@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { profiles, users, swipes, blocks } from "../db/schema";
-import { eq, and, notInArray, desc, sql, ne } from "drizzle-orm";
+import { profiles, swipes, blocks } from "../db/schema";
+import { eq, and, notInArray } from "drizzle-orm";
 
 export async function getRecommendations(userId: string) {
     // 1. Get current user profile

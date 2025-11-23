@@ -1,18 +1,28 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, StatusBar, ScrollView } from 'react-native';
 import { signUp, signIn } from '../../lib/auth-client';
 import { useRouter, Link } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { NeonInput } from '@/components/ui/neon-input';
+import { GradientButton } from '@/components/ui/gradient-button';
+import { FloatingEmojis } from '@/components/ui/floating-emojis';
 
 export default function RegisterScreen() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const router = useRouter();
 
     const handleRegister = async () => {
-        if (!name || !email || !password) {
+        if (!name || !email || !password || !confirmPassword) {
             Alert.alert('Error', 'Please fill in all fields');
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            Alert.alert('Error', 'Passwords do not match');
             return;
         }
 
@@ -46,7 +56,6 @@ export default function RegisterScreen() {
                 callbackURL: "/(tabs)",
             });
 
-            // If successful, navigate to tabs
             if (result.data) {
                 router.replace('/(tabs)');
             }
@@ -57,152 +66,170 @@ export default function RegisterScreen() {
     };
 
     return (
-        <ScrollView contentContainerStyle={styles.container}>
-            <View style={styles.formContainer}>
-                <Text style={styles.title}>Create Account</Text>
-                <Text style={styles.subtitle}>Sign up to get started</Text>
+        <View style={styles.container}>
+            <StatusBar barStyle="light-content" />
+            <FloatingEmojis />
 
-                <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Full Name</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Enter your full name"
-                        value={name}
-                        onChangeText={setName}
-                    />
+            <ScrollView contentContainerStyle={styles.scrollContent}>
+                <View style={styles.header}>
+                    <Text style={styles.title}>Strathspace</Text>
+                    <Text style={styles.subtitle}>Join the{'\n'}Campus Crew!</Text>
                 </View>
 
-                <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Email</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Enter your email"
+                <View style={styles.form}>
+                    <NeonInput
+                        placeholder="Full Name"
+                        value={name}
+                        onChangeText={setName}
+                        borderColor="#FF00FF" // Neon Pink
+                        glowColor="#FF00FF"
+                    />
+
+                    <NeonInput
+                        placeholder="University Email"
                         value={email}
                         onChangeText={setEmail}
                         autoCapitalize="none"
                         keyboardType="email-address"
+                        borderColor="#00FFFF" // Neon Cyan
+                        glowColor="#00FFFF"
                     />
-                </View>
 
-                <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Password</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Create a password"
+                    <NeonInput
+                        placeholder="Create Password"
                         value={password}
                         onChangeText={setPassword}
                         secureTextEntry
+                        borderColor="#FF00FF" // Neon Pink
+                        glowColor="#FF00FF"
+                    />
+
+                    <NeonInput
+                        placeholder="Confirm Password"
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                        secureTextEntry
+                        borderColor="#00FFFF" // Neon Cyan
+                        glowColor="#00FFFF"
+                    />
+
+                    <GradientButton
+                        title="Sign Up"
+                        onPress={handleRegister}
+                        loading={loading}
+                        style={styles.signupButton}
                     />
                 </View>
 
-                <TouchableOpacity
-                    style={styles.button}
-                    onPress={handleRegister}
-                    disabled={loading}
-                >
-                    {loading ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.buttonText}>Sign Up</Text>
-                    )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.button, styles.googleButton]}
-                    onPress={handleGoogleSignUp}
-                    disabled={loading}
-                >
-                    <Text style={styles.googleButtonText}>Sign up with Google</Text>
-                </TouchableOpacity>
+                <View style={styles.socialSection}>
+                    <Text style={styles.socialText}>Or vibe with:</Text>
+                    <TouchableOpacity
+                        style={styles.googleButton}
+                        onPress={handleGoogleSignUp}
+                    >
+                        <Ionicons name="logo-google" size={24} color="#FFF" style={styles.googleIcon} />
+                        <Text style={styles.googleButtonText}>Continue with Google</Text>
+                    </TouchableOpacity>
+                </View>
 
                 <View style={styles.footer}>
-                    <Text style={styles.footerText}>Already have an account? </Text>
                     <Link href="/(auth)/login" asChild>
                         <TouchableOpacity>
-                            <Text style={styles.link}>Sign In</Text>
+                            <Text style={styles.footerText}>
+                                Already have an account? <Text style={styles.linkText}>Login</Text>
+                            </Text>
                         </TouchableOpacity>
                     </Link>
                 </View>
-            </View>
-        </ScrollView>
+            </ScrollView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        flexGrow: 1,
-        backgroundColor: '#fff',
-        justifyContent: 'center',
-        padding: 20,
+        flex: 1,
+        backgroundColor: '#1a0d2e', // Deep Purple Solid Background
     },
-    formContainer: {
-        width: '100%',
-        maxWidth: 400,
-        alignSelf: 'center',
+    scrollContent: {
+        flexGrow: 1,
+        padding: 24,
+        justifyContent: 'center',
+        zIndex: 1,
+    },
+    header: {
+        alignItems: 'center',
+        marginBottom: 30,
     },
     title: {
-        fontSize: 32,
+        fontSize: 24,
         fontWeight: 'bold',
+        color: '#FFF',
         marginBottom: 10,
-        color: '#333',
+        letterSpacing: 1,
+        textShadowColor: '#FF3399',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 10,
     },
     subtitle: {
-        fontSize: 16,
-        color: '#666',
-        marginBottom: 40,
+        fontSize: 36,
+        fontWeight: '800',
+        color: '#FFF',
+        textAlign: 'center',
+        lineHeight: 42,
+        textShadowColor: '#00FFFF',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 5,
     },
-    inputContainer: {
-        marginBottom: 20,
+    form: {
+        marginBottom: 30,
     },
-    label: {
-        fontSize: 14,
-        fontWeight: '600',
-        marginBottom: 8,
-        color: '#333',
+    signupButton: {
+        marginTop: 10,
     },
-    input: {
-        borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 8,
-        padding: 15,
-        fontSize: 16,
-        backgroundColor: '#f9f9f9',
-    },
-    button: {
-        backgroundColor: '#007AFF',
-        padding: 16,
-        borderRadius: 8,
+    socialSection: {
         alignItems: 'center',
-        marginTop: 20,
+        marginBottom: 30,
     },
-    buttonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
+    socialText: {
+        color: '#CCC',
+        marginBottom: 15,
+        fontSize: 14,
     },
     googleButton: {
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#ddd',
-        marginTop: 12,
-    },
-    googleButtonText: {
-        color: '#333',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    footer: {
+        width: '100%',
+        height: 56,
+        borderRadius: 28,
+        borderWidth: 2,
+        borderColor: '#00FFFF',
+        backgroundColor: 'rgba(0,0,0,0.5)',
         flexDirection: 'row',
         justifyContent: 'center',
-        marginTop: 30,
+        alignItems: 'center',
+        shadowColor: '#00FFFF',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    googleIcon: {
+        marginRight: 12,
+    },
+    googleButtonText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    footer: {
+        alignItems: 'center',
+        marginBottom: 20,
     },
     footerText: {
-        color: '#666',
+        color: '#CCC',
         fontSize: 14,
     },
-    link: {
-        color: '#007AFF',
-        fontSize: 14,
+    linkText: {
+        color: '#FF3399',
         fontWeight: 'bold',
     },
 });

@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, StatusBar } from 'react-native';
 import { signIn } from '../../lib/auth-client';
 import { useRouter, Link } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { NeonInput } from '@/components/ui/neon-input';
+import { GradientButton } from '@/components/ui/gradient-button';
+import { FloatingEmojis } from '@/components/ui/floating-emojis';
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
@@ -25,7 +29,6 @@ export default function LoginScreen() {
             if (error) {
                 Alert.alert('Login Failed', error.message || 'An error occurred');
             } else {
-                // Navigate to main app
                 router.replace('/(tabs)');
             }
         } catch (err) {
@@ -43,7 +46,6 @@ export default function LoginScreen() {
                 callbackURL: "/(tabs)",
             });
 
-            // If successful, navigate to tabs
             if (result.data) {
                 router.replace('/(tabs)');
             }
@@ -55,58 +57,60 @@ export default function LoginScreen() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.formContainer}>
-                <Text style={styles.title}>Welcome Back</Text>
-                <Text style={styles.subtitle}>Sign in to continue</Text>
+            <StatusBar barStyle="light-content" />
+            <FloatingEmojis />
 
-                <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Email</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Enter your email"
+            <View style={styles.content}>
+                <View style={styles.header}>
+                    <Text style={styles.title}>Strathspace</Text>
+                    <Text style={styles.subtitle}>Back to{'\n'}Campus Love?</Text>
+                </View>
+
+                <View style={styles.form}>
+                    <NeonInput
+                        placeholder="Email"
                         value={email}
                         onChangeText={setEmail}
                         autoCapitalize="none"
                         keyboardType="email-address"
+                        borderColor="#FF00FF" // Neon Pink
+                        glowColor="#FF00FF"
                     />
-                </View>
 
-                <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Password</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Enter your password"
+                    <NeonInput
+                        placeholder="Password"
                         value={password}
                         onChangeText={setPassword}
                         secureTextEntry
+                        borderColor="#00FFFF" // Neon Cyan
+                        glowColor="#00FFFF"
+                    />
+
+                    <GradientButton
+                        title="Login"
+                        onPress={handleLogin}
+                        loading={loading}
+                        style={styles.loginButton}
                     />
                 </View>
 
-                <TouchableOpacity
-                    style={styles.button}
-                    onPress={handleLogin}
-                    disabled={loading}
-                >
-                    {loading ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.buttonText}>Sign In</Text>
-                    )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.button, styles.googleButton]}
-                    onPress={handleGoogleSignIn}
-                    disabled={loading}
-                >
-                    <Text style={styles.googleButtonText}>Sign in with Google</Text>
-                </TouchableOpacity>
+                <View style={styles.socialSection}>
+                    <Text style={styles.socialText}>Or vibe with:</Text>
+                    <TouchableOpacity
+                        style={styles.googleButton}
+                        onPress={handleGoogleSignIn}
+                    >
+                        <Ionicons name="logo-google" size={24} color="#FFF" style={styles.googleIcon} />
+                        <Text style={styles.googleButtonText}>Continue with Google</Text>
+                    </TouchableOpacity>
+                </View>
 
                 <View style={styles.footer}>
-                    <Text style={styles.footerText}>Don't have an account? </Text>
                     <Link href="/(auth)/register" asChild>
                         <TouchableOpacity>
-                            <Text style={styles.link}>Sign Up</Text>
+                            <Text style={styles.footerText}>
+                                Don't have an account? <Text style={styles.linkText}>Sign Up</Text>
+                            </Text>
                         </TouchableOpacity>
                     </Link>
                 </View>
@@ -118,78 +122,86 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: '#1a0d2e', // Deep Purple Solid Background
+    },
+    content: {
+        flex: 1,
+        padding: 24,
         justifyContent: 'center',
-        padding: 20,
+        zIndex: 1,
     },
-    formContainer: {
-        width: '100%',
-        maxWidth: 400,
-        alignSelf: 'center',
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        marginBottom: 10,
-        color: '#333',
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#666',
+    header: {
+        alignItems: 'center',
         marginBottom: 40,
     },
-    inputContainer: {
-        marginBottom: 20,
-    },
-    label: {
-        fontSize: 14,
-        fontWeight: '600',
-        marginBottom: 8,
-        color: '#333',
-    },
-    input: {
-        borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 8,
-        padding: 15,
-        fontSize: 16,
-        backgroundColor: '#f9f9f9',
-    },
-    button: {
-        backgroundColor: '#007AFF',
-        padding: 16,
-        borderRadius: 8,
-        alignItems: 'center',
-        marginTop: 20,
-    },
-    buttonText: {
-        color: '#fff',
-        fontSize: 16,
+    title: {
+        fontSize: 24,
         fontWeight: 'bold',
+        color: '#FFF',
+        marginBottom: 10,
+        letterSpacing: 1,
+        textShadowColor: '#FF3399',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 10,
+    },
+    subtitle: {
+        fontSize: 36,
+        fontWeight: '800',
+        color: '#FFF',
+        textAlign: 'center',
+        lineHeight: 42,
+        textShadowColor: '#00FFFF',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 5,
+    },
+    form: {
+        marginBottom: 30,
+    },
+    loginButton: {
+        marginTop: 10,
+    },
+    socialSection: {
+        alignItems: 'center',
+        marginBottom: 30,
+    },
+    socialText: {
+        color: '#CCC',
+        marginBottom: 15,
+        fontSize: 14,
     },
     googleButton: {
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#ddd',
-        marginTop: 12,
-    },
-    googleButtonText: {
-        color: '#333',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    footer: {
+        width: '100%',
+        height: 56,
+        borderRadius: 28,
+        borderWidth: 2,
+        borderColor: '#00FFFF',
+        backgroundColor: 'rgba(0,0,0,0.5)',
         flexDirection: 'row',
         justifyContent: 'center',
-        marginTop: 30,
+        alignItems: 'center',
+        shadowColor: '#00FFFF',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    googleIcon: {
+        marginRight: 12,
+    },
+    googleButtonText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    footer: {
+        alignItems: 'center',
     },
     footerText: {
-        color: '#666',
+        color: '#CCC',
         fontSize: 14,
     },
-    link: {
-        color: '#007AFF',
-        fontSize: 14,
+    linkText: {
+        color: '#FF3399',
         fontWeight: 'bold',
     },
 });
