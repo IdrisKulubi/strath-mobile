@@ -7,22 +7,26 @@ import {
     boolean,
     uuid,
     json,
-    primaryKey,
     index,
 } from "drizzle-orm/pg-core";
 
+
+
 // First define all tables
-export const users = pgTable(
+export const user = pgTable(
     "user",
     {
         id: text("id").primaryKey(),
         name: text("name").notNull(),
         email: text("email").notNull().unique(),
         role: text("role").$type<"user" | "admin">().default("user"),
-        emailVerified: boolean("emailVerified").default(false),
+        emailVerified: boolean("email_verified").default(false).notNull(),
         image: text("image"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
-        updatedAt: timestamp("updated_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at")
+            .defaultNow()
+            .$onUpdate(() => new Date())
+            .notNull(),
         lastActive: timestamp("last_active").defaultNow().notNull(),
         isOnline: boolean("is_online").default(false),
         profilePhoto: text("profile_photo"),
@@ -37,41 +41,67 @@ export const users = pgTable(
 );
 
 // Auth tables (BetterAuth compatible)
-export const accounts = pgTable(
+export const account = pgTable(
     "account",
     {
         id: text("id").primaryKey(),
-        userId: text("userId")
+        userId: text("user_id")
             .notNull()
-            .references(() => users.id, { onDelete: "cascade" }),
-        accountId: text("accountId").notNull(),
-        providerId: text("providerId").notNull(),
-        accessToken: text("accessToken"),
-        refreshToken: text("refreshToken"),
-        expiresAt: timestamp("expiresAt"),
+            .references(() => user.id, { onDelete: "cascade" }),
+        accountId: text("account_id").notNull(),
+        providerId: text("provider_id").notNull(),
+        accessToken: text("access_token"),
+        refreshToken: text("refresh_token"),
+        idToken: text("id_token"),
+        accessTokenExpiresAt: timestamp("access_token_expires_at"),
+        refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+        scope: text("scope"),
         password: text("password"),
-    }
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at")
+            .defaultNow()
+            .$onUpdate(() => new Date())
+            .notNull(),
+    },
+    (table) => ({
+        userIdIdx: index("account_userId_idx").on(table.userId),
+    })
 );
 
-export const sessions = pgTable("session", {
+export const session = pgTable("session", {
     id: text("id").primaryKey(),
-    userId: text("userId")
+    userId: text("user_id")
         .notNull()
-        .references(() => users.id, { onDelete: "cascade" }),
+        .references(() => user.id, { onDelete: "cascade" }),
     token: text("token").notNull().unique(),
-    expiresAt: timestamp("expiresAt").notNull(),
-    ipAddress: text("ipAddress"),
-    userAgent: text("userAgent"),
-});
+    expiresAt: timestamp("expires_at").notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+        .defaultNow()
+        .$onUpdate(() => new Date())
+        .notNull(),
+}, (table) => ({
+    userIdIdx: index("session_userId_idx").on(table.userId),
+}));
 
-export const verifications = pgTable(
+export const verification = pgTable(
     "verification",
     {
         id: text("id").primaryKey(),
         identifier: text("identifier").notNull(),
         value: text("value").notNull(),
-        expiresAt: timestamp("expiresAt").notNull(),
-    }
+        expiresAt: timestamp("expires_at").notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at")
+            .defaultNow()
+            .$onUpdate(() => new Date())
+            .notNull(),
+    },
+    (table) => ({
+        identifierIdx: index("verification_identifier_idx").on(table.identifier),
+    })
 );
 
 // Extended user profiles
@@ -79,7 +109,7 @@ export const profiles = pgTable("profiles", {
     id: uuid("id").defaultRandom().primaryKey(),
     userId: text("user_id")
         .notNull()
-        .references(() => users.id, { onDelete: "cascade" }),
+        .references(() => user.id, { onDelete: "cascade" }),
     bio: text("bio"),
     age: integer("age"),
     gender: text("gender"),
@@ -123,26 +153,15 @@ export const profiles = pgTable("profiles", {
     readReceiptsEnabled: boolean("read_receipts_enabled").default(true),
     showActiveStatus: boolean("show_active_status").default(true),
     username: text("username"),
-});
-
-// Indexes for the profiles table (defined externally)
-export const profileUserIdIdx = index("profile_user_id_idx").on(profiles.userId);
-export const profileIsVisibleIdx = index("profile_is_visible_idx").on(
-    profiles.isVisible
-);
-export const profileGenderIdx = index("profile_gender_idx").on(profiles.gender);
-export const profileLastActiveIdx = index("profile_last_active_idx").on(
-    profiles.lastActive
-);
-export const profileCompletedIdx = index("profile_completed_idx").on(
-    profiles.profileCompleted
-);
-export const profileUsernameIdx = index("profile_username_idx").on(
-    profiles.username
-);
-export const profileAnonymousIdx = index("profile_anonymous_idx").on(
-    profiles.anonymous
-);
+}, (table) => ({
+    userIdIdx: index("profile_user_id_idx").on(table.userId),
+    isVisibleIdx: index("profile_is_visible_idx").on(table.isVisible),
+    genderIdx: index("profile_gender_idx").on(table.gender),
+    lastActiveIdx: index("profile_last_active_idx").on(table.lastActive),
+    completedIdx: index("profile_completed_idx").on(table.profileCompleted),
+    usernameIdx: index("profile_username_idx").on(table.username),
+    anonymousIdx: index("profile_anonymous_idx").on(table.anonymous),
+}));
 
 // Swipes/Likes
 export const swipes = pgTable(
@@ -151,10 +170,10 @@ export const swipes = pgTable(
         id: uuid("id").defaultRandom().primaryKey(),
         swiperId: text("swiper_id")
             .notNull()
-            .references(() => users.id),
+            .references(() => user.id),
         swipedId: text("swiped_id")
             .notNull()
-            .references(() => users.id),
+            .references(() => user.id),
         isLike: boolean("is_like").notNull(),
         createdAt: timestamp("created_at").defaultNow().notNull(),
     },
@@ -173,10 +192,10 @@ export const matches = pgTable(
         id: uuid("id").defaultRandom().primaryKey(),
         user1Id: text("user1_id")
             .notNull()
-            .references(() => users.id),
+            .references(() => user.id),
         user2Id: text("user2_id")
             .notNull()
-            .references(() => users.id),
+            .references(() => user.id),
         user1Typing: boolean("user1_typing").default(false),
         user2Typing: boolean("user2_typing").default(false),
         lastMessageAt: timestamp("last_message_at"),
@@ -210,7 +229,7 @@ export const messages = pgTable(
             .references(() => matches.id)
             .notNull(),
         senderId: text("sender_id")
-            .references(() => users.id)
+            .references(() => user.id)
             .notNull(),
         status: text("status", { enum: ["sent", "delivered", "read"] })
             .default("sent")
@@ -228,9 +247,9 @@ export const messages = pgTable(
 );
 
 export const messagesRelations = relations(messages, ({ one }) => ({
-    sender: one(users, {
+    sender: one(user, {
         fields: [messages.senderId],
-        references: [users.id],
+        references: [user.id],
     }),
 }));
 
@@ -239,10 +258,10 @@ export const blocks = pgTable("blocks", {
     id: uuid("id").defaultRandom().primaryKey(),
     blockerId: text("blocker_id")
         .notNull()
-        .references(() => users.id),
+        .references(() => user.id),
     blockedId: text("blocked_id")
         .notNull()
-        .references(() => users.id),
+        .references(() => user.id),
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -251,10 +270,10 @@ export const starredProfiles = pgTable("starred_profiles", {
     id: uuid("id").defaultRandom().primaryKey(),
     userId: text("user_id")
         .notNull()
-        .references(() => users.id, { onDelete: "cascade" }),
+        .references(() => user.id, { onDelete: "cascade" }),
     starredId: text("starred_id")
         .notNull()
-        .references(() => users.id, { onDelete: "cascade" }),
+        .references(() => user.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -265,10 +284,10 @@ export const reports = pgTable(
         id: uuid("id").defaultRandom().primaryKey(),
         reporterId: text("reporter_id")
             .notNull()
-            .references(() => users.id),
+            .references(() => user.id),
         reportedUserId: text("reported_user_id")
             .notNull()
-            .references(() => users.id),
+            .references(() => user.id),
         reason: text("reason").notNull(),
         status: text("status").$type<"PENDING" | "RESOLVED">().default("PENDING"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -288,10 +307,10 @@ export const profileViews = pgTable(
         id: uuid("id").defaultRandom().primaryKey(),
         viewerId: text("viewer_id")
             .notNull()
-            .references(() => users.id),
+            .references(() => user.id),
         viewedId: text("viewed_id")
             .notNull()
-            .references(() => users.id),
+            .references(() => user.id),
         viewedAt: timestamp("viewed_at").defaultNow().notNull(),
         source: text("source")
             .$type<"VIEW_MORE" | "PROFILE_CARD" | "SEARCH" | "MATCHES">()
@@ -306,9 +325,9 @@ export const profileViews = pgTable(
 );
 
 // Relations
-export const usersRelations = relations(users, ({ one, many }) => ({
+export const userRelations = relations(user, ({ one, many }) => ({
     profile: one(profiles, {
-        fields: [users.id],
+        fields: [user.id],
         references: [profiles.userId],
     }),
     sentSwipes: many(swipes, { relationName: "swiperRelation" }),
@@ -319,40 +338,56 @@ export const usersRelations = relations(users, ({ one, many }) => ({
         relationName: "userStarredProfiles",
     }),
     reports: many(reports, { relationName: "userReports" }),
+    sessions: many(session),
+    accounts: many(account),
+}));
+
+export const sessionRelations = relations(session, ({ one }) => ({
+    user: one(user, {
+        fields: [session.userId],
+        references: [user.id],
+    }),
+}));
+
+export const accountRelations = relations(account, ({ one }) => ({
+    user: one(user, {
+        fields: [account.userId],
+        references: [user.id],
+    }),
 }));
 
 export const matchesRelations = relations(matches, ({ one, many }) => ({
     messages: many(messages, { relationName: "matchMessages" }),
-    user1: one(users, {
+    user1: one(user, {
         fields: [matches.user1Id],
-        references: [users.id],
+        references: [user.id],
     }),
-    user2: one(users, {
+    user2: one(user, {
         fields: [matches.user2Id],
-        references: [users.id],
+        references: [user.id],
     }),
 }));
 
 export const reportsRelations = relations(reports, ({ one }) => ({
-    reporter: one(users, {
+    reporter: one(user, {
         fields: [reports.reporterId],
-        references: [users.id],
+        references: [user.id],
     }),
-    reportedUser: one(users, {
+    reportedUser: one(user, {
         fields: [reports.reportedUserId],
-        references: [users.id],
+        references: [user.id],
     }),
 }));
 
 export const profileViewsRelations = relations(profileViews, ({ one }) => ({
-    viewer: one(users, {
+    viewer: one(user, {
         fields: [profileViews.viewerId],
-        references: [users.id],
+        references: [user.id],
         relationName: "profileViewer",
     }),
-    viewed: one(users, {
+    viewed: one(user, {
         fields: [profileViews.viewedId],
-        references: [users.id],
+        references: [user.id],
         relationName: "profileViewed",
     }),
 }));
