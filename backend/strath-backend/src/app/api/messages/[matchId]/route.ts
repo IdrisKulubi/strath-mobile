@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { messages, matches, users } from "@/db/schema";
+import { messages, matches, user } from "@/db/schema";
 import { messageSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { eq, and, or, asc } from "drizzle-orm";
@@ -89,8 +89,8 @@ export async function POST(
             .where(eq(matches.id, matchId));
 
         // Get partner's push token
-        const partner = await db.query.users.findFirst({
-            where: eq(users.id, partnerId),
+        const partner = await db.query.user.findFirst({
+            where: eq(user.id, partnerId),
         });
 
         if (partner?.pushToken) {

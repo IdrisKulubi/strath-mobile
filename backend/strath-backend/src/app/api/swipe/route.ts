@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { swipes, matches, users } from "@/db/schema";
+import { swipes, matches, user } from "@/db/schema";
 import { swipeSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { eq, and } from "drizzle-orm";
@@ -53,11 +53,11 @@ export async function POST(req: NextRequest) {
                 matchData = newMatch;
 
                 // Fetch users to get push tokens
-                const user1 = await db.query.users.findFirst({
-                    where: eq(users.id, session.user.id),
+                const user1 = await db.query.user.findFirst({
+                    where: eq(user.id, session.user.id),
                 });
-                const user2 = await db.query.users.findFirst({
-                    where: eq(users.id, targetUserId),
+                const user2 = await db.query.user.findFirst({
+                    where: eq(user.id, targetUserId),
                 });
 
                 // Notify user 2 (target)

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { profiles, users } from "@/db/schema";
+import { profiles } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { updateProfileSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/api-response";

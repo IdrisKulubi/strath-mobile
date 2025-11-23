@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { users } from "@/db/schema";
+import { user } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { z } from "zod";
@@ -21,9 +21,9 @@ export async function POST(req: NextRequest) {
         const { pushToken } = pushTokenSchema.parse(body);
 
         await db
-            .update(users)
+            .update(user)
             .set({ pushToken })
-            .where(eq(users.id, session.user.id));
+            .where(eq(user.id, session.user.id));
 
         return successResponse({ success: true });
     } catch (error) {

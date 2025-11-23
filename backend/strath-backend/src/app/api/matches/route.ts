@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { matches, profiles, users } from "@/db/schema";
-import { eq, or, and } from "drizzle-orm";
+import { matches } from "@/db/schema";
+import { eq, or } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
