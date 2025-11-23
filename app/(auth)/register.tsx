@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { signUp, signIn } from '../../lib/auth-client';
 import { useRouter, Link } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 
 export default function RegisterScreen() {
     const [name, setName] = useState('');
@@ -37,6 +36,23 @@ export default function RegisterScreen() {
             console.error(err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleGoogleSignUp = async () => {
+        try {
+            const result = await signIn.social({
+                provider: "google",
+                callbackURL: "/(tabs)",
+            });
+
+            // If successful, navigate to tabs
+            if (result.data) {
+                router.replace('/(tabs)');
+            }
+        } catch (error) {
+            console.error("Sign up error:", error);
+            Alert.alert('Error', 'Google sign-up failed');
         }
     };
 
@@ -93,28 +109,7 @@ export default function RegisterScreen() {
 
                 <TouchableOpacity
                     style={[styles.button, styles.googleButton]}
-                    onPress={async () => {
-                        try {
-                            // Use signIn.social to get the OAuth URL and state
-                            const res = await signIn.social({
-                                provider: "google",
-                                callbackURL: "strathmobile://",
-                            });
-
-                            console.log("Sign in response:", res);
-
-                            // The response should have a URL to open in the browser
-                            if (res.data?.url) {
-                                const result = await WebBrowser.openAuthSessionAsync(
-                                    res.data.url,
-                                    "strathmobile://"
-                                );
-                                console.log("WebBrowser result:", result);
-                            }
-                        } catch (error) {
-                            console.error("Sign in error:", error);
-                        }
-                    }}
+                    onPress={handleGoogleSignUp}
                     disabled={loading}
                 >
                     <Text style={styles.googleButtonText}>Sign up with Google</Text>
