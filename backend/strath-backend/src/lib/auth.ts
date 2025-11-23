@@ -12,8 +12,14 @@ export const auth = betterAuth({
     emailAndPassword: {
         enabled: true,
     },
+    socialProviders: {
+        google: {
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+        },
+    },
     plugins: [expo()],
-    trustedOrigins: ["myapp://"],
+    trustedOrigins: ["strathmobile://", "http://192.168.100.24:3000", "https://proud-moments-nail.loca.lt"],
     user: {
         additionalFields: {
             role: {

@@ -3,7 +3,11 @@ import * as SecureStore from "expo-secure-store";
 
 export const authClient = createAuthClient({
     baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000",
-    disableDefaultFetch: true,
+    fetchOptions: {
+        headers: {
+            Origin: "strathmobile://",
+        },
+    },
     storage: {
         getItem: async (key: string) => {
             return await SecureStore.getItemAsync(key);

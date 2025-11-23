@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { signIn } from '../../lib/auth-client';
 import { useRouter, Link } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
@@ -77,6 +78,35 @@ export default function LoginScreen() {
                     )}
                 </TouchableOpacity>
 
+                <TouchableOpacity
+                    style={[styles.button, styles.googleButton]}
+                    onPress={async () => {
+                        try {
+                            // Use signIn.social to get the OAuth URL and state
+                            const res = await signIn.social({
+                                provider: "google",
+                                callbackURL: "strathmobile://",
+                            });
+
+                            console.log("Sign in response:", res);
+
+                            // The response should have a URL to open in the browser
+                            if (res.data?.url) {
+                                const result = await WebBrowser.openAuthSessionAsync(
+                                    res.data.url,
+                                    "strathmobile://"
+                                );
+                                console.log("WebBrowser result:", result);
+                            }
+                        } catch (error) {
+                            console.error("Sign in error:", error);
+                        }
+                    }}
+                    disabled={loading}
+                >
+                    <Text style={styles.googleButtonText}>Sign in with Google</Text>
+                </TouchableOpacity>
+
                 <View style={styles.footer}>
                     <Text style={styles.footerText}>Don't have an account? </Text>
                     <Link href="/(auth)/register" asChild>
@@ -139,6 +169,17 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    googleButton: {
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#ddd',
+        marginTop: 12,
+    },
+    googleButtonText: {
+        color: '#333',
         fontSize: 16,
         fontWeight: 'bold',
     },

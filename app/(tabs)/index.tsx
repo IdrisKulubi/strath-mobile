@@ -1,13 +1,26 @@
 import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Alert, Button, Platform, StyleSheet } from 'react-native';
 
 import { HelloWave } from '@/components/hello-wave';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
+import { signOut } from '@/lib/auth-client';
 
 export default function HomeScreen() {
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      router.replace('/(auth)/login');
+    } catch (error) {
+      console.error('Failed to sign out', error);
+      Alert.alert('Error', 'Something went wrong while signing out.');
+    }
+  };
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
@@ -18,7 +31,7 @@ export default function HomeScreen() {
         />
       }>
       <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
+        <ThemedText type="title">Idris</ThemedText>
         <HelloWave />
       </ThemedView>
       <ThemedView style={styles.stepContainer}>
@@ -65,7 +78,7 @@ export default function HomeScreen() {
         </ThemedText>
       </ThemedView>
       <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
+        <ThemedText type="subtitle">Idris </ThemedText>
         <ThemedText>
           {`When you're ready, run `}
           <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
@@ -73,6 +86,13 @@ export default function HomeScreen() {
           <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
           <ThemedText type="defaultSemiBold">app-example</ThemedText>.
         </ThemedText>
+      </ThemedView>
+      <ThemedView style={styles.logoutContainer}>
+        <ThemedText type="subtitle">Need a break?</ThemedText>
+        <ThemedText>
+          {`Tap below to sign out when you're done exploring.`}
+        </ThemedText>
+        <Button title="Log out" onPress={handleLogout} color="#d22" />
       </ThemedView>
     </ParallaxScrollView>
   );
@@ -94,5 +114,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     position: 'absolute',
+  },
+  logoutContainer: {
+    gap: 8,
+    marginTop: 16,
+    paddingVertical: 12,
   },
 });
