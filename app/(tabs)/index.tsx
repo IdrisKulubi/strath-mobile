@@ -1,123 +1,136 @@
-import { Image } from 'expo-image';
-import { Alert, Button, Platform, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, SafeAreaView, TouchableOpacity, StatusBar } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/hooks/use-theme';
+import { useFeed, FeedProfile } from '@/hooks/use-feed';
+import { ProfileView } from '@/components/feed/profile-view';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link, useRouter } from 'expo-router';
-import { signOut } from '@/lib/auth-client';
+// Dummy data for fallback/demo
+const DUMMY_PROFILES: FeedProfile[] = [
+  {
+    id: '1',
+    userId: 'u1',
+    firstName: 'Nellee',
+    lastName: 'Joy',
+    age: 21,
+    bio: 'Here for a good time not a long time 🌸\nStudent at Strathmore University.\nLoves coffee and coding.',
+    photos: ['https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=687&q=80'],
+    interests: ['Coffee', 'Coding', 'Music', 'Travel'],
+    university: 'Strathmore',
+    course: 'Computer Science',
+    yearOfStudy: 3,
+  },
+  {
+    id: '2',
+    userId: 'u2',
+    firstName: 'James',
+    lastName: 'Bond',
+    age: 23,
+    bio: 'Just looking for my study buddy 📚\nLaw student.',
+    photos: ['https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=687&q=80'],
+    interests: ['Law', 'Debate', 'Rugby'],
+    university: 'Strathmore',
+    course: 'Law',
+    yearOfStudy: 4,
+  }
+];
 
-export default function HomeScreen() {
-  const router = useRouter();
+export default function DiscoverScreen() {
+  const { colors } = useTheme();
+  const { data: serverProfiles, isLoading, error } = useFeed();
+  const [profiles, setProfiles] = useState<FeedProfile[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      router.replace('/(auth)/login');
-    } catch (error) {
-      console.error('Failed to sign out', error);
-      Alert.alert('Error', 'Something went wrong while signing out.');
+  // Sync server data to local state when loaded
+  useEffect(() => {
+    if (serverProfiles && serverProfiles.length > 0) {
+      setProfiles(serverProfiles);
+    } else if (!isLoading && (!serverProfiles || serverProfiles.length === 0)) {
+      // Fallback to dummy if no server data or error
+      setProfiles(DUMMY_PROFILES);
+    }
+  }, [serverProfiles, isLoading]);
+
+  const handleNext = () => {
+    if (currentIndex < profiles.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    } else {
+      // End of list, reset for demo
+      setCurrentIndex(0);
     }
   };
 
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Idris</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const handleLike = () => {
+    console.log("Liked profile:", profiles[currentIndex].id);
+    handleNext();
+  };
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Idris </ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.logoutContainer}>
-        <ThemedText type="subtitle">Need a break?</ThemedText>
-        <ThemedText>
-          {`Tap below to sign out when you're done exploring.`}
-        </ThemedText>
-        <Button title="Log out" onPress={handleLogout} color="#d22" />
-      </ThemedView>
-    </ParallaxScrollView>
+  const handlePass = () => {
+    console.log("Passed profile:", profiles[currentIndex].id);
+    handleNext();
+  };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  const currentProfile = profiles[currentIndex];
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle="light-content" />
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Strathspace</Text>
+        <TouchableOpacity style={styles.profileIcon}>
+          <Ionicons name="person-circle-outline" size={32} color={colors.foreground} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Main Content */}
+      {currentProfile ? (
+        <ProfileView
+          profile={currentProfile}
+          onLike={handleLike}
+          onPass={handlePass}
+        />
+      ) : (
+        <View style={styles.center}>
+          <Text style={{ color: colors.foreground }}>No profiles found.</Text>
+        </View>
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+  },
+  center: {
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    flex: 1,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginTop: 10,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FFF', // Or theme color
+    letterSpacing: 0.5,
   },
-  logoutContainer: {
-    gap: 8,
-    marginTop: 16,
-    paddingVertical: 12,
+  profileIcon: {
+    padding: 4,
   },
 });

@@ -361,10 +361,12 @@ export const matchesRelations = relations(matches, ({ one, many }) => ({
     user1: one(user, {
         fields: [matches.user1Id],
         references: [user.id],
+        relationName: "user1Relation",
     }),
     user2: one(user, {
         fields: [matches.user2Id],
         references: [user.id],
+        relationName: "user2Relation",
     }),
 }));
 
@@ -372,9 +374,42 @@ export const reportsRelations = relations(reports, ({ one }) => ({
     reporter: one(user, {
         fields: [reports.reporterId],
         references: [user.id],
+        relationName: "userReports",
     }),
     reportedUser: one(user, {
         fields: [reports.reportedUserId],
+        references: [user.id],
+    }),
+}));
+
+export const swipesRelations = relations(swipes, ({ one }) => ({
+    swiper: one(user, {
+        fields: [swipes.swiperId],
+        references: [user.id],
+        relationName: "swiperRelation",
+    }),
+    swiped: one(user, {
+        fields: [swipes.swipedId],
+        references: [user.id],
+        relationName: "swipedRelation",
+    }),
+}));
+
+export const starredProfilesRelations = relations(starredProfiles, ({ one }) => ({
+    user: one(user, {
+        fields: [starredProfiles.userId],
+        references: [user.id],
+        relationName: "userStarredProfiles",
+    }),
+    starred: one(user, {
+        fields: [starredProfiles.starredId],
+        references: [user.id],
+    }),
+}));
+
+export const profilesRelations = relations(profiles, ({ one }) => ({
+    user: one(user, {
+        fields: [profiles.userId],
         references: [user.id],
     }),
 }));
