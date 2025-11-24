@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, SafeAreaView, TouchableOpacity, StatusBar } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, ActivityIndicator, StatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/use-theme';
 import { useFeed, FeedProfile } from '@/hooks/use-feed';
 import { ProfileView } from '@/components/feed/profile-view';
@@ -86,9 +86,6 @@ export default function DiscoverScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Strathspace</Text>
-        <TouchableOpacity style={styles.profileIcon}>
-          <Ionicons name="person-circle-outline" size={32} color={colors.foreground} />
-        </TouchableOpacity>
       </View>
 
       {/* Main Content */}

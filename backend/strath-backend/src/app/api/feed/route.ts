@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/db/drizzle";
-import { profiles, user } from "@/db/schema";
-import { eq, and, not } from "drizzle-orm";
+import { profiles } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
 
 export async function GET(request: Request) {
     try {
