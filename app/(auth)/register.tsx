@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, StatusBar, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, StatusBar, Image, ScrollView } from 'react-native';
 import { signUp, signIn } from '../../lib/auth-client';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NeonInput } from '@/components/ui/neon-input';
 import { GradientButton } from '@/components/ui/gradient-button';
-import { FloatingEmojis } from '@/components/ui/floating-emojis';
 
 export default function RegisterScreen() {
     const [name, setName] = useState('');
@@ -68,12 +67,33 @@ export default function RegisterScreen() {
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
-            <FloatingEmojis />
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>Strathspace</Text>
-                    <Text style={styles.subtitle}>Join the{'\n'}Campus Crew!</Text>
+                <View style={styles.logoContainer}>
+                    <Image
+                        source={require('@/assets/images/logos/LOGO.png')}
+                        style={styles.logo}
+                        resizeMode="contain"
+                    />
+                    <Text style={styles.appName}>Strathspace</Text>
+                </View>
+
+                <Text style={styles.title}>Join the{'\n'}Strathspace Crew!</Text>
+
+                <TouchableOpacity
+                    style={styles.googleButton}
+                    onPress={handleGoogleSignUp}
+                >
+                    <View style={styles.googleIconContainer}>
+                        <Ionicons name="logo-google" size={20} color="#e91e8c" />
+                    </View>
+                    <Text style={styles.googleButtonText}>Sign Up with Google</Text>
+                </TouchableOpacity>
+
+                <View style={styles.dividerContainer}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>OR</Text>
+                    <View style={styles.dividerLine} />
                 </View>
 
                 <View style={styles.form}>
@@ -81,27 +101,30 @@ export default function RegisterScreen() {
                         placeholder="Full Name"
                         value={name}
                         onChangeText={setName}
-                        borderColor="#FF00FF" // Neon Pink
-                        glowColor="#FF00FF"
+                        borderColor="#e91e8c"
+                        glowColor="#e91e8c"
+                        icon="person-outline"
                     />
 
                     <NeonInput
-                        placeholder="University Email"
+                        placeholder="Uni Email"
                         value={email}
                         onChangeText={setEmail}
                         autoCapitalize="none"
                         keyboardType="email-address"
-                        borderColor="#00FFFF" // Neon Cyan
-                        glowColor="#00FFFF"
+                        borderColor="#e91e8c"
+                        glowColor="#e91e8c"
+                        icon="mail-outline"
                     />
 
                     <NeonInput
-                        placeholder="Create Password"
+                        placeholder="Password"
                         value={password}
                         onChangeText={setPassword}
                         secureTextEntry
-                        borderColor="#FF00FF" // Neon Pink
-                        glowColor="#FF00FF"
+                        borderColor="#e91e8c"
+                        glowColor="#e91e8c"
+                        icon="lock-closed-outline"
                     />
 
                     <NeonInput
@@ -109,34 +132,24 @@ export default function RegisterScreen() {
                         value={confirmPassword}
                         onChangeText={setConfirmPassword}
                         secureTextEntry
-                        borderColor="#00FFFF" // Neon Cyan
-                        glowColor="#00FFFF"
+                        borderColor="#e91e8c"
+                        glowColor="#e91e8c"
+                        icon="lock-closed-outline"
                     />
 
                     <GradientButton
-                        title="Sign Up"
+                        title="Create Account"
                         onPress={handleRegister}
                         loading={loading}
                         style={styles.signupButton}
                     />
                 </View>
 
-                <View style={styles.socialSection}>
-                    <Text style={styles.socialText}>Or vibe with:</Text>
-                    <TouchableOpacity
-                        style={styles.googleButton}
-                        onPress={handleGoogleSignUp}
-                    >
-                        <Ionicons name="logo-google" size={24} color="#FFF" style={styles.googleIcon} />
-                        <Text style={styles.googleButtonText}>Continue with Google</Text>
-                    </TouchableOpacity>
-                </View>
-
                 <View style={styles.footer}>
                     <Link href="/(auth)/login" asChild>
                         <TouchableOpacity>
                             <Text style={styles.footerText}>
-                                Already have an account? <Text style={styles.linkText}>Login</Text>
+                                Already have an account? <Text style={styles.linkText}>Log In</Text>
                             </Text>
                         </TouchableOpacity>
                     </Link>
@@ -149,70 +162,60 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#1a0d2e', // Deep Purple Solid Background
+        backgroundColor: '#1a0d2e', // Deep Purple Background
     },
     scrollContent: {
         flexGrow: 1,
         padding: 24,
         justifyContent: 'center',
-        zIndex: 1,
     },
-    header: {
+    logoContainer: {
         alignItems: 'center',
+        flexDirection: 'row',
+        justifyContent: 'center',
         marginBottom: 30,
+        marginTop: 40,
+    },
+    logo: {
+        width: 40,
+        height: 40,
+        marginRight: 10,
+    },
+    appName: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#e91e8c', // Pink
     },
     title: {
-        fontSize: 24,
+        fontSize: 32,
         fontWeight: 'bold',
         color: '#FFF',
-        marginBottom: 10,
-        letterSpacing: 1,
-        textShadowColor: '#FF3399',
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 10,
-    },
-    subtitle: {
-        fontSize: 36,
-        fontWeight: '800',
-        color: '#FFF',
+        marginBottom: 30,
         textAlign: 'center',
-        lineHeight: 42,
-        textShadowColor: '#00FFFF',
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 5,
-    },
-    form: {
-        marginBottom: 30,
-    },
-    signupButton: {
-        marginTop: 10,
-    },
-    socialSection: {
-        alignItems: 'center',
-        marginBottom: 30,
-    },
-    socialText: {
-        color: '#CCC',
-        marginBottom: 15,
-        fontSize: 14,
+        lineHeight: 40,
     },
     googleButton: {
         width: '100%',
         height: 56,
         borderRadius: 28,
-        borderWidth: 2,
-        borderColor: '#00FFFF',
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: '#e91e8c', // Pink background
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#00FFFF',
-        shadowOffset: { width: 0, height: 0 },
+        marginBottom: 24,
+        shadowColor: '#e91e8c',
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 5,
     },
-    googleIcon: {
+    googleIconContainer: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#FFF',
+        justifyContent: 'center',
+        alignItems: 'center',
         marginRight: 12,
     },
     googleButtonText: {
@@ -220,8 +223,32 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
+    dividerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: '#666',
+    },
+    dividerText: {
+        color: '#FFF',
+        paddingHorizontal: 16,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    form: {
+        marginBottom: 20,
+    },
+    signupButton: {
+        marginTop: 10,
+        backgroundColor: '#e91e8c',
+    },
     footer: {
         alignItems: 'center',
+        marginTop: 10,
         marginBottom: 20,
     },
     footerText: {
@@ -229,7 +256,7 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     linkText: {
-        color: '#FF3399',
+        color: '#FFF',
         fontWeight: 'bold',
     },
 });

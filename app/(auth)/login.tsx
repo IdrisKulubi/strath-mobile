@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, StatusBar, Image, ScrollView } from 'react-native';
 import { signIn } from '../../lib/auth-client';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { NeonInput } from '@/components/ui/neon-input';
 import { GradientButton } from '@/components/ui/gradient-button';
-import { FloatingEmojis } from '@/components/ui/floating-emojis';
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
@@ -40,17 +39,22 @@ export default function LoginScreen() {
     };
 
     const handleGoogleSignIn = async () => {
+        console.log("Google Sign-In button pressed");
         try {
+            console.log("Starting signIn.social...");
+            console.log("API URL:", process.env.EXPO_PUBLIC_API_URL);
             const result = await signIn.social({
                 provider: "google",
                 callbackURL: "/(tabs)",
             });
+            console.log("signIn.social result:", result);
 
             if (result.data) {
+                console.log("Sign-in successful, redirecting...");
                 router.replace('/(tabs)');
             }
         } catch (error) {
-            console.error("Sign in error:", error);
+            console.error("Sign in error details:", error);
             Alert.alert('Error', 'Google sign-in failed');
         }
     };
@@ -58,23 +62,45 @@ export default function LoginScreen() {
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
-            <FloatingEmojis />
 
-            <View style={styles.content}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>Strathspace</Text>
-                    <Text style={styles.subtitle}>Back to{'\n'}Campus Love?</Text>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
+                <View style={styles.logoContainer}>
+                    <Image
+                        source={require('@/assets/images/logos/LOGO.png')}
+                        style={styles.logo}
+                        resizeMode="contain"
+                    />
+                    <Text style={styles.appName}>Strathspace</Text>
+                </View>
+
+                <Text style={styles.title}>Welcome Back to{'\n'}Campus,😉</Text>
+
+                <TouchableOpacity
+                    style={styles.googleButton}
+                    onPress={handleGoogleSignIn}
+                >
+                    <View style={styles.googleIconContainer}>
+                        <Ionicons name="logo-google" size={20} color="#e91e8c" />
+                    </View>
+                    <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </TouchableOpacity>
+
+                <View style={styles.dividerContainer}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>OR</Text>
+                    <View style={styles.dividerLine} />
                 </View>
 
                 <View style={styles.form}>
                     <NeonInput
-                        placeholder="Email"
+                        placeholder="Uni Email"
                         value={email}
                         onChangeText={setEmail}
                         autoCapitalize="none"
                         keyboardType="email-address"
-                        borderColor="#FF00FF" // Neon Pink
-                        glowColor="#FF00FF"
+                        borderColor="#e91e8c"
+                        glowColor="#e91e8c"
+                        icon="mail-outline"
                     />
 
                     <NeonInput
@@ -82,39 +108,33 @@ export default function LoginScreen() {
                         value={password}
                         onChangeText={setPassword}
                         secureTextEntry
-                        borderColor="#00FFFF" // Neon Cyan
-                        glowColor="#00FFFF"
+                        borderColor="#e91e8c"
+                        glowColor="#e91e8c"
+                        icon="lock-closed-outline"
                     />
 
                     <GradientButton
-                        title="Login"
+                        title="Log In"
                         onPress={handleLogin}
                         loading={loading}
                         style={styles.loginButton}
                     />
                 </View>
 
-                <View style={styles.socialSection}>
-                    <Text style={styles.socialText}>Or vibe with:</Text>
-                    <TouchableOpacity
-                        style={styles.googleButton}
-                        onPress={handleGoogleSignIn}
-                    >
-                        <Ionicons name="logo-google" size={24} color="#FFF" style={styles.googleIcon} />
-                        <Text style={styles.googleButtonText}>Continue with Google</Text>
-                    </TouchableOpacity>
-                </View>
-
                 <View style={styles.footer}>
+                    <TouchableOpacity onPress={() => Alert.alert('Info', 'Reset password flow coming soon!')}>
+                        <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                    </TouchableOpacity>
+
                     <Link href="/(auth)/register" asChild>
-                        <TouchableOpacity>
+                        <TouchableOpacity style={styles.signupLink}>
                             <Text style={styles.footerText}>
                                 Don't have an account? <Text style={styles.linkText}>Sign Up</Text>
                             </Text>
                         </TouchableOpacity>
                     </Link>
                 </View>
-            </View>
+            </ScrollView>
         </View>
     );
 }
@@ -122,70 +142,60 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#1a0d2e', // Deep Purple Solid Background
+        backgroundColor: '#1a0d2e', // Deep Purple Background
     },
-    content: {
-        flex: 1,
+    scrollContent: {
+        flexGrow: 1,
         padding: 24,
         justifyContent: 'center',
-        zIndex: 1,
     },
-    header: {
+    logoContainer: {
         alignItems: 'center',
+        flexDirection: 'row',
+        justifyContent: 'center',
         marginBottom: 40,
+        marginTop: 60, // Moved down a bit as requested
+    },
+    logo: {
+        width: 40,
+        height: 40,
+        marginRight: 10,
+    },
+    appName: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#e91e8c', // Pink
     },
     title: {
-        fontSize: 24,
+        fontSize: 32,
         fontWeight: 'bold',
         color: '#FFF',
-        marginBottom: 10,
-        letterSpacing: 1,
-        textShadowColor: '#FF3399',
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 10,
-    },
-    subtitle: {
-        fontSize: 36,
-        fontWeight: '800',
-        color: '#FFF',
+        marginBottom: 30,
         textAlign: 'center',
-        lineHeight: 42,
-        textShadowColor: '#00FFFF',
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 5,
-    },
-    form: {
-        marginBottom: 30,
-    },
-    loginButton: {
-        marginTop: 10,
-    },
-    socialSection: {
-        alignItems: 'center',
-        marginBottom: 30,
-    },
-    socialText: {
-        color: '#CCC',
-        marginBottom: 15,
-        fontSize: 14,
+        lineHeight: 40,
     },
     googleButton: {
         width: '100%',
         height: 56,
         borderRadius: 28,
-        borderWidth: 2,
-        borderColor: '#00FFFF',
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: '#e91e8c', // Pink background
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#00FFFF',
-        shadowOffset: { width: 0, height: 0 },
+        marginBottom: 24,
+        shadowColor: '#e91e8c',
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 5,
     },
-    googleIcon: {
+    googleIconContainer: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#FFF',
+        justifyContent: 'center',
+        alignItems: 'center',
         marginRight: 12,
     },
     googleButtonText: {
@@ -193,15 +203,47 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
+    dividerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: '#666',
+    },
+    dividerText: {
+        color: '#FFF',
+        paddingHorizontal: 16,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    form: {
+        marginBottom: 20,
+    },
+    loginButton: {
+        marginTop: 10,
+        backgroundColor: '#e91e8c', // Ensure it matches the theme if GradientButton supports style override or we might need to update GradientButton too if it forces gradient
+    },
     footer: {
         alignItems: 'center',
+        marginTop: 10,
+    },
+    forgotPasswordText: {
+        color: '#FFF',
+        fontSize: 14,
+        marginBottom: 16,
+    },
+    signupLink: {
+        marginTop: 8,
     },
     footerText: {
         color: '#CCC',
         fontSize: 14,
     },
     linkText: {
-        color: '#FF3399',
+        color: '#FFF',
         fontWeight: 'bold',
     },
 });

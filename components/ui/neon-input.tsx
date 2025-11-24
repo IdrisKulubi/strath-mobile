@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import { TextInput, View, StyleSheet, TextInputProps, Animated, StyleProp, ViewStyle } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { TextInput, View, StyleSheet, TextInputProps, StyleProp, ViewStyle } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 interface NeonInputProps extends Omit<TextInputProps, 'style'> {
     borderColor?: string;
     glowColor?: string;
     style?: StyleProp<ViewStyle>;
+    icon?: keyof typeof Ionicons.glyphMap;
 }
 
 export function NeonInput({
     style,
     borderColor = '#00FFFF', // Default neon cyan
     glowColor = '#00FFFF',
+    icon,
     ...props
 }: NeonInputProps) {
     const [isFocused, setIsFocused] = useState(false);
@@ -30,6 +32,14 @@ export function NeonInput({
                 style,
             ]}
         >
+            {icon && (
+                <Ionicons
+                    name={icon}
+                    size={20}
+                    color={isFocused ? borderColor : '#666'}
+                    style={styles.icon}
+                />
+            )}
             <TextInput
                 style={styles.input}
                 placeholderTextColor="#666"
@@ -45,15 +55,20 @@ const styles = StyleSheet.create({
     container: {
         width: '100%',
         height: 56,
-        borderWidth: 2,
-        borderRadius: 28,
-        backgroundColor: '#000', // Deep black background for contrast
-        justifyContent: 'center',
-        paddingHorizontal: 20,
+        borderWidth: 1, // Thinner border as per design
+        borderRadius: 16, // Slightly less rounded
+        backgroundColor: 'rgba(255, 255, 255, 0.05)', // Transparent background
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
         marginBottom: 16,
         shadowOffset: { width: 0, height: 0 },
     },
+    icon: {
+        marginRight: 12,
+    },
     input: {
+        flex: 1,
         color: '#FFF',
         fontSize: 16,
         height: '100%',

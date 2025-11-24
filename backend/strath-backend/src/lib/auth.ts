@@ -22,7 +22,7 @@ export const auth = betterAuth({
     trustedOrigins: [
         "strathmobile://",
         "http://192.168.100.24:3000",
-        "https://strong-nights-turn.loca.lt",
+        " https://four-worlds-cry.loca.lt",
         // Development mode - Expo's exp:// scheme
         ...(process.env.NODE_ENV === "development" ? [
             "exp://192.168.100.24:8081",
