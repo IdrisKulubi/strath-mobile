@@ -15,6 +15,8 @@ const FeedProfileSchema = z.object({
     university: z.string().nullable().optional(),
     course: z.string().nullable().optional(),
     yearOfStudy: z.number().nullable().optional(),
+    lookingFor: z.string().nullable().optional(),
+    location: z.string().nullable().optional(),
 });
 
 export type FeedProfile = z.infer<typeof FeedProfileSchema>;
