@@ -14,6 +14,7 @@ export const Colors = {
     // Core colors - Light mode (if needed)
     background: '#fafafa',           // Light background
     foreground: '#1a0d2e',           // Dark purple text
+    card: '#ffffff',                 // White card background
 
     // Primary (Pink/Magenta accent)
     primary: '#e91e8c',              // Bright pink/magenta
