@@ -26,6 +26,9 @@ export const updateProfileSchema = z.object({
     visibilityMode: z.enum(["standard", "incognito"]).optional(),
     readReceiptsEnabled: z.boolean().optional(),
     showActiveStatus: z.boolean().optional(),
+    anonymous: z.boolean().optional(),
+    anonymousAvatar: z.string().optional(),
+    isComplete: z.boolean().optional(),
 });
 
 export const swipeSchema = z.object({

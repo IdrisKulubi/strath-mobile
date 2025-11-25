@@ -45,7 +45,6 @@ export async function PATCH(req: NextRequest) {
             .set({
                 ...validatedData,
                 updatedAt: new Date(),
-                profileCompleted: true, // Assume profile is completed on first update
             })
             .where(eq(profiles.userId, session.user.id))
             .returning();
