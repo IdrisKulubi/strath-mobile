@@ -1,5 +1,5 @@
 import { Redirect, useRouter } from 'expo-router';
-import {View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { useSession } from '../lib/auth-client';
 import { useEffect, useState } from 'react';
 

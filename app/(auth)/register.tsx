@@ -37,7 +37,7 @@ export default function RegisterScreen() {
                 Alert.alert('Registration Failed', error.message || 'An error occurred');
             } else {
                 Alert.alert('Success', 'Account created successfully', [
-                    { text: 'OK', onPress: () => router.replace('/(tabs)') }
+                    { text: 'OK', onPress: () => router.replace('/') }
                 ]);
             }
         } catch (err) {
@@ -52,11 +52,11 @@ export default function RegisterScreen() {
         try {
             const result = await signIn.social({
                 provider: "google",
-                callbackURL: "/(tabs)",
+                callbackURL: "/",
             });
 
             if (result.data) {
-                router.replace('/(tabs)');
+                router.replace('/');
             }
         } catch (error) {
             console.error("Sign up error:", error);

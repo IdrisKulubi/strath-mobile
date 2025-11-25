@@ -28,7 +28,7 @@ export default function LoginScreen() {
             if (error) {
                 Alert.alert('Login Failed', error.message || 'An error occurred');
             } else {
-                router.replace('/(tabs)');
+                router.replace('/');
             }
         } catch (err) {
             Alert.alert('Error', 'Something went wrong');
@@ -45,13 +45,13 @@ export default function LoginScreen() {
             console.log("API URL:", process.env.EXPO_PUBLIC_API_URL);
             const result = await signIn.social({
                 provider: "google",
-                callbackURL: "/(tabs)",
+                callbackURL: "/",
             });
             console.log("signIn.social result:", result);
 
             if (result.data) {
                 console.log("Sign-in successful, redirecting...");
-                router.replace('/(tabs)');
+                router.replace('/');
             }
         } catch (error) {
             console.error("Sign in error details:", error);
