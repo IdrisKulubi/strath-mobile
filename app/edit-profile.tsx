@@ -108,6 +108,8 @@ export default function EditProfileScreen() {
             if (updatedFormData.profilePhoto && !updatedFormData.profilePhoto.startsWith('http')) {
                 const publicUrl = await uploadImage(updatedFormData.profilePhoto);
                 updatedFormData.profilePhoto = publicUrl;
+                // Update state so preview shows uploaded image
+                setFormData(prev => ({ ...prev, profilePhoto: publicUrl }));
             }
 
             // Upload extra photos
@@ -119,6 +121,8 @@ export default function EditProfileScreen() {
                     return photo;
                 }));
                 updatedFormData.photos = uploadedPhotos;
+                // Update state so previews show uploaded images
+                setFormData(prev => ({ ...prev, photos: uploadedPhotos }));
             }
 
             updateProfile(updatedFormData, {
