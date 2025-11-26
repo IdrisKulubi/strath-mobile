@@ -8,6 +8,7 @@ export async function middleware(request: NextRequest) {
     // List of public paths that don't require authentication
     const publicPaths = [
         "/api/auth",
+        "/api/test-db",
         "/_next",
         "/favicon.ico",
         "/public",
@@ -26,6 +27,13 @@ export async function middleware(request: NextRequest) {
     // but middleware runs on edge and might not have DB access easily.
     // BetterAuth handles the actual session validation in the API routes.
     // This middleware is just for quick redirection/blocking at the edge.
+
+    // Allow requests with Authorization header (Bearer token) to pass through
+    // The route handler will verify the token validity
+    const authHeader = request.headers.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+        return NextResponse.next();
+    }
 
     if (!sessionCookie) {
         // If it's an API route, return 401
