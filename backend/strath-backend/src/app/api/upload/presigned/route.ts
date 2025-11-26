@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
         });
 
         const signedUrl = await getSignedUrl(r2, command, { expiresIn: 3600 });
-        const publicUrl = `${R2_PUBLIC_URL}/${uniqueFilename}`;
+        const baseUrl = R2_PUBLIC_URL.startsWith("http") ? R2_PUBLIC_URL : `https://${R2_PUBLIC_URL}`;
+        const publicUrl = `${baseUrl}/${uniqueFilename}`;
 
         return NextResponse.json({ signedUrl, publicUrl });
     } catch (error) {

@@ -71,6 +71,26 @@ async function fetchProfile() {
     }
 
     const data = await response.json();
+
+    // Helper to ensure URLs have protocol
+    const normalizeUrl = (url?: string) => {
+        if (!url) return url;
+        if (url.startsWith('http')) return url;
+        // If it looks like an R2 URL (contains r2.dev or cloudflare), prepend https
+        if (url.includes('r2.dev') || url.includes('cloudflare')) {
+            return `https://${url}`;
+        }
+        return url;
+    };
+
+    // Normalize URLs in the response
+    if (data.data) {
+        data.data.profilePhoto = normalizeUrl(data.data.profilePhoto);
+        if (data.data.photos) {
+            data.data.photos = data.data.photos.map(normalizeUrl);
+        }
+    }
+
     return data.data;
 }
 
