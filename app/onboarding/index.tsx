@@ -10,11 +10,14 @@ import Phase5SocialConnect from '../../components/digital-dna/Phase5SocialConnec
 import Phase6Launch from '../../components/digital-dna/Phase5Launch'; // Renamed but keeping current file
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/theme';
+import { useImageUpload } from '@/hooks/use-image-upload';
 
 export default function OnboardingScreen() {
     const router = useRouter();
     const [phase, setPhase] = useState(1);
     const progressAnim = new Animated.Value(0);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const { uploadImage } = useImageUpload();
 
     const [formData, setFormData] = useState<OnboardingData>({
         // Phase 1
@@ -98,10 +101,23 @@ export default function OnboardingScreen() {
     };
 
     const submitData = async () => {
+        setIsSubmitting(true);
         try {
+            // Upload photos first
+            let uploadedPhotos = [...formData.photos];
+            if (uploadedPhotos.length > 0) {
+                uploadedPhotos = await Promise.all(uploadedPhotos.map(async (photo) => {
+                    if (photo && !photo.startsWith('http')) {
+                        return await uploadImage(photo);
+                    }
+                    return photo;
+                }));
+            }
+
             // Prepare data for API
             const payload = {
                 ...formData,
+                photos: uploadedPhotos,
                 yearOfStudy: formData.yearOfStudy ? parseInt(formData.yearOfStudy) : undefined,
                 isComplete: true,
                 profileCompleted: true, // For backward compatibility if needed
@@ -124,6 +140,8 @@ export default function OnboardingScreen() {
         } catch (error) {
             console.error('Onboarding error:', error);
             Alert.alert('Error', 'Failed to save your profile. Please try again.');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -133,6 +151,7 @@ export default function OnboardingScreen() {
             updateData,
             onNext: handleNext,
             onBack: handleBack,
+            isSubmitting,
         };
 
         switch (phase) {

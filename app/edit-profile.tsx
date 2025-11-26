@@ -5,10 +5,14 @@ import { useProfile, Profile } from '@/hooks/use-profile';
 import { StrengthMeter } from '@/components/profile/strength-meter';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+
+import { useImageUpload } from '@/hooks/use-image-upload';
 
 export default function EditProfileScreen() {
     const { colors } = useTheme();
     const { data: profile, updateProfile, isUpdating } = useProfile();
+    const { uploadImage, isUploading: isImageUploading } = useImageUpload();
     const router = useRouter();
 
     const [formData, setFormData] = useState<Partial<Profile>>({});
@@ -40,18 +44,98 @@ export default function EditProfileScreen() {
         setIsDirty(true);
     };
 
-    const handleSave = () => {
-        updateProfile(formData, {
-            onSuccess: () => {
-                Alert.alert("Success", "Profile updated successfully!");
-                setIsDirty(false);
-                router.back();
-            },
-            onError: (error) => {
-                Alert.alert("Error", "Failed to update profile.");
-                console.error(error);
-            }
+    const handleImagePress = async (index: number) => {
+        // index -1 for main photo, 0-4 for extra photos
+        const isMain = index === -1;
+        const currentUri = isMain ? formData.profilePhoto : formData.photos?.[index];
+
+        if (currentUri) {
+            Alert.alert(
+                "Edit Photo",
+                "Choose an action",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Remove", style: "destructive", onPress: () => removeImage(index) },
+                    { text: "Replace", onPress: () => pickImage(index) }
+                ]
+            );
+        } else {
+            pickImage(index);
+        }
+    };
+
+    const pickImage = async (index: number) => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
         });
+
+        if (!result.canceled) {
+            const newUri = result.assets[0].uri;
+            if (index === -1) {
+                handleChange('profilePhoto', newUri);
+            } else {
+                const currentPhotos = [...(formData.photos || [])];
+                // If replacing an existing photo (index within bounds)
+                if (index < currentPhotos.length) {
+                    currentPhotos[index] = newUri;
+                } else {
+                    // If adding a new photo (append)
+                    currentPhotos.push(newUri);
+                }
+                handleChange('photos', currentPhotos);
+            }
+        }
+    };
+
+    const removeImage = (index: number) => {
+        if (index === -1) {
+            handleChange('profilePhoto', null);
+        } else {
+            const currentPhotos = [...(formData.photos || [])];
+            currentPhotos.splice(index, 1);
+            handleChange('photos', currentPhotos);
+        }
+    };
+
+    const handleSave = async () => {
+        try {
+            let updatedFormData = { ...formData };
+
+            // Upload main photo if changed (local URI)
+            if (updatedFormData.profilePhoto && !updatedFormData.profilePhoto.startsWith('http')) {
+                const publicUrl = await uploadImage(updatedFormData.profilePhoto);
+                updatedFormData.profilePhoto = publicUrl;
+            }
+
+            // Upload extra photos
+            if (updatedFormData.photos && updatedFormData.photos.length > 0) {
+                const uploadedPhotos = await Promise.all(updatedFormData.photos.map(async (photo) => {
+                    if (photo && !photo.startsWith('http')) {
+                        return await uploadImage(photo);
+                    }
+                    return photo;
+                }));
+                updatedFormData.photos = uploadedPhotos;
+            }
+
+            updateProfile(updatedFormData, {
+                onSuccess: () => {
+                    Alert.alert("Success", "Profile updated successfully!");
+                    setIsDirty(false);
+                    router.back();
+                },
+                onError: (error) => {
+                    Alert.alert("Error", "Failed to update profile.");
+                    console.error(error);
+                }
+            });
+        } catch (error) {
+            Alert.alert("Error", "Failed to upload images.");
+            console.error(error);
+        }
     };
 
     const calculateCompletion = () => {
@@ -91,9 +175,9 @@ export default function EditProfileScreen() {
                     <Text style={[styles.headerButton, { color: colors.muted }]}>Cancel</Text>
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: colors.foreground }]}>Update DNA</Text>
-                <TouchableOpacity onPress={handleSave} disabled={!isDirty || isUpdating}>
-                    <Text style={[styles.headerButton, { color: isDirty ? colors.primary : colors.muted, opacity: isUpdating ? 0.5 : 1 }]}>
-                        Save
+                <TouchableOpacity onPress={handleSave} disabled={!isDirty || isUpdating || isImageUploading}>
+                    <Text style={[styles.headerButton, { color: isDirty ? colors.primary : colors.muted, opacity: isUpdating || isImageUploading ? 0.5 : 1 }]}>
+                        {isImageUploading ? 'Uploading...' : 'Save'}
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -109,7 +193,7 @@ export default function EditProfileScreen() {
                         <Text style={[styles.sectionTitle, { color: colors.muted }]}>PHOTO LAB</Text>
                         <View style={styles.photoGrid}>
                             {/* Main Photo */}
-                            <TouchableOpacity style={styles.mainPhotoContainer}>
+                            <TouchableOpacity style={styles.mainPhotoContainer} onPress={() => handleImagePress(-1)}>
                                 {formData.profilePhoto ? (
                                     <Image source={{ uri: formData.profilePhoto }} style={styles.mainPhoto} />
                                 ) : (
@@ -126,7 +210,7 @@ export default function EditProfileScreen() {
                             {[1, 2, 3, 4, 5].map((i) => {
                                 const photoUri = formData.photos?.[i - 1];
                                 return (
-                                    <TouchableOpacity key={i} style={styles.smallPhotoContainer}>
+                                    <TouchableOpacity key={i} style={styles.smallPhotoContainer} onPress={() => handleImagePress(i - 1)}>
                                         {photoUri ? (
                                             <Image source={{ uri: photoUri }} style={styles.smallPhoto} />
                                         ) : (
@@ -416,10 +500,10 @@ export default function EditProfileScreen() {
                         </View>
                     </View>
 
-                    
 
-                    <TouchableOpacity style={[styles.saveButton, { backgroundColor: colors.primary }]} onPress={handleSave} disabled={isUpdating}>
-                        <Text style={styles.saveButtonText}>{isUpdating ? 'Saving...' : 'Save Changes'}</Text>
+
+                    <TouchableOpacity style={[styles.saveButton, { backgroundColor: colors.primary }]} onPress={handleSave} disabled={isUpdating || isImageUploading}>
+                        <Text style={styles.saveButtonText}>{isUpdating || isImageUploading ? 'Saving...' : 'Save Changes'}</Text>
                     </TouchableOpacity>
 
                     <View style={{ height: 50 }} />

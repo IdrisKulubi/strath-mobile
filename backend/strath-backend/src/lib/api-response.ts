@@ -17,7 +17,7 @@ export function errorResponse(error: unknown, status = 500) {
 
     if (error instanceof ZodError) {
         return NextResponse.json(
-            { success: false, error: "Validation Error", details: error.errors },
+            { success: false, error: "Validation Error", details: error.issues },
             { status: 400 }
         );
     }

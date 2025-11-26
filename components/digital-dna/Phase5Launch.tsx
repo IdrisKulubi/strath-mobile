@@ -15,12 +15,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/theme';
 
-export default function Phase5Launch({ data, updateData, onNext, onBack }: PhaseProps) {
+export default function Phase5Launch({ data, updateData, onNext, onBack, isSubmitting }: PhaseProps) {
     const [isScanning, setIsScanning] = useState(false);
     const progress = useSharedValue(0);
     const router = useRouter();
 
     const handlePressIn = () => {
+        if (isSubmitting) return;
         setIsScanning(true);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
         progress.value = withTiming(1, { duration: 2000, easing: Easing.linear }, (finished) => {
@@ -58,8 +59,8 @@ export default function Phase5Launch({ data, updateData, onNext, onBack }: Phase
     return (
         <View style={styles.container}>
             <Animated.View entering={FadeIn.duration(800)} style={styles.header}>
-                <Text style={styles.title}>System Ready</Text>
-                <Text style={styles.subtitle}>Authenticate to launch.</Text>
+                <Text style={styles.title}>{isSubmitting ? 'Initializing...' : 'System Ready'}</Text>
+                <Text style={styles.subtitle}>{isSubmitting ? 'Uploading your digital DNA...' : 'Authenticate to launch.'}</Text>
             </Animated.View>
 
             <View style={styles.content}>
@@ -67,7 +68,8 @@ export default function Phase5Launch({ data, updateData, onNext, onBack }: Phase
                     <Pressable
                         onPressIn={handlePressIn}
                         onPressOut={handlePressOut}
-                        style={styles.fingerprintArea}
+                        style={[styles.fingerprintArea, isSubmitting && { opacity: 0.5 }]}
+                        disabled={isSubmitting}
                     >
                         <View style={styles.fingerprintRing}>
                             <Animated.View style={[styles.scanFill, scannerStyle]}>
@@ -79,7 +81,7 @@ export default function Phase5Launch({ data, updateData, onNext, onBack }: Phase
                             <Text style={styles.fingerprintIcon}>☝️</Text>
                         </View>
                     </Pressable>
-                    <Text style={styles.instruction}>HOLD TO LAUNCH</Text>
+                    <Text style={styles.instruction}>{isSubmitting ? 'PLEASE WAIT' : 'HOLD TO LAUNCH'}</Text>
                 </View>
             </View>
 

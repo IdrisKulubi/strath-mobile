@@ -41,4 +41,5 @@ export interface PhaseProps {
     updateData: (key: keyof OnboardingData, value: any) => void;
     onNext: () => void;
     onBack: () => void;
+    isSubmitting?: boolean;
 }
