@@ -23,6 +23,7 @@ export const useImageUpload = () => {
             console.log("[useImageUpload] Token:", token ? "Present" : "Missing");
             console.log("[useImageUpload] API URL:", apiUrl);
 
+            console.log("[useImageUpload] Step 1: Requesting presigned URL...");
             const presignRes = await fetch(`${apiUrl}/api/upload/presigned`, {
                 method: 'POST',
                 headers: {
@@ -38,10 +39,13 @@ export const useImageUpload = () => {
             }
 
             const { signedUrl, publicUrl } = await presignRes.json();
+            console.log("[useImageUpload] Step 2: Got presigned URL. Public URL:", publicUrl);
 
             // 2. Upload to R2
+            console.log("[useImageUpload] Step 3: Reading local file blob...");
             const response = await fetch(uri);
             const blob = await response.blob();
+            console.log("[useImageUpload] Step 4: Uploading to R2...", signedUrl.substring(0, 50) + "...");
 
             const uploadRes = await fetch(signedUrl, {
                 method: 'PUT',
