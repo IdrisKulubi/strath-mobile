@@ -94,10 +94,15 @@ export async function PATCH(req: NextRequest) {
         const body = await req.json();
         const validatedData = updateProfileSchema.parse(body);
 
+        // Filter out null values (keep undefined to not overwrite DB values)
+        const filteredData = Object.fromEntries(
+            Object.entries(validatedData).filter(([_, value]) => value !== null)
+        );
+
         const updatedProfile = await db
             .update(profiles)
             .set({
-                ...validatedData,
+                ...filteredData,
                 updatedAt: new Date(),
             })
             .where(eq(profiles.userId, session.user.id))

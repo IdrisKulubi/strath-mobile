@@ -95,7 +95,9 @@ async function updateProfile(updates: Partial<Profile>) {
     });
 
     if (!response.ok) {
-        throw new Error('Failed to update profile');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[updateProfile] Error response:', response.status, errorData);
+        throw new Error(errorData.error || 'Failed to update profile');
     }
 
     const data = await response.json();
