@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
+import { authClient } from '@/lib/auth-client';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -22,7 +23,14 @@ const FeedProfileSchema = z.object({
 export type FeedProfile = z.infer<typeof FeedProfileSchema>;
 
 const fetchFeedProfiles = async (): Promise<FeedProfile[]> => {
-    const response = await fetch(`${API_URL}/api/feed`);
+    const session = await authClient.getSession();
+    const token = session.data?.session?.token;
+
+    const response = await fetch(`${API_URL}/api/feed`, {
+        headers: {
+            'Authorization': token ? `Bearer ${token}` : ''
+        }
+    });
 
     if (!response.ok) {
         throw new Error('Failed to fetch feed');
