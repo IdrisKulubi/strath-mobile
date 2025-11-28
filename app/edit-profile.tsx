@@ -281,12 +281,17 @@ export default function EditProfileScreen() {
                     </View>
 
                     {/* Photo Lab */}
+                    {/* Photo Lab */}
                     <View style={styles.section}>
-                        {renderSectionHeader("PHOTOS")}
-                        <View style={styles.photoSection}>
-                            {/* Main Photo - Full Width Card */}
+                        {renderSectionHeader("PHOTOS & VIDEOS")}
+                        <Text style={[styles.helperText, { color: colors.muted, marginBottom: 16, marginTop: -4 }]}>
+                            Pick some that show the true you.
+                        </Text>
+
+                        <View style={styles.photoGridContainer}>
+                            {/* Main Photo (Slot 1) */}
                             <TouchableOpacity
-                                style={[styles.photoCard, styles.mainPhotoCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                                style={[styles.photoCard, styles.gridPhotoCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                                 onPress={() => handleImagePress(-1)}
                                 activeOpacity={0.9}
                             >
@@ -294,58 +299,55 @@ export default function EditProfileScreen() {
                                     <>
                                         <Image source={{ uri: formData.profilePhoto }} style={styles.photoCardImage} />
                                         <View style={[styles.photoOverlay, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
-                                            <Ionicons name="pencil" size={20} color="white" />
+                                            <Ionicons name="pencil" size={16} color="white" />
+                                        </View>
+                                        <View style={styles.mainPhotoBadge}>
+                                            <Text style={styles.mainPhotoBadgeText}>Main</Text>
                                         </View>
                                     </>
                                 ) : (
                                     <View style={styles.photoCardEmpty}>
-                                        <View style={[styles.photoIconCircle, { backgroundColor: colors.primary + '20' }]}>
-                                            <Ionicons name="camera" size={32} color={colors.primary} />
+                                        <Ionicons name="add" size={32} color={colors.primary} />
+                                        <View style={[styles.photoNumberBadge, { backgroundColor: colors.border, position: 'absolute', bottom: 8, left: 8, width: 24, height: 24 }]}>
+                                            <Text style={[styles.photoNumberText, { color: colors.muted, fontSize: 12 }]}>1</Text>
                                         </View>
-                                        <Text style={[styles.photoCardTitle, { color: colors.foreground }]}>Add your main photo</Text>
-                                        <Text style={[styles.photoCardSubtitle, { color: colors.muted }]}>This is the first photo people will see</Text>
                                     </View>
                                 )}
-                                <View style={styles.mainPhotoBadge}>
-                                    <Text style={styles.mainPhotoBadgeText}>MAIN PHOTO</Text>
-                                </View>
                             </TouchableOpacity>
 
-                            {/* Additional Photos - Grid */}
-                            <View style={styles.additionalPhotosGrid}>
-                                {[0, 1, 2, 3].map((index) => {
-                                    const photoUri = formData.photos?.[index];
-                                    const photoNumber = index + 2;
-                                    return (
-                                        <TouchableOpacity
-                                            key={index}
-                                            style={[styles.photoCard, styles.gridPhotoCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                                            onPress={() => handleImagePress(index)}
-                                            activeOpacity={0.9}
-                                        >
-                                            {photoUri ? (
-                                                <>
-                                                    <Image source={{ uri: photoUri }} style={styles.photoCardImage} />
-                                                    <View style={[styles.photoOverlay, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
-                                                        <Ionicons name="pencil" size={16} color="white" />
-                                                    </View>
-                                                </>
-                                            ) : (
-                                                <View style={styles.photoCardEmpty}>
-                                                    <View style={[styles.photoNumberBadge, { backgroundColor: colors.border }]}>
-                                                        <Text style={[styles.photoNumberText, { color: colors.muted }]}>{photoNumber}</Text>
-                                                    </View>
-                                                    <Ionicons name="add-circle-outline" size={24} color={colors.border} style={{ marginTop: 8 }} />
+                            {/* Additional Photos (Slots 2-6) */}
+                            {[0, 1, 2, 3, 4].map((index) => {
+                                const photoUri = formData.photos?.[index];
+                                const photoNumber = index + 2;
+                                return (
+                                    <TouchableOpacity
+                                        key={index}
+                                        style={[styles.photoCard, styles.gridPhotoCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                                        onPress={() => handleImagePress(index)}
+                                        activeOpacity={0.9}
+                                    >
+                                        {photoUri ? (
+                                            <>
+                                                <Image source={{ uri: photoUri }} style={styles.photoCardImage} />
+                                                <View style={[styles.photoOverlay, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
+                                                    <Ionicons name="close-circle" size={20} color="white" style={{ position: 'absolute', top: 4, right: 4 }} />
                                                 </View>
-                                            )}
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
+                                                <View style={[styles.photoNumberBadge, { backgroundColor: 'rgba(0,0,0,0.5)', position: 'absolute', bottom: 8, left: 8, width: 24, height: 24 }]}>
+                                                    <Text style={[styles.photoNumberText, { color: 'white', fontSize: 12 }]}>{photoNumber}</Text>
+                                                </View>
+                                            </>
+                                        ) : (
+                                            <View style={styles.photoCardEmpty}>
+                                                <Ionicons name="add" size={32} color={colors.border} />
+                                                <View style={[styles.photoNumberBadge, { backgroundColor: colors.border, position: 'absolute', bottom: 8, left: 8, width: 24, height: 24 }]}>
+                                                    <Text style={[styles.photoNumberText, { color: colors.muted, fontSize: 12 }]}>{photoNumber}</Text>
+                                                </View>
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </View>
-                        <Text style={[styles.helperText, { color: colors.muted }]}>
-                            Add at least 3 photos. Photos with faces get 3x more matches.
-                        </Text>
                     </View>
 
                     {/* The Basics */}
@@ -652,6 +654,8 @@ const styles = StyleSheet.create({
     },
     meterContainer: {
         marginBottom: 24,
+        borderRadius: 12,
+        overflow: 'hidden',
     },
     section: {
         marginBottom: 32,
@@ -665,20 +669,24 @@ const styles = StyleSheet.create({
         letterSpacing: -0.2,
     },
     photoSection: {
-        gap: 12,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    photoGridContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
     },
     photoCard: {
-        borderRadius: 16,
+        borderRadius: 12,
         borderWidth: 2,
         overflow: 'hidden',
         position: 'relative',
-    },
-    mainPhotoCard: {
-        height: 240,
-        marginBottom: 12,
+        backgroundColor: '#1C1C1E', // Fallback
     },
     gridPhotoCard: {
-        width: '48%',
+        width: '31%', // (100% - 16px gap) / 3
         aspectRatio: 1,
     },
     photoCardImage: {
@@ -699,56 +707,28 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
-    },
-    photoIconCircle: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    photoCardTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        textAlign: 'center',
-        marginBottom: 4,
-    },
-    photoCardSubtitle: {
-        fontSize: 13,
-        textAlign: 'center',
     },
     mainPhotoBadge: {
         position: 'absolute',
-        top: 12,
-        left: 12,
-        backgroundColor: 'rgba(0,0,0,0.7)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 8,
+        bottom: 8,
+        left: 8,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 4,
     },
     mainPhotoBadgeText: {
         color: 'white',
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: 'bold',
-        letterSpacing: 0.5,
-    },
-    additionalPhotosGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
     },
     photoNumberBadge: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center',
+        borderRadius: 12,
     },
     photoNumberText: {
-        fontSize: 16,
-        fontWeight: 'bold',
+        fontWeight: '600',
     },
     helperText: {
         fontSize: 13,
