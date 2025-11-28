@@ -8,16 +8,63 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
 import { useImageUpload } from '@/hooks/use-image-upload';
+import { Skeleton } from '@/components/ui/skeleton';
+import { SelectionSheet } from '@/components/ui/selection-sheet';
+import {
+    GENDER_OPTIONS,
+    LOOKING_FOR_OPTIONS,
+    ZODIAC_SIGNS,
+    PERSONALITY_TYPES,
+    LOVE_LANGUAGES,
+    SLEEPING_HABITS,
+    DRINKING_PREFERENCES,
+    WORKOUT_FREQUENCY,
+    SOCIAL_MEDIA_USAGE,
+    COMMUNICATION_STYLE
+} from '@/constants/profile-options';
 
 export default function EditProfileScreen() {
     const { colors } = useTheme();
-    const { data: profile, updateProfile, isUpdating } = useProfile();
+    const { data: profile, updateProfile, isUpdating, isLoading } = useProfile();
     const { uploadImage, isUploading: isImageUploading } = useImageUpload();
     const router = useRouter();
 
     const [formData, setFormData] = useState<Partial<Profile>>({});
     const [isDirty, setIsDirty] = useState(false);
     const [newInterest, setNewInterest] = useState('');
+    const [activeField, setActiveField] = useState<string | null>(null);
+
+    const getOptionsForField = (field: string) => {
+        switch (field) {
+            case 'gender': return GENDER_OPTIONS;
+            case 'lookingFor': return LOOKING_FOR_OPTIONS;
+            case 'zodiacSign': return ZODIAC_SIGNS;
+            case 'personalityType': return PERSONALITY_TYPES;
+            case 'loveLanguage': return LOVE_LANGUAGES;
+            case 'sleepingHabits': return SLEEPING_HABITS;
+            case 'drinkingPreference': return DRINKING_PREFERENCES;
+            case 'workoutFrequency': return WORKOUT_FREQUENCY;
+            case 'socialMediaUsage': return SOCIAL_MEDIA_USAGE;
+            case 'communicationStyle': return COMMUNICATION_STYLE;
+            default: return [];
+        }
+    };
+
+    const getLabelForField = (field: string) => {
+        switch (field) {
+            case 'gender': return 'Gender';
+            case 'lookingFor': return 'Looking For';
+            case 'zodiacSign': return 'Zodiac Sign';
+            case 'personalityType': return 'Personality Type';
+            case 'loveLanguage': return 'Love Language';
+            case 'sleepingHabits': return 'Sleeping Habits';
+            case 'drinkingPreference': return 'Drinking Preference';
+            case 'workoutFrequency': return 'Workout Frequency';
+            case 'socialMediaUsage': return 'Social Media Usage';
+            case 'communicationStyle': return 'Communication Style';
+            default: return '';
+        }
+    };
 
     const addInterest = () => {
         if (!newInterest.trim()) return;
@@ -171,69 +218,139 @@ export default function EditProfileScreen() {
 
     const completion = calculateCompletion();
 
+    const renderSectionHeader = (title: string) => (
+        <Text style={[styles.sectionTitle, { color: colors.muted }]}>{title}</Text>
+    );
+
+    if (isLoading) {
+        return (
+            <View style={[styles.container, { backgroundColor: colors.background }]}>
+                <View style={[styles.header, { borderBottomColor: colors.border }]}>
+                    <View style={{ width: 50, height: 20 }} />
+                    <Text style={[styles.headerTitle, { color: colors.foreground }]}>Update DNA</Text>
+                    <View style={{ width: 50, height: 20 }} />
+                </View>
+
+                <ScrollView contentContainerStyle={styles.scrollContent}>
+                    {/* Photo Lab Skeleton */}
+                    <View style={styles.section}>
+                        <Skeleton width={100} height={16} borderRadius={4} style={{ marginBottom: 12 }} />
+                        <View style={styles.photoSection}>
+                            <Skeleton width="64%" height={undefined} style={{ aspectRatio: 1, borderRadius: 12 }} />
+                            <Skeleton width="30%" height={undefined} style={{ aspectRatio: 1, borderRadius: 12 }} />
+                            <Skeleton width="30%" height={undefined} style={{ aspectRatio: 1, borderRadius: 12 }} />
+                            <Skeleton width="30%" height={undefined} style={{ aspectRatio: 1, borderRadius: 12 }} />
+                        </View>
+                    </View>
+
+                    {/* Basics Skeleton */}
+                    <View style={styles.section}>
+                        <Skeleton width={100} height={16} borderRadius={4} style={{ marginBottom: 12 }} />
+                        <View style={[styles.inputGroup, { backgroundColor: colors.card, padding: 16 }]}>
+                            <Skeleton width="100%" height={40} borderRadius={8} style={{ marginBottom: 16 }} />
+                            <Skeleton width="100%" height={40} borderRadius={8} style={{ marginBottom: 16 }} />
+                            <Skeleton width="100%" height={80} borderRadius={8} />
+                        </View>
+                    </View>
+                </ScrollView>
+            </View>
+        );
+    }
+
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Header */}
-            <View style={[styles.header, { borderBottomColor: colors.border }]}>
+            <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
                 <TouchableOpacity onPress={() => router.back()}>
-                    <Text style={[styles.headerButton, { color: colors.muted }]}>Cancel</Text>
+                    <Text style={[styles.headerButton, { color: colors.primary }]}>Cancel</Text>
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.foreground }]}>Update DNA</Text>
+                <Text style={[styles.headerTitle, { color: colors.foreground }]}>Edit Profile</Text>
                 <TouchableOpacity onPress={handleSave} disabled={!isDirty || isUpdating || isImageUploading}>
-                    <Text style={[styles.headerButton, { color: isDirty ? colors.primary : colors.muted, opacity: isUpdating || isImageUploading ? 0.5 : 1 }]}>
-                        {isImageUploading ? 'Uploading...' : 'Save'}
+                    <Text style={[styles.headerButton, { color: isDirty ? colors.primary : colors.muted, opacity: isUpdating || isImageUploading ? 0.5 : 1, fontWeight: 'bold' }]}>
+                        {isImageUploading ? 'Uploading...' : 'Done'}
                     </Text>
                 </TouchableOpacity>
             </View>
 
-            {/* Strength Meter */}
-            <StrengthMeter percentage={completion} />
-
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-                <ScrollView contentContainerStyle={styles.scrollContent}>
+                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+                    {/* Strength Meter */}
+                    <View style={styles.meterContainer}>
+                        <StrengthMeter percentage={completion} />
+                    </View>
 
                     {/* Photo Lab */}
                     <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.muted }]}>PHOTO LAB</Text>
-                        <View style={styles.photoGrid}>
-                            {/* Main Photo */}
-                            <TouchableOpacity style={styles.mainPhotoContainer} onPress={() => handleImagePress(-1)}>
+                        {renderSectionHeader("PHOTOS")}
+                        <View style={styles.photoSection}>
+                            {/* Main Photo - Full Width Card */}
+                            <TouchableOpacity
+                                style={[styles.photoCard, styles.mainPhotoCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                                onPress={() => handleImagePress(-1)}
+                                activeOpacity={0.9}
+                            >
                                 {formData.profilePhoto ? (
-                                    <Image source={{ uri: formData.profilePhoto }} style={styles.mainPhoto} />
+                                    <>
+                                        <Image source={{ uri: formData.profilePhoto }} style={styles.photoCardImage} />
+                                        <View style={[styles.photoOverlay, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
+                                            <Ionicons name="pencil" size={20} color="white" />
+                                        </View>
+                                    </>
                                 ) : (
-                                    <View style={[styles.placeholderPhoto, { backgroundColor: colors.card }]}>
-                                        <Ionicons name="add" size={40} color={colors.primary} />
+                                    <View style={styles.photoCardEmpty}>
+                                        <View style={[styles.photoIconCircle, { backgroundColor: colors.primary + '20' }]}>
+                                            <Ionicons name="camera" size={32} color={colors.primary} />
+                                        </View>
+                                        <Text style={[styles.photoCardTitle, { color: colors.foreground }]}>Add your main photo</Text>
+                                        <Text style={[styles.photoCardSubtitle, { color: colors.muted }]}>This is the first photo people will see</Text>
                                     </View>
                                 )}
-                                <View style={styles.photoBadge}>
-                                    <Text style={styles.photoBadgeText}>MAIN</Text>
+                                <View style={styles.mainPhotoBadge}>
+                                    <Text style={styles.mainPhotoBadgeText}>MAIN PHOTO</Text>
                                 </View>
                             </TouchableOpacity>
 
-                            {/* Extra Photos */}
-                            {[1, 2, 3, 4, 5].map((i) => {
-                                const photoUri = formData.photos?.[i - 1];
-                                return (
-                                    <TouchableOpacity key={i} style={styles.smallPhotoContainer} onPress={() => handleImagePress(i - 1)}>
-                                        {photoUri ? (
-                                            <Image source={{ uri: photoUri }} style={styles.smallPhoto} />
-                                        ) : (
-                                            <View style={[styles.placeholderPhoto, { backgroundColor: colors.card }]}>
-                                                <Ionicons name="add" size={24} color={colors.primary} />
-                                            </View>
-                                        )}
-                                    </TouchableOpacity>
-                                );
-                            })}
+                            {/* Additional Photos - Grid */}
+                            <View style={styles.additionalPhotosGrid}>
+                                {[0, 1, 2, 3].map((index) => {
+                                    const photoUri = formData.photos?.[index];
+                                    const photoNumber = index + 2;
+                                    return (
+                                        <TouchableOpacity
+                                            key={index}
+                                            style={[styles.photoCard, styles.gridPhotoCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                                            onPress={() => handleImagePress(index)}
+                                            activeOpacity={0.9}
+                                        >
+                                            {photoUri ? (
+                                                <>
+                                                    <Image source={{ uri: photoUri }} style={styles.photoCardImage} />
+                                                    <View style={[styles.photoOverlay, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
+                                                        <Ionicons name="pencil" size={16} color="white" />
+                                                    </View>
+                                                </>
+                                            ) : (
+                                                <View style={styles.photoCardEmpty}>
+                                                    <View style={[styles.photoNumberBadge, { backgroundColor: colors.border }]}>
+                                                        <Text style={[styles.photoNumberText, { color: colors.muted }]}>{photoNumber}</Text>
+                                                    </View>
+                                                    <Ionicons name="add-circle-outline" size={24} color={colors.border} style={{ marginTop: 8 }} />
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
                         </View>
                         <Text style={[styles.helperText, { color: colors.muted }]}>
-                            Drag to reorder. Tap to edit.
+                            Add at least 3 photos. Photos with faces get 3x more matches.
                         </Text>
                     </View>
 
                     {/* The Basics */}
                     <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.muted }]}>THE BASICS</Text>
+                        {renderSectionHeader("THE BASICS")}
                         <View style={[styles.inputGroup, { backgroundColor: colors.card }]}>
                             <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
                                 <Text style={[styles.label, { color: colors.foreground }]}>First Name</Text>
@@ -241,7 +358,7 @@ export default function EditProfileScreen() {
                                     style={[styles.input, { color: colors.foreground }]}
                                     value={formData.firstName}
                                     onChangeText={(text) => handleChange('firstName', text)}
-                                    placeholder="First Name"
+                                    placeholder="Required"
                                     placeholderTextColor={colors.muted}
                                 />
                             </View>
@@ -251,19 +368,20 @@ export default function EditProfileScreen() {
                                     style={[styles.input, { color: colors.foreground }]}
                                     value={formData.lastName}
                                     onChangeText={(text) => handleChange('lastName', text)}
-                                    placeholder="Last Name"
+                                    placeholder="Required"
                                     placeholderTextColor={colors.muted}
                                 />
                             </View>
                             <View style={styles.inputRow}>
-                                <Text style={[styles.label, { color: colors.foreground }]}>Bio</Text>
+                                <Text style={[styles.label, { color: colors.foreground, alignSelf: 'flex-start', marginTop: 12 }]}>Bio</Text>
                                 <TextInput
-                                    style={[styles.input, { color: colors.foreground, height: 80 }]}
+                                    style={[styles.input, { color: colors.foreground, height: 100, paddingTop: 12 }]}
                                     value={formData.bio}
                                     onChangeText={(text) => handleChange('bio', text)}
                                     placeholder="Tell us about yourself..."
                                     placeholderTextColor={colors.muted}
                                     multiline
+                                    textAlignVertical="top"
                                 />
                             </View>
                         </View>
@@ -271,7 +389,7 @@ export default function EditProfileScreen() {
 
                     {/* Personal Details */}
                     <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.muted }]}>PERSONAL DETAILS</Text>
+                        {renderSectionHeader("DETAILS")}
                         <View style={[styles.inputGroup, { backgroundColor: colors.card }]}>
                             <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
                                 <Text style={[styles.label, { color: colors.foreground }]}>Age</Text>
@@ -279,37 +397,41 @@ export default function EditProfileScreen() {
                                     style={[styles.input, { color: colors.foreground }]}
                                     value={formData.age?.toString()}
                                     onChangeText={(text) => handleChange('age', parseInt(text) || 0)}
-                                    placeholder="Age"
+                                    placeholder="Required"
                                     keyboardType="numeric"
                                     placeholderTextColor={colors.muted}
                                 />
                             </View>
-                            <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
+                            <TouchableOpacity
+                                style={[styles.inputRow, { borderBottomColor: colors.border }]}
+                                onPress={() => setActiveField('gender')}
+                            >
                                 <Text style={[styles.label, { color: colors.foreground }]}>Gender</Text>
-                                <TextInput
-                                    style={[styles.input, { color: colors.foreground }]}
-                                    value={formData.gender}
-                                    onChangeText={(text) => handleChange('gender', text)}
-                                    placeholder="Gender"
-                                    placeholderTextColor={colors.muted}
-                                />
-                            </View>
-                            <View style={styles.inputRow}>
+                                <View style={styles.selectValueContainer}>
+                                    <Text style={[styles.inputText, { color: formData.gender ? colors.primary : colors.muted }]}>
+                                        {formData.gender ? (GENDER_OPTIONS.find(o => o.value === formData.gender)?.label || formData.gender) : 'Select'}
+                                    </Text>
+                                    <Ionicons name="chevron-forward" size={20} color={colors.muted} style={{ marginLeft: 8 }} />
+                                </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.inputRow}
+                                onPress={() => setActiveField('lookingFor')}
+                            >
                                 <Text style={[styles.label, { color: colors.foreground }]}>Looking For</Text>
-                                <TextInput
-                                    style={[styles.input, { color: colors.foreground }]}
-                                    value={formData.lookingFor}
-                                    onChangeText={(text) => handleChange('lookingFor', text)}
-                                    placeholder="e.g. Friendship, Networking"
-                                    placeholderTextColor={colors.muted}
-                                />
-                            </View>
+                                <View style={styles.selectValueContainer}>
+                                    <Text style={[styles.inputText, { color: formData.lookingFor ? colors.primary : colors.muted }]}>
+                                        {formData.lookingFor ? (LOOKING_FOR_OPTIONS.find(o => o.value === formData.lookingFor)?.label || formData.lookingFor) : 'Select'}
+                                    </Text>
+                                    <Ionicons name="chevron-forward" size={20} color={colors.muted} style={{ marginLeft: 8 }} />
+                                </View>
+                            </TouchableOpacity>
                         </View>
                     </View>
 
                     {/* Uni Life */}
                     <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.muted }]}>UNI LIFE</Text>
+                        {renderSectionHeader("EDUCATION")}
                         <View style={[styles.inputGroup, { backgroundColor: colors.card }]}>
                             <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
                                 <Text style={[styles.label, { color: colors.foreground }]}>University</Text>
@@ -317,7 +439,7 @@ export default function EditProfileScreen() {
                                     style={[styles.input, { color: colors.foreground }]}
                                     value={formData.university}
                                     onChangeText={(text) => handleChange('university', text)}
-                                    placeholder="University"
+                                    placeholder="Add University"
                                     placeholderTextColor={colors.muted}
                                 />
                             </View>
@@ -327,7 +449,7 @@ export default function EditProfileScreen() {
                                     style={[styles.input, { color: colors.foreground }]}
                                     value={formData.course}
                                     onChangeText={(text) => handleChange('course', text)}
-                                    placeholder="Course"
+                                    placeholder="Add Course"
                                     placeholderTextColor={colors.muted}
                                 />
                             </View>
@@ -337,7 +459,7 @@ export default function EditProfileScreen() {
                                     style={[styles.input, { color: colors.foreground }]}
                                     value={formData.yearOfStudy?.toString()}
                                     onChangeText={(text) => handleChange('yearOfStudy', parseInt(text) || 0)}
-                                    placeholder="Year"
+                                    placeholder="Add Year"
                                     keyboardType="numeric"
                                     placeholderTextColor={colors.muted}
                                 />
@@ -347,132 +469,117 @@ export default function EditProfileScreen() {
 
                     {/* The Vibe */}
                     <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.muted }]}>THE VIBE</Text>
+                        {renderSectionHeader("MY VIBE")}
                         <View style={[styles.inputGroup, { backgroundColor: colors.card }]}>
-                            <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
+                            <TouchableOpacity
+                                style={[styles.inputRow, { borderBottomColor: colors.border }]}
+                                onPress={() => setActiveField('zodiacSign')}
+                            >
                                 <Text style={[styles.label, { color: colors.foreground }]}>Zodiac</Text>
-                                <TextInput
-                                    style={[styles.input, { color: colors.foreground }]}
-                                    value={formData.zodiacSign}
-                                    onChangeText={(text) => handleChange('zodiacSign', text)}
-                                    placeholder="Select Zodiac"
-                                    placeholderTextColor={colors.muted}
-                                />
-                            </View>
-                            <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
+                                <View style={styles.selectValueContainer}>
+                                    <Text style={[styles.inputText, { color: formData.zodiacSign ? colors.primary : colors.muted }]}>
+                                        {formData.zodiacSign || 'Select'}
+                                    </Text>
+                                    <Ionicons name="chevron-forward" size={20} color={colors.muted} style={{ marginLeft: 8 }} />
+                                </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.inputRow, { borderBottomColor: colors.border }]}
+                                onPress={() => setActiveField('personalityType')}
+                            >
                                 <Text style={[styles.label, { color: colors.foreground }]}>Personality</Text>
-                                <TextInput
-                                    style={[styles.input, { color: colors.foreground }]}
-                                    value={formData.personalityType}
-                                    onChangeText={(text) => handleChange('personalityType', text)}
-                                    placeholder="MBTI / Enneagram"
-                                    placeholderTextColor={colors.muted}
-                                />
-                            </View>
-                            <View style={styles.inputRow}>
+                                <View style={styles.selectValueContainer}>
+                                    <Text style={[styles.inputText, { color: formData.personalityType ? colors.primary : colors.muted }]}>
+                                        {formData.personalityType || 'Select'}
+                                    </Text>
+                                    <Ionicons name="chevron-forward" size={20} color={colors.muted} style={{ marginLeft: 8 }} />
+                                </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.inputRow}
+                                onPress={() => setActiveField('loveLanguage')}
+                            >
                                 <Text style={[styles.label, { color: colors.foreground }]}>Love Language</Text>
-                                <TextInput
-                                    style={[styles.input, { color: colors.foreground }]}
-                                    value={formData.loveLanguage}
-                                    onChangeText={(text) => handleChange('loveLanguage', text)}
-                                    placeholder="Select Love Language"
-                                    placeholderTextColor={colors.muted}
-                                />
-                            </View>
+                                <View style={styles.selectValueContainer}>
+                                    <Text style={[styles.inputText, { color: formData.loveLanguage ? colors.primary : colors.muted }]}>
+                                        {formData.loveLanguage || 'Select'}
+                                    </Text>
+                                    <Ionicons name="chevron-forward" size={20} color={colors.muted} style={{ marginLeft: 8 }} />
+                                </View>
+                            </TouchableOpacity>
                         </View>
                     </View>
 
                     {/* Interests */}
                     <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.muted }]}>INTERESTS</Text>
+                        {renderSectionHeader("INTERESTS")}
                         <View style={[styles.inputGroup, { backgroundColor: colors.card, padding: 16 }]}>
-                            <View style={{ flexDirection: 'row', marginBottom: 12 }}>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                                {formData.interests?.map((interest, index) => (
+                                    <TouchableOpacity
+                                        key={index}
+                                        onPress={() => removeInterest(interest)}
+                                        style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary + '15', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: colors.primary + '30' }}
+                                    >
+                                        <Text style={{ color: colors.primary, marginRight: 6, fontWeight: '600' }}>{interest}</Text>
+                                        <Ionicons name="close" size={14} color={colors.primary} />
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <TextInput
-                                    style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderRadius: 8, paddingHorizontal: 12, marginRight: 8 }]}
+                                    style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 12, height: 44, marginRight: 10 }]}
                                     value={newInterest}
                                     onChangeText={setNewInterest}
                                     placeholder="Add an interest..."
                                     placeholderTextColor={colors.muted}
                                     onSubmitEditing={addInterest}
+                                    returnKeyType="done"
                                 />
-                                <TouchableOpacity onPress={addInterest} style={{ justifyContent: 'center', paddingHorizontal: 12, backgroundColor: colors.primary, borderRadius: 8 }}>
-                                    <Ionicons name="add" size={24} color="white" />
+                                <TouchableOpacity
+                                    onPress={addInterest}
+                                    style={{ width: 44, height: 44, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.primary, borderRadius: 22 }}
+                                >
+                                    <Ionicons name="arrow-up" size={24} color="white" />
                                 </TouchableOpacity>
-                            </View>
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                                {formData.interests?.map((interest, index) => (
-                                    <TouchableOpacity key={index} onPress={() => removeInterest(interest)} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}>
-                                        <Text style={{ color: colors.foreground, marginRight: 4 }}>{interest}</Text>
-                                        <Ionicons name="close-circle" size={16} color={colors.muted} />
-                                    </TouchableOpacity>
-                                ))}
                             </View>
                         </View>
                     </View>
 
                     {/* Lifestyle */}
                     <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.muted }]}>LIFESTYLE</Text>
+                        {renderSectionHeader("LIFESTYLE")}
                         <View style={[styles.inputGroup, { backgroundColor: colors.card }]}>
-                            <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
-                                <Text style={[styles.label, { color: colors.foreground }]}>Sleeping</Text>
-                                <TextInput
-                                    style={[styles.input, { color: colors.foreground }]}
-                                    value={formData.sleepingHabits}
-                                    onChangeText={(text) => handleChange('sleepingHabits', text)}
-                                    placeholder="e.g. Night Owl"
-                                    placeholderTextColor={colors.muted}
-                                />
-                            </View>
-                            <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
-                                <Text style={[styles.label, { color: colors.foreground }]}>Drinking</Text>
-                                <TextInput
-                                    style={[styles.input, { color: colors.foreground }]}
-                                    value={formData.drinkingPreference}
-                                    onChangeText={(text) => handleChange('drinkingPreference', text)}
-                                    placeholder="e.g. Socially"
-                                    placeholderTextColor={colors.muted}
-                                />
-                            </View>
-                            <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
-                                <Text style={[styles.label, { color: colors.foreground }]}>Workout</Text>
-                                <TextInput
-                                    style={[styles.input, { color: colors.foreground }]}
-                                    value={formData.workoutFrequency}
-                                    onChangeText={(text) => handleChange('workoutFrequency', text)}
-                                    placeholder="e.g. Often"
-                                    placeholderTextColor={colors.muted}
-                                />
-                            </View>
-                            <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
-                                <Text style={[styles.label, { color: colors.foreground }]}>Social Media</Text>
-                                <TextInput
-                                    style={[styles.input, { color: colors.foreground }]}
-                                    value={formData.socialMediaUsage}
-                                    onChangeText={(text) => handleChange('socialMediaUsage', text)}
-                                    placeholder="e.g. Active"
-                                    placeholderTextColor={colors.muted}
-                                />
-                            </View>
-                            <View style={styles.inputRow}>
-                                <Text style={[styles.label, { color: colors.foreground }]}>Communication</Text>
-                                <TextInput
-                                    style={[styles.input, { color: colors.foreground }]}
-                                    value={formData.communicationStyle}
-                                    onChangeText={(text) => handleChange('communicationStyle', text)}
-                                    placeholder="e.g. Texting"
-                                    placeholderTextColor={colors.muted}
-                                />
-                            </View>
+                            {[
+                                { label: 'Sleeping', field: 'sleepingHabits' },
+                                { label: 'Drinking', field: 'drinkingPreference' },
+                                { label: 'Workout', field: 'workoutFrequency' },
+                                { label: 'Social Media', field: 'socialMediaUsage' },
+                                { label: 'Communication', field: 'communicationStyle' },
+                            ].map((item, index, arr) => (
+                                <TouchableOpacity
+                                    key={item.field}
+                                    style={[styles.inputRow, index < arr.length - 1 && { borderBottomColor: colors.border }]}
+                                    onPress={() => setActiveField(item.field)}
+                                >
+                                    <Text style={[styles.label, { color: colors.foreground }]}>{item.label}</Text>
+                                    <View style={styles.selectValueContainer}>
+                                        <Text style={[styles.inputText, { color: formData[item.field as keyof Profile] ? colors.primary : colors.muted }]}>
+                                            {formData[item.field as keyof Profile] as string || 'Select'}
+                                        </Text>
+                                        <Ionicons name="chevron-forward" size={20} color={colors.muted} style={{ marginLeft: 8 }} />
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
                         </View>
                     </View>
 
                     {/* Socials */}
                     <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.muted }]}>SOCIALS</Text>
+                        {renderSectionHeader("SOCIALS")}
                         <View style={[styles.inputGroup, { backgroundColor: colors.card }]}>
                             <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
-                                <Ionicons name="logo-instagram" size={20} color={colors.primary} style={styles.inputIcon} />
+                                <Ionicons name="logo-instagram" size={22} color="#E1306C" style={styles.inputIcon} />
                                 <TextInput
                                     style={[styles.input, { color: colors.foreground }]}
                                     value={formData.instagram}
@@ -482,7 +589,7 @@ export default function EditProfileScreen() {
                                 />
                             </View>
                             <View style={[styles.inputRow, { borderBottomColor: colors.border }]}>
-                                <Ionicons name="musical-notes" size={20} color={colors.primary} style={styles.inputIcon} />
+                                <Ionicons name="musical-notes" size={22} color="#1DB954" style={styles.inputIcon} />
                                 <TextInput
                                     style={[styles.input, { color: colors.foreground }]}
                                     value={formData.spotify}
@@ -492,7 +599,7 @@ export default function EditProfileScreen() {
                                 />
                             </View>
                             <View style={styles.inputRow}>
-                                <Ionicons name="logo-snapchat" size={20} color={colors.primary} style={styles.inputIcon} />
+                                <Ionicons name="logo-snapchat" size={22} color="#FFFC00" style={styles.inputIcon} />
                                 <TextInput
                                     style={[styles.input, { color: colors.foreground }]}
                                     value={formData.snapchat}
@@ -504,15 +611,18 @@ export default function EditProfileScreen() {
                         </View>
                     </View>
 
-
-
-                    <TouchableOpacity style={[styles.saveButton, { backgroundColor: colors.primary }]} onPress={handleSave} disabled={isUpdating || isImageUploading}>
-                        <Text style={styles.saveButtonText}>{isUpdating || isImageUploading ? 'Saving...' : 'Save Changes'}</Text>
-                    </TouchableOpacity>
-
-                    <View style={{ height: 50 }} />
+                    <View style={{ height: 100 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            <SelectionSheet
+                visible={!!activeField}
+                onClose={() => setActiveField(null)}
+                title={activeField ? getLabelForField(activeField) : ''}
+                options={activeField ? getOptionsForField(activeField) : []}
+                value={activeField ? (formData[activeField as keyof Profile] as string) : undefined}
+                onSelect={(value) => activeField && handleChange(activeField as keyof Profile, value)}
+            />
         </View>
     );
 }
@@ -527,78 +637,123 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingTop: 60,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
+        paddingBottom: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    headerButton: {
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: '600',
     },
-    scrollContent: {
-        padding: 16,
+    headerButton: {
+        fontSize: 17,
     },
-    section: {
+    scrollContent: {
+        padding: 20,
+    },
+    meterContainer: {
         marginBottom: 24,
     },
-    sectionTitle: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        marginBottom: 12,
-        letterSpacing: 1,
+    section: {
+        marginBottom: 32,
     },
-    photoGrid: {
+    sectionTitle: {
+        fontSize: 13,
+        fontWeight: '600',
+        marginBottom: 8,
+        marginLeft: 16,
+        textTransform: 'uppercase',
+        letterSpacing: -0.2,
+    },
+    photoSection: {
+        gap: 12,
+    },
+    photoCard: {
+        borderRadius: 16,
+        borderWidth: 2,
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    mainPhotoCard: {
+        height: 240,
+        marginBottom: 12,
+    },
+    gridPhotoCard: {
+        width: '48%',
+        aspectRatio: 1,
+    },
+    photoCardImage: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    photoOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    photoCardEmpty: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    photoIconCircle: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    photoCardTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        textAlign: 'center',
+        marginBottom: 4,
+    },
+    photoCardSubtitle: {
+        fontSize: 13,
+        textAlign: 'center',
+    },
+    mainPhotoBadge: {
+        position: 'absolute',
+        top: 12,
+        left: 12,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    mainPhotoBadgeText: {
+        color: 'white',
+        fontSize: 11,
+        fontWeight: 'bold',
+        letterSpacing: 0.5,
+    },
+    additionalPhotosGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 12,
     },
-    mainPhotoContainer: {
-        width: '64%',
-        aspectRatio: 1,
-        borderRadius: 12,
-        overflow: 'hidden',
-    },
-    mainPhoto: {
-        width: '100%',
-        height: '100%',
-    },
-    smallPhotoContainer: {
-        width: '30%',
-        aspectRatio: 1,
-        borderRadius: 12,
-        overflow: 'hidden',
-    },
-    smallPhoto: {
-        width: '100%',
-        height: '100%',
-    },
-    placeholderPhoto: {
-        width: '100%',
-        height: '100%',
+    photoNumberBadge: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    photoBadge: {
-        position: 'absolute',
-        bottom: 8,
-        left: 8,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 4,
-    },
-    photoBadgeText: {
-        color: 'white',
-        fontSize: 10,
+    photoNumberText: {
+        fontSize: 16,
         fontWeight: 'bold',
     },
     helperText: {
-        fontSize: 12,
+        fontSize: 13,
         marginTop: 8,
-        textAlign: 'center',
+        marginLeft: 16,
     },
     inputGroup: {
         borderRadius: 12,
@@ -607,20 +762,36 @@ const styles = StyleSheet.create({
     inputRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
         borderBottomWidth: StyleSheet.hairlineWidth,
+        minHeight: 50,
     },
     label: {
-        width: 100,
-        fontSize: 16,
-        fontWeight: '500',
+        width: 110,
+        fontSize: 17,
+        fontWeight: '400',
     },
     input: {
         flex: 1,
-        fontSize: 16,
+        fontSize: 17,
+    },
+    selectValueContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+    },
+    inputText: {
+        fontSize: 17,
+        textAlign: 'right',
+    },
+    inputIcon: {
+        marginRight: 16,
+        width: 24,
+        textAlign: 'center',
     },
     saveButton: {
-        backgroundColor: '#e91e8c', // Pink
         paddingVertical: 16,
         borderRadius: 12,
         alignItems: 'center',
@@ -630,8 +801,5 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 16,
         fontWeight: 'bold',
-    },
-    inputIcon: {
-        marginRight: 12,
     },
 });

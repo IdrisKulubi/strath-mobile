@@ -6,6 +6,7 @@ import { CompletionHalo } from '@/components/profile/completion-halo';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const { width } = Dimensions.get('window');
 
@@ -45,8 +46,35 @@ export default function ProfileScreen() {
 
     if (isLoading) {
         return (
-            <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-                <Text style={{ color: colors.foreground }}>Loading DNA...</Text>
+            <View style={[styles.container, { backgroundColor: colors.background }]}>
+                <View style={styles.headerActions}>
+                    <View style={{ width: 24, height: 24 }} />
+                </View>
+
+                <View style={[styles.heroSection, { marginTop: 20 }]}>
+                    {/* Profile Image Skeleton */}
+                    <Skeleton width={140} height={140} borderRadius={70} style={{ marginBottom: 16 }} />
+
+                    {/* Name & Details Skeleton */}
+                    <Skeleton width={200} height={32} borderRadius={8} style={{ marginBottom: 8 }} />
+                    <Skeleton width={150} height={20} borderRadius={4} style={{ marginBottom: 4 }} />
+                    <Skeleton width={100} height={20} borderRadius={4} />
+                </View>
+
+                <View style={styles.section}>
+                    <Skeleton width={80} height={16} borderRadius={4} style={{ marginBottom: 12 }} />
+                    <Skeleton width="100%" height={16} borderRadius={4} style={{ marginBottom: 8 }} />
+                    <Skeleton width="80%" height={16} borderRadius={4} />
+                </View>
+
+                <View style={styles.section}>
+                    <Skeleton width={80} height={16} borderRadius={4} style={{ marginBottom: 12 }} />
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <Skeleton width={80} height={32} borderRadius={16} />
+                        <Skeleton width={100} height={32} borderRadius={16} />
+                        <Skeleton width={70} height={32} borderRadius={16} />
+                    </View>
+                </View>
             </View>
         );
     }

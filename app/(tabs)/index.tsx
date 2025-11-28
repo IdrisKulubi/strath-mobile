@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/use-theme';
 import { useFeed, FeedProfile } from '@/hooks/use-feed';
 import { ProfileView } from '@/components/feed/profile-view';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Dummy data for fallback/demo
 const DUMMY_PROFILES: FeedProfile[] = [
@@ -72,9 +73,27 @@ export default function DiscoverScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Strathspace</Text>
+        </View>
+        <View style={{ flex: 1, padding: 16 }}>
+          {/* Main Photo Skeleton */}
+          <Skeleton width="100%" height="70%" borderRadius={20} style={{ marginBottom: 16 }} />
+
+          {/* Name & Age Skeleton */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <Skeleton width={150} height={32} borderRadius={8} style={{ marginRight: 12 }} />
+            <Skeleton width={40} height={32} borderRadius={8} />
+          </View>
+
+          {/* Bio Skeleton */}
+          <Skeleton width="90%" height={16} borderRadius={4} style={{ marginBottom: 8 }} />
+          <Skeleton width="80%" height={16} borderRadius={4} style={{ marginBottom: 8 }} />
+          <Skeleton width="60%" height={16} borderRadius={4} />
+        </View>
+      </SafeAreaView>
     );
   }
 
