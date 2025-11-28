@@ -1,20 +1,22 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, StatusBar, Image, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Image, ScrollView } from 'react-native';
 import { signIn } from '../../lib/auth-client';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { NeonInput } from '@/components/ui/neon-input';
-import { GradientButton } from '@/components/ui/gradient-button';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/toast';
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+    const { error: toastError, success: toastSuccess, info: toastInfo } = useToast();
 
     const handleLogin = async () => {
         if (!email || !password) {
-            Alert.alert('Error', 'Please fill in all fields');
+            toastError('Please fill in all fields');
             return;
         }
 
@@ -26,12 +28,13 @@ export default function LoginScreen() {
             });
 
             if (error) {
-                Alert.alert('Login Failed', error.message || 'An error occurred');
+                toastError(error.message || 'An error occurred');
             } else {
+                toastSuccess('Welcome back!');
                 router.replace('/');
             }
         } catch (err) {
-            Alert.alert('Error', 'Something went wrong');
+            toastError('Something went wrong');
             console.error(err);
         } finally {
             setLoading(false);
@@ -51,11 +54,12 @@ export default function LoginScreen() {
 
             if (result.data) {
                 console.log("Sign-in successful, redirecting...");
+                toastSuccess('Signed in successfully!');
                 router.replace('/');
             }
         } catch (error) {
             console.error("Sign in error details:", error);
-            Alert.alert('Error', 'Google sign-in failed');
+            toastError('Google sign-in failed');
         }
     };
 
@@ -75,15 +79,17 @@ export default function LoginScreen() {
 
                 <Text style={styles.title}>Welcome Back to{'\n'}Campus,😉</Text>
 
-                <TouchableOpacity
-                    style={styles.googleButton}
+                <Button
                     onPress={handleGoogleSignIn}
+                    variant="default"
+                    size="lg"
+                    className="mb-6 rounded-full bg-[#e91e8c]"
                 >
                     <View style={styles.googleIconContainer}>
                         <Ionicons name="logo-google" size={20} color="#e91e8c" />
                     </View>
                     <Text style={styles.googleButtonText}>Continue with Google</Text>
-                </TouchableOpacity>
+                </Button>
 
                 <View style={styles.dividerContainer}>
                     <View style={styles.dividerLine} />
@@ -92,37 +98,41 @@ export default function LoginScreen() {
                 </View>
 
                 <View style={styles.form}>
-                    <NeonInput
+                    <Input
                         placeholder="Uni Email"
                         value={email}
                         onChangeText={setEmail}
                         autoCapitalize="none"
                         keyboardType="email-address"
-                        borderColor="#e91e8c"
-                        glowColor="#e91e8c"
-                        icon="mail-outline"
+                        className="mb-4 bg-white/5 border-[#e91e8c]/50 text-white placeholder:text-gray-400"
+                        startContent={
+                            <Ionicons name="mail-outline" size={20} color="#e91e8c" />
+                        }
                     />
 
-                    <NeonInput
+                    <Input
                         placeholder="Password"
                         value={password}
                         onChangeText={setPassword}
                         secureTextEntry
-                        borderColor="#e91e8c"
-                        glowColor="#e91e8c"
-                        icon="lock-closed-outline"
+                        className="mb-4 bg-white/5 border-[#e91e8c]/50 text-white placeholder:text-gray-400"
+                        startContent={
+                            <Ionicons name="lock-closed-outline" size={20} color="#e91e8c" />
+                        }
                     />
 
-                    <GradientButton
-                        title="Log In"
+                    <Button
                         onPress={handleLogin}
-                        loading={loading}
-                        style={styles.loginButton}
-                    />
+                        disabled={loading}
+                        size="lg"
+                        className="mt-2 rounded-full bg-[#e91e8c]"
+                    >
+                        {loading ? <Text className="text-white font-bold">Loading...</Text> : <Text className="text-white font-bold text-lg">Log In</Text>}
+                    </Button>
                 </View>
 
                 <View style={styles.footer}>
-                    <TouchableOpacity onPress={() => Alert.alert('Info', 'Reset password flow coming soon!')}>
+                    <TouchableOpacity onPress={() => toastInfo('Reset password flow coming soon!')}>
                         <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                     </TouchableOpacity>
 
@@ -154,7 +164,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         marginBottom: 40,
-        marginTop: 60, // Moved down a bit as requested
+        marginTop: 60,
     },
     logo: {
         width: 40,
@@ -173,21 +183,6 @@ const styles = StyleSheet.create({
         marginBottom: 30,
         textAlign: 'center',
         lineHeight: 40,
-    },
-    googleButton: {
-        width: '100%',
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: '#e91e8c', // Pink background
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 24,
-        shadowColor: '#e91e8c',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
     },
     googleIconContainer: {
         width: 28,
@@ -221,10 +216,6 @@ const styles = StyleSheet.create({
     },
     form: {
         marginBottom: 20,
-    },
-    loginButton: {
-        marginTop: 10,
-        backgroundColor: '#e91e8c', // Ensure it matches the theme if GradientButton supports style override or we might need to update GradientButton too if it forces gradient
     },
     footer: {
         alignItems: 'center',
