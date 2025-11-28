@@ -84,7 +84,10 @@ export default function ProfileScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 {/* Header Actions */}
                 <View style={styles.headerActions}>
-                    <TouchableOpacity style={styles.iconButton}>
+                    <TouchableOpacity
+                        style={styles.iconButton}
+                        onPress={() => router.push('/settings')}
+                    >
                         <Ionicons name="settings-outline" size={24} color={colors.foreground} />
                     </TouchableOpacity>
                 </View>
