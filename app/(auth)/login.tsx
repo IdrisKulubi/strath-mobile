@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, StatusBar, Image, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, StatusBar, Image, ScrollView, ActivityIndicator } from 'react-native';
 import { signIn } from '../../lib/auth-client';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, TextField, toast } from 'heroui-native';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/toast';
 import { Text } from '@/components/ui/text';
 
 export default function LoginScreen() {
@@ -11,10 +13,11 @@ export default function LoginScreen() {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+    const toast = useToast();
 
     const handleLogin = async () => {
         if (!email || !password) {
-            toast('Please fill in all fields', { variant: 'error' });
+            toast.show({ message: 'Please fill in all fields', variant: 'danger' });
             return;
         }
 
@@ -26,13 +29,13 @@ export default function LoginScreen() {
             });
 
             if (error) {
-                toast(error.message || 'An error occurred', { variant: 'error' });
+                toast.show({ message: error.message || 'An error occurred', variant: 'danger' });
             } else {
-                toast('Welcome back!', { variant: 'success' });
+                toast.show({ message: 'Welcome back!', variant: 'success' });
                 router.replace('/');
             }
         } catch (err) {
-            toast('Something went wrong', { variant: 'error' });
+            toast.show({ message: 'Something went wrong', variant: 'danger' });
             console.error(err);
         } finally {
             setLoading(false);
@@ -52,12 +55,12 @@ export default function LoginScreen() {
 
             if (result.data) {
                 console.log("Sign-in successful, redirecting...");
-                toast('Signed in successfully!', { variant: 'success' });
+                toast.show({ message: 'Signed in successfully!', variant: 'success' });
                 router.replace('/');
             }
         } catch (error) {
             console.error("Sign in error details:", error);
-            toast('Google sign-in failed', { variant: 'error' });
+            toast.show({ message: 'Google sign-in failed', variant: 'danger' });
         }
     };
 
@@ -82,7 +85,7 @@ export default function LoginScreen() {
                 <Button
                     onPress={handleGoogleSignIn}
                     size="lg"
-                    className="mb-6 rounded-full bg-[#e91e8c]"
+                    className="mb-6 rounded-full bg-[#e91e8c] flex-row items-center justify-center"
                 >
                     <View style={styles.googleIconContainer}>
                         <Ionicons name="logo-google" size={20} color="#e91e8c" />
@@ -97,35 +100,38 @@ export default function LoginScreen() {
                 </View>
 
                 <View style={styles.form}>
-                    <TextField
-                        placeholder="Uni Email"
-                        value={email}
-                        onChangeText={setEmail}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                        className="mb-4"
-                        startContent={
-                            <Ionicons name="mail-outline" size={20} color="#e91e8c" />
-                        }
-                    />
+                    <View style={styles.inputContainer}>
+                        <Ionicons name="mail-outline" size={20} color="#e91e8c" style={styles.inputIcon} />
+                        <Input
+                            placeholder="Uni Email"
+                            value={email}
+                            onChangeText={setEmail}
+                            autoCapitalize="none"
+                            keyboardType="email-address"
+                            className="flex-1 mb-0"
+                            placeholderTextColor="#999"
+                        />
+                    </View>
 
-                    <TextField
-                        placeholder="Password"
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry
-                        className="mb-4"
-                        startContent={
-                            <Ionicons name="lock-closed-outline" size={20} color="#e91e8c" />
-                        }
-                    />
+                    <View style={styles.inputContainer}>
+                        <Ionicons name="lock-closed-outline" size={20} color="#e91e8c" style={styles.inputIcon} />
+                        <Input
+                            placeholder="Password"
+                            value={password}
+                            onChangeText={setPassword}
+                            secureTextEntry
+                            className="flex-1 mb-0"
+                            placeholderTextColor="#999"
+                        />
+                    </View>
 
                     <Button
                         onPress={handleLogin}
-                        loading={loading}
+                        disabled={loading}
                         size="lg"
-                        className="mt-2 rounded-full bg-[#e91e8c]"
+                        className="mt-2 rounded-full bg-[#e91e8c] flex-row items-center justify-center"
                     >
+                        {loading && <ActivityIndicator color="white" style={{ marginRight: 8 }} />}
                         <Text className="text-white font-bold text-lg">
                             {loading ? 'Loading...' : 'Log In'}
                         </Text>
@@ -133,7 +139,7 @@ export default function LoginScreen() {
                 </View>
 
                 <View style={styles.footer}>
-                    <TouchableOpacity onPress={() => toast('Reset password flow coming soon!', { variant: 'info' })}>
+                    <TouchableOpacity onPress={() => toast.show({ message: 'Reset password flow coming soon!', variant: 'accent' })}>
                         <Text className="text-white text-sm mb-4">Forgot Password?</Text>
                     </TouchableOpacity>
 
@@ -193,6 +199,19 @@ const styles = StyleSheet.create({
     },
     form: {
         marginBottom: 20,
+    },
+    inputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#482961',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        backgroundColor: '#2a1541',
+    },
+    inputIcon: {
+        marginRight: 8,
     },
     footer: {
         alignItems: 'center',

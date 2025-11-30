@@ -3,7 +3,9 @@ import { View, StyleSheet, TouchableOpacity, StatusBar, Image, ScrollView } from
 import { signUp, signIn } from '../../lib/auth-client';
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, TextField, toast } from 'heroui-native';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/toast';
 import { Text } from '@/components/ui/text';
 
 export default function RegisterScreen() {
@@ -12,16 +14,25 @@ export default function RegisterScreen() {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const toast = useToast();
     const router = useRouter();
 
     const handleRegister = async () => {
         if (!name || !email || !password || !confirmPassword) {
-            toast('Please fill in all fields', { variant: 'error' });
+            toast.show({
+                message: 'Please fill in all fields',
+                variant: 'danger',
+                dismissKeyboard: true,
+            });
             return;
         }
 
         if (password !== confirmPassword) {
-            toast('Passwords do not match', { variant: 'error' });
+            toast.show({
+                message: 'Passwords do not match',
+                variant: 'danger',
+                dismissKeyboard: true,
+            });
             return;
         }
 
@@ -34,13 +45,23 @@ export default function RegisterScreen() {
             });
 
             if (error) {
-                toast(error.message || 'An error occurred', { variant: 'error' });
+                toast.show({
+                    message: error.message || 'An error occurred',
+                    variant: 'danger',
+                });
             } else {
-                toast('Account created successfully!', { variant: 'success' });
+                toast.show({
+                    message: '🎉 Account created successfully!',
+                    variant: 'success',
+                    size: 'large',
+                });
                 router.replace('/');
             }
         } catch (err) {
-            toast('Something went wrong', { variant: 'error' });
+            toast.show({
+                message: 'Something went wrong',
+                variant: 'danger',
+            });
             console.error(err);
         } finally {
             setLoading(false);
@@ -55,12 +76,19 @@ export default function RegisterScreen() {
             });
 
             if (result.data) {
-                toast('Signed up successfully!', { variant: 'success' });
+                toast.show({
+                    message: '🎉 Signed up successfully!',
+                    variant: 'success',
+                    size: 'large',
+                });
                 router.replace('/');
             }
         } catch (error) {
             console.error("Sign up error:", error);
-            toast('Google sign-up failed', { variant: 'error' });
+            toast.show({
+                message: 'Google sign-up failed',
+                variant: 'danger',
+            });
         }
     };
 
@@ -85,12 +113,13 @@ export default function RegisterScreen() {
                 <Button
                     onPress={handleGoogleSignUp}
                     size="lg"
-                    className="mb-6 rounded-full bg-[#e91e8c]"
+                    variant="default"
+                    className="mb-6 rounded-full bg-[#e91e8c] flex-row items-center justify-center"
                 >
                     <View style={styles.googleIconContainer}>
                         <Ionicons name="logo-google" size={20} color="#e91e8c" />
                     </View>
-                    <Text className="text-white text-base font-semibold">Sign Up with Google</Text>
+                    <Text className="text-white text-base font-semibold ml-2">Sign Up with Google</Text>
                 </Button>
 
                 <View style={styles.dividerContainer}>
@@ -100,55 +129,55 @@ export default function RegisterScreen() {
                 </View>
 
                 <View style={styles.form}>
-                    <TextField
-                        placeholder="Full Name"
-                        value={name}
-                        onChangeText={setName}
-                        className="mb-4"
-                        startContent={
-                            <Ionicons name="person-outline" size={20} color="#e91e8c" />
-                        }
-                    />
+                    <View className="mb-4">
+                        <Input
+                            placeholder="Full Name"
+                            value={name}
+                            onChangeText={setName}
+                            className="bg-[#3d2459] border-[#482961] text-white rounded-lg h-14 px-4"
+                            placeholderTextColor="#9ca3af"
+                        />
+                    </View>
 
-                    <TextField
-                        placeholder="Uni Email"
-                        value={email}
-                        onChangeText={setEmail}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                        className="mb-4"
-                        startContent={
-                            <Ionicons name="mail-outline" size={20} color="#e91e8c" />
-                        }
-                    />
+                    <View className="mb-4">
+                        <Input
+                            placeholder="Uni Email"
+                            value={email}
+                            onChangeText={setEmail}
+                            autoCapitalize="none"
+                            keyboardType="email-address"
+                            className="bg-[#3d2459] border-[#482961] text-white rounded-lg h-14 px-4"
+                            placeholderTextColor="#9ca3af"
+                        />
+                    </View>
 
-                    <TextField
-                        placeholder="Password"
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry
-                        className="mb-4"
-                        startContent={
-                            <Ionicons name="lock-closed-outline" size={20} color="#e91e8c" />
-                        }
-                    />
+                    <View className="mb-4">
+                        <Input
+                            placeholder="Password"
+                            value={password}
+                            onChangeText={setPassword}
+                            secureTextEntry
+                            className="bg-[#3d2459] border-[#482961] text-white rounded-lg h-14 px-4"
+                            placeholderTextColor="#9ca3af"
+                        />
+                    </View>
 
-                    <TextField
-                        placeholder="Confirm Password"
-                        value={confirmPassword}
-                        onChangeText={setConfirmPassword}
-                        secureTextEntry
-                        className="mb-4"
-                        startContent={
-                            <Ionicons name="lock-closed-outline" size={20} color="#e91e8c" />
-                        }
-                    />
+                    <View className="mb-4">
+                        <Input
+                            placeholder="Confirm Password"
+                            value={confirmPassword}
+                            onChangeText={setConfirmPassword}
+                            secureTextEntry
+                            className="bg-[#3d2459] border-[#482961] text-white rounded-lg h-14 px-4"
+                            placeholderTextColor="#9ca3af"
+                        />
+                    </View>
 
                     <Button
                         onPress={handleRegister}
-                        loading={loading}
+                        disabled={loading}
                         size="lg"
-                        className="mt-2 rounded-full bg-[#e91e8c]"
+                        className="mt-2 rounded-full bg-[#e91e8c] h-14"
                     >
                         <Text className="text-white font-bold text-lg">
                             {loading ? 'Creating Account...' : 'Create Account'}
