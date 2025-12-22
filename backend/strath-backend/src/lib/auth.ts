@@ -23,12 +23,15 @@ export const auth = betterAuth({
         "strathmobile://",
         "http://192.168.100.24:3000",
         "https://strath-mobile-j9lv.vercel.app",
-        // Development mode - Expo's exp:// scheme
-        ...(process.env.NODE_ENV === "development" ? [
-            "exp://192.168.100.24:8081",
-            "exp://*/*",
-            "exp://192.168.*.*:*/*",
-        ] : [])
+        // Expo Go development - needs to be trusted even when API is in production
+        "exp://192.168.100.24:8081",
+        "exp://192.168.100.24:8082",
+        "exp://localhost:8081",
+        "exp://localhost:8082",
+        // Web development
+        "http://localhost:8081",
+        "http://localhost:8082",
+        "http://localhost:3000",
     ],
     user: {
         additionalFields: {
