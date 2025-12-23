@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme as useSystemColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useColorScheme as useNativewindColorScheme } from 'nativewind';
 
 type Theme = 'light' | 'dark';
 
@@ -15,6 +16,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const systemScheme = useSystemColorScheme();
+    const { setColorScheme } = useNativewindColorScheme();
     const [theme, setThemeState] = useState<Theme>(systemScheme === 'dark' ? 'dark' : 'light');
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -23,8 +25,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.getItem('user-theme').then((savedTheme) => {
             if (savedTheme === 'dark' || savedTheme === 'light') {
                 setThemeState(savedTheme);
+                setColorScheme(savedTheme);
             } else if (systemScheme) {
                 setThemeState(systemScheme);
+                setColorScheme(systemScheme);
             }
             setIsLoaded(true);
         });
@@ -32,12 +36,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     const setTheme = (newTheme: Theme) => {
         setThemeState(newTheme);
+        setColorScheme(newTheme);
         AsyncStorage.setItem('user-theme', newTheme);
     };
 
     const toggleTheme = () => {
         setTheme(theme === 'dark' ? 'light' : 'dark');
     };
+
 
     if (!isLoaded) {
         return null; // Or a splash screen

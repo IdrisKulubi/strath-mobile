@@ -39,14 +39,14 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Discover',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? "albums" : "albums-outline"} color={color} />,
+          tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? "compass" : "compass-outline"} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="people"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? "search" : "search-outline"} color={color} />,
+          title: 'People',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? "people" : "people-outline"} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -63,6 +63,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? "chatbubbles" : "chatbubbles-outline"} color={color} />,
         }}
       />
+
     </Tabs>
   );
 }
