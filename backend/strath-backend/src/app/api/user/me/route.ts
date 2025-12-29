@@ -96,20 +96,46 @@ export async function PATCH(req: NextRequest) {
 
         // Filter out null values (keep undefined to not overwrite DB values)
         const filteredData = Object.fromEntries(
-            Object.entries(validatedData).filter(([_, value]) => value !== null)
+            Object.entries(validatedData).filter(([_, value]) => value !== null && value !== undefined)
         );
 
-        const updatedProfile = await db
-            .update(profiles)
-            .set({
-                ...filteredData,
-                updatedAt: new Date(),
-            })
-            .where(eq(profiles.userId, session.user.id))
-            .returning();
+        // Check if profile exists
+        const existingProfile = await db.query.profiles.findFirst({
+            where: eq(profiles.userId, session.user.id),
+        });
 
-        return successResponse(updatedProfile[0]);
+        let resultProfile;
+
+        if (existingProfile) {
+            // Update existing profile
+            const updated = await db
+                .update(profiles)
+                .set({
+                    ...filteredData,
+                    updatedAt: new Date(),
+                })
+                .where(eq(profiles.userId, session.user.id))
+                .returning();
+            resultProfile = updated[0];
+        } else {
+            // Create new profile
+            const inserted = await db
+                .insert(profiles)
+                .values({
+                    userId: session.user.id,
+                    firstName: (filteredData as any).firstName || session.user.name?.split(' ')[0] || '',
+                    lastName: (filteredData as any).lastName || session.user.name?.split(' ').slice(1).join(' ') || '',
+                    ...filteredData,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                })
+                .returning();
+            resultProfile = inserted[0];
+        }
+
+        return successResponse(resultProfile);
     } catch (error) {
+        console.error('[PATCH /api/user/me] Error:', error);
         return errorResponse(error);
     }
 }

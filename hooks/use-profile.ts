@@ -47,30 +47,42 @@ export interface Profile {
 }
 
 async function fetchProfile() {
+    console.log('[useProfile] Fetching profile...');
+
     const session = await authClient.getSession();
     const token = session?.data?.session?.token;
+    console.log('[useProfile] Token from session:', token ? 'Present' : 'Missing');
 
     // Fallback to SecureStore if token is not in session (though better-auth usually handles this)
     const storedToken = await SecureStore.getItemAsync('strathmobile.session_token');
     const finalToken = token || storedToken;
+    console.log('[useProfile] Final token:', finalToken ? 'Present' : 'Missing');
+
+    if (!finalToken) {
+        console.error('[useProfile] No auth token available');
+        throw new Error('Not authenticated');
+    }
 
     const headers: HeadersInit = {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${finalToken}`,
     };
 
-    if (finalToken) {
-        headers['Authorization'] = `Bearer ${finalToken}`;
-    }
-
+    console.log('[useProfile] Fetching from:', `${API_URL}/api/user/me`);
     const response = await fetch(`${API_URL}/api/user/me`, {
         headers,
     });
 
+    console.log('[useProfile] Response status:', response.status);
+
     if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[useProfile] Error response:', errorText);
         throw new Error('Failed to fetch profile');
     }
 
     const data = await response.json();
+    console.log('[useProfile] Data received:', data?.data ? 'Has profile' : 'No profile data');
 
     // Helper to ensure URLs have protocol
     const normalizeUrl = (url?: string) => {

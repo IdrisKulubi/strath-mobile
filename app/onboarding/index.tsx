@@ -103,6 +103,14 @@ export default function OnboardingScreen() {
     const submitData = async () => {
         setIsSubmitting(true);
         try {
+            // Get auth session for Authorization header
+            const session = await import('@/lib/auth-client').then(m => m.authClient.getSession());
+            const token = session.data?.session?.token;
+
+            if (!token) {
+                throw new Error('Not authenticated. Please log in again.');
+            }
+
             // Upload photos first
             let uploadedPhotos = [...formData.photos];
             if (uploadedPhotos.length > 0) {
@@ -114,10 +122,11 @@ export default function OnboardingScreen() {
                 }));
             }
 
-            // Prepare data for API
+            // Prepare data for API - convert string fields to proper types
             const payload = {
                 ...formData,
                 photos: uploadedPhotos,
+                age: formData.age ? parseInt(formData.age) : undefined,
                 yearOfStudy: formData.yearOfStudy ? parseInt(formData.yearOfStudy) : undefined,
                 isComplete: true,
                 profileCompleted: true, // For backward compatibility if needed
@@ -127,12 +136,15 @@ export default function OnboardingScreen() {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
                 },
                 body: JSON.stringify(payload),
             });
 
             if (!response.ok) {
-                throw new Error('Failed to update profile');
+                const errorData = await response.json().catch(() => ({}));
+                console.error('Profile update failed:', response.status, errorData);
+                throw new Error(errorData.message || 'Failed to update profile');
             }
 
             // Navigate to main app
