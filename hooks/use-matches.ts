@@ -56,14 +56,19 @@ export type MatchesResponse = z.infer<typeof MatchesResponseSchema>;
  * Fetch matches with optional cursor for pagination
  */
 async function fetchMatches(cursor?: string): Promise<MatchesResponse> {
+    console.log('[useMatches] Fetching matches...');
+
     const session = await authClient.getSession();
     const token = session.data?.session?.token;
+    console.log('[useMatches] Token:', token ? 'Present' : 'Missing');
 
     const url = new URL(`${API_URL}/api/matches`);
     if (cursor) {
         url.searchParams.set('cursor', cursor);
     }
     url.searchParams.set('limit', '20');
+
+    console.log('[useMatches] Fetching from:', url.toString());
 
     const response = await fetch(url.toString(), {
         headers: {
@@ -72,15 +77,21 @@ async function fetchMatches(cursor?: string): Promise<MatchesResponse> {
         },
     });
 
+    console.log('[useMatches] Response status:', response.status);
+
     if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[useMatches] Error response:', errorText);
         throw new Error('Failed to fetch matches');
     }
 
     const data = await response.json();
+    console.log('[useMatches] Raw response:', JSON.stringify(data).slice(0, 500));
 
     // Handle both old format (array) and new format (object with matches)
     if (Array.isArray(data)) {
         // Old format - convert to new format
+        console.log('[useMatches] Old format (array), converting...');
         return {
             matches: data.map((m: unknown) => {
                 const parsed = MatchSchema.safeParse(m);
@@ -93,10 +104,11 @@ async function fetchMatches(cursor?: string): Promise<MatchesResponse> {
     // New format with pagination
     const result = MatchesResponseSchema.safeParse(data);
     if (!result.success) {
-        console.error('Matches validation error:', result.error);
+        console.error('[useMatches] Validation error:', result.error);
         return { matches: data.matches || [], nextCursor: null };
     }
 
+    console.log('[useMatches] Parsed matches count:', result.data.matches.length);
     return result.data;
 }
 

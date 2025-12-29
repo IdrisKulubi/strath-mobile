@@ -251,6 +251,25 @@ export const messagesRelations = relations(messages, ({ one }) => ({
         fields: [messages.senderId],
         references: [user.id],
     }),
+    match: one(matches, {
+        fields: [messages.matchId],
+        references: [matches.id],
+    }),
+}));
+
+// Matches Relations - required for relational queries with 'with:' clause
+export const matchesRelations = relations(matches, ({ one, many }) => ({
+    user1: one(user, {
+        fields: [matches.user1Id],
+        references: [user.id],
+        relationName: "matchUser1",
+    }),
+    user2: one(user, {
+        fields: [matches.user2Id],
+        references: [user.id],
+        relationName: "matchUser2",
+    }),
+    messages: many(messages),
 }));
 
 // Blocks
@@ -356,19 +375,6 @@ export const accountRelations = relations(account, ({ one }) => ({
     }),
 }));
 
-export const matchesRelations = relations(matches, ({ one, many }) => ({
-    messages: many(messages, { relationName: "matchMessages" }),
-    user1: one(user, {
-        fields: [matches.user1Id],
-        references: [user.id],
-        relationName: "user1Relation",
-    }),
-    user2: one(user, {
-        fields: [matches.user2Id],
-        references: [user.id],
-        relationName: "user2Relation",
-    }),
-}));
 
 export const reportsRelations = relations(reports, ({ one }) => ({
     reporter: one(user, {
