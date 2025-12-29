@@ -5,8 +5,13 @@ CREATE TABLE "account" (
 	"provider_id" text NOT NULL,
 	"access_token" text,
 	"refresh_token" text,
-	"expires_at" timestamp,
-	"password" text
+	"id_token" text,
+	"access_token_expires_at" timestamp,
+	"refresh_token_expires_at" timestamp,
+	"scope" text,
+	"password" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "blocks" (
@@ -119,6 +124,8 @@ CREATE TABLE "session" (
 	"expires_at" timestamp NOT NULL,
 	"ip_address" text,
 	"user_agent" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "session_token_unique" UNIQUE("token")
 );
 --> statement-breakpoint
@@ -142,7 +149,7 @@ CREATE TABLE "user" (
 	"name" text NOT NULL,
 	"email" text NOT NULL,
 	"role" text DEFAULT 'user',
-	"email_verified" boolean DEFAULT false,
+	"email_verified" boolean DEFAULT false NOT NULL,
 	"image" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
@@ -158,7 +165,9 @@ CREATE TABLE "verification" (
 	"id" text PRIMARY KEY NOT NULL,
 	"identifier" text NOT NULL,
 	"value" text NOT NULL,
-	"expires_at" timestamp NOT NULL
+	"expires_at" timestamp NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -178,6 +187,7 @@ ALTER TABLE "starred_profiles" ADD CONSTRAINT "starred_profiles_user_id_user_id_
 ALTER TABLE "starred_profiles" ADD CONSTRAINT "starred_profiles_starred_id_user_id_fk" FOREIGN KEY ("starred_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "swipes" ADD CONSTRAINT "swipes_swiper_id_user_id_fk" FOREIGN KEY ("swiper_id") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "swipes" ADD CONSTRAINT "swipes_swiped_id_user_id_fk" FOREIGN KEY ("swiped_id") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "account_userId_idx" ON "account" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "match_users_idx" ON "matches" USING btree ("user1_id","user2_id");--> statement-breakpoint
 CREATE INDEX "last_message_idx" ON "matches" USING btree ("last_message_at");--> statement-breakpoint
 CREATE INDEX "match_id_idx" ON "messages" USING btree ("match_id");--> statement-breakpoint
@@ -196,10 +206,12 @@ CREATE INDEX "profile_username_idx" ON "profiles" USING btree ("username");--> s
 CREATE INDEX "profile_anonymous_idx" ON "profiles" USING btree ("anonymous");--> statement-breakpoint
 CREATE INDEX "reported_user_idx" ON "reports" USING btree ("reported_user_id");--> statement-breakpoint
 CREATE INDEX "report_status_idx" ON "reports" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "session_userId_idx" ON "session" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "swipe_swiper_idx" ON "swipes" USING btree ("swiper_id");--> statement-breakpoint
 CREATE INDEX "swipe_swiped_idx" ON "swipes" USING btree ("swiped_id");--> statement-breakpoint
 CREATE INDEX "swipe_created_at_idx" ON "swipes" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "swipe_combo_idx" ON "swipes" USING btree ("swiper_id","swiped_id");--> statement-breakpoint
 CREATE INDEX "user_email_idx" ON "user" USING btree ("email");--> statement-breakpoint
 CREATE INDEX "user_created_at_idx" ON "user" USING btree ("created_at");--> statement-breakpoint
-CREATE INDEX "user_last_active_idx" ON "user" USING btree ("last_active");
+CREATE INDEX "user_last_active_idx" ON "user" USING btree ("last_active");--> statement-breakpoint
+CREATE INDEX "verification_identifier_idx" ON "verification" USING btree ("identifier");

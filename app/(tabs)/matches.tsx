@@ -28,11 +28,8 @@ export default function MatchesScreen() {
 
     const handleMatchPress = useCallback((match: Match) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        // Navigate to chat screen (will be created later)
-        // For now, log the match ID
-        console.log('Navigate to chat with match:', match.id);
-        // router.push(`/chat/${match.id}`);
-    }, []);
+        router.push({ pathname: '/chat/[matchId]', params: { matchId: match.id } } as any);
+    }, [router]);
 
     const handleExplore = useCallback(() => {
         router.push('/(tabs)');

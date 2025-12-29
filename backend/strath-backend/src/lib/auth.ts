@@ -20,15 +20,23 @@ export const auth = betterAuth({
     },
     plugins: [expo()],
     trustedOrigins: [
+        // Mobile app scheme
         "strathmobile://",
-        "http://192.168.100.24:3000",
+
+        // Production
         "https://strath-mobile-j9lv.vercel.app",
-        // Expo Go development - needs to be trusted even when API is in production
+
+        // Expo Go development - ADD YOUR CURRENT IP HERE
+        "exp://172.20.10.4:8081",
+        "exp://172.20.10.4:8082",
         "exp://192.168.100.24:8081",
         "exp://192.168.100.24:8082",
         "exp://localhost:8081",
         "exp://localhost:8082",
-        // Web development
+
+        // Web/API development
+        "http://172.20.10.4:3000",
+        "http://192.168.100.24:3000",
         "http://localhost:8081",
         "http://localhost:8082",
         "http://localhost:3000",
