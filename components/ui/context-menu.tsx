@@ -3,7 +3,7 @@ import { NativeOnlyAnimatedView } from '@/components/ui/native-only-animated-vie
 import { TextClassContext } from '@/components/ui/text';
 import { cn } from '@/lib/utils';
 import * as ContextMenuPrimitive from '@rn-primitives/context-menu';
-import { Check, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react-native';
+import { Check, CaretDown, CaretRight, CaretUp } from 'phosphor-react-native';
 import * as React from 'react';
 import {
   Platform,
@@ -36,7 +36,7 @@ function ContextMenuSubTrigger({
     inset?: boolean;
   }) {
   const { open } = ContextMenuPrimitive.useSubContext();
-  const icon = Platform.OS === 'web' ? ChevronRight : open ? ChevronUp : ChevronDown;
+  const icon = Platform.OS === 'web' ? CaretRight : open ? CaretUp : CaretDown;
   return (
     <TextClassContext.Provider
       value={cn(
@@ -102,9 +102,9 @@ function ContextMenuContent({
             web: overlayStyle ?? undefined,
             native: overlayStyle
               ? StyleSheet.flatten([
-                  StyleSheet.absoluteFill,
-                  overlayStyle as typeof StyleSheet.absoluteFill,
-                ])
+                StyleSheet.absoluteFill,
+                overlayStyle as typeof StyleSheet.absoluteFill,
+              ])
               : StyleSheet.absoluteFill,
           })}
           className={overlayClassName}>

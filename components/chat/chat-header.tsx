@@ -3,7 +3,7 @@ import { View, Pressable, StyleSheet, Image } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, MoreVertical } from 'lucide-react-native';
+import { CaretLeft, DotsThreeVertical } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 
 interface ChatHeaderProps {
@@ -32,7 +32,7 @@ export function ChatHeader({ partnerName, partnerImage, isOnline = false, onMore
                 onPress={handleBack}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-                <ChevronLeft size={28} color={colors.primary} />
+                <CaretLeft size={28} color={colors.primary} />
             </Pressable>
 
             {/* Avatar */}
@@ -65,7 +65,7 @@ export function ChatHeader({ partnerName, partnerImage, isOnline = false, onMore
                 onPress={onMorePress}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-                <MoreVertical size={22} color={colors.mutedForeground} />
+                <DotsThreeVertical size={22} color={colors.mutedForeground} weight="bold" />
             </Pressable>
         </View>
     );

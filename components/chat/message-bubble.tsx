@@ -3,7 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { Message, formatMessageTime } from '@/hooks/use-chat';
-import { Check, CheckCheck } from 'lucide-react-native';
+import { Check, Checks } from 'phosphor-react-native';
 
 interface MessageBubbleProps {
     message: Message;
@@ -30,9 +30,9 @@ export function MessageBubble({ message, isOwn, showTimestamp = true }: MessageB
 
         switch (message.status) {
             case 'read':
-                return <CheckCheck size={iconSize} color={iconColor} />;
+                return <Checks size={iconSize} color={iconColor} />;
             case 'delivered':
-                return <CheckCheck size={iconSize} color={iconColor} />;
+                return <Checks size={iconSize} color={iconColor} />;
             case 'sent':
             default:
                 return <Check size={iconSize} color={iconColor} />;

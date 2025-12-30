@@ -8,7 +8,7 @@ import {
     TouchableWithoutFeedback,
 } from 'react-native';
 import { useTheme } from '@/hooks/use-theme';
-import { X, Shield, Flag, Ban, XCircle } from 'lucide-react-native';
+import { X, Shield, Flag, Prohibit, XCircle } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 
 interface SafetyToolkitModalProps {
@@ -91,7 +91,7 @@ export function SafetyToolkitModal({
                                     style={styles.option}
                                     onPress={() => handleAction(onBlock)}
                                 >
-                                    <Ban size={22} color={textColor} />
+                                    <Prohibit size={22} color={textColor} />
                                     <View style={styles.optionText}>
                                         <Text style={[styles.optionTitle, { color: textColor }]}>
                                             BLOCK {partnerName.toUpperCase()}

@@ -10,7 +10,7 @@ import {
     Text,
 } from 'react-native';
 import { useTheme } from '@/hooks/use-theme';
-import { Send, Image as ImageIcon, Music, Sticker } from 'lucide-react-native';
+import { PaperPlaneTilt, Image, MusicNote, Sticker } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 
 interface ChatInputProps {

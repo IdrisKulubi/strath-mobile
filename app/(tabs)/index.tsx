@@ -3,7 +3,7 @@ import { View, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
-import { Compass } from 'lucide-react-native';
+import { Compass } from 'phosphor-react-native';
 
 export default function DiscoverScreen() {
   const { colors, colorScheme } = useTheme();

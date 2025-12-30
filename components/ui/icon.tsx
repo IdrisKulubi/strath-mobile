@@ -1,46 +1,55 @@
 import { cn } from '@/lib/utils';
-import type { LucideIcon, LucideProps } from 'lucide-react-native';
+import type { IconProps as PhosphorIconProps, IconWeight } from 'phosphor-react-native';
 import { cssInterop } from 'nativewind';
+import React from 'react';
 
-type IconProps = LucideProps & {
-  as: LucideIcon;
+type IconComponent = React.ComponentType<PhosphorIconProps>;
+
+type IconWrapperProps = {
+  as: IconComponent;
+  className?: string;
+  size?: number;
+  color?: string;
+  weight?: IconWeight;
+  mirrored?: boolean;
+  testID?: string;
 };
 
-function IconImpl({ as: IconComponent, ...props }: IconProps) {
+function IconImpl({ as: IconComponent, className, ...props }: IconWrapperProps) {
   return <IconComponent {...props} />;
 }
 
 cssInterop(IconImpl, {
   className: {
-    target: 'style',
+    target: false as const,
     nativeStyleToProp: {
       height: 'size',
       width: 'size',
+      color: 'color',
     },
   },
 });
 
 /**
- * A wrapper component for Lucide icons with Nativewind `className` support via `cssInterop`.
+ * A wrapper component for Phosphor icons with Nativewind `className` support via `cssInterop`.
  *
- * This component allows you to render any Lucide icon while applying utility classes
+ * This component allows you to render any Phosphor icon while applying utility classes
  * using `nativewind`. It avoids the need to wrap or configure each icon individually.
  *
  * @component
  * @example
  * ```tsx
- * import { ArrowRight } from 'lucide-react-native';
- * import { Icon } from '@/registry/components/ui/icon';
+ * import { ArrowRight } from 'phosphor-react-native';
+ * import { Icon } from '@/components/ui/icon';
  *
  * <Icon as={ArrowRight} className="text-red-500" size={16} />
  * ```
  *
- * @param {LucideIcon} as - The Lucide icon component to render.
+ * @param {IconComponent} as - The Phosphor icon component to render.
  * @param {string} className - Utility classes to style the icon using Nativewind.
  * @param {number} size - Icon size (defaults to 14).
- * @param {...LucideProps} ...props - Additional Lucide icon props passed to the "as" icon.
  */
-function Icon({ as: IconComponent, className, size = 14, ...props }: IconProps) {
+function Icon({ as: IconComponent, className, size = 14, ...props }: IconWrapperProps) {
   return (
     <IconImpl
       as={IconComponent}
@@ -52,3 +61,4 @@ function Icon({ as: IconComponent, className, size = 14, ...props }: IconProps) 
 }
 
 export { Icon };
+export type { IconWrapperProps as IconProps, IconComponent };

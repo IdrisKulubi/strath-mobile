@@ -109,7 +109,7 @@ export default function ChatScreen() {
         return (
             <View style={styles.listHeader}>
                 <Text style={styles.matchedText}>
-                    YOU MATCHED WITH {partner?.name?.toUpperCase() || 'THEM'} ON {dateString}
+                    YOU MATCHED WITH {partner?.profile?.firstName?.toUpperCase() || 'THEM'} ON {dateString}
                 </Text>
             </View>
         );

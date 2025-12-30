@@ -2,7 +2,7 @@ import { Icon } from '@/components/ui/icon';
 import { NativeOnlyAnimatedView } from '@/components/ui/native-only-animated-view';
 import { cn } from '@/lib/utils';
 import * as DialogPrimitive from '@rn-primitives/dialog';
-import { X } from 'lucide-react-native';
+import { X } from 'phosphor-react-native';
 import * as React from 'react';
 import { Platform, Text, View, type ViewProps } from 'react-native';
 import { FadeIn, FadeOut } from 'react-native-reanimated';

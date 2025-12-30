@@ -3,7 +3,7 @@ import { NativeOnlyAnimatedView } from '@/components/ui/native-only-animated-vie
 import { TextClassContext } from '@/components/ui/text';
 import { cn } from '@/lib/utils';
 import * as SelectPrimitive from '@rn-primitives/select';
-import { Check, ChevronDown, ChevronDownIcon, ChevronUpIcon } from 'lucide-react-native';
+import { Check, CaretDown, CaretUp } from 'phosphor-react-native';
 import * as React from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -62,7 +62,7 @@ function SelectTrigger({
       )}
       {...props}>
       <>{children}</>
-      <Icon as={ChevronDown} aria-hidden={true} className="text-muted-foreground size-4" />
+      <Icon as={CaretDown} aria-hidden={true} className="text-muted-foreground size-4" />
     </SelectPrimitive.Trigger>
   );
 }
@@ -98,12 +98,12 @@ function SelectContent({
                     native: 'p-1',
                   }),
                   position === 'popper' &&
-                    Platform.select({
-                      web: cn(
-                        props.side === 'bottom' && 'translate-y-1',
-                        props.side === 'top' && '-translate-y-1'
-                      ),
-                    }),
+                  Platform.select({
+                    web: cn(
+                      props.side === 'bottom' && 'translate-y-1',
+                      props.side === 'top' && '-translate-y-1'
+                    ),
+                  }),
                   className
                 )}
                 position={position}
@@ -113,12 +113,12 @@ function SelectContent({
                   className={cn(
                     'p-1',
                     position === 'popper' &&
-                      cn(
-                        'w-full',
-                        Platform.select({
-                          web: 'h-[var(--radix-select-trigger-height)] min-w-[var(--radix-select-trigger-width)]',
-                        })
-                      )
+                    cn(
+                      'w-full',
+                      Platform.select({
+                        web: 'h-[var(--radix-select-trigger-height)] min-w-[var(--radix-select-trigger-width)]',
+                      })
+                    )
                   )}>
                   {children}
                 </SelectPrimitive.Viewport>
@@ -201,7 +201,7 @@ function SelectScrollUpButton({
     <SelectPrimitive.ScrollUpButton
       className={cn('flex cursor-default items-center justify-center py-1', className)}
       {...props}>
-      <Icon as={ChevronUpIcon} className="size-4" />
+      <Icon as={CaretUp} className="size-4" />
     </SelectPrimitive.ScrollUpButton>
   );
 }
@@ -221,7 +221,7 @@ function SelectScrollDownButton({
     <SelectPrimitive.ScrollDownButton
       className={cn('flex cursor-default items-center justify-center py-1', className)}
       {...props}>
-      <Icon as={ChevronDownIcon} className="size-4" />
+      <Icon as={CaretDown} className="size-4" />
     </SelectPrimitive.ScrollDownButton>
   );
 }

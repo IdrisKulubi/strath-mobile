@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 import { Match } from '@/hooks/use-matches';
 import { MatchItem } from './match-item';
-import { Heart } from 'lucide-react-native';
+import { Heart } from 'phosphor-react-native';
 
 interface MatchesListProps {
     matches: Match[];
