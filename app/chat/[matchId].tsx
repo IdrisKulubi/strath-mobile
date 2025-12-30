@@ -16,15 +16,17 @@ import { useChat, Message } from '@/hooks/use-chat';
 import { useMatches } from '@/hooks/use-matches';
 import { MessageBubble, ChatInput, ChatHeader } from '@/components/chat';
 
+import { SafetyToolkitModal } from '@/components/chat/safety-toolkit-modal';
+
 export default function ChatScreen() {
     const { matchId } = useLocalSearchParams<{ matchId: string }>();
     const { colors, colorScheme } = useTheme();
     const flatListRef = useRef<FlatList>(null);
+    const [isSafetyModalVisible, setIsSafetyModalVisible] = React.useState(false);
 
     const {
         messages,
         isInitialLoading,
-        isLoading,
         sendMessage,
         isSending,
         currentUserId,
@@ -52,6 +54,27 @@ export default function ChatScreen() {
         sendMessage(content);
     }, [sendMessage]);
 
+    // Safety Actions
+    const handleUnmatch = useCallback(() => {
+        console.log('Unmatch');
+        // Implement unmatch logic
+    }, []);
+
+    const handleBlock = useCallback(() => {
+        console.log('Block');
+        // Implement block logic
+    }, []);
+
+    const handleReport = useCallback(() => {
+        console.log('Report');
+        // Implement report logic
+    }, []);
+
+    const handleSafetyCenter = useCallback(() => {
+        console.log('Safety Center');
+        // Navigate to safety center
+    }, []);
+
     // Memoize messages for stable reference in renderItem
     const messagesRef = useRef(messages);
     useEffect(() => {
@@ -76,6 +99,21 @@ export default function ChatScreen() {
     }, [currentUserId]); // Only depend on currentUserId, not messages
 
     const keyExtractor = useCallback((item: Message) => item.id, []);
+
+    // Header component for the list (Matched date)
+    const renderListHeader = useCallback(() => {
+        if (!currentMatch) return null;
+        const date = new Date(currentMatch.createdAt || Date.now());
+        const dateString = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' });
+
+        return (
+            <View style={styles.listHeader}>
+                <Text style={styles.matchedText}>
+                    YOU MATCHED WITH {partner?.name?.toUpperCase() || 'THEM'} ON {dateString}
+                </Text>
+            </View>
+        );
+    }, [currentMatch, partner]);
 
     // Loading state - only show skeletons on the VERY FIRST load when no messages exist
     if (isInitialLoading && messages.length === 0) {
@@ -104,7 +142,8 @@ export default function ChatScreen() {
     // Empty state
     const renderEmptyState = () => (
         <View style={styles.emptyContainer}>
-            <Text className="text-muted-foreground text-center text-base">
+            {renderListHeader()}
+            <Text className="text-muted-foreground text-center text-base mt-8">
                 No messages yet.{'\n'}Say hi to {partner?.name || 'your match'}! 👋
             </Text>
         </View>
@@ -117,6 +156,7 @@ export default function ChatScreen() {
             <ChatHeader
                 partnerName={partner?.name || 'Chat'}
                 partnerImage={partner?.image}
+                onMorePress={() => setIsSafetyModalVisible(true)}
             />
 
             <KeyboardAvoidingView
@@ -133,6 +173,7 @@ export default function ChatScreen() {
                         styles.messageList,
                         messages.length === 0 && styles.emptyList,
                     ]}
+                    ListHeaderComponent={messages.length > 0 ? renderListHeader : undefined}
                     ListEmptyComponent={renderEmptyState}
                     showsVerticalScrollIndicator={false}
                     onContentSizeChange={() => {
@@ -145,8 +186,21 @@ export default function ChatScreen() {
                 <ChatInput
                     onSend={handleSend}
                     isSending={isSending}
+                    onMediaPress={() => console.log('Media')}
+                    onGifPress={() => console.log('GIF')}
+                    onMusicPress={() => console.log('Music')}
                 />
             </KeyboardAvoidingView>
+
+            <SafetyToolkitModal
+                visible={isSafetyModalVisible}
+                onClose={() => setIsSafetyModalVisible(false)}
+                partnerName={partner?.name || 'User'}
+                onUnmatch={handleUnmatch}
+                onBlock={handleBlock}
+                onReport={handleReport}
+                onSafetyCenter={handleSafetyCenter}
+            />
         </SafeAreaView>
     );
 }
@@ -185,5 +239,18 @@ const styles = StyleSheet.create({
     },
     skeletonRight: {
         justifyContent: 'flex-end',
+    },
+    listHeader: {
+        paddingVertical: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 32,
+    },
+    matchedText: {
+        color: '#636366',
+        fontSize: 11,
+        fontWeight: '600',
+        textAlign: 'center',
+        letterSpacing: 0.5,
     },
 });
