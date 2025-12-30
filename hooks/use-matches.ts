@@ -85,8 +85,12 @@ async function fetchMatches(cursor?: string): Promise<MatchesResponse> {
         throw new Error('Failed to fetch matches');
     }
 
-    const data = await response.json();
-    console.log('[useMatches] Raw response:', JSON.stringify(data).slice(0, 500));
+    const responseData = await response.json();
+    console.log('[useMatches] Raw response:', JSON.stringify(responseData).slice(0, 500));
+
+    // API returns {success: true, data: {matches: [...], nextCursor: ...}}
+    // Unwrap the data property
+    const data = responseData.data || responseData;
 
     // Handle both old format (array) and new format (object with matches)
     if (Array.isArray(data)) {
@@ -105,7 +109,8 @@ async function fetchMatches(cursor?: string): Promise<MatchesResponse> {
     const result = MatchesResponseSchema.safeParse(data);
     if (!result.success) {
         console.error('[useMatches] Validation error:', result.error);
-        return { matches: data.matches || [], nextCursor: null };
+        // Fallback: return data directly if parsing fails
+        return { matches: data.matches || [], nextCursor: data.nextCursor || null };
     }
 
     console.log('[useMatches] Parsed matches count:', result.data.matches.length);

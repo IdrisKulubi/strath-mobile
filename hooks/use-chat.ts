@@ -97,9 +97,12 @@ export function useChat(matchId: string) {
     }, []);
 
     // Fetch messages with smart polling
+    // isPending is only true on initial load (no cached data), not during refetches
+    // placeholderData keeps previous data visible during refetch
     const {
         data: messages = [],
-        isLoading,
+        isPending,
+        isFetching,
         isError,
         error,
         refetch,
@@ -109,7 +112,10 @@ export function useChat(matchId: string) {
         refetchInterval: isAppActive ? 3000 : false, // Poll every 3s when active
         refetchIntervalInBackground: false,
         enabled: !!matchId,
-        staleTime: 1000, // Consider data stale after 1s
+        staleTime: 2000, // Consider data stale after 2s
+        gcTime: 5 * 60 * 1000, // Keep in cache for 5 min
+        placeholderData: (previousData) => previousData, // Keep previous data during refetch
+        structuralSharing: true, // Prevent re-renders if data is deeply equal
     });
 
     // Send message mutation with optimistic update
@@ -155,7 +161,9 @@ export function useChat(matchId: string) {
 
     return {
         messages,
-        isLoading,
+        isInitialLoading: isPending && messages.length === 0, // Truly only valid for the first load
+        isLoading: isPending,
+        isFetching,
         isError,
         error,
         refetch,

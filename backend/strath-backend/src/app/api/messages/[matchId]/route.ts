@@ -12,7 +12,31 @@ export async function GET(
     { params }: { params: Promise<{ matchId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({ headers: req.headers });
+        let session = await auth.api.getSession({ headers: req.headers });
+
+        // Fallback: Manual token check if getSession fails (for Bearer token auth)
+        if (!session) {
+            const authHeader = req.headers.get('authorization');
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                const token = authHeader.split(' ')[1];
+                const { session: sessionTable } = await import("@/db/schema");
+                const dbSession = await db.query.session.findFirst({
+                    where: eq(sessionTable.token, token),
+                    with: { user: true }
+                });
+
+                if (dbSession) {
+                    const now = new Date();
+                    if (dbSession.expiresAt > now) {
+                        session = {
+                            session: dbSession,
+                            user: dbSession.user
+                        } as any;
+                    }
+                }
+            }
+        }
+
         if (!session) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
@@ -48,7 +72,31 @@ export async function POST(
     { params }: { params: Promise<{ matchId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({ headers: req.headers });
+        let session = await auth.api.getSession({ headers: req.headers });
+
+        // Fallback: Manual token check if getSession fails (for Bearer token auth)
+        if (!session) {
+            const authHeader = req.headers.get('authorization');
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                const token = authHeader.split(' ')[1];
+                const { session: sessionTable } = await import("@/db/schema");
+                const dbSession = await db.query.session.findFirst({
+                    where: eq(sessionTable.token, token),
+                    with: { user: true }
+                });
+
+                if (dbSession) {
+                    const now = new Date();
+                    if (dbSession.expiresAt > now) {
+                        session = {
+                            session: dbSession,
+                            user: dbSession.user
+                        } as any;
+                    }
+                }
+            }
+        }
+
         if (!session) {
             return errorResponse(new Error("Unauthorized"), 401);
         }

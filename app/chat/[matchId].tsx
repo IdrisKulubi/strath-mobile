@@ -1,10 +1,9 @@
-import React, { useCallback, useRef, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useEffect, useMemo } from 'react';
 import {
     View,
     FlatList,
     StyleSheet,
     StatusBar,
-    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
 } from 'react-native';
@@ -24,6 +23,7 @@ export default function ChatScreen() {
 
     const {
         messages,
+        isInitialLoading,
         isLoading,
         sendMessage,
         isSending,
@@ -35,25 +35,36 @@ export default function ChatScreen() {
     const currentMatch = matchesData?.matches?.find(m => m.id === matchId);
     const partner = currentMatch?.partner;
 
-    // Scroll to bottom on new messages
+    // Track previous message count to know when new messages arrive
+    const prevMessageCountRef = useRef(messages.length);
+
+    // Scroll to bottom only when NEW messages arrive (not on every poll)
     useEffect(() => {
-        if (messages.length > 0 && flatListRef.current) {
+        if (messages.length > prevMessageCountRef.current && flatListRef.current) {
             setTimeout(() => {
                 flatListRef.current?.scrollToEnd({ animated: true });
             }, 100);
         }
+        prevMessageCountRef.current = messages.length;
     }, [messages.length]);
 
     const handleSend = useCallback((content: string) => {
         sendMessage(content);
     }, [sendMessage]);
 
+    // Memoize messages for stable reference in renderItem
+    const messagesRef = useRef(messages);
+    useEffect(() => {
+        messagesRef.current = messages;
+    }, [messages]);
+
     const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
         const isOwn = item.senderId === currentUserId;
-        // Show timestamp if first message or different day/time gap
+        // Access messages via ref to avoid dependency causing re-renders
+        const prevMessages = messagesRef.current;
         const showTimestamp = index === 0 ||
-            (index > 0 &&
-                new Date(item.createdAt).getTime() - new Date(messages[index - 1].createdAt).getTime() > 5 * 60 * 1000);
+            (index > 0 && prevMessages[index - 1] &&
+                new Date(item.createdAt).getTime() - new Date(prevMessages[index - 1].createdAt).getTime() > 5 * 60 * 1000);
 
         return (
             <MessageBubble
@@ -62,12 +73,12 @@ export default function ChatScreen() {
                 showTimestamp={showTimestamp}
             />
         );
-    }, [currentUserId, messages]);
+    }, [currentUserId]); // Only depend on currentUserId, not messages
 
     const keyExtractor = useCallback((item: Message) => item.id, []);
 
-    // Loading state
-    if (isLoading && messages.length === 0) {
+    // Loading state - only show skeletons on the VERY FIRST load when no messages exist
+    if (isInitialLoading && messages.length === 0) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
                 <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
