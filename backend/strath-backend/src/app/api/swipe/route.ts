@@ -5,11 +5,39 @@ import { swipes, matches, user } from "@/db/schema";
 import { swipeSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { eq, and } from "drizzle-orm";
+
+export const dynamic = "force-dynamic";
 import { sendPushNotification } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth.api.getSession({ headers: req.headers });
+        let session = await auth.api.getSession({ headers: req.headers });
+
+        // Fallback: Manual token check for Bearer token auth (mobile clients)
+        if (!session) {
+            const authHeader = req.headers.get('authorization');
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                const token = authHeader.split(' ')[1];
+                // Import session table dynamically to avoid circular deps
+                const { session: sessionTable } = await import("@/db/schema");
+
+                const dbSession = await db.query.session.findFirst({
+                    where: eq(sessionTable.token, token),
+                    with: { user: true }
+                });
+
+                if (dbSession) {
+                    const now = new Date();
+                    if (dbSession.expiresAt > now) {
+                        session = {
+                            session: dbSession,
+                            user: dbSession.user
+                        } as any;
+                    }
+                }
+            }
+        }
+
         if (!session) {
             return errorResponse(new Error("Unauthorized"), 401);
         }

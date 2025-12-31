@@ -5,6 +5,8 @@ import { messages, matches } from "@/db/schema";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { eq, and, or, ne } from "drizzle-orm";
 
+export const dynamic = "force-dynamic";
+
 export async function PATCH(
     req: NextRequest,
     { params }: { params: Promise<{ matchId: string }> }

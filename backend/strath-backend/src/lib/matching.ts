@@ -2,7 +2,7 @@ import { db } from "./db";
 import { profiles, swipes, blocks } from "../db/schema";
 import { eq, and, notInArray } from "drizzle-orm";
 
-export async function getRecommendations(userId: string) {
+export async function getRecommendations(userId: string, limit: number = 20, offset: number = 0) {
     // 1. Get current user profile
     const currentUserProfile = await db.query.profiles.findFirst({
         where: eq(profiles.userId, userId),
@@ -34,21 +34,16 @@ export async function getRecommendations(userId: string) {
     ];
 
     // 3. Fetch potential matches
-    // Note: In a real app with millions of users, we'd use PostGIS for location 
-    // and more efficient queries. For now, we fetch candidates and rank in memory 
-    // or use basic SQL filtering.
-
     const candidates = await db.query.profiles.findMany({
         where: and(
             notInArray(profiles.userId, excludedIds),
             eq(profiles.isVisible, true),
             eq(profiles.profileCompleted, true)
-            // Add gender filtering here if needed based on currentUserProfile.lookingFor
         ),
         with: {
-            user: true, // Join with user table to get name/image if needed
+            user: true,
         },
-        limit: 50,
+        limit: limit + offset + 20,
     });
 
     // 4. Scoring Algorithm
@@ -84,5 +79,6 @@ export async function getRecommendations(userId: string) {
     // For simplicity, we just return the sorted list for now, but you could 
     // shuffle the top 10.
 
-    return scoredCandidates;
+    // Return paginated slice
+    return scoredCandidates.slice(offset, offset + limit);
 }
