@@ -2,7 +2,7 @@ import { db } from "./db";
 import { profiles, swipes, blocks } from "../db/schema";
 import { eq, and, notInArray } from "drizzle-orm";
 
-export async function getRecommendations(userId: string, limit: number = 20, offset: number = 0) {
+export async function getRecommendations(userId: string, limit: number = 20, offset: number = 0, vibe: string = 'all') {
     // 1. Get current user profile
     const currentUserProfile = await db.query.profiles.findFirst({
         where: eq(profiles.userId, userId),
@@ -66,6 +66,27 @@ export async function getRecommendations(userId: string, limit: number = 20, off
         const oneDay = 24 * 60 * 60 * 1000;
         if (Date.now() - lastActive < oneDay) {
             score += 5;
+        }
+
+        // Vibe Matching (Major weight)
+        if (vibe !== 'all') {
+            const vibeKeywords: Record<string, string[]> = {
+                music: ['Music', 'Concerts', 'Spotify', 'Guitar', 'Singing', 'Afrobeats', 'Hip Hop', 'Jazz'],
+                hustle: ['Coding', 'Startups', 'Entrepreneurship', 'Business', 'Freelancing', 'Tech', 'AI'],
+                chill: ['Coffee', 'Reading', 'Netflix', 'Relaxing', 'Sleep', 'Peace', 'Nature'],
+                gaming: ['Gaming', 'PlayStation', 'Xbox', 'PC', 'E-sports', 'Twitch', 'Streaming'],
+                night: ['Party', 'Clubbing', 'Late Night', 'Night Owl', 'Dancing', 'Midnight'],
+                creative: ['Art', 'Design', 'Photography', 'Painting', 'Content Creation', 'Writing'],
+            };
+
+            const keywords = vibeKeywords[vibe] || [];
+            const hasVibeMatch = (candidate.interests || []).some(interest =>
+                keywords.some(k => interest.toLowerCase().includes(k.toLowerCase()))
+            );
+
+            if (hasVibeMatch) {
+                score += 25; // Massive boost for vibe alignment
+            }
         }
 
         return { ...candidate, score };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
     View,
     StyleSheet,
@@ -7,7 +7,14 @@ import {
     Pressable,
     ScrollView,
 } from 'react-native';
-import Animated, { SharedValue, useAnimatedStyle } from 'react-native-reanimated';
+import Animated, {
+    SharedValue,
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withTiming,
+    Easing
+} from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { DiscoverProfile } from '@/hooks/use-discover';
@@ -32,6 +39,7 @@ interface SwipeCardProps {
     profile: DiscoverProfile;
     onInfoPress?: () => void;
     isTop?: boolean;
+    showAura?: boolean;
     likeOpacity?: SharedValue<number>;
     nopeOpacity?: SharedValue<number>;
 }
@@ -55,6 +63,7 @@ export function SwipeCard({
     profile,
     onInfoPress,
     isTop = false,
+    showAura = false,
     likeOpacity,
     nopeOpacity,
 }: SwipeCardProps) {
@@ -73,6 +82,43 @@ export function SwipeCard({
     const age = profile.age;
     const interests = profile.interests || [];
 
+    // Vibe Aura Logic
+    const auraOpacity = useSharedValue(0.4);
+
+    useEffect(() => {
+        auraOpacity.value = withRepeat(
+            withTiming(0.7, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
+            -1,
+            true
+        );
+    }, []);
+
+    const getAuraColor = () => {
+        const keywords: Record<string, { color: string, keys: string[] }> = {
+            music: { color: '#007AFF', keys: ['Music', 'Spotify', 'Concerts', 'Guitar', 'Singing', 'Afrobeats'] },
+            hustle: { color: '#34C759', keys: ['Coding', 'Startups', 'Entrepreneurship', 'Business', 'Freelancing', 'Tech'] },
+            chill: { color: '#FF9500', keys: ['Coffee', 'Reading', 'Netflix', 'Relaxing', 'Sleep', 'Peace'] },
+            gaming: { color: '#5856D6', keys: ['Gaming', 'PlayStation', 'Xbox', 'PC', 'E-sports', 'Twitch'] },
+            night: { color: '#AF52DE', keys: ['Party', 'Clubbing', 'Late Night', 'Night Owl', 'Dancing'] },
+            creative: { color: '#FF2D55', keys: ['Art', 'Design', 'Photography', 'Painting', 'Content Creation'] },
+        };
+
+        for (const [vibe, data] of Object.entries(keywords)) {
+            if (interests.some(i => data.keys.some(k => i.toLowerCase().includes(k.toLowerCase())))) {
+                return data.color;
+            }
+        }
+        return colors.primary; // Fallback to brand pink
+    };
+
+    const auraColor = getAuraColor();
+
+    const auraStyle = useAnimatedStyle(() => ({
+        opacity: showAura ? auraOpacity.value : 1,
+        shadowColor: showAura ? auraColor : 'transparent',
+        backgroundColor: colors.card,
+    }));
+
     // Animated styles for stamps
     const likeStampStyle = useAnimatedStyle(() => {
         if (!likeOpacity) return { opacity: 0 };
@@ -85,7 +131,8 @@ export function SwipeCard({
     });
 
     return (
-        <View style={[styles.card, { backgroundColor: colors.background }]}>
+        <Animated.View style={[styles.card, auraStyle, showAura && styles.auraContainer]}>
+            {showAura && <View style={[styles.auraBackground, { backgroundColor: auraColor, opacity: 0.15 }]} />}
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
@@ -203,7 +250,7 @@ export function SwipeCard({
                     </Animated.View>
                 </View>
             )}
-        </View>
+        </Animated.View>
     );
 }
 
@@ -213,6 +260,17 @@ const styles = StyleSheet.create({
         height: CARD_HEIGHT,
         borderRadius: 12,
         overflow: 'hidden',
+    },
+    auraContainer: {
+        // Glow effect
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 1,
+        shadowRadius: 15,
+        elevation: 10,
+    },
+    auraBackground: {
+        ...StyleSheet.absoluteFillObject,
+        zIndex: -1,
     },
     scrollContent: {
         paddingBottom: 100,

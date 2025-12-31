@@ -21,11 +21,12 @@ const ROTATION_FACTOR = 10; // degrees per 100px
 
 interface CardStackProps {
     profiles: DiscoverProfile[];
-    onSwipe: (action: 'like' | 'pass') => void;
-    onInfoPress: (profile: DiscoverProfile) => void;
+    onSwipe?: (action: 'like' | 'pass') => void;
+    onInfoPress?: (profile: DiscoverProfile) => void;
+    showAura?: boolean;
 }
 
-export function CardStack({ profiles, onSwipe, onInfoPress }: CardStackProps) {
+export function CardStack({ profiles, onSwipe, onInfoPress, showAura = false }: CardStackProps) {
     // Shared values for the top card animation
     const translateX = useSharedValue(0);
     const translateY = useSharedValue(0);
@@ -42,7 +43,7 @@ export function CardStack({ profiles, onSwipe, onInfoPress }: CardStackProps) {
     // Handle swipe completion
     const completeSwipe = useCallback((direction: 'like' | 'pass') => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        onSwipe(direction);
+        onSwipe?.(direction);
 
         // Reset values after swipe
         setTimeout(() => {
@@ -173,7 +174,7 @@ export function CardStack({ profiles, onSwipe, onInfoPress }: CardStackProps) {
                 <Animated.View style={[styles.cardContainer, styles.backgroundCard, thirdCardStyle]}>
                     <SwipeCard
                         profile={profiles[2]}
-                        onInfoPress={() => onInfoPress(profiles[2])}
+                        onInfoPress={() => onInfoPress?.(profiles[2])}
                     />
                 </Animated.View>
             )}
@@ -183,7 +184,7 @@ export function CardStack({ profiles, onSwipe, onInfoPress }: CardStackProps) {
                 <Animated.View style={[styles.cardContainer, styles.backgroundCard, secondCardStyle]}>
                     <SwipeCard
                         profile={profiles[1]}
-                        onInfoPress={() => onInfoPress(profiles[1])}
+                        onInfoPress={() => onInfoPress?.(profiles[1])}
                     />
                 </Animated.View>
             )}
@@ -194,8 +195,9 @@ export function CardStack({ profiles, onSwipe, onInfoPress }: CardStackProps) {
                     <Animated.View style={[styles.cardContainer, topCardStyle]}>
                         <SwipeCard
                             profile={profiles[0]}
-                            onInfoPress={() => onInfoPress(profiles[0])}
+                            onInfoPress={() => onInfoPress?.(profiles[0])}
                             isTop={true}
+                            showAura={showAura}
                             likeOpacity={likeOpacityValue}
                             nopeOpacity={nopeOpacityValue}
                         />

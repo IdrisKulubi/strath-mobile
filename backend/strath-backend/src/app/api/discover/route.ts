@@ -41,16 +41,17 @@ export async function GET(req: NextRequest) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
 
-        // Pagination params
+        // Pagination & Vibe params
         const { searchParams } = new URL(req.url);
         const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 50);
         const offset = parseInt(searchParams.get("offset") || "0");
+        const vibe = searchParams.get("vibe") || "all";
 
         if (!session) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
 
-        const recommendations = await getRecommendations(session.user.id, limit, offset);
+        const recommendations = await getRecommendations(session.user.id, limit, offset, vibe);
 
         return successResponse({
             profiles: recommendations,

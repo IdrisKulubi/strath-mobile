@@ -13,6 +13,8 @@ import { GestureHandlerRootView, Pressable as GesturePressable } from 'react-nat
 export default function PeopleScreen() {
     const { colors, colorScheme } = useTheme();
     const { data: currentUserProfile } = useProfile();
+
+
     const {
         currentProfile,
         upcomingProfiles,

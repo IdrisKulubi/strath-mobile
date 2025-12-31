@@ -40,11 +40,11 @@ export type DiscoverProfile = z.infer<typeof ProfileSchema>;
 export type DiscoverResponse = z.infer<typeof DiscoverResponseSchema>;
 
 // Fetch profiles from discover API
-async function fetchProfiles(offset: number = 0, limit: number = 10): Promise<DiscoverResponse> {
+async function fetchProfiles(offset: number = 0, limit: number = 10, vibe: string = 'all'): Promise<DiscoverResponse> {
     const session = await authClient.getSession();
     const token = session.data?.session?.token;
 
-    const url = `${API_URL}/api/discover?limit=${limit}&offset=${offset}`;
+    const url = `${API_URL}/api/discover?limit=${limit}&offset=${offset}&vibe=${vibe}`;
 
     const response = await fetch(url, {
         headers: {
@@ -111,7 +111,7 @@ function preloadImages(profiles: DiscoverProfile[], count: number = 5) {
  * useDiscover Hook
  * Fetches and manages discover profiles with infinite loading
  */
-export function useDiscover() {
+export function useDiscover(vibe: string = 'all') {
     const queryClient = useQueryClient();
     const [currentIndex, setCurrentIndex] = useState(0);
     const [swipeHistory, setSwipeHistory] = useState<{ profile: DiscoverProfile; action: 'like' | 'pass' }[]>([]);
@@ -128,13 +128,19 @@ export function useDiscover() {
         error,
         refetch,
     } = useInfiniteQuery({
-        queryKey: ['discover'],
-        queryFn: ({ pageParam = 0 }) => fetchProfiles(pageParam, 10),
+        queryKey: ['discover', vibe],
+        queryFn: ({ pageParam = 0 }) => fetchProfiles(pageParam, 10, vibe),
         getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.nextOffset : undefined,
         initialPageParam: 0,
         staleTime: 5 * 60 * 1000, // 5 minutes
         gcTime: 10 * 60 * 1000, // 10 minutes cache
     });
+
+    // Reset current index when vibe changes
+    useEffect(() => {
+        setCurrentIndex(0);
+        setSwipeHistory([]);
+    }, [vibe]);
 
     // Flatten all profiles from all pages
     const allProfiles = data?.pages.flatMap(page => page.profiles) ?? [];

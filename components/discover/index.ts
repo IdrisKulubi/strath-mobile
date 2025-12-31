@@ -1,5 +1,6 @@
 export { SwipeCard } from './swipe-card';
-export { CardStack } from './card-stack';
-export { SwipeButtons } from './swipe-buttons';
-export { MatchModal } from './match-modal';
-export { ProfileDetailSheet } from './profile-detail-sheet';
+export * from './card-stack';
+export * from './swipe-buttons';
+export * from './match-modal';
+export * from './profile-detail-sheet';
+export * from './vibe-switcher';
