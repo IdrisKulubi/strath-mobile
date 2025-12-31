@@ -99,18 +99,6 @@ export function SwipeCard({
                         resizeMode="cover"
                     />
 
-                    {/* LIKE/NOPE Stamps */}
-                    {isTop && (
-                        <>
-                            <Animated.View style={[styles.likeStamp, likeStampStyle]}>
-                                <Text style={[styles.stampText, { color: '#34C759' }]}>LIKE</Text>
-                            </Animated.View>
-                            <Animated.View style={[styles.nopeStamp, nopeStampStyle]}>
-                                <Text style={[styles.stampText, { color: '#FF3B30' }]}>NOPE</Text>
-                            </Animated.View>
-                        </>
-                    )}
-
                     {/* Bottom Gradient - Sits below the profile info layer */}
                     <LinearGradient
                         colors={['transparent', 'rgba(0,0,0,0.8)']}
@@ -203,6 +191,18 @@ export function SwipeCard({
                     </View>
                 </View>
             </ScrollView>
+
+            {/* FIXED LAYER: LIKE/NOPE Stamps - Sits on top of everything, centered */}
+            {isTop && (
+                <View style={styles.stampOverlay} pointerEvents="none">
+                    <Animated.View style={[styles.likeStamp, likeStampStyle]}>
+                        <Text style={[styles.stampText, { color: '#34C759' }]}>LIKE</Text>
+                    </Animated.View>
+                    <Animated.View style={[styles.nopeStamp, nopeStampStyle]}>
+                        <Text style={[styles.stampText, { color: '#FF3B30' }]}>NOPE</Text>
+                    </Animated.View>
+                </View>
+            )}
         </View>
     );
 }
@@ -338,32 +338,40 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '600',
     },
+    stampOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 200, // Above all content and name overlay
+    },
     likeStamp: {
         position: 'absolute',
-        top: 50,
-        left: 20,
+        top: '25%',
+        left: 40,
         borderWidth: 4,
         borderColor: '#34C759',
         borderRadius: 8,
         paddingHorizontal: 12,
-        paddingVertical: 6,
+        paddingVertical: 4,
         transform: [{ rotate: '-15deg' }],
-        zIndex: 10,
+        minHeight: 50, // Ensure height for text
     },
     nopeStamp: {
         position: 'absolute',
-        top: 50,
-        right: 20,
+        top: '25%',
+        right: 40,
         borderWidth: 4,
         borderColor: '#FF3B30',
         borderRadius: 8,
         paddingHorizontal: 12,
-        paddingVertical: 6,
+        paddingVertical: 4,
         transform: [{ rotate: '15deg' }],
-        zIndex: 10,
+        minHeight: 50, // Ensure height for text
     },
     stampText: {
-        fontSize: 28,
-        fontWeight: '800',
+        fontSize: 32,
+        fontWeight: '900',
+        lineHeight: 40, // Increased to prevent clipping
+        textAlign: 'center',
     },
 });
