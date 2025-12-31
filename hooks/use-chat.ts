@@ -64,6 +64,39 @@ async function sendMessage(matchId: string, content: string): Promise<Message> {
     return MessageSchema.parse(result.data || result);
 }
 
+// Mark messages as read
+async function markMessagesAsRead(matchId: string): Promise<void> {
+    console.log('[markAsRead] Starting for matchId:', matchId);
+    const session = await authClient.getSession();
+    const token = session.data?.session?.token;
+    console.log('[markAsRead] Token:', token ? 'Present' : 'Missing');
+
+    try {
+        const url = `${API_URL}/api/messages/${matchId}/read`;
+        console.log('[markAsRead] Calling:', url);
+
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': token ? `Bearer ${token}` : '',
+                'Content-Type': 'application/json',
+            },
+        });
+
+        console.log('[markAsRead] Response status:', response.status);
+        const data = await response.json();
+        console.log('[markAsRead] Response data:', data);
+
+        if (!response.ok) {
+            console.warn('[markAsRead] Failed:', response.status, data);
+        } else {
+            console.log('[markAsRead] Success!');
+        }
+    } catch (error) {
+        console.error('[markAsRead] Error:', error);
+    }
+}
+
 // Get current user ID helper
 async function getCurrentUserId(): Promise<string | null> {
     const session = await authClient.getSession();
@@ -95,6 +128,16 @@ export function useChat(matchId: string) {
         const subscription = AppState.addEventListener('change', handleAppStateChange);
         return () => subscription?.remove();
     }, []);
+
+    // Mark messages as read when chat opens
+    useEffect(() => {
+        if (matchId) {
+            markMessagesAsRead(matchId).then(() => {
+                // Invalidate matches cache to update unread counts in the list
+                queryClient.invalidateQueries({ queryKey: ['matches'] });
+            });
+        }
+    }, [matchId, queryClient]);
 
     // Fetch messages with smart polling
     // isPending is only true on initial load (no cached data), not during refetches
