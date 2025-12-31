@@ -1,29 +1,54 @@
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import {
     View,
     StyleSheet,
     Dimensions,
     Image,
     Pressable,
+    ScrollView,
 } from 'react-native';
 import Animated, { SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { DiscoverProfile } from '@/hooks/use-discover';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Info, GraduationCap } from 'phosphor-react-native';
-import * as Haptics from 'expo-haptics';
+import {
+    GraduationCap,
+    MapPin,
+    User,
+    Heart,
+    Wine,
+    Smiley,
+    Buildings,
+    WarningCircle,
+    Prohibit
+} from 'phosphor-react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const CARD_WIDTH = SCREEN_WIDTH - 24;
-const CARD_HEIGHT = SCREEN_HEIGHT * 0.65;
+const CARD_WIDTH = SCREEN_WIDTH - 16;
+const CARD_HEIGHT = SCREEN_HEIGHT - 200; // Leave room for header and tab bar
 
 interface SwipeCardProps {
     profile: DiscoverProfile;
-    onInfoPress: () => void;
+    onInfoPress?: () => void;
     isTop?: boolean;
     likeOpacity?: SharedValue<number>;
     nopeOpacity?: SharedValue<number>;
+}
+
+interface TagProps {
+    icon: React.ReactNode;
+    label: string;
+    colors: any;
+}
+
+function Tag({ icon, label, colors }: TagProps) {
+    return (
+        <View style={[styles.tag, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            {icon}
+            <Text style={[styles.tagText, { color: colors.foreground }]}>{label}</Text>
+        </View>
+    );
 }
 
 export function SwipeCard({
@@ -34,43 +59,19 @@ export function SwipeCard({
     nopeOpacity,
 }: SwipeCardProps) {
     const { colors } = useTheme();
-    const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
 
-    // Get all photos (profile photo + photos array)
+    // Get all photos
     const allPhotos: string[] = [];
     if (profile.profilePhoto) allPhotos.push(profile.profilePhoto);
     if (profile.photos) allPhotos.push(...profile.photos.filter(p => p && p !== profile.profilePhoto));
-    if (profile.user?.image && !allPhotos.includes(profile.user.image)) {
-        allPhotos.unshift(profile.user.image);
-    }
-    // Fallback if no photos
+
     if (allPhotos.length === 0) {
         allPhotos.push('https://via.placeholder.com/400x600?text=No+Photo');
     }
 
     const displayName = profile.firstName || profile.user?.name?.split(' ')[0] || 'User';
     const age = profile.age;
-    const interests = profile.interests?.slice(0, 5) || [];
-
-    // Handle photo tap to navigate carousel
-    const handlePhotoTap = useCallback((event: any) => {
-        const tapX = event.nativeEvent.locationX;
-        const halfWidth = CARD_WIDTH / 2;
-
-        if (tapX < halfWidth - 40) {
-            // Tap on left side - previous photo
-            if (currentPhotoIndex > 0) {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setCurrentPhotoIndex(prev => prev - 1);
-            }
-        } else if (tapX > halfWidth + 40) {
-            // Tap on right side - next photo
-            if (currentPhotoIndex < allPhotos.length - 1) {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setCurrentPhotoIndex(prev => prev + 1);
-            }
-        }
-    }, [currentPhotoIndex, allPhotos.length]);
+    const interests = profile.interests || [];
 
     // Animated styles for stamps
     const likeStampStyle = useAnimatedStyle(() => {
@@ -84,91 +85,124 @@ export function SwipeCard({
     });
 
     return (
-        <View style={[styles.card, { backgroundColor: colors.card }]}>
-            {/* Photo */}
-            <Pressable onPress={handlePhotoTap} style={styles.photoContainer}>
-                <Image
-                    source={{ uri: allPhotos[currentPhotoIndex] }}
-                    style={styles.photo}
-                    resizeMode="cover"
-                />
+        <View style={[styles.card, { backgroundColor: colors.background }]}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+                bounces={true}
+            >
+                {/* Hero Photo Section - Just the image and gradient/stamps */}
+                <View style={styles.heroContainer}>
+                    <Image
+                        source={{ uri: allPhotos[0] }}
+                        style={styles.heroPhoto}
+                        resizeMode="cover"
+                    />
 
-                {/* Photo indicators */}
-                {allPhotos.length > 1 && (
-                    <View style={styles.photoIndicators}>
-                        {allPhotos.map((_, index) => (
-                            <View
-                                key={index}
-                                style={[
-                                    styles.photoIndicator,
-                                    {
-                                        backgroundColor: index === currentPhotoIndex
-                                            ? '#FFFFFF'
-                                            : 'rgba(255,255,255,0.4)',
-                                    },
-                                ]}
-                            />
-                        ))}
-                    </View>
-                )}
-
-                {/* Like stamp */}
-                {isTop && (
-                    <Animated.View style={[styles.likeStamp, likeStampStyle]}>
-                        <Text style={[styles.stampText, { color: '#34C759' }]}>LIKE</Text>
-                    </Animated.View>
-                )}
-
-                {/* Nope stamp */}
-                {isTop && (
-                    <Animated.View style={[styles.nopeStamp, nopeStampStyle]}>
-                        <Text style={[styles.stampText, { color: '#FF3B30' }]}>NOPE</Text>
-                    </Animated.View>
-                )}
-
-                {/* Gradient overlay */}
-                <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.8)']}
-                    style={styles.gradient}
-                />
-
-                {/* Profile info overlay */}
-                <View style={styles.infoOverlay}>
-                    <View style={styles.nameRow}>
-                        <Text style={styles.name}>
-                            {displayName}{age ? `, ${age}` : ''}
-                        </Text>
-                        <Pressable
-                            onPress={onInfoPress}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                            style={styles.infoButton}
-                        >
-                            <Info size={24} color="#FFFFFF" weight="bold" />
-                        </Pressable>
-                    </View>
-
-                    {/* University & Course */}
-                    {(profile.university || profile.course) && (
-                        <View style={styles.detailRow}>
-                            <GraduationCap size={16} color="rgba(255,255,255,0.8)" />
-                            <Text style={styles.detailText}>
-                                {[profile.university, profile.course].filter(Boolean).join(' • ')}
-                            </Text>
-                        </View>
+                    {/* LIKE/NOPE Stamps */}
+                    {isTop && (
+                        <>
+                            <Animated.View style={[styles.likeStamp, likeStampStyle]}>
+                                <Text style={[styles.stampText, { color: '#34C759' }]}>LIKE</Text>
+                            </Animated.View>
+                            <Animated.View style={[styles.nopeStamp, nopeStampStyle]}>
+                                <Text style={[styles.stampText, { color: '#FF3B30' }]}>NOPE</Text>
+                            </Animated.View>
+                        </>
                     )}
 
-                    {/* Interests */}
-                    {interests.length > 0 && (
-                        <View style={styles.interestsRow}>
+                    {/* Bottom Gradient - Sits below the profile info layer */}
+                    <LinearGradient
+                        colors={['transparent', 'rgba(0,0,0,0.8)']}
+                        style={styles.gradient}
+                    />
+
+                    {/* Name & Info - Moves with the image */}
+                    <View style={styles.heroInfo}>
+                        <Text style={styles.heroName} numberOfLines={1}>
+                            {displayName}, {age || '?'}
+                        </Text>
+                        {profile.university && (
+                            <View style={styles.heroDetail}>
+                                <GraduationCap size={16} color="#FFFFFF" weight="fill" />
+                                <Text style={styles.heroDetailText}>{profile.university}</Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+
+                {/* About Me Section */}
+                <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Text style={[styles.sectionTitle, { color: colors.foreground }]}>About me</Text>
+                    <View style={styles.tagsContainer}>
+                        <Tag icon={<User size={16} color={colors.foreground} />} label={profile.gender || "Not specified"} colors={colors} />
+                        <Tag icon={<Buildings size={16} color={colors.foreground} />} label={profile.university || "University"} colors={colors} />
+                        <Tag icon={<Wine size={16} color={colors.foreground} />} label="Socially" colors={colors} />
+                        <Tag icon={<Smiley size={16} color={colors.foreground} />} label="Christian" colors={colors} />
+                    </View>
+                    {profile.bio && (
+                        <Text style={[styles.bioText, { color: colors.foreground }]}>{profile.bio}</Text>
+                    )}
+                </View>
+
+                {/* Second Photo */}
+                {allPhotos.length > 1 && (
+                    <View style={styles.photoContainer}>
+                        <Image source={{ uri: allPhotos[1] }} style={styles.photo} resizeMode="cover" />
+                    </View>
+                )}
+
+                {/* Looking For */}
+                <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Text style={[styles.sectionTitle, { color: colors.foreground }]}>I'm looking for</Text>
+                    <View style={styles.tagsContainer}>
+                        <Tag icon={<Heart size={16} color={colors.foreground} />} label="A long-term relationship" colors={colors} />
+                    </View>
+                </View>
+
+                {/* Interests */}
+                {interests.length > 0 && (
+                    <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>My interests</Text>
+                        <View style={styles.tagsContainer}>
                             {interests.map((interest, index) => (
-                                <View key={index} style={styles.interestChip}>
-                                    <Text style={styles.interestText}>{interest}</Text>
+                                <View key={index} style={[styles.tag, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                                    <Text style={[styles.tagText, { color: colors.foreground }]}>{interest}</Text>
                                 </View>
                             ))}
                         </View>
-                    )}
+                    </View>
+                )}
+
+                {/* Third Photo */}
+                {allPhotos.length > 2 && (
+                    <View style={styles.photoContainer}>
+                        <Image source={{ uri: allPhotos[2] }} style={styles.photo} resizeMode="cover" />
+                    </View>
+                )}
+
+                {/* Location & Actions */}
+                <View style={[styles.section, styles.lastSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Text style={[styles.sectionTitle, { color: colors.foreground }]}>My location</Text>
+                    <View style={styles.locationRow}>
+                        <MapPin size={20} color={colors.foreground} weight="bold" />
+                        <View>
+                            <Text style={[styles.locationMain, { color: colors.foreground }]}>Nairobi, Kenya</Text>
+                            <Text style={[styles.locationSub, { color: colors.mutedForeground }]}>Strathmore University</Text>
+                        </View>
+                    </View>
+                    <View style={styles.actionButtons}>
+                        <Pressable style={styles.actionButton}>
+                            <Prohibit size={20} color={colors.foreground} />
+                            <Text style={[styles.actionButtonText, { color: colors.foreground }]}>Block {displayName}</Text>
+                        </Pressable>
+                        <Pressable style={styles.actionButton}>
+                            <WarningCircle size={20} color="#FF3B30" />
+                            <Text style={[styles.actionButtonText, { color: '#FF3B30' }]}>Report {displayName}</Text>
+                        </Pressable>
+                    </View>
                 </View>
-            </Pressable>
+            </ScrollView>
         </View>
     );
 }
@@ -177,92 +211,132 @@ const styles = StyleSheet.create({
     card: {
         width: CARD_WIDTH,
         height: CARD_HEIGHT,
-        borderRadius: 16,
+        borderRadius: 12,
         overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
     },
-    photoContainer: {
-        flex: 1,
+    scrollContent: {
+        paddingBottom: 100,
     },
-    photo: {
+    heroContainer: {
+        width: '100%',
+        height: CARD_HEIGHT, // Full card height for hero
+        position: 'relative',
+    },
+    heroPhoto: {
         width: '100%',
         height: '100%',
-    },
-    photoIndicators: {
-        position: 'absolute',
-        top: 12,
-        left: 12,
-        right: 12,
-        flexDirection: 'row',
-        gap: 4,
-    },
-    photoIndicator: {
-        flex: 1,
-        height: 3,
-        borderRadius: 2,
     },
     gradient: {
         position: 'absolute',
         left: 0,
         right: 0,
         bottom: 0,
-        height: '40%',
+        height: 180, // Slightly taller gradient for visibility
     },
-    infoOverlay: {
+    heroInfo: {
         position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        padding: 16,
+        bottom: 20, // Positioned at the bottom of the photo
+        left: 20,
+        right: 80, // Space for floating buttons
+        zIndex: 20,
     },
-    nameRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    name: {
-        fontSize: 28,
-        fontWeight: '700',
+    heroName: {
+        fontSize: 32,
+        fontWeight: '800',
         color: '#FFFFFF',
+        lineHeight: 40, // Increased line height to prevent letter cutoff
+        textShadowColor: 'rgba(0, 0, 0, 0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 10,
+        letterSpacing: -0.5,
     },
-    infoButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    detailRow: {
+    heroDetail: {
         flexDirection: 'row',
         alignItems: 'center',
         marginTop: 4,
         gap: 6,
     },
-    detailText: {
-        fontSize: 14,
-        color: 'rgba(255,255,255,0.8)',
-    },
-    interestsRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        marginTop: 10,
-        gap: 6,
-    },
-    interestChip: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        borderRadius: 12,
-    },
-    interestText: {
-        fontSize: 12,
+    heroDetailText: {
+        fontSize: 15,
         color: '#FFFFFF',
         fontWeight: '500',
+    },
+    section: {
+        padding: 20,
+        marginHorizontal: 12,
+        borderRadius: 16,
+        marginTop: 12,
+        borderWidth: 1,
+    },
+    lastSection: {
+        paddingBottom: 40,
+        marginBottom: 40, // Space for buttons
+    },
+    sectionTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 12,
+    },
+    tagsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    tag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 20,
+        borderWidth: 1,
+        gap: 6,
+    },
+    tagText: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    bioText: {
+        fontSize: 16,
+        lineHeight: 24,
+        marginTop: 12,
+    },
+    photoContainer: {
+        width: '100%',
+        height: 550,
+        paddingHorizontal: 12,
+        marginTop: 12,
+    },
+    photo: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 12,
+    },
+    locationRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    locationMain: {
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    locationSub: {
+        fontSize: 14,
+        marginTop: 2,
+    },
+    actionButtons: {
+        marginTop: 32,
+        gap: 16,
+        alignItems: 'center',
+    },
+    actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    actionButtonText: {
+        fontSize: 15,
+        fontWeight: '600',
     },
     likeStamp: {
         position: 'absolute',
@@ -274,6 +348,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 6,
         transform: [{ rotate: '-15deg' }],
+        zIndex: 10,
     },
     nopeStamp: {
         position: 'absolute',
@@ -285,9 +360,10 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 6,
         transform: [{ rotate: '15deg' }],
+        zIndex: 10,
     },
     stampText: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: '800',
     },
 });

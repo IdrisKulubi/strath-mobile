@@ -55,15 +55,17 @@ export function CardStack({ profiles, onSwipe, onInfoPress }: CardStackProps) {
 
     // Pan gesture for swiping
     const panGesture = Gesture.Pan()
+        .activeOffsetX([-10, 10]) // Only activate for horizontal movement
+        .failOffsetY([-20, 20]) // Fail if vertical movement is significant
         .onStart(() => {
             scale.value = withSpring(1.02, springConfig);
         })
-        .onUpdate((event) => {
+        .onUpdate((event: any) => {
             translateX.value = event.translationX;
-            translateY.value = event.translationY * 0.5; // Dampen vertical movement
+            translateY.value = event.translationY * 0.2; // Heavily dampen vertical movement
             rotation.value = (event.translationX / SCREEN_WIDTH) * ROTATION_FACTOR;
         })
-        .onEnd((event) => {
+        .onEnd((event: any) => {
             const shouldSwipeRight = event.translationX > SWIPE_THRESHOLD;
             const shouldSwipeLeft = event.translationX < -SWIPE_THRESHOLD;
 

@@ -1,26 +1,21 @@
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
-import { useTheme } from '@/hooks/use-theme';
-import { X, Heart, ArrowCounterClockwise } from 'phosphor-react-native';
+import { Heart, X, Star } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 
 interface SwipeButtonsProps {
     onPass: () => void;
     onLike: () => void;
-    onUndo?: () => void;
-    canUndo?: boolean;
+    onSuperLike?: () => void;
     disabled?: boolean;
 }
 
 export function SwipeButtons({
     onPass,
     onLike,
-    onUndo,
-    canUndo = false,
+    onSuperLike,
     disabled = false,
 }: SwipeButtonsProps) {
-    const { colors } = useTheme();
-
     const handlePress = (action: () => void) => {
         if (disabled) return;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -29,61 +24,45 @@ export function SwipeButtons({
 
     return (
         <View style={styles.container}>
-            {/* Undo Button */}
-            {onUndo && (
-                <Pressable
-                    style={({ pressed }) => [
-                        styles.button,
-                        styles.smallButton,
-                        {
-                            backgroundColor: colors.card,
-                            borderColor: canUndo ? '#FF9500' : colors.border,
-                            opacity: pressed ? 0.7 : (canUndo ? 1 : 0.4),
-                        },
-                    ]}
-                    onPress={() => handlePress(onUndo)}
-                    disabled={!canUndo || disabled}
-                >
-                    <ArrowCounterClockwise
-                        size={24}
-                        color={canUndo ? '#FF9500' : colors.mutedForeground}
-                        weight="bold"
-                    />
-                </Pressable>
-            )}
-
-            {/* Pass Button */}
+            {/* Pass Button - Left side */}
             <Pressable
                 style={({ pressed }) => [
                     styles.button,
-                    styles.mainButton,
-                    {
-                        backgroundColor: colors.card,
-                        borderColor: '#FF3B30',
-                        opacity: pressed ? 0.7 : 1,
-                    },
+                    styles.passButton,
+                    { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] },
                 ]}
                 onPress={() => handlePress(onPass)}
                 disabled={disabled}
             >
-                <X size={32} color="#FF3B30" weight="bold" />
+                <X size={28} color="#000000" weight="bold" />
             </Pressable>
 
-            {/* Like Button */}
+            {/* Super Like Button - Center (Optional) */}
+            {onSuperLike && (
+                <Pressable
+                    style={({ pressed }) => [
+                        styles.button,
+                        styles.superButton,
+                        { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] },
+                    ]}
+                    onPress={() => handlePress(onSuperLike)}
+                    disabled={disabled}
+                >
+                    <Star size={24} color="#000000" weight="fill" />
+                </Pressable>
+            )}
+
+            {/* Like Button - Right side (Larger) */}
             <Pressable
                 style={({ pressed }) => [
                     styles.button,
-                    styles.mainButton,
-                    {
-                        backgroundColor: colors.card,
-                        borderColor: '#34C759',
-                        opacity: pressed ? 0.7 : 1,
-                    },
+                    styles.likeButton,
+                    { opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] },
                 ]}
                 onPress={() => handlePress(onLike)}
                 disabled={disabled}
             >
-                <Heart size={32} color="#34C759" weight="fill" />
+                <Heart size={32} color="#000000" weight="fill" />
             </Pressable>
         </View>
     );
@@ -91,30 +70,38 @@ export function SwipeButtons({
 
 const styles = StyleSheet.create({
     container: {
+        position: 'absolute',
+        bottom: 24,
+        right: 16,
         flexDirection: 'row',
-        justifyContent: 'center',
         alignItems: 'center',
-        gap: 16,
-        paddingVertical: 16,
+        gap: 12,
     },
     button: {
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 2,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 6,
     },
-    smallButton: {
+    passButton: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: '#FFFFFF',
+    },
+    superButton: {
         width: 48,
         height: 48,
         borderRadius: 24,
+        backgroundColor: '#FFD700',
     },
-    mainButton: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
+    likeButton: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: '#FFBD3D', // Bumble Yellow/Orange
     },
 });

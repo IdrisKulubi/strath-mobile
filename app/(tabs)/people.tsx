@@ -7,8 +7,8 @@ import { useDiscover, DiscoverProfile } from '@/hooks/use-discover';
 import { useProfile } from '@/hooks/use-profile';
 import { CardStack, SwipeButtons, MatchModal, ProfileDetailSheet } from '@/components/discover';
 import { BottomSheetModal, BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { Users } from 'phosphor-react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Users, ArrowCounterClockwise, SlidersHorizontal } from 'phosphor-react-native';
+import { GestureHandlerRootView, Pressable as GesturePressable } from 'react-native-gesture-handler';
 
 export default function PeopleScreen() {
     const { colors, colorScheme } = useTheme();
@@ -30,70 +30,62 @@ export default function PeopleScreen() {
     const profileSheetRef = useRef<BottomSheetModal>(null);
     const [selectedProfile, setSelectedProfile] = useState<DiscoverProfile | null>(null);
 
-    // Open profile detail sheet
     const handleInfoPress = useCallback((profile: DiscoverProfile) => {
         setSelectedProfile(profile);
         profileSheetRef.current?.present();
     }, []);
 
-    // Close profile detail sheet
     const handleCloseSheet = useCallback(() => {
         profileSheetRef.current?.dismiss();
         setSelectedProfile(null);
     }, []);
 
-    // Render loading state
+    // Loading state
     if (isLoading) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
                 <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
-                <View style={styles.loadingContainer}>
+                <View style={styles.centerContainer}>
                     <ActivityIndicator size="large" color={colors.primary} />
-                    <Text className="text-muted-foreground text-center mt-4">
-                        Finding people near you...
-                    </Text>
+                    <Text className="text-muted-foreground text-center mt-4">Finding people near you...</Text>
                 </View>
             </SafeAreaView>
         );
     }
 
-    // Render empty state
+    // Empty/Complete state
     if (isEmpty || isComplete) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
                 <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
                 <View style={styles.header}>
-                    <Text className="text-foreground text-[28px] font-bold">People</Text>
+                    <View style={styles.headerButton} />
+                    <Text style={[styles.logoText, { color: colors.primary }]}>StrathSpace</Text>
+                    <View style={styles.headerButton} />
                 </View>
-                <View style={styles.emptyContainer}>
-                    <View style={[styles.emptyIconContainer, { backgroundColor: colors.primary + '20' }]}>
+                <View style={styles.centerContainer}>
+                    <View style={[styles.emptyIcon, { backgroundColor: colors.primary + '20' }]}>
                         <Users size={48} color={colors.primary} />
                     </View>
                     <Text className="text-foreground text-xl font-bold text-center mt-6">
                         {isEmpty ? 'No one around' : 'You\'ve seen everyone!'}
                     </Text>
                     <Text className="text-muted-foreground text-center mt-2 px-8">
-                        {isEmpty
-                            ? 'There are no new profiles to show right now. Check back later!'
-                            : 'You\'ve swiped through all available profiles. Come back later for more!'}
+                        {isEmpty ? 'Check back later!' : 'Come back later for more!'}
                     </Text>
                 </View>
             </SafeAreaView>
         );
     }
 
-    // Render error state
+    // Error state
     if (isError) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
                 <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
-                <View style={styles.emptyContainer}>
-                    <Text className="text-foreground text-xl font-bold text-center">
-                        Something went wrong
-                    </Text>
-                    <Text className="text-muted-foreground text-center mt-2">
-                        Please try again later
-                    </Text>
+                <View style={styles.centerContainer}>
+                    <Text className="text-foreground text-xl font-bold text-center">Something went wrong</Text>
+                    <Text className="text-muted-foreground text-center mt-2">Please try again later</Text>
                 </View>
             </SafeAreaView>
         );
@@ -102,31 +94,41 @@ export default function PeopleScreen() {
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <BottomSheetModalProvider>
-                <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+                <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
                     <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
 
                     {/* Header */}
                     <View style={styles.header}>
-                        <Text className="text-foreground text-[28px] font-bold">People</Text>
+                        <GesturePressable
+                            onPress={undoSwipe}
+                            disabled={!canUndo}
+                            style={({ pressed }: any) => [styles.headerButton, { opacity: !canUndo ? 0.3 : pressed ? 0.6 : 1 }]}
+                        >
+                            <ArrowCounterClockwise size={26} color={colors.foreground} weight="bold" />
+                        </GesturePressable>
+
+                        <Text style={[styles.logoText, { color: colors.primary }]}>StrathSpace</Text>
+
+                        <GesturePressable style={styles.headerButton}>
+                            <SlidersHorizontal size={26} color={colors.foreground} weight="bold" />
+                        </GesturePressable>
                     </View>
 
-                    {/* Card Stack */}
-                    <View style={styles.cardContainer}>
+                    {/* Card Stack - Fills remaining space */}
+                    <View style={styles.cardWrapper}>
                         <CardStack
                             profiles={upcomingProfiles}
                             onSwipe={handleSwipe}
                             onInfoPress={handleInfoPress}
                         />
-                    </View>
 
-                    {/* Swipe Buttons */}
-                    <SwipeButtons
-                        onPass={() => handleSwipe('pass')}
-                        onLike={() => handleSwipe('like')}
-                        onUndo={undoSwipe}
-                        canUndo={canUndo}
-                        disabled={!currentProfile}
-                    />
+                        {/* Floating Buttons - Positioned over the card */}
+                        <SwipeButtons
+                            onPass={() => handleSwipe('pass')}
+                            onLike={() => handleSwipe('like')}
+                            disabled={!currentProfile}
+                        />
+                    </View>
 
                     {/* Match Modal */}
                     <MatchModal
@@ -156,27 +158,33 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        marginTop: 10,
+        paddingHorizontal: 16,
+        height: 50,
     },
-    cardContainer: {
-        flex: 1,
+    logoText: {
+        fontSize: 22,
+        fontWeight: '800',
+        letterSpacing: -0.5,
+    },
+    headerButton: {
+        width: 40,
+        height: 40,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    loadingContainer: {
+    cardWrapper: {
         flex: 1,
-        justifyContent: 'center',
         alignItems: 'center',
+        justifyContent: 'flex-start',
+        paddingTop: 4,
     },
-    emptyContainer: {
+    centerContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 40,
     },
-    emptyIconContainer: {
+    emptyIcon: {
         width: 100,
         height: 100,
         borderRadius: 50,
