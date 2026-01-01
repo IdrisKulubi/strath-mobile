@@ -8,6 +8,23 @@ import { eq, and } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 import { sendPushNotification } from "@/lib/notifications";
+import { redis } from "@/lib/redis";
+
+async function logPulseEvent(type: string, message: string, data?: any) {
+    try {
+        const pulse = {
+            id: Math.random().toString(36).substring(7),
+            type,
+            message,
+            data,
+            timestamp: Date.now(),
+        };
+        await redis.lpush('pulse_events', pulse);
+        await redis.ltrim('pulse_events', 0, 49); // Keep last 50 events
+    } catch (err) {
+        console.error("Failed to log pulse event:", err);
+    }
+}
 
 export async function POST(req: NextRequest) {
     try {
@@ -105,7 +122,22 @@ export async function POST(req: NextRequest) {
                         { matchId: newMatch.id, partnerId: targetUserId }
                     );
                 }
+
+                // Log Pulse Event for Match
+                await logPulseEvent('match', `New match just happened! 🔥`, {
+                    university: user1?.name ? user1.name.split(' ')[0] : 'Someone'
+                });
             }
+        }
+
+        // Log Pulse Event for Activity (optional/sampled)
+        if (Math.random() > 0.7) { // Sample activity to avoid noise
+            const user1 = await db.query.user.findFirst({
+                where: eq(user.id, session.user.id),
+            });
+            await logPulseEvent('activity', `${user1?.name?.split(' ')[0] || 'Someone'} is active in the Lounge`, {
+                type: action
+            });
         }
 
         return successResponse({ success: true, isMatch, match: matchData });

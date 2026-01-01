@@ -5,7 +5,7 @@ import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useDiscover, DiscoverProfile } from '@/hooks/use-discover';
 import { useProfile } from '@/hooks/use-profile';
-import { CardStack, SwipeButtons, MatchModal, ProfileDetailSheet, VibeSwitcher, VibeType } from '@/components/discover';
+import { CardStack, SwipeButtons, MatchModal, ProfileDetailSheet, VibeSwitcher, VibeType, PulseBar } from '@/components/discover';
 import { BottomSheetModal, BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { ArrowCounterClockwise, SlidersHorizontal, Sparkle } from 'phosphor-react-native';
 import { GestureHandlerRootView, Pressable as GesturePressable } from 'react-native-gesture-handler';
@@ -23,9 +23,11 @@ export default function DiscoverScreen() {
     undoSwipe,
     clearMatch,
     isLoading,
+    isError,
     isEmpty,
     isComplete,
     canUndo,
+    refetch,
   } = useDiscover(activeVibe);
 
   const profileSheetRef = useRef<BottomSheetModal>(null);
@@ -67,6 +69,9 @@ export default function DiscoverScreen() {
             </GesturePressable>
           </View>
 
+          {/* Real-time Pulse Engine */}
+          <PulseBar />
+
           {/* Vibe Switcher - The Lounge Entry */}
           <VibeSwitcher
             activeVibe={activeVibe}
@@ -89,7 +94,28 @@ export default function DiscoverScreen() {
             />
 
             {/* Empty/Loading States overlaying the content area */}
-            {(isEmpty || isComplete) && !isLoading && (
+            {isLoading && (
+              <View style={styles.emptyOverlay}>
+                <Text className="text-foreground text-xl font-bold">Opening the Lounge...</Text>
+              </View>
+            )}
+
+            {isError && (
+              <View style={styles.emptyOverlay}>
+                <Text className="text-foreground text-xl font-bold">Lounge is closed</Text>
+                <Text className="text-muted-foreground text-center mt-2 px-8">
+                  We couldn't reach the lounge. Check your connection or deployment.
+                </Text>
+                <GesturePressable
+                  onPress={() => refetch()}
+                  style={[styles.headerButton, { marginTop: 20, backgroundColor: colors.primary, width: 120, borderRadius: 20 }]}
+                >
+                  <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Try Again</Text>
+                </GesturePressable>
+              </View>
+            )}
+
+            {(isEmpty || isComplete) && !isLoading && !isError && (
               <View style={styles.emptyOverlay}>
                 <Text className="text-foreground text-xl font-bold">Lounge is quiet...</Text>
                 <Text className="text-muted-foreground text-center mt-2 px-8">
