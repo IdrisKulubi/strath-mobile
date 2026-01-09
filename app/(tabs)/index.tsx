@@ -1,47 +1,63 @@
 import React, { useRef, useCallback, useState } from 'react';
-import { View, StyleSheet, StatusBar } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  StatusBar,
+  ScrollView,
+  RefreshControl,
+  Pressable
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
-import { useDiscover, DiscoverProfile } from '@/hooks/use-discover';
+import { useDiscoverSections } from '@/hooks/use-discover-sections';
 import { useProfile } from '@/hooks/use-profile';
-import { CardStack, SwipeButtons, MatchModal, ProfileDetailSheet, VibeSwitcher, VibeType, PulseBar } from '@/components/discover';
+import { MatchModal, ProfileDetailSheet, DiscoverSectionView } from '@/components/discover';
 import { BottomSheetModal, BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { ArrowCounterClockwise, SlidersHorizontal, Sparkle } from 'phosphor-react-native';
-import { GestureHandlerRootView, Pressable as GesturePressable } from 'react-native-gesture-handler';
+import { Question, Clock, ArrowClockwise } from 'phosphor-react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { DiscoverProfile } from '@/types/discover';
 
 export default function DiscoverScreen() {
   const { colors, colorScheme } = useTheme();
   const { data: currentUserProfile } = useProfile();
-  const [activeVibe, setActiveVibe] = useState<VibeType>('all');
 
+  // Use modular sections hook
   const {
-    currentProfile,
-    upcomingProfiles,
-    matchedProfile,
-    handleSwipe,
-    undoSwipe,
-    clearMatch,
+    sections,
     isLoading,
     isError,
-    isEmpty,
-    isComplete,
-    canUndo,
     refetch,
-  } = useDiscover(activeVibe);
+    refreshAt,
+  } = useDiscoverSections();
 
   const profileSheetRef = useRef<BottomSheetModal>(null);
   const [selectedProfile, setSelectedProfile] = useState<DiscoverProfile | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [matchedProfile, setMatchedProfile] = useState<DiscoverProfile | null>(null);
 
-  const handleInfoPress = useCallback((profile: DiscoverProfile) => {
+  const handleProfilePress = useCallback((profile: DiscoverProfile) => {
     setSelectedProfile(profile);
     profileSheetRef.current?.present();
+  }, []);
+
+  const handleLikePress = useCallback((profile: DiscoverProfile) => {
+    // Future: integrate with swipe/like API
+    console.log('Like pressed for:', profile.firstName);
   }, []);
 
   const handleCloseSheet = useCallback(() => {
     profileSheetRef.current?.dismiss();
     setSelectedProfile(null);
   }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
+
+  const isEmpty = !isLoading && sections.length === 0;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -51,86 +67,87 @@ export default function DiscoverScreen() {
 
           {/* Header */}
           <View style={styles.header}>
-            <GesturePressable
-              onPress={undoSwipe}
-              disabled={!canUndo}
-              style={({ pressed }: any) => [styles.headerButton, { opacity: !canUndo ? 0.3 : pressed ? 0.6 : 1 }]}
-            >
-              <ArrowCounterClockwise size={26} color={colors.foreground} weight="bold" />
-            </GesturePressable>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>Discover</Text>
+            <Pressable style={styles.helpButton}>
+              <Question size={24} color={colors.mutedForeground} />
+            </Pressable>
+          </View>
 
-            <View style={styles.titleContainer}>
-              <Sparkle size={20} color={colors.primary} weight="fill" />
-              <Text style={[styles.headerTitle, { color: colors.foreground }]}>Lounge</Text>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.primary}
+              />
+            }
+          >
+            {/* Countdown Badge */}
+            <View style={[styles.countdownBadge, { backgroundColor: colors.primary }]}>
+              <Clock size={14} color="#000" weight="bold" />
+              <Text style={styles.countdownText}>See new people in 24 hours</Text>
             </View>
 
-            <GesturePressable style={styles.headerButton}>
-              <SlidersHorizontal size={26} color={colors.foreground} weight="bold" />
-            </GesturePressable>
-          </View>
+            {/* Subtitle */}
+            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+              Connect over common ground with people who match your vibe, refreshed every day.
+            </Text>
 
-          {/* Real-time Pulse Engine */}
-          <PulseBar />
-
-          {/* Vibe Switcher - The Lounge Entry */}
-          <VibeSwitcher
-            activeVibe={activeVibe}
-            onVibeChange={setActiveVibe}
-          />
-
-          {/* Discovery Card Stack */}
-          <View style={styles.cardWrapper}>
-            <CardStack
-              profiles={upcomingProfiles}
-              onSwipe={handleSwipe}
-              onInfoPress={handleInfoPress}
-              showAura={true} // High energy discovery mode
-            />
-
-            <SwipeButtons
-              onPass={() => handleSwipe('pass')}
-              onLike={() => handleSwipe('like')}
-              disabled={!currentProfile || isLoading}
-            />
-
-            {/* Empty/Loading States overlaying the content area */}
+            {/* Loading State */}
             {isLoading && (
-              <View style={styles.emptyOverlay}>
-                <Text className="text-foreground text-xl font-bold">Opening the Lounge...</Text>
+              <View style={styles.centerState}>
+                <Text style={{ color: colors.mutedForeground }}>Finding people for you...</Text>
               </View>
             )}
 
-            {isError && (
-              <View style={styles.emptyOverlay}>
-                <Text className="text-foreground text-xl font-bold">Lounge is closed</Text>
-                <Text className="text-muted-foreground text-center mt-2 px-8">
-                  We couldn't reach the lounge. Check your connection or deployment.
+            {/* Error State */}
+            {isError && !isLoading && (
+              <View style={styles.centerState}>
+                <Text style={{ color: colors.foreground, fontWeight: '600' }}>
+                  Couldn't load profiles
                 </Text>
-                <GesturePressable
+                <Pressable
                   onPress={() => refetch()}
-                  style={[styles.headerButton, { marginTop: 20, backgroundColor: colors.primary, width: 120, borderRadius: 20 }]}
+                  style={[styles.retryButton, { backgroundColor: colors.primary }]}
                 >
-                  <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Try Again</Text>
-                </GesturePressable>
+                  <ArrowClockwise size={18} color="#FFF" />
+                  <Text style={{ color: '#FFF', fontWeight: '600' }}>Try Again</Text>
+                </Pressable>
               </View>
             )}
 
-            {(isEmpty || isComplete) && !isLoading && !isError && (
-              <View style={styles.emptyOverlay}>
-                <Text className="text-foreground text-xl font-bold">Lounge is quiet...</Text>
-                <Text className="text-muted-foreground text-center mt-2 px-8">
-                  {isEmpty ? 'No one is vibing here right now.' : "You've met everyone in this room!"}
+            {/* Empty State */}
+            {isEmpty && !isLoading && !isError && (
+              <View style={styles.centerState}>
+                <Text style={{ color: colors.foreground, fontWeight: '600', fontSize: 18 }}>
+                  No profiles yet
+                </Text>
+                <Text style={{ color: colors.mutedForeground, textAlign: 'center', marginTop: 8 }}>
+                  Check back soon as more students join!
                 </Text>
               </View>
             )}
-          </View>
+
+            {/* Render Sections */}
+            {!isLoading && !isError && sections.map(section => (
+              <DiscoverSectionView
+                key={section.id}
+                section={section}
+                onProfilePress={handleProfilePress}
+                onLikePress={handleLikePress}
+              />
+            ))}
+          </ScrollView>
 
           {/* Match Modal */}
           <MatchModal
             visible={!!matchedProfile}
             profile={matchedProfile}
             currentUserImage={currentUserProfile?.profilePhoto || currentUserProfile?.photos?.[0]}
-            onClose={clearMatch}
+            onClose={() => setMatchedProfile(null)}
           />
 
           {/* Profile Detail Sheet */}
@@ -153,37 +170,58 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    height: 50,
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+    fontSize: 32,
+    fontWeight: '700',
   },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+  helpButton: {
+    padding: 8,
   },
-  cardWrapper: {
+  scrollView: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 4,
   },
-  emptyOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)', // Dim background to focus on text
-    justifyContent: 'center',
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  countdownBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
-    margin: 8,
+    alignSelf: 'flex-start',
+    marginHorizontal: 20,
+    marginTop: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  countdownText: {
+    color: '#000',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    paddingHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 24,
+  },
+  centerState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 20,
+    marginTop: 16,
   },
 });
