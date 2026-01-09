@@ -12,8 +12,7 @@ import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useDiscoverSections } from '@/hooks/use-discover-sections';
 import { useProfile } from '@/hooks/use-profile';
-import { MatchModal, ProfileDetailSheet, DiscoverSectionView } from '@/components/discover';
-import { BottomSheetModal, BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import { MatchModal, DiscoverSectionView, DiscoverProfileModal } from '@/components/discover';
 import { Question, Clock, ArrowClockwise } from 'phosphor-react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { DiscoverProfile } from '@/types/discover';
@@ -28,26 +27,31 @@ export default function DiscoverScreen() {
     isLoading,
     isError,
     refetch,
-    refreshAt,
   } = useDiscoverSections();
 
-  const profileSheetRef = useRef<BottomSheetModal>(null);
   const [selectedProfile, setSelectedProfile] = useState<DiscoverProfile | null>(null);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [matchedProfile, setMatchedProfile] = useState<DiscoverProfile | null>(null);
 
   const handleProfilePress = useCallback((profile: DiscoverProfile) => {
     setSelectedProfile(profile);
-    profileSheetRef.current?.present();
+    setProfileModalVisible(true);
   }, []);
 
-  const handleLikePress = useCallback((profile: DiscoverProfile) => {
-    // Future: integrate with swipe/like API
-    console.log('Like pressed for:', profile.firstName);
+  const handleLikeProfile = useCallback((profile: DiscoverProfile) => {
+    // TODO: Integrate with swipe API to record like
+    console.log('Liked:', profile.firstName);
+    // Could trigger match check here
   }, []);
 
-  const handleCloseSheet = useCallback(() => {
-    profileSheetRef.current?.dismiss();
+  const handlePassProfile = useCallback((profile: DiscoverProfile) => {
+    // TODO: Integrate with swipe API to record pass
+    console.log('Passed:', profile.firstName);
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setProfileModalVisible(false);
     setSelectedProfile(null);
   }, []);
 
@@ -61,103 +65,103 @@ export default function DiscoverScreen() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <BottomSheetModalProvider>
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-          <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
 
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]}>Discover</Text>
-            <Pressable style={styles.helpButton}>
-              <Question size={24} color={colors.mutedForeground} />
-            </Pressable>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Discover</Text>
+          <Pressable style={styles.helpButton}>
+            <Question size={24} color={colors.mutedForeground} />
+          </Pressable>
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+        >
+          {/* Countdown Badge */}
+          <View style={[styles.countdownBadge, { backgroundColor: colors.primary }]}>
+            <Clock size={14} color="#FFF" weight="bold" />
+            <Text style={styles.countdownText}>See new people in 24 hours</Text>
           </View>
 
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={colors.primary}
-              />
-            }
-          >
-            {/* Countdown Badge */}
-            <View style={[styles.countdownBadge, { backgroundColor: colors.primary }]}>
-              <Clock size={14} color="#000" weight="bold" />
-              <Text style={styles.countdownText}>See new people in 24 hours</Text>
+          {/* Subtitle */}
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+            Connect over common ground with people who match your vibe, refreshed every day.
+          </Text>
+
+          {/* Loading State */}
+          {isLoading && (
+            <View style={styles.centerState}>
+              <Text style={{ color: colors.mutedForeground }}>Finding people for you...</Text>
             </View>
+          )}
 
-            {/* Subtitle */}
-            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-              Connect over common ground with people who match your vibe, refreshed every day.
-            </Text>
+          {/* Error State */}
+          {isError && !isLoading && (
+            <View style={styles.centerState}>
+              <Text style={{ color: colors.foreground, fontWeight: '600' }}>
+                Couldn't load profiles
+              </Text>
+              <Pressable
+                onPress={() => refetch()}
+                style={[styles.retryButton, { backgroundColor: colors.primary }]}
+              >
+                <ArrowClockwise size={18} color="#FFF" />
+                <Text style={{ color: '#FFF', fontWeight: '600' }}>Try Again</Text>
+              </Pressable>
+            </View>
+          )}
 
-            {/* Loading State */}
-            {isLoading && (
-              <View style={styles.centerState}>
-                <Text style={{ color: colors.mutedForeground }}>Finding people for you...</Text>
-              </View>
-            )}
+          {/* Empty State */}
+          {isEmpty && !isLoading && !isError && (
+            <View style={styles.centerState}>
+              <Text style={{ color: colors.foreground, fontWeight: '600', fontSize: 18 }}>
+                No profiles yet
+              </Text>
+              <Text style={{ color: colors.mutedForeground, textAlign: 'center', marginTop: 8 }}>
+                Check back soon as more students join!
+              </Text>
+            </View>
+          )}
 
-            {/* Error State */}
-            {isError && !isLoading && (
-              <View style={styles.centerState}>
-                <Text style={{ color: colors.foreground, fontWeight: '600' }}>
-                  Couldn't load profiles
-                </Text>
-                <Pressable
-                  onPress={() => refetch()}
-                  style={[styles.retryButton, { backgroundColor: colors.primary }]}
-                >
-                  <ArrowClockwise size={18} color="#FFF" />
-                  <Text style={{ color: '#FFF', fontWeight: '600' }}>Try Again</Text>
-                </Pressable>
-              </View>
-            )}
+          {/* Render Sections */}
+          {!isLoading && !isError && sections.map(section => (
+            <DiscoverSectionView
+              key={section.id}
+              section={section}
+              onProfilePress={handleProfilePress}
+              onLikePress={handleLikeProfile}
+            />
+          ))}
+        </ScrollView>
 
-            {/* Empty State */}
-            {isEmpty && !isLoading && !isError && (
-              <View style={styles.centerState}>
-                <Text style={{ color: colors.foreground, fontWeight: '600', fontSize: 18 }}>
-                  No profiles yet
-                </Text>
-                <Text style={{ color: colors.mutedForeground, textAlign: 'center', marginTop: 8 }}>
-                  Check back soon as more students join!
-                </Text>
-              </View>
-            )}
+        {/* Full Profile Modal */}
+        <DiscoverProfileModal
+          visible={profileModalVisible}
+          profile={selectedProfile}
+          onClose={handleCloseModal}
+          onLike={handleLikeProfile}
+          onPass={handlePassProfile}
+        />
 
-            {/* Render Sections */}
-            {!isLoading && !isError && sections.map(section => (
-              <DiscoverSectionView
-                key={section.id}
-                section={section}
-                onProfilePress={handleProfilePress}
-                onLikePress={handleLikePress}
-              />
-            ))}
-          </ScrollView>
-
-          {/* Match Modal */}
-          <MatchModal
-            visible={!!matchedProfile}
-            profile={matchedProfile}
-            currentUserImage={currentUserProfile?.profilePhoto || currentUserProfile?.photos?.[0]}
-            onClose={() => setMatchedProfile(null)}
-          />
-
-          {/* Profile Detail Sheet */}
-          <ProfileDetailSheet
-            ref={profileSheetRef}
-            profile={selectedProfile}
-            onClose={handleCloseSheet}
-          />
-        </SafeAreaView>
-      </BottomSheetModalProvider>
+        {/* Match Modal */}
+        <MatchModal
+          visible={!!matchedProfile}
+          profile={matchedProfile}
+          currentUserImage={currentUserProfile?.profilePhoto || currentUserProfile?.photos?.[0]}
+          onClose={() => setMatchedProfile(null)}
+        />
+      </SafeAreaView>
     </GestureHandlerRootView>
   );
 }
@@ -176,6 +180,8 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 32,
     fontWeight: '700',
+    lineHeight: 40,
+    paddingVertical: 4,
   },
   helpButton: {
     padding: 8,
@@ -198,7 +204,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   countdownText: {
-    color: '#000',
+    color: '#FFF',
     fontSize: 13,
     fontWeight: '600',
   },

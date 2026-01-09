@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
     View,
     StyleSheet,
@@ -7,6 +7,13 @@ import {
     Image,
     Dimensions
 } from 'react-native';
+import Animated, {
+    useAnimatedStyle,
+    useSharedValue,
+    withDelay,
+    withSpring,
+    FadeInRight
+} from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { DiscoverSection, DiscoverProfile } from '@/types/discover';
@@ -18,6 +25,8 @@ const FEATURED_WIDTH = SCREEN_WIDTH - 100;
 const SMALL_CARD_WIDTH = 140;
 const HORIZONTAL_CARD_WIDTH = 150;
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 interface DiscoverSectionViewProps {
     section: DiscoverSection;
     onProfilePress: (profile: DiscoverProfile) => void;
@@ -25,7 +34,7 @@ interface DiscoverSectionViewProps {
 }
 
 /**
- * DiscoverSectionView - Renders a discover section based on its type
+ * DiscoverSectionView - Renders a discover section with animated cards
  */
 export function DiscoverSectionView({
     section,
@@ -39,14 +48,16 @@ export function DiscoverSectionView({
         onProfilePress(profile);
     };
 
-    const handleLike = (profile: DiscoverProfile) => {
+    const handleLike = (profile: DiscoverProfile, e: any) => {
+        e.stopPropagation();
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         onLikePress?.(profile);
     };
 
     const renderProfileCard = (
         profile: DiscoverProfile,
-        size: 'large' | 'small' | 'horizontal'
+        size: 'large' | 'small' | 'horizontal',
+        index: number
     ) => {
         const photo = profile.profilePhoto || profile.photos?.[0] || profile.user?.image;
         const name = profile.firstName || profile.user?.name?.split(' ')[0] || 'User';
@@ -58,19 +69,20 @@ export function DiscoverSectionView({
         }[size];
 
         const nameStyle = size === 'large' ? styles.featuredName : styles.cardName;
+        const delay = index * 100; // Staggered animation
 
         return (
-            <Pressable
+            <AnimatedPressable
                 key={profile.id}
+                entering={FadeInRight.delay(delay).springify()}
                 onPress={() => handlePress(profile)}
-                style={({ pressed }) => [
+                style={[
                     cardStyle,
                     { backgroundColor: colors.card },
-                    pressed && { opacity: 0.95, transform: [{ scale: 0.98 }] }
                 ]}
             >
                 {photo ? (
-                    <Image source={{ uri: photo }} style={styles.cardImage} />
+                    <Image source={{ uri: photo }} style={styles.cardImage} resizeMode="cover" />
                 ) : (
                     <View style={[styles.cardImage, styles.placeholder, { backgroundColor: colors.muted }]}>
                         <Heart size={size === 'large' ? 48 : 24} color={colors.mutedForeground} />
@@ -90,12 +102,12 @@ export function DiscoverSectionView({
                     </View>
                     <Pressable
                         style={styles.heartButton}
-                        onPress={() => handleLike(profile)}
+                        onPress={(e) => handleLike(profile, e)}
                     >
                         <Heart size={size === 'large' ? 22 : 18} color="#333" />
                     </Pressable>
                 </View>
-            </Pressable>
+            </AnimatedPressable>
         );
     };
 
@@ -118,13 +130,13 @@ export function DiscoverSectionView({
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.horizontalScroll}
                     >
-                        {section.profiles[0] && renderProfileCard(section.profiles[0], 'large')}
+                        {section.profiles[0] && renderProfileCard(section.profiles[0], 'large', 0)}
 
                         <View style={styles.smallCardsColumn}>
-                            {section.profiles.slice(1, 3).map(p => renderProfileCard(p, 'small'))}
+                            {section.profiles.slice(1, 3).map((p, i) => renderProfileCard(p, 'small', i + 1))}
                         </View>
 
-                        {section.profiles.slice(3, 5).map(p => renderProfileCard(p, 'small'))}
+                        {section.profiles.slice(3, 5).map((p, i) => renderProfileCard(p, 'small', i + 3))}
                     </ScrollView>
 
                     {section.subtitle && (
@@ -142,14 +154,14 @@ export function DiscoverSectionView({
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.horizontalScroll}
                 >
-                    {section.profiles.map(p => renderProfileCard(p, 'horizontal'))}
+                    {section.profiles.map((p, i) => renderProfileCard(p, 'horizontal', i))}
                 </ScrollView>
             )}
 
             {/* Grid layout: 2 column grid */}
             {section.type === 'grid' && (
                 <View style={styles.grid}>
-                    {section.profiles.slice(0, 4).map(p => renderProfileCard(p, 'small'))}
+                    {section.profiles.slice(0, 4).map((p, i) => renderProfileCard(p, 'small', i))}
                 </View>
             )}
         </View>

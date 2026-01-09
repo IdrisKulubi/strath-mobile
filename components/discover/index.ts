@@ -7,3 +7,4 @@ export * from './vibe-switcher';
 export * from './pulse-bar';
 export * from './profile-grid';
 export * from './discover-section';
+export * from './discover-profile-modal';
