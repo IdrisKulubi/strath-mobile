@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
 
     // Features
     featuresSection: {
-        marginBottom: 28,
+        marginBottom: 20,
     },
 
     // Card styles - explicit flexDirection row
@@ -296,29 +296,36 @@ const styles = StyleSheet.create({
     authSection: {
         marginTop: 'auto',
         alignItems: 'center',
-        paddingTop: 12,
+        paddingTop: 8,
+        paddingBottom: 8,
     },
     googleButton: {
         width: '100%',
-        height: 52,
+        height: 56,
         backgroundColor: '#FFFFFF',
-        borderRadius: 26,
+        borderRadius: 28,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#E0E0E0',
-        marginBottom: 16,
+        borderWidth: 1.5,
+        borderColor: '#E8E8E8',
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 3,
     },
     googleButtonPressed: {
-        backgroundColor: '#F8F8F8',
+        backgroundColor: '#FAFAFA',
+        transform: [{ scale: 0.98 }],
     },
     googleButtonContent: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     googleButtonText: {
-        marginLeft: 10,
-        fontSize: 16,
+        marginLeft: 12,
+        fontSize: 17,
         fontWeight: '600',
         color: '#1a1a1a',
     },
