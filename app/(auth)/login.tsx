@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { signIn } from '@/lib/auth-client';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
@@ -35,7 +36,7 @@ export default function LoginScreen() {
 
             if (result.data) {
                 toast.show({
-                    message: 'Welcome to Strathspace! 🚀',
+                    message: 'Welcome to Strathspace',
                     variant: 'success'
                 });
                 router.replace('/');
@@ -76,7 +77,7 @@ export default function LoginScreen() {
                         entering={FadeInDown.delay(200).springify()}
                         style={styles.headlineSection}
                     >
-                        <Text style={styles.headline}>Join Your Campus{'\n'}Community</Text>
+                        <Text style={styles.headline}>Join Your Campus{`\n`}Community</Text>
                         <Text style={styles.subheadline}>Connect, Discover, Vibe – simplified.</Text>
                     </Animated.View>
 
@@ -131,44 +132,50 @@ export default function LoginScreen() {
                         </Animated.View>
                     </View>
 
-                    {/* Google Sign In Button */}
+                    {/* Bottom Auth Section */}
                     <Animated.View 
                         entering={FadeInUp.delay(600).springify()}
                         style={styles.authSection}
                     >
-                        <Pressable
+                        {/* Google Sign In Button */}
+                        <Button
                             onPress={handleGoogleAuth}
                             disabled={loading}
-                            style={({ pressed }) => [
-                                styles.googleButton,
-                                pressed && styles.googleButtonPressed,
-                            ]}
+                            variant="secondary"
+                            size="lg"
+                            className="w-full h-14 rounded-full bg-white border-0 shadow-lg shadow-black/20"
                         >
                             {loading ? (
-                                <ActivityIndicator color="#333" />
+                                <ActivityIndicator color="#4285F4" size="small" />
                             ) : (
-                                <View style={styles.googleButtonContent}>
-                                    <Ionicons name="logo-google" size={20} color="#4285F4" />
-                                    <Text style={styles.googleButtonText}>Continue with Google</Text>
-                                </View>
+                                <>
+                                    <Ionicons name="logo-google" size={20} color="#DB4437" />
+                                    <Text className="text-lg font-semibold text-gray-900 ml-3">Continue with Google</Text>
+                                </>
                             )}
-                        </Pressable>
+                        </Button>
 
-                        {/* Terms Text */}
+                        {/* Terms Text - Below Button */}
                         <Text style={styles.termsText}>
                             By continuing, you agree to our{' '}
                             <Text style={styles.termsLink}>Terms</Text>
-                            {' '}and{' '}
-                            <Text style={styles.termsLink}>Privacy Policy</Text>
                         </Text>
 
-                        {/* Sign In Link */}
-                        <Pressable onPress={handleGoogleAuth}>
-                            <Text style={styles.signInText}>
-                                Already have an account?{' '}
-                                <Text style={styles.signInLink}>Sign In</Text>
-                            </Text>
-                        </Pressable>
+                        {/* Sign In Link - Separate Section */}
+                        <View style={styles.signInSection}>
+                            <Pressable 
+                                onPress={handleGoogleAuth}
+                                style={({ pressed }) => [
+                                    styles.signInButton,
+                                    pressed && styles.signInButtonPressed,
+                                ]}
+                            >
+                                <Text style={styles.signInText}>
+                                    Already have an account?{' '}
+                                    <Text style={styles.signInLink}>Sign In</Text>
+                                </Text>
+                            </Pressable>
+                        </View>
                     </Animated.View>
                 </ScrollView>
             </SafeAreaView>
@@ -196,28 +203,29 @@ const styles = StyleSheet.create({
         marginTop: 16,
     },
     logo: {
-        width: 70,
-        height: 70,
+        width: 52,
+        height: 52,
     },
     brandName: {
-        fontSize: 22,
-        fontWeight: '700',
+        fontSize: 18,
+        fontWeight: '600',
         color: '#1a1a1a',
-        marginTop: 6,
+        marginTop: 4,
+        letterSpacing: 0.2,
     },
 
     // Headline
     headlineSection: {
         alignItems: 'center',
-        marginTop: 24,
-        marginBottom: 24,
+        marginTop: 20,
+        marginBottom: 20,
     },
     headline: {
-        fontSize: 30,
-        fontWeight: '800',
+        fontSize: 32,
+        fontWeight: '700',
         color: '#1a1a1a',
         textAlign: 'center',
-        lineHeight: 38,
+        lineHeight: 40,
     },
     subheadline: {
         fontSize: 15,
@@ -231,11 +239,11 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
 
-    // Card styles - explicit flexDirection row
+    // Card styles
     connectCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFE4EE',
+        backgroundColor: '#FFCFE3',
         borderRadius: 40,
         paddingVertical: 10,
         paddingHorizontal: 12,
@@ -244,7 +252,7 @@ const styles = StyleSheet.create({
     discoverCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFF3E0',
+        backgroundColor: '#FFE3B6',
         borderRadius: 40,
         paddingVertical: 10,
         paddingHorizontal: 12,
@@ -253,7 +261,7 @@ const styles = StyleSheet.create({
     vibeCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#E0F7F4',
+        backgroundColor: '#C7F4EC',
         borderRadius: 40,
         paddingVertical: 10,
         paddingHorizontal: 12,
@@ -292,61 +300,42 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
 
-    // Auth
+    // Auth Section
     authSection: {
-        marginTop: 'auto',
+        marginTop: 50,
         alignItems: 'center',
-        paddingTop: 8,
-        paddingBottom: 8,
-    },
-    googleButton: {
-        width: '100%',
-        height: 56,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 28,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1.5,
-        borderColor: '#E8E8E8',
-        marginBottom: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-        elevation: 3,
-    },
-    googleButtonPressed: {
-        backgroundColor: '#FAFAFA',
-        transform: [{ scale: 0.98 }],
-    },
-    googleButtonContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    googleButtonText: {
-        marginLeft: 12,
-        fontSize: 17,
-        fontWeight: '600',
-        color: '#1a1a1a',
+        paddingBottom: Platform.OS === 'ios' ? 20 : 30,
     },
     termsText: {
         fontSize: 12,
-        color: '#888',
+        color: '#999',
         textAlign: 'center',
-        lineHeight: 18,
-        marginBottom: 12,
+        marginTop: 16,
+        marginBottom: 40,
     },
     termsLink: {
-        color: '#E91E8C',
-        textDecorationLine: 'underline',
+        color: '#00BFA5',
+        fontWeight: '600',
+    },
+    signInSection: {
+        width: '100%',
+        alignItems: 'center',
+        marginTop: 10,
+    },
+    signInButton: {
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+    },
+    signInButtonPressed: {
+        opacity: 0.7,
     },
     signInText: {
-        fontSize: 14,
+        fontSize: 15,
         color: '#555',
+        fontWeight: '400',
     },
     signInLink: {
         color: '#E91E8C',
-        fontWeight: '600',
-        textDecorationLine: 'underline',
+        fontWeight: '700',
     },
 });
