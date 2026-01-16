@@ -1,15 +1,19 @@
 {
   "expo": {
-    "name": "strath-mobile",
-    "slug": "strath-mobile",
+    "name": "strathSpace",
+    "slug": "strathSpace",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "strathmobile",
+    "scheme": "strathSpace",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.strathspace.mobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -45,6 +49,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "30146769-e71c-43fd-a9e5-f437b137ace5"
+      }
     }
   }
 }

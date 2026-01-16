@@ -20,10 +20,10 @@ export const auth = betterAuth({
     },
     plugins: [expo()],
     trustedOrigins: [
-        // Mobile app scheme
-        "strathmobile://",
+        // Mobile app scheme (MUST match app.json and auth-client.ts)
+        "strathSpace://",
 
-        // Production
+        // Production backend
         "https://strath-mobile-j9lv.vercel.app",
 
         // Expo Go development - ADD YOUR CURRENT IP HERE
