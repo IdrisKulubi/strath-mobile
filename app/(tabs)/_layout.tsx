@@ -11,6 +11,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      initialRouteName="index"
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: '#8E8E93',
@@ -39,17 +40,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="index"
+        name="discover"
         options={{
           title: 'Discover',
           tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "compass" : "compass-outline"} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="people"
+        name="index"
         options={{
           title: 'People',
-          tabBarIcon: ({ color, focused }) => <MaterialCommunityIcons size={28} name={focused ? "hexagon" : "hexagon-outline"} color={color} />,
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "people" : "people-outline"} color={color} />,
         }}
       />
       <Tabs.Screen
