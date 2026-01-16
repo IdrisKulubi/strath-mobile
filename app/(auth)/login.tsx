@@ -18,6 +18,7 @@ import { useToast } from '@/components/ui/toast';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { GoogleLogo } from '@/components/icons/google-logo';
 
 export default function LoginScreen() {
     const [loading, setLoading] = useState(false);
@@ -77,7 +78,10 @@ export default function LoginScreen() {
                         entering={FadeInDown.delay(200).springify()}
                         style={styles.headlineSection}
                     >
-                        <Text style={styles.headline}>Join Your Campus{`\n`}Community</Text>
+                        <Text style={styles.headline}>
+                            <Text style={styles.headlineLight}>Join Your </Text>
+                            <Text style={styles.headlineBold}>Campus{`\n`}Community</Text>
+                        </Text>
                         <Text style={styles.subheadline}>Connect, Discover, Vibe – simplified.</Text>
                     </Animated.View>
 
@@ -87,7 +91,7 @@ export default function LoginScreen() {
                         <Animated.View entering={FadeInUp.delay(300).springify()}>
                             <Pressable style={styles.connectCard}>
                                 <View style={styles.iconCircle}>
-                                    <Text style={styles.iconEmoji}>👥</Text>
+                                    <Ionicons name="people-outline" size={22} color="#E91E8C" />
                                 </View>
                                 <View style={styles.cardTextWrap}>
                                     <Text style={[styles.cardTitle, { color: '#E91E8C' }]}>Connect</Text>
@@ -103,7 +107,7 @@ export default function LoginScreen() {
                         <Animated.View entering={FadeInUp.delay(400).springify()}>
                             <Pressable style={styles.discoverCard}>
                                 <View style={styles.iconCircle}>
-                                    <Text style={styles.iconEmoji}>✨</Text>
+                                    <Ionicons name="sparkles-outline" size={22} color="#FF9800" />
                                 </View>
                                 <View style={styles.cardTextWrap}>
                                     <Text style={[styles.cardTitle, { color: '#FF9800' }]}>Discover</Text>
@@ -119,7 +123,7 @@ export default function LoginScreen() {
                         <Animated.View entering={FadeInUp.delay(500).springify()}>
                             <Pressable style={styles.vibeCard}>
                                 <View style={styles.iconCircle}>
-                                    <Text style={styles.iconEmoji}>🎯</Text>
+                                    <Ionicons name="pulse-outline" size={22} color="#00BFA5" />
                                 </View>
                                 <View style={styles.cardTextWrap}>
                                     <Text style={[styles.cardTitle, { color: '#00BFA5' }]}>Vibe</Text>
@@ -149,7 +153,7 @@ export default function LoginScreen() {
                                 <ActivityIndicator color="#4285F4" size="small" />
                             ) : (
                                 <>
-                                    <Ionicons name="logo-google" size={20} color="#DB4437" />
+                                    <GoogleLogo size={22} />
                                     <Text className="text-lg font-semibold text-gray-900 ml-3">Continue with Google</Text>
                                 </>
                             )}
@@ -222,10 +226,15 @@ const styles = StyleSheet.create({
     },
     headline: {
         fontSize: 32,
-        fontWeight: '700',
         color: '#1a1a1a',
         textAlign: 'center',
         lineHeight: 40,
+    },
+    headlineLight: {
+        fontWeight: '500',
+    },
+    headlineBold: {
+        fontWeight: '800',
     },
     subheadline: {
         fontSize: 15,
@@ -239,45 +248,42 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
 
-    // Card styles
+    // Card styles - with equal vertical padding for perfect centering
     connectCard: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFCFE3',
         borderRadius: 40,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        marginBottom: 10,
+        paddingVertical: 14,
+        paddingHorizontal: 14,
+        marginBottom: 12,
     },
     discoverCard: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFE3B6',
         borderRadius: 40,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        marginBottom: 10,
+        paddingVertical: 14,
+        paddingHorizontal: 14,
+        marginBottom: 12,
     },
     vibeCard: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#C7F4EC',
         borderRadius: 40,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        marginBottom: 10,
+        paddingVertical: 14,
+        paddingHorizontal: 14,
+        marginBottom: 12,
     },
 
     iconCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: '#FFFFFF',
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    iconEmoji: {
-        fontSize: 20,
     },
     cardTextWrap: {
         flex: 1,
