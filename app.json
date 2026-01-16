@@ -1,5 +1,6 @@
 {
   "expo": {
+    "owner": "vehemgroup",
     "name": "strathSpace",
     "slug": "strathSpace",
     "version": "1.0.0",
@@ -50,7 +51,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "30146769-e71c-43fd-a9e5-f437b137ace5"
+        "projectId": "72c4aded-f0d8-4049-95fa-401be27ae5fb"
       }
     }
   }
