@@ -442,6 +442,7 @@ const styles = StyleSheet.create({
   },
   opportunitiesList: {
     paddingHorizontal: 16,
+    paddingTop: 4,
     paddingBottom: 100,
   },
 });

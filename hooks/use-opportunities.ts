@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSession } from "@/lib/auth-client";
+import { useSession, authClient } from "@/lib/auth-client";
+import * as SecureStore from 'expo-secure-store';
 import type { 
     Opportunity, 
     OpportunitiesResponse, 
@@ -8,6 +9,19 @@ import type {
 } from "@/types/opportunities";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
+
+// Helper to get auth headers
+async function getAuthHeaders(): Promise<HeadersInit> {
+    const session = await authClient.getSession();
+    const token = session?.data?.session?.token;
+    const storedToken = await SecureStore.getItemAsync('strathmobile.session_token');
+    const finalToken = token || storedToken;
+
+    return {
+        'Content-Type': 'application/json',
+        ...(finalToken && { 'Authorization': `Bearer ${finalToken}` }),
+    };
+}
 
 // Fetch opportunities with filters
 async function fetchOpportunities(
@@ -25,21 +39,34 @@ async function fetchOpportunities(
     params.append("limit", limit.toString());
     params.append("offset", offset.toString());
 
-    const response = await fetch(
-        `${API_URL}/api/opportunities?${params.toString()}`
-    );
+    const url = `${API_URL}/api/opportunities?${params.toString()}`;
+    console.log("[useOpportunities] Fetching from:", url);
 
-    if (!response.ok) {
-        throw new Error("Failed to fetch opportunities");
+    try {
+        const headers = await getAuthHeaders();
+        const response = await fetch(url, { headers });
+        console.log("[useOpportunities] Response status:", response.status);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("[useOpportunities] Error response:", errorText);
+            throw new Error(`Failed to fetch opportunities: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("[useOpportunities] Got", data.opportunities?.length, "opportunities");
+        return data;
+    } catch (error) {
+        console.error("[useOpportunities] Fetch error:", error);
+        throw error;
     }
-
-    return response.json();
 }
 
 // Fetch single opportunity
 async function fetchOpportunity(id: string, userId?: string): Promise<Opportunity> {
     const params = userId ? `?userId=${userId}` : "";
-    const response = await fetch(`${API_URL}/api/opportunities/${id}${params}`);
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}/api/opportunities/${id}${params}`, { headers });
 
     if (!response.ok) {
         throw new Error("Failed to fetch opportunity");
@@ -50,8 +77,10 @@ async function fetchOpportunity(id: string, userId?: string): Promise<Opportunit
 
 // Fetch saved opportunities
 async function fetchSavedOpportunities(userId: string): Promise<{ opportunities: Opportunity[]; total: number }> {
+    const headers = await getAuthHeaders();
     const response = await fetch(
-        `${API_URL}/api/opportunities/saved?userId=${userId}`
+        `${API_URL}/api/opportunities/saved?userId=${userId}`,
+        { headers }
     );
 
     if (!response.ok) {
@@ -68,11 +97,13 @@ async function toggleSaveOpportunity(
     isSaved: boolean
 ): Promise<{ isSaved: boolean }> {
     const url = `${API_URL}/api/opportunities/${opportunityId}/save`;
+    const headers = await getAuthHeaders();
 
     if (isSaved) {
         // Unsave
         const response = await fetch(`${url}?userId=${userId}`, {
             method: "DELETE",
+            headers,
         });
         if (!response.ok) throw new Error("Failed to unsave opportunity");
         return response.json();
@@ -80,7 +111,7 @@ async function toggleSaveOpportunity(
         // Save
         const response = await fetch(url, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers,
             body: JSON.stringify({ userId }),
         });
         if (!response.ok) throw new Error("Failed to save opportunity");

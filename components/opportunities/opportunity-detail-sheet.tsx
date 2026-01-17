@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { 
     View, 
     ScrollView, 
@@ -7,17 +7,26 @@ import {
     Linking,
     Share,
     Platform,
-    Dimensions 
+    Dimensions,
+    useColorScheme 
 } from 'react-native';
+import { Colors } from '@/constants/theme';
 import { Text } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
 import { Ionicons } from '@expo/vector-icons';
 import { type Opportunity, CATEGORY_CONFIG } from '@/types/opportunities';
 import { formatDistanceToNow, format } from 'date-fns';
 import * as Haptics from 'expo-haptics';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { 
+    FadeInDown, 
+    SlideOutRight,
+    useSharedValue, 
+    useAnimatedStyle, 
+    withSpring,
+    runOnJS,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface OpportunityDetailSheetProps {
     opportunity: Opportunity | null;
@@ -32,13 +41,61 @@ export function OpportunityDetailSheet({
     onClose,
     onSave 
 }: OpportunityDetailSheetProps) {
+    const colorScheme = useColorScheme() ?? 'dark';
+    const isDark = colorScheme === 'dark';
+    const colors = Colors[colorScheme];
+    
+    const translateX = useSharedValue(0);
+    const opacity = useSharedValue(1);
+
+    // Reset values when sheet becomes visible
+    useEffect(() => {
+        if (visible) {
+            translateX.value = 0;
+            opacity.value = 1;
+        }
+    }, [visible, translateX, opacity]);
+
+    const animatedSheetStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: translateX.value }],
+        opacity: opacity.value,
+    }));
+
+    // Early return AFTER hooks
     if (!opportunity || !visible) return null;
 
     const categoryConfig = CATEGORY_CONFIG[opportunity.category];
 
+    const dismissSheet = () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onClose();
+    };
+
+    const panGesture = Gesture.Pan()
+        .activeOffsetX(20)
+        .onUpdate((event) => {
+            // Only allow right swipe (positive X)
+            if (event.translationX > 0) {
+                translateX.value = event.translationX;
+                opacity.value = 1 - (event.translationX / SCREEN_WIDTH) * 0.5;
+            }
+        })
+        .onEnd((event) => {
+            // If swiped more than 100px or with velocity > 500, dismiss
+            if (event.translationX > 100 || event.velocityX > 500) {
+                translateX.value = withSpring(SCREEN_WIDTH);
+                opacity.value = withSpring(0);
+                runOnJS(dismissSheet)();
+            } else {
+                // Snap back
+                translateX.value = withSpring(0);
+                opacity.value = withSpring(1);
+            }
+        });
+
     const handleApply = async () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        if (opportunity.applicationUrl) {
+        if (opportunity?.applicationUrl) {
             await Linking.openURL(opportunity.applicationUrl);
         }
     };
@@ -73,19 +130,27 @@ export function OpportunityDetailSheet({
     return (
         <View style={styles.overlay}>
             <Pressable style={styles.backdrop} onPress={onClose} />
-            <Animated.View 
-                entering={FadeInDown.springify()}
-                style={styles.sheet}
-            >
-                {/* Handle */}
-                <View style={styles.handleContainer}>
-                    <View style={styles.handle} />
-                </View>
-
-                <ScrollView 
-                    style={styles.content}
-                    showsVerticalScrollIndicator={false}
+            <GestureDetector gesture={panGesture}>
+                <Animated.View 
+                    entering={FadeInDown.springify()}
+                    exiting={SlideOutRight.springify()}
+                    style={[styles.sheet, animatedSheetStyle, { backgroundColor: isDark ? colors.card : '#FFFFFF' }]}
                 >
+                    {/* Swipe Indicator */}
+                    <View style={styles.swipeIndicator}>
+                        <Ionicons name="chevron-back" size={16} color="rgba(255,255,255,0.5)" />
+                        <Text style={styles.swipeHint}>Swipe to go back</Text>
+                    </View>
+
+                    {/* Handle */}
+                    <View style={styles.handleContainer}>
+                        <View style={[styles.handle, { backgroundColor: isDark ? colors.border : '#D1D5DB' }]} />
+                    </View>
+
+                    <ScrollView 
+                        style={styles.content}
+                        showsVerticalScrollIndicator={false}
+                    >
                     {/* Header */}
                     <View style={styles.header}>
                         <View style={[styles.categoryBadge, { backgroundColor: categoryConfig.bgColor }]}>
@@ -99,34 +164,35 @@ export function OpportunityDetailSheet({
                                 <Ionicons 
                                     name={opportunity.isSaved ? "bookmark" : "bookmark-outline"} 
                                     size={24} 
-                                    color={opportunity.isSaved ? "#E91E8C" : "#6B7280"} 
+                                    color={opportunity.isSaved ? colors.primary : colors.mutedForeground} 
                                 />
                             </Pressable>
                             <Pressable onPress={handleShare} style={styles.iconButton}>
-                                <Ionicons name="share-outline" size={24} color="#6B7280" />
+                                <Ionicons name="share-outline" size={24} color={colors.mutedForeground} />
                             </Pressable>
                             <Pressable onPress={onClose} style={styles.iconButton}>
-                                <Ionicons name="close" size={24} color="#6B7280" />
+                                <Ionicons name="close" size={24} color={colors.mutedForeground} />
                             </Pressable>
                         </View>
                     </View>
 
                     {/* Title & Organization */}
-                    <Text style={styles.title}>{opportunity.title}</Text>
-                    <Text style={styles.organization}>{opportunity.organization}</Text>
+                    <Text style={[styles.title, { color: colors.foreground }]}>{opportunity.title}</Text>
+                    <Text style={[styles.organization, { color: colors.mutedForeground }]}>{opportunity.organization}</Text>
 
                     {/* Quick Info Pills */}
                     <View style={styles.pillsContainer}>
                         {opportunity.location && (
-                            <View style={styles.pill}>
-                                <Ionicons name="location" size={14} color="#6B7280" />
-                                <Text style={styles.pillText}>{opportunity.location}</Text>
+                            <View style={[styles.pill, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}>
+                                <Ionicons name="location" size={14} color={colors.mutedForeground} />
+                                <Text style={[styles.pillText, { color: isDark ? colors.mutedForeground : '#4B5563' }]}>{opportunity.location}</Text>
                             </View>
                         )}
                         {opportunity.locationType && (
                             <View style={[styles.pill, 
-                                opportunity.locationType === 'remote' && styles.remotePill,
-                                opportunity.locationType === 'hybrid' && styles.hybridPill
+                                { backgroundColor: isDark ? colors.muted : '#F3F4F6' },
+                                opportunity.locationType === 'remote' && (isDark ? { backgroundColor: 'rgba(59, 130, 246, 0.2)' } : styles.remotePill),
+                                opportunity.locationType === 'hybrid' && (isDark ? { backgroundColor: 'rgba(139, 92, 246, 0.2)' } : styles.hybridPill)
                             ]}>
                                 <Ionicons 
                                     name={opportunity.locationType === 'remote' ? 'globe-outline' : 'business-outline'} 
@@ -134,6 +200,7 @@ export function OpportunityDetailSheet({
                                     color={opportunity.locationType === 'remote' ? '#3B82F6' : '#8B5CF6'} 
                                 />
                                 <Text style={[styles.pillText,
+                                    { color: isDark ? colors.mutedForeground : '#4B5563' },
                                     opportunity.locationType === 'remote' && styles.remoteText,
                                     opportunity.locationType === 'hybrid' && styles.hybridText
                                 ]}>
@@ -142,39 +209,39 @@ export function OpportunityDetailSheet({
                             </View>
                         )}
                         {opportunity.duration && (
-                            <View style={styles.pill}>
-                                <Ionicons name="calendar-outline" size={14} color="#6B7280" />
-                                <Text style={styles.pillText}>{opportunity.duration}</Text>
+                            <View style={[styles.pill, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}>
+                                <Ionicons name="calendar-outline" size={14} color={colors.mutedForeground} />
+                                <Text style={[styles.pillText, { color: isDark ? colors.mutedForeground : '#4B5563' }]}>{opportunity.duration}</Text>
                             </View>
                         )}
                         {opportunity.slots && (
-                            <View style={styles.pill}>
-                                <Ionicons name="people-outline" size={14} color="#6B7280" />
-                                <Text style={styles.pillText}>{opportunity.slots} positions</Text>
+                            <View style={[styles.pill, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}>
+                                <Ionicons name="people-outline" size={14} color={colors.mutedForeground} />
+                                <Text style={[styles.pillText, { color: isDark ? colors.mutedForeground : '#4B5563' }]}>{opportunity.slots} positions</Text>
                             </View>
                         )}
                     </View>
 
                     {/* Deadline Alert */}
                     {opportunity.deadline && (
-                        <View style={styles.deadlineCard}>
+                        <View style={[styles.deadlineCard, { backgroundColor: isDark ? 'rgba(220, 38, 38, 0.15)' : '#FEE2E2' }]}>
                             <Ionicons name="alarm" size={20} color="#DC2626" />
                             <View>
-                                <Text style={styles.deadlineLabel}>Application Deadline</Text>
-                                <Text style={styles.deadlineValue}>{formatDeadline()}</Text>
+                                <Text style={[styles.deadlineLabel, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>Application Deadline</Text>
+                                <Text style={[styles.deadlineValue, { color: isDark ? '#F87171' : '#DC2626' }]}>{formatDeadline()}</Text>
                             </View>
                         </View>
                     )}
 
                     {/* Compensation */}
                     {(opportunity.salary || opportunity.stipend) && (
-                        <View style={styles.compensationCard}>
+                        <View style={[styles.compensationCard, { backgroundColor: isDark ? 'rgba(5, 150, 105, 0.15)' : '#D1FAE5' }]}>
                             <Ionicons name="cash" size={20} color="#059669" />
                             <View>
-                                <Text style={styles.compensationLabel}>
+                                <Text style={[styles.compensationLabel, { color: isDark ? '#6EE7B7' : '#065F46' }]}>
                                     {opportunity.salary ? 'Salary' : 'Stipend'}
                                 </Text>
-                                <Text style={styles.compensationValue}>
+                                <Text style={[styles.compensationValue, { color: isDark ? '#34D399' : '#059669' }]}>
                                     {opportunity.salary || opportunity.stipend}
                                 </Text>
                             </View>
@@ -183,18 +250,18 @@ export function OpportunityDetailSheet({
 
                     {/* Description */}
                     <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>About This Opportunity</Text>
-                        <Text style={styles.description}>{opportunity.description}</Text>
+                        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>About This Opportunity</Text>
+                        <Text style={[styles.description, { color: isDark ? colors.mutedForeground : '#4B5563' }]}>{opportunity.description}</Text>
                     </View>
 
                     {/* Requirements */}
                     {opportunity.requirements && opportunity.requirements.length > 0 && (
                         <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Requirements</Text>
+                            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Requirements</Text>
                             {opportunity.requirements.map((req, index) => (
                                 <View key={index} style={styles.requirementItem}>
-                                    <View style={styles.bulletPoint} />
-                                    <Text style={styles.requirementText}>{req}</Text>
+                                    <View style={[styles.bulletPoint, { backgroundColor: colors.primary }]} />
+                                    <Text style={[styles.requirementText, { color: isDark ? colors.mutedForeground : '#4B5563' }]}>{req}</Text>
                                 </View>
                             ))}
                         </View>
@@ -203,11 +270,11 @@ export function OpportunityDetailSheet({
                     {/* Tags */}
                     {opportunity.tags && opportunity.tags.length > 0 && (
                         <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Tags</Text>
+                            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Tags</Text>
                             <View style={styles.tagsContainer}>
                                 {opportunity.tags.map((tag, index) => (
-                                    <View key={index} style={styles.tag}>
-                                        <Text style={styles.tagText}>#{tag}</Text>
+                                    <View key={index} style={[styles.tag, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}>
+                                        <Text style={[styles.tagText, { color: colors.mutedForeground }]}>#{tag}</Text>
                                     </View>
                                 ))}
                             </View>
@@ -217,12 +284,12 @@ export function OpportunityDetailSheet({
                     {/* Contact Info */}
                     {(opportunity.contactEmail || opportunity.contactPhone) && (
                         <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Contact</Text>
+                            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Contact</Text>
                             <View style={styles.contactButtons}>
                                 {opportunity.contactEmail && (
                                     <Pressable 
                                         onPress={() => handleContact('email')}
-                                        style={styles.contactButton}
+                                        style={[styles.contactButton, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF' }]}
                                     >
                                         <Ionicons name="mail-outline" size={18} color="#3B82F6" />
                                         <Text style={styles.contactButtonText}>Email</Text>
@@ -231,7 +298,7 @@ export function OpportunityDetailSheet({
                                 {opportunity.contactPhone && (
                                     <Pressable 
                                         onPress={() => handleContact('phone')}
-                                        style={styles.contactButton}
+                                        style={[styles.contactButton, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF' }]}
                                     >
                                         <Ionicons name="call-outline" size={18} color="#3B82F6" />
                                         <Text style={styles.contactButtonText}>Call</Text>
@@ -243,31 +310,31 @@ export function OpportunityDetailSheet({
 
                     {/* Footer Info */}
                     <View style={styles.footerInfo}>
-                        <Text style={styles.footerText}>
+                        <Text style={[styles.footerText, { color: isDark ? colors.mutedForeground : '#9CA3AF' }]}>
                             Posted {formatDistanceToNow(new Date(opportunity.postedAt), { addSuffix: true })}
                         </Text>
-                        <Text style={styles.footerText}>•</Text>
-                        <Text style={styles.footerText}>{opportunity.viewCount} views</Text>
+                        <Text style={[styles.footerText, { color: isDark ? colors.mutedForeground : '#9CA3AF' }]}>•</Text>
+                        <Text style={[styles.footerText, { color: isDark ? colors.mutedForeground : '#9CA3AF' }]}>{opportunity.viewCount} views</Text>
                     </View>
 
-                    {/* Bottom Padding */}
-                    <View style={{ height: 100 }} />
+                    {/* Bottom Padding for Apply Button */}
+                    <View style={{ height: 120 }} />
                 </ScrollView>
 
                 {/* Apply Button */}
                 {opportunity.applicationUrl && (
                     <View style={styles.applyContainer}>
-                        <Button
+                        <Pressable
                             onPress={handleApply}
-                            size="lg"
-                            className="flex-1 h-14 rounded-full bg-pink-500"
+                            style={styles.applyButton}
                         >
                             <Ionicons name="open-outline" size={20} color="#FFFFFF" />
-                            <Text className="text-white font-bold text-base ml-2">Apply Now</Text>
-                        </Button>
+                            <Text style={styles.applyButtonText}>Apply Now</Text>
+                        </Pressable>
                     </View>
                 )}
-            </Animated.View>
+                </Animated.View>
+            </GestureDetector>
         </View>
     );
 }
@@ -299,6 +366,21 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 24,
         maxHeight: SCREEN_HEIGHT * 0.9,
     },
+    swipeIndicator: {
+        position: 'absolute',
+        top: -30,
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+    },
+    swipeHint: {
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.5)',
+        fontWeight: '500',
+    },
     handleContainer: {
         alignItems: 'center',
         paddingVertical: 12,
@@ -311,12 +393,13 @@ const styles = StyleSheet.create({
     },
     content: {
         paddingHorizontal: 20,
+        paddingTop: 8,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 16,
+        marginBottom: 20,
     },
     categoryBadge: {
         flexDirection: 'row',
@@ -341,16 +424,16 @@ const styles = StyleSheet.create({
         padding: 8,
     },
     title: {
-        fontSize: 24,
+        fontSize: 26,
         fontWeight: '800',
         color: '#111827',
-        lineHeight: 32,
+        lineHeight: 34,
     },
     organization: {
         fontSize: 16,
         color: '#6B7280',
-        marginTop: 4,
-        marginBottom: 16,
+        marginTop: 6,
+        marginBottom: 20,
     },
     pillsContainer: {
         flexDirection: 'row',
@@ -502,13 +585,27 @@ const styles = StyleSheet.create({
     },
     applyContainer: {
         position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        padding: 16,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 16,
-        backgroundColor: '#FFFFFF',
-        borderTopWidth: 1,
-        borderTopColor: '#F3F4F6',
+        bottom: Platform.OS === 'ios' ? 34 : 20,
+        left: 20,
+        right: 20,
+    },
+    applyButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#EC4899',
+        height: 56,
+        borderRadius: 28,
+        gap: 10,
+        shadowColor: '#EC4899',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
+        elevation: 12,
+    },
+    applyButtonText: {
+        color: '#FFFFFF',
+        fontSize: 17,
+        fontWeight: '700',
     },
 });
