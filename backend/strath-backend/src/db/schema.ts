@@ -445,3 +445,142 @@ export type Profile = typeof profiles.$inferSelect & {
 export type Message = typeof messages.$inferSelect;
 
 export type ProfileView = typeof profileViews.$inferSelect;
+
+// ============================================
+// OPPORTUNITIES / JOBS SECTION
+// ============================================
+
+// Opportunity Categories Enum
+export const opportunityCategories = [
+    "internship",
+    "part_time",
+    "full_time", 
+    "scholarship",
+    "grant",
+    "event",
+    "workshop",
+    "announcement"
+] as const;
+
+export type OpportunityCategory = typeof opportunityCategories[number];
+
+// Location Types
+export const locationTypes = ["remote", "onsite", "hybrid"] as const;
+export type LocationType = typeof locationTypes[number];
+
+// Opportunities Table
+export const opportunities = pgTable(
+    "opportunities",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        title: text("title").notNull(),
+        description: text("description").notNull(),
+        category: text("category").$type<OpportunityCategory>().notNull(),
+        organization: text("organization").notNull(),
+        logo: text("logo"), // Organization logo URL
+        location: text("location"),
+        locationType: text("location_type").$type<LocationType>().default("onsite"),
+        deadline: timestamp("deadline"),
+        applicationUrl: text("application_url"),
+        requirements: json("requirements").$type<string[]>(),
+        salary: text("salary"), // e.g., "KES 30,000 - 50,000" or "Unpaid"
+        stipend: text("stipend"),
+        duration: text("duration"), // e.g., "3 months", "6 weeks"
+        slots: integer("slots"), // Number of available positions
+        isActive: boolean("is_active").default(true),
+        isFeatured: boolean("is_featured").default(false),
+        viewCount: integer("view_count").default(0),
+        postedBy: text("posted_by").references(() => user.id),
+        contactEmail: text("contact_email"),
+        contactPhone: text("contact_phone"),
+        tags: json("tags").$type<string[]>(),
+        postedAt: timestamp("posted_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        categoryIdx: index("opportunity_category_idx").on(table.category),
+        deadlineIdx: index("opportunity_deadline_idx").on(table.deadline),
+        isActiveIdx: index("opportunity_is_active_idx").on(table.isActive),
+        isFeaturedIdx: index("opportunity_is_featured_idx").on(table.isFeatured),
+        postedAtIdx: index("opportunity_posted_at_idx").on(table.postedAt),
+        organizationIdx: index("opportunity_organization_idx").on(table.organization),
+    })
+);
+
+// Saved/Bookmarked Opportunities
+export const savedOpportunities = pgTable(
+    "saved_opportunities",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        opportunityId: uuid("opportunity_id")
+            .notNull()
+            .references(() => opportunities.id, { onDelete: "cascade" }),
+        savedAt: timestamp("saved_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdIdx: index("saved_opportunity_user_idx").on(table.userId),
+        opportunityIdIdx: index("saved_opportunity_opp_idx").on(table.opportunityId),
+        uniqueSave: index("saved_opportunity_unique_idx").on(table.userId, table.opportunityId),
+    })
+);
+
+// Opportunity Applications (track who applied)
+export const opportunityApplications = pgTable(
+    "opportunity_applications",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        opportunityId: uuid("opportunity_id")
+            .notNull()
+            .references(() => opportunities.id, { onDelete: "cascade" }),
+        appliedAt: timestamp("applied_at").defaultNow().notNull(),
+        status: text("status").$type<"pending" | "viewed" | "shortlisted" | "rejected">().default("pending"),
+    },
+    (table) => ({
+        userIdIdx: index("application_user_idx").on(table.userId),
+        opportunityIdIdx: index("application_opp_idx").on(table.opportunityId),
+    })
+);
+
+// Relations for Opportunities
+export const opportunitiesRelations = relations(opportunities, ({ one, many }) => ({
+    postedByUser: one(user, {
+        fields: [opportunities.postedBy],
+        references: [user.id],
+    }),
+    savedBy: many(savedOpportunities),
+    applications: many(opportunityApplications),
+}));
+
+export const savedOpportunitiesRelations = relations(savedOpportunities, ({ one }) => ({
+    user: one(user, {
+        fields: [savedOpportunities.userId],
+        references: [user.id],
+    }),
+    opportunity: one(opportunities, {
+        fields: [savedOpportunities.opportunityId],
+        references: [opportunities.id],
+    }),
+}));
+
+export const opportunityApplicationsRelations = relations(opportunityApplications, ({ one }) => ({
+    user: one(user, {
+        fields: [opportunityApplications.userId],
+        references: [user.id],
+    }),
+    opportunity: one(opportunities, {
+        fields: [opportunityApplications.opportunityId],
+        references: [opportunities.id],
+    }),
+}));
+
+// Types
+export type Opportunity = typeof opportunities.$inferSelect;
+export type NewOpportunity = typeof opportunities.$inferInsert;
+export type SavedOpportunity = typeof savedOpportunities.$inferSelect;
+export type OpportunityApplication = typeof opportunityApplications.$inferSelect;
