@@ -13,6 +13,8 @@ import { queryClient } from '@/lib/react-query';
 import { ThemeProvider, useThemeContext } from '@/context/theme-context';
 import { ToastProvider } from '@/components/ui/toast';
 import SplashScreen from '@/components/splash-screen';
+import { NoInternetScreen } from '@/components/no-internet-screen';
+import { useNetwork } from '@/hooks/use-network';
 
 // Prevent the native splash screen from auto-hiding
 ExpoSplashScreen.preventAutoHideAsync();
@@ -23,6 +25,17 @@ export const unstable_settings = {
 
 function RootLayoutNav() {
   const { theme } = useThemeContext();
+  const { isConnected, isLoading, refresh } = useNetwork();
+
+  // Show no internet screen if not connected (and not still loading initial check)
+  if (!isLoading && !isConnected) {
+    return (
+      <NavThemeProvider value={theme === 'dark' ? NavigationDarkTheme : NavigationLightTheme}>
+        <NoInternetScreen onRetry={refresh} />
+        <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+      </NavThemeProvider>
+    );
+  }
 
   return (
     <NavThemeProvider value={theme === 'dark' ? NavigationDarkTheme : NavigationLightTheme}>

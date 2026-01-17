@@ -31,7 +31,7 @@ export default function ExploreScreen() {
   const { data: currentUserProfile } = useProfile();
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<ExploreTab>('people');
+  const [activeTab, setActiveTab] = useState<ExploreTab>('opportunities');
 
   // People/Discover state
   const {
