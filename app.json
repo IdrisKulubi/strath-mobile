@@ -12,6 +12,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.strathspace.mobile",
+      "buildNumber": "7",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
