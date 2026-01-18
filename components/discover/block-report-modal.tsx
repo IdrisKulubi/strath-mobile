@@ -166,10 +166,15 @@ export function BlockReportModal({
         blockUser(userId, {
             onSuccess: () => {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                onSuccess();
+                closeSheet();
+                setTimeout(() => {
+                    onSuccess();
+                }, 400);
             },
-            onError: () => {
+            onError: (error) => {
+                console.error("Block error:", error);
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                closeSheet();
             },
         });
     };
@@ -188,10 +193,15 @@ export function BlockReportModal({
                 onSuccess: () => {
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                     resetReportState();
-                    onSuccess();
+                    closeSheet();
+                    setTimeout(() => {
+                        onSuccess();
+                    }, 400);
                 },
-                onError: () => {
+                onError: (error) => {
+                    console.error("Report error:", error);
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                    closeSheet();
                 },
             }
         );
@@ -208,7 +218,7 @@ export function BlockReportModal({
 
     const blockEffects = [
         { icon: "eye-off", text: "You won't see each other again" },
-        { icon: "chatbubble-ellipses-off", text: "They won't be able to message you" },
+        { icon: "chatbubble-ellipses", text: "They won't be able to message you" },
         { icon: "shield-checkmark", text: "We'll block any other accounts they create" },
     ];
 

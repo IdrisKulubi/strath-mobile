@@ -33,6 +33,9 @@ export function useReportUser() {
                 throw new Error("Not authenticated");
             }
 
+            console.log("Reporting user:", { reportedUserId, reason, details });
+            console.log("API URL:", `${API_URL}/api/user/report`);
+
             const response = await fetch(`${API_URL}/api/user/report`, {
                 method: "POST",
                 headers: {
@@ -42,12 +45,22 @@ export function useReportUser() {
                 body: JSON.stringify({ reportedUserId, reason, details }),
             });
 
+            const responseText = await response.text();
+            console.log("Report response status:", response.status);
+            console.log("Report response body:", responseText);
+
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || "Failed to report user");
+                let errorMessage = "Failed to report user";
+                try {
+                    const errorData = JSON.parse(responseText);
+                    errorMessage = errorData.error || errorMessage;
+                } catch {
+                    errorMessage = responseText || errorMessage;
+                }
+                throw new Error(errorMessage);
             }
 
-            return response.json();
+            return JSON.parse(responseText);
         },
         onSuccess: () => {
             // Invalidate relevant queries

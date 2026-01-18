@@ -29,6 +29,14 @@ export function errorResponse(error: unknown, status = 500) {
         );
     }
 
+    // Handle string errors
+    if (typeof error === "string") {
+        return NextResponse.json(
+            { success: false, error },
+            { status }
+        );
+    }
+
     return NextResponse.json(
         { success: false, error: "Internal Server Error" },
         { status }
