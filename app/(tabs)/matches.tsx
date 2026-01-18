@@ -1,23 +1,36 @@
 import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, StatusBar } from 'react-native';
+import { View, StyleSheet, StatusBar, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useMatches, Match } from '@/hooks/use-matches';
-import { MatchesList } from '@/components/matches/matches-list';
+import { MatchesListV2 } from '@/components/matches/matches-list-v2';
+import { ArchivedChatsSheet } from '@/components/matches/archived-chats-sheet';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Heart, Archive } from 'phosphor-react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 export default function MatchesScreen() {
-    const { colors, colorScheme } = useTheme();
+    const { colors, colorScheme, isDark } = useTheme();
     const router = useRouter();
     const queryClient = useQueryClient();
 
-    const { data, isLoading, isError, refetch } = useMatches();
+    const { data, isLoading, refetch } = useMatches();
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [showArchivedSheet, setShowArchivedSheet] = useState(false);
+    
+    // For now, archived matches are stored locally
+    // In production, this would come from the API
+    const [archivedMatchIds, setArchivedMatchIds] = useState<Set<string>>(new Set());
 
-    const matches = data?.matches ?? [];
+    const allMatches = data?.matches ?? [];
+    
+    // Filter out archived matches from main list
+    const matches = allMatches.filter(m => !archivedMatchIds.has(m.id));
+    const archivedMatches = allMatches.filter(m => archivedMatchIds.has(m.id));
 
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true);
@@ -32,8 +45,69 @@ export default function MatchesScreen() {
     }, [router]);
 
     const handleExplore = useCallback(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         router.push('/(tabs)');
     }, [router]);
+
+    const handleArchive = useCallback((match: Match) => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setArchivedMatchIds(prev => new Set([...prev, match.id]));
+    }, []);
+
+    const handleUnarchive = useCallback((match: Match) => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setArchivedMatchIds(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(match.id);
+            return newSet;
+        });
+    }, []);
+
+    const handleUnmatch = useCallback((match: Match) => {
+        // TODO: Implement unmatch API call
+        Alert.alert(
+            'Unmatched',
+            `You have unmatched with ${match.partner.name}. This action cannot be undone.`,
+            [{ text: 'OK' }]
+        );
+        // Remove from archived if it was archived
+        setArchivedMatchIds(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(match.id);
+            return newSet;
+        });
+        // Invalidate matches query to refetch
+        queryClient.invalidateQueries({ queryKey: ['matches'] });
+    }, [queryClient]);
+
+    const handleDeleteArchived = useCallback((match: Match) => {
+        Alert.alert(
+            'Delete Archived Chat',
+            `Are you sure you want to permanently delete this chat with ${match.partner.name}?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => {
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                        // Remove from archived
+                        setArchivedMatchIds(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(match.id);
+                            return newSet;
+                        });
+                        // TODO: Call API to delete the match
+                    },
+                },
+            ]
+        );
+    }, []);
+
+    const openArchivedSheet = () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setShowArchivedSheet(true);
+    };
 
     return (
         <SafeAreaView
@@ -44,26 +118,74 @@ export default function MatchesScreen() {
 
             {/* Header */}
             <View style={styles.header}>
-                <Text className="text-foreground text-[28px] font-bold">
-                    Matches
-                </Text>
+                <View style={styles.headerTop}>
+                    <View style={styles.headerTitleRow}>
+                        <LinearGradient
+                            colors={['#ec4899', '#f43f5e']}
+                            style={styles.headerIcon}
+                        >
+                            <Heart size={18} color="#fff" weight="fill" />
+                        </LinearGradient>
+                        <Text style={[styles.headerTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+                            Matches
+                        </Text>
+                    </View>
+                    
+                    {/* Archive Button */}
+                    <Pressable
+                        style={[
+                            styles.archiveButton,
+                            { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)' }
+                        ]}
+                        onPress={openArchivedSheet}
+                    >
+                        <Archive size={20} color={isDark ? '#94a3b8' : '#6b7280'} />
+                        {archivedMatches.length > 0 && (
+                            <View style={styles.archiveBadge}>
+                                <Text style={styles.archiveBadgeText}>
+                                    {archivedMatches.length > 9 ? '9+' : archivedMatches.length}
+                                </Text>
+                            </View>
+                        )}
+                    </Pressable>
+                </View>
+                
                 {matches.length > 0 && (
-                    <Text className="text-muted-foreground text-[15px]">
-                        {matches.length} {matches.length === 1 ? 'connection' : 'connections'}
-                    </Text>
+                    <Animated.View entering={FadeIn}>
+                        <Text style={[styles.headerSubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
+                            {matches.length} {matches.length === 1 ? 'connection' : 'connections'} waiting to chat
+                        </Text>
+                    </Animated.View>
                 )}
             </View>
 
             {/* Matches List */}
             <View style={styles.listContainer}>
-                <MatchesList
+                <MatchesListV2
                     matches={matches}
                     isLoading={isLoading}
                     isRefreshing={isRefreshing}
                     onRefresh={handleRefresh}
                     onMatchPress={handleMatchPress}
+                    onArchive={handleArchive}
+                    onUnmatch={handleUnmatch}
+                    onExplore={handleExplore}
                 />
             </View>
+
+            {/* Archived Chats Sheet */}
+            <ArchivedChatsSheet
+                visible={showArchivedSheet}
+                onClose={() => setShowArchivedSheet(false)}
+                archivedMatches={archivedMatches}
+                isLoading={false}
+                onMatchPress={(match) => {
+                    setShowArchivedSheet(false);
+                    setTimeout(() => handleMatchPress(match), 300);
+                }}
+                onUnarchive={handleUnarchive}
+                onDelete={handleDeleteArchived}
+            />
         </SafeAreaView>
     );
 }
@@ -74,8 +196,60 @@ const styles = StyleSheet.create({
     },
     header: {
         paddingHorizontal: 20,
-        paddingTop: 10,
-        paddingBottom: 16,
+        paddingTop: 16,
+        paddingBottom: 12,
+    },
+    headerTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    headerTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    headerIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    headerTitle: {
+        fontSize: 28,
+        fontWeight: '700',
+        lineHeight: 36,
+    },
+    headerSubtitle: {
+        fontSize: 14,
+        marginTop: 6,
+        fontWeight: '500',
+    },
+    archiveButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
+    },
+    archiveBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        minWidth: 18,
+        height: 18,
+        borderRadius: 9,
+        backgroundColor: '#ec4899',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+    },
+    archiveBadgeText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: '700',
     },
     listContainer: {
         flex: 1,

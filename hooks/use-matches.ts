@@ -14,6 +14,7 @@ const MatchProfileSchema = z.object({
     profilePhoto: z.string().nullable().optional(),
     university: z.string().nullable().optional(),
     course: z.string().nullable().optional(),
+    interests: z.array(z.string()).nullable().optional(),
 });
 
 // Schema for last message
@@ -31,6 +32,7 @@ const MatchPartnerSchema = z.object({
     name: z.string(),
     image: z.string().nullable().optional(),
     profile: MatchProfileSchema.nullable().optional(),
+    lastActive: z.string().nullable().optional(),
 });
 
 // Main Match schema
@@ -39,6 +41,7 @@ const MatchSchema = z.object({
     partner: MatchPartnerSchema,
     lastMessage: LastMessageSchema.nullable().optional(),
     unreadCount: z.number().optional().default(0),
+    sparkScore: z.number().optional().default(70),
     createdAt: z.string(),
 });
 
@@ -162,4 +165,28 @@ export function getRelativeTime(dateString: string): string {
     if (diffDays < 7) return `${diffDays}d`;
 
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Get last active status string
+ */
+export function getLastActiveStatus(dateString: string | null | undefined): { text: string; isOnline: boolean } {
+    if (!dateString) return { text: 'Offline', isOnline: false };
+    
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    
+    if (diffMins < 5) return { text: 'Online now', isOnline: true };
+    if (diffMins < 60) return { text: `Active ${diffMins}m ago`, isOnline: false };
+    
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    if (diffHours < 24) return { text: `Active ${diffHours}h ago`, isOnline: false };
+    
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 1) return { text: 'Active yesterday', isOnline: false };
+    if (diffDays < 7) return { text: `Active ${diffDays}d ago`, isOnline: false };
+    
+    return { text: 'Offline', isOnline: false };
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useCallback, useRef, useEffect, useMemo, useState } from 'react';
 import {
     View,
     FlatList,
@@ -6,23 +6,50 @@ import {
     StatusBar,
     KeyboardAvoidingView,
     Platform,
+    Dimensions,
+    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 import { useChat, Message } from '@/hooks/use-chat';
 import { useMatches } from '@/hooks/use-matches';
+import { useUnmatch } from '@/hooks/use-unmatch';
 import { MessageBubble, ChatInput, ChatHeader } from '@/components/chat';
-
 import { SafetyToolkitModal } from '@/components/chat/safety-toolkit-modal';
+import { BlockReportModal } from '@/components/discover/block-report-modal';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { 
+    useAnimatedStyle, 
+    useSharedValue, 
+    withSpring, 
+    runOnJS,
+    interpolate,
+    Extrapolation,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const SWIPE_THRESHOLD = 100;
 
 export default function ChatScreen() {
     const { matchId } = useLocalSearchParams<{ matchId: string }>();
-    const { colors, colorScheme } = useTheme();
+    const { colors, colorScheme, isDark } = useTheme();
+    const router = useRouter();
     const flatListRef = useRef<FlatList>(null);
-    const [isSafetyModalVisible, setIsSafetyModalVisible] = React.useState(false);
+    
+    // Modal states
+    const [isSafetyModalVisible, setIsSafetyModalVisible] = useState(false);
+    const [blockReportModalVisible, setBlockReportModalVisible] = useState(false);
+    const [blockReportMode, setBlockReportMode] = useState<'block' | 'report'>('block');
+
+    // Swipe to go back
+    const translateX = useSharedValue(0);
+
+    // Hooks
+    const { mutate: unmatch, isPending: isUnmatching } = useUnmatch();
 
     const {
         messages,
@@ -54,26 +81,103 @@ export default function ChatScreen() {
         sendMessage(content);
     }, [sendMessage]);
 
+    const goBack = useCallback(() => {
+        router.back();
+    }, [router]);
+
     // Safety Actions
     const handleUnmatch = useCallback(() => {
-        console.log('Unmatch');
-        // Implement unmatch logic
-    }, []);
+        setIsSafetyModalVisible(false);
+        
+        Alert.alert(
+            'Unmatch',
+            `Are you sure you want to unmatch with ${partner?.name || 'this person'}?\n\nThis will:\n• Remove them from your matches\n• Delete all your messages\n• This action cannot be undone`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Unmatch',
+                    style: 'destructive',
+                    onPress: () => {
+                        if (!matchId) return;
+                        
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                        unmatch(
+                            { matchId },
+                            {
+                                onSuccess: () => {
+                                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                    router.back();
+                                },
+                                onError: (error) => {
+                                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                                    Alert.alert('Error', error.message || 'Failed to unmatch');
+                                },
+                            }
+                        );
+                    },
+                },
+            ]
+        );
+    }, [partner?.name, matchId, unmatch, router]);
 
     const handleBlock = useCallback(() => {
-        console.log('Block');
-        // Implement block logic
+        setIsSafetyModalVisible(false);
+        setBlockReportMode('block');
+        setTimeout(() => {
+            setBlockReportModalVisible(true);
+        }, 300);
     }, []);
 
     const handleReport = useCallback(() => {
-        console.log('Report');
-        // Implement report logic
+        setIsSafetyModalVisible(false);
+        setBlockReportMode('report');
+        setTimeout(() => {
+            setBlockReportModalVisible(true);
+        }, 300);
     }, []);
 
     const handleSafetyCenter = useCallback(() => {
-        console.log('Safety Center');
-        // Navigate to safety center
+        setIsSafetyModalVisible(false);
+        // TODO: Navigate to safety center
+        Alert.alert('Safety Center', 'Safety Center coming soon! For now, you can block or report users if needed.');
     }, []);
+
+    const handleBlockReportSuccess = useCallback(() => {
+        // Navigate back after successful block/report
+        router.back();
+    }, [router]);
+
+    // Swipe right to go back gesture
+    const swipeGesture = Gesture.Pan()
+        .activeOffsetX([20, SCREEN_WIDTH])
+        .onUpdate((event) => {
+            if (event.translationX > 0) {
+                translateX.value = event.translationX;
+            }
+        })
+        .onEnd((event) => {
+            if (event.translationX > SWIPE_THRESHOLD && event.velocityX > 0) {
+                runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
+                translateX.value = withSpring(SCREEN_WIDTH, { damping: 20, stiffness: 200 }, () => {
+                    runOnJS(goBack)();
+                });
+            } else {
+                translateX.value = withSpring(0, { damping: 20, stiffness: 300 });
+            }
+        });
+
+    const screenStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: translateX.value }],
+    }));
+
+    const backdropStyle = useAnimatedStyle(() => ({
+        opacity: interpolate(
+            translateX.value,
+            [0, SCREEN_WIDTH],
+            [0, 0.5],
+            Extrapolation.CLAMP
+        ),
+    }));
 
     // Memoize messages for stable reference in renderItem
     const messagesRef = useRef(messages);
@@ -150,58 +254,87 @@ export default function ChatScreen() {
     );
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-            <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
-
-            <ChatHeader
-                partnerName={partner?.name || 'Chat'}
-                partnerImage={partner?.image}
-                onMorePress={() => setIsSafetyModalVisible(true)}
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            {/* Backdrop that shows when swiping */}
+            <Animated.View 
+                style={[
+                    StyleSheet.absoluteFill, 
+                    { backgroundColor: '#000' },
+                    backdropStyle
+                ]} 
+                pointerEvents="none"
             />
+            
+            <GestureDetector gesture={swipeGesture}>
+                <Animated.View style={[{ flex: 1 }, screenStyle]}>
+                    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+                        <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
 
-            <KeyboardAvoidingView
-                style={styles.keyboardView}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={0}
-            >
-                <FlatList
-                    ref={flatListRef}
-                    data={messages}
-                    renderItem={renderMessage}
-                    keyExtractor={keyExtractor}
-                    contentContainerStyle={[
-                        styles.messageList,
-                        messages.length === 0 && styles.emptyList,
-                    ]}
-                    ListHeaderComponent={messages.length > 0 ? renderListHeader : undefined}
-                    ListEmptyComponent={renderEmptyState}
-                    showsVerticalScrollIndicator={false}
-                    onContentSizeChange={() => {
-                        if (messages.length > 0) {
-                            flatListRef.current?.scrollToEnd({ animated: false });
-                        }
-                    }}
+                        <ChatHeader
+                            partnerName={partner?.name || 'Chat'}
+                            partnerImage={partner?.image}
+                            onMorePress={() => setIsSafetyModalVisible(true)}
+                        />
+
+                        <KeyboardAvoidingView
+                            style={styles.keyboardView}
+                            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                            keyboardVerticalOffset={0}
+                        >
+                            <FlatList
+                                ref={flatListRef}
+                                data={messages}
+                                renderItem={renderMessage}
+                                keyExtractor={keyExtractor}
+                                contentContainerStyle={[
+                                    styles.messageList,
+                                    messages.length === 0 && styles.emptyList,
+                                ]}
+                                ListHeaderComponent={messages.length > 0 ? renderListHeader : undefined}
+                                ListEmptyComponent={renderEmptyState}
+                                showsVerticalScrollIndicator={false}
+                                onContentSizeChange={() => {
+                                    if (messages.length > 0) {
+                                        flatListRef.current?.scrollToEnd({ animated: false });
+                                    }
+                                }}
+                            />
+
+                            <ChatInput
+                                onSend={handleSend}
+                                isSending={isSending}
+                                onMediaPress={() => console.log('Media')}
+                                onGifPress={() => console.log('GIF')}
+                                onMusicPress={() => console.log('Music')}
+                            />
+                        </KeyboardAvoidingView>
+
+                        <SafetyToolkitModal
+                            visible={isSafetyModalVisible}
+                            onClose={() => setIsSafetyModalVisible(false)}
+                            partnerName={partner?.name || 'User'}
+                            onUnmatch={handleUnmatch}
+                            onBlock={handleBlock}
+                            onReport={handleReport}
+                            onSafetyCenter={handleSafetyCenter}
+                        />
+                    </SafeAreaView>
+                </Animated.View>
+            </GestureDetector>
+
+            {/* Block/Report Modal */}
+            {partner && (
+                <BlockReportModal
+                    visible={blockReportModalVisible}
+                    mode={blockReportMode}
+                    userId={partner.id}
+                    userName={partner.name || 'User'}
+                    onClose={() => setBlockReportModalVisible(false)}
+                    onSuccess={handleBlockReportSuccess}
+                    onSwitchMode={() => setBlockReportMode(prev => prev === 'block' ? 'report' : 'block')}
                 />
-
-                <ChatInput
-                    onSend={handleSend}
-                    isSending={isSending}
-                    onMediaPress={() => console.log('Media')}
-                    onGifPress={() => console.log('GIF')}
-                    onMusicPress={() => console.log('Music')}
-                />
-            </KeyboardAvoidingView>
-
-            <SafetyToolkitModal
-                visible={isSafetyModalVisible}
-                onClose={() => setIsSafetyModalVisible(false)}
-                partnerName={partner?.name || 'User'}
-                onUnmatch={handleUnmatch}
-                onBlock={handleBlock}
-                onReport={handleReport}
-                onSafetyCenter={handleSafetyCenter}
-            />
-        </SafeAreaView>
+            )}
+        </GestureHandlerRootView>
     );
 }
 

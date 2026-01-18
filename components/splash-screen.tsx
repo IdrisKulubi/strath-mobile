@@ -127,10 +127,9 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
                     </View>
                 </Animated.View>
 
-                {/* App Name and Loading Text */}
+                {/* App Name  */}
                 <Animated.View style={[styles.textContainer, textAnimatedStyle]}>
                     <Text style={styles.appName}>Strathspace</Text>
-                    <Text style={styles.loadingText}>Loading...</Text>
                 </Animated.View>
             </View>
         </LinearGradient>

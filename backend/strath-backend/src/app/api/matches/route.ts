@@ -117,6 +117,21 @@ export async function GET(req: NextRequest) {
         const formattedMatches = matchesToReturn.map((match) => {
             const isUser1 = match.user1Id === userId;
             const partner = isUser1 ? match.user2 : match.user1;
+            const currentUserProfile = isUser1 ? match.user1.profile : match.user2.profile;
+            
+            // Calculate compatibility/spark score based on shared interests
+            let sparkScore = 70; // Base score
+            const partnerInterests = partner.profile?.interests || [];
+            const userInterests = currentUserProfile?.interests || [];
+            
+            if (partnerInterests.length > 0 && userInterests.length > 0) {
+                const sharedInterests = partnerInterests.filter((i: string) => 
+                    userInterests.includes(i)
+                );
+                const sharedCount = sharedInterests.length;
+                // Add up to 30% for shared interests
+                sparkScore += Math.min(30, sharedCount * 10);
+            }
 
             return {
                 id: match.id,
@@ -124,10 +139,15 @@ export async function GET(req: NextRequest) {
                     id: partner.id,
                     name: partner.name,
                     image: partner.image,
-                    profile: partner.profile,
+                    profile: partner.profile ? {
+                        ...partner.profile,
+                        interests: partner.profile.interests || [],
+                    } : null,
+                    lastActive: partner.lastActive?.toISOString() || null,
                 },
                 lastMessage: match.messages[0] || null,
                 unreadCount: unreadMap.get(match.id) || 0,
+                sparkScore,
                 createdAt: match.createdAt.toISOString(),
             };
         });
