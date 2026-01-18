@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useState } from 'react';
 import {
     View,
     StyleSheet,
@@ -7,14 +7,16 @@ import {
     Image,
     Pressable,
     Dimensions,
-    StatusBar
+    StatusBar,
+    Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { DiscoverProfile } from '@/types/discover';
-import { X, Star, Heart, MapPin, GraduationCap, Sparkle } from 'phosphor-react-native';
+import { X, Heart, GraduationCap, Sparkle, DotsThreeVertical, Shield, Flag } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
+import { BlockReportModal } from './block-report-modal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -24,6 +26,8 @@ interface DiscoverProfileModalProps {
     onClose: () => void;
     onLike: (profile: DiscoverProfile) => void;
     onPass: (profile: DiscoverProfile) => void;
+    onBlock?: (profile: DiscoverProfile) => void;
+    onReport?: (profile: DiscoverProfile) => void;
 }
 
 /**
@@ -35,9 +39,13 @@ export function DiscoverProfileModal({
     profile,
     onClose,
     onLike,
-    onPass
+    onPass,
+    onBlock,
+    onReport
 }: DiscoverProfileModalProps) {
     const { colors } = useTheme();
+    const [showMenu, setShowMenu] = useState(false);
+    const [blockReportMode, setBlockReportMode] = useState<"block" | "report" | null>(null);
 
     if (!profile) return null;
 
@@ -66,6 +74,38 @@ export function DiscoverProfileModal({
         onClose();
     };
 
+    const handleOpenMenu = () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setShowMenu(true);
+    };
+
+    const handleOpenBlockSheet = () => {
+        setShowMenu(false);
+        setBlockReportMode("block");
+    };
+
+    const handleOpenReportSheet = () => {
+        setShowMenu(false);
+        setBlockReportMode("report");
+    };
+
+    const handleBlockReportSuccess = () => {
+        setBlockReportMode(null);
+        onBlock?.(profile);
+        onClose();
+        Alert.alert(
+            blockReportMode === "block" ? 'User Blocked' : 'Report Submitted',
+            blockReportMode === "block" 
+                ? `You won't see ${name} anymore.`
+                : 'Thank you for helping keep our community safe. We\'ll review this report within 24 hours.',
+            [{ text: 'OK' }]
+        );
+    };
+
+    const handleSwitchMode = () => {
+        setBlockReportMode(blockReportMode === "block" ? "report" : "block");
+    };
+
     return (
         <Modal
             visible={visible}
@@ -84,8 +124,40 @@ export function DiscoverProfileModal({
                     <Text style={[styles.headerTitle, { color: colors.foreground }]}>
                         {name}, {profile.age || '?'}
                     </Text>
-                    <View style={styles.closeButton} />
+                    <Pressable onPress={handleOpenMenu} style={styles.closeButton}>
+                        <DotsThreeVertical size={28} color={colors.foreground} weight="bold" />
+                    </Pressable>
                 </SafeAreaView>
+
+                {/* Menu Dropdown */}
+                {showMenu && (
+                    <Pressable 
+                        style={styles.menuOverlay} 
+                        onPress={() => setShowMenu(false)}
+                    >
+                        <View style={[styles.menuContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                            <Pressable 
+                                style={styles.menuItem} 
+                                onPress={handleOpenBlockSheet}
+                            >
+                                <Shield size={20} color={colors.foreground} />
+                                <Text style={[styles.menuItemText, { color: colors.foreground }]}>
+                                    Block {name}
+                                </Text>
+                            </Pressable>
+                            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+                            <Pressable 
+                                style={styles.menuItem} 
+                                onPress={handleOpenReportSheet}
+                            >
+                                <Flag size={20} color="#ef4444" />
+                                <Text style={[styles.menuItemText, { color: '#ef4444' }]}>
+                                    Report {name}
+                                </Text>
+                            </Pressable>
+                        </View>
+                    </Pressable>
+                )}
 
                 {/* Scrollable Content */}
                 <ScrollView
@@ -201,6 +273,19 @@ export function DiscoverProfileModal({
                         <Text style={styles.likeButtonText}>Like</Text>
                     </Pressable>
                 </SafeAreaView>
+
+                {/* Block/Report Modal */}
+                {blockReportMode && (
+                    <BlockReportModal
+                        visible={!!blockReportMode}
+                        mode={blockReportMode}
+                        userId={profile.userId}
+                        userName={name}
+                        onClose={() => setBlockReportMode(null)}
+                        onSuccess={handleBlockReportSuccess}
+                        onSwitchMode={handleSwitchMode}
+                    />
+                )}
             </View>
         </Modal>
     );
@@ -371,5 +456,40 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: '#FFFFFF',
+    },
+    menuOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 100,
+    },
+    menuContainer: {
+        position: 'absolute',
+        top: 100,
+        right: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
+        minWidth: 180,
+    },
+    menuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14,
+        gap: 12,
+    },
+    menuItemText: {
+        fontSize: 15,
+        fontWeight: '500',
+    },
+    menuDivider: {
+        height: 1,
     },
 });

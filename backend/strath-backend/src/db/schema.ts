@@ -282,7 +282,25 @@ export const blocks = pgTable("blocks", {
         .notNull()
         .references(() => user.id),
     createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+    blockerIdx: index("blocks_blocker_idx").on(table.blockerId),
+    blockedIdx: index("blocks_blocked_idx").on(table.blockedId),
+    uniqueBlock: index("blocks_unique_idx").on(table.blockerId, table.blockedId),
+}));
+
+// Blocks Relations
+export const blocksRelations = relations(blocks, ({ one }) => ({
+    blocker: one(user, {
+        fields: [blocks.blockerId],
+        references: [user.id],
+        relationName: "blockerRelation",
+    }),
+    blocked: one(user, {
+        fields: [blocks.blockedId],
+        references: [user.id],
+        relationName: "blockedRelation",
+    }),
+}));
 
 // Starred Profiles
 export const starredProfiles = pgTable("starred_profiles", {
@@ -357,6 +375,8 @@ export const userRelations = relations(user, ({ one, many }) => ({
         relationName: "userStarredProfiles",
     }),
     reports: many(reports, { relationName: "userReports" }),
+    blockedUsers: many(blocks, { relationName: "blockerRelation" }),
+    blockedBy: many(blocks, { relationName: "blockedRelation" }),
     sessions: many(session),
     accounts: many(account),
 }));

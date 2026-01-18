@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     StyleSheet,
@@ -6,6 +6,7 @@ import {
     Image,
     Pressable,
     ScrollView,
+    Alert,
 } from 'react-native';
 import Animated, {
     SharedValue,
@@ -30,6 +31,8 @@ import {
     WarningCircle,
     Prohibit
 } from 'phosphor-react-native';
+import * as Haptics from 'expo-haptics';
+import { BlockReportModal } from './block-report-modal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 16;
@@ -38,6 +41,8 @@ const CARD_HEIGHT = SCREEN_HEIGHT - 200; // Leave room for header and tab bar
 interface SwipeCardProps {
     profile: DiscoverProfile;
     onInfoPress?: () => void;
+    onBlock?: (profile: DiscoverProfile) => void;
+    onReport?: (profile: DiscoverProfile) => void;
     isTop?: boolean;
     showAura?: boolean;
     likeOpacity?: SharedValue<number>;
@@ -62,12 +67,15 @@ function Tag({ icon, label, colors }: TagProps) {
 export function SwipeCard({
     profile,
     onInfoPress,
+    onBlock,
+    onReport,
     isTop = false,
     showAura = false,
     likeOpacity,
     nopeOpacity,
 }: SwipeCardProps) {
     const { colors } = useTheme();
+    const [blockReportMode, setBlockReportMode] = useState<"block" | "report" | null>(null);
 
     // Get all photos
     const allPhotos: string[] = [];
@@ -227,17 +235,60 @@ export function SwipeCard({
                         </View>
                     </View>
                     <View style={styles.actionButtons}>
-                        <Pressable style={styles.actionButton}>
+                        <Pressable 
+                            style={styles.actionButton}
+                            onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                setBlockReportMode("block");
+                            }}
+                        >
                             <Prohibit size={20} color={colors.foreground} />
                             <Text style={[styles.actionButtonText, { color: colors.foreground }]}>Block {displayName}</Text>
                         </Pressable>
-                        <Pressable style={styles.actionButton}>
+                        <Pressable 
+                            style={styles.actionButton}
+                            onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                setBlockReportMode("report");
+                            }}
+                        >
                             <WarningCircle size={20} color="#FF3B30" />
                             <Text style={[styles.actionButtonText, { color: '#FF3B30' }]}>Report {displayName}</Text>
                         </Pressable>
                     </View>
                 </View>
             </ScrollView>
+
+            {/* Block/Report Modal */}
+            {blockReportMode && (
+                <BlockReportModal
+                    visible={!!blockReportMode}
+                    mode={blockReportMode}
+                    userId={profile.userId}
+                    userName={displayName}
+                    onClose={() => setBlockReportMode(null)}
+                    onSuccess={() => {
+                        const wasBlock = blockReportMode === "block";
+                        setBlockReportMode(null);
+                        if (wasBlock) {
+                            onBlock?.(profile);
+                            Alert.alert(
+                                'User Blocked',
+                                `You won't see ${displayName} anymore.`,
+                                [{ text: 'OK' }]
+                            );
+                        } else {
+                            onReport?.(profile);
+                            Alert.alert(
+                                'Report Submitted',
+                                'Thank you for helping keep our community safe.',
+                                [{ text: 'OK' }]
+                            );
+                        }
+                    }}
+                    onSwitchMode={() => setBlockReportMode(blockReportMode === "block" ? "report" : "block")}
+                />
+            )}
 
             {/* FIXED LAYER: LIKE/NOPE Stamps - Sits on top of everything, centered */}
             {isTop && (

@@ -8,3 +8,6 @@ export * from './pulse-bar';
 export * from './profile-grid';
 export * from './discover-section';
 export * from './discover-profile-modal';
+export { default as BlockSheet } from './block-sheet';
+export { default as ReportSheet } from './report-sheet';
+export { BlockReportModal } from './block-report-modal';
