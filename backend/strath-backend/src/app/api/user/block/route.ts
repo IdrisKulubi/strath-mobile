@@ -1,15 +1,36 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { blocks, matches } from "@/db/schema";
+import { blocks, matches, session as sessionTable } from "@/db/schema";
 import { and, eq, or, desc } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
 import { successResponse, errorResponse } from "@/lib/api-response";
+
+// Helper to get session with Bearer token fallback
+async function getSessionWithFallback(req: NextRequest) {
+    let session = await auth.api.getSession({ headers: req.headers });
+
+    // Fallback: Manual token check if getSession fails (for Bearer token auth)
+    if (!session) {
+        const authHeader = req.headers.get('authorization');
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.split(' ')[1];
+            const dbSession = await db.query.session.findFirst({
+                where: eq(sessionTable.token, token),
+                with: { user: true }
+            });
+
+            if (dbSession && dbSession.expiresAt > new Date()) {
+                session = { session: dbSession, user: dbSession.user } as any;
+            }
+        }
+    }
+    return session;
+}
 
 // POST - Block a user
 export async function POST(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({ headers: await headers() });
+        const session = await getSessionWithFallback(request);
         if (!session?.user?.id) {
             return errorResponse("Unauthorized", 401);
         }
@@ -72,7 +93,7 @@ export async function POST(request: NextRequest) {
 // DELETE - Unblock a user
 export async function DELETE(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({ headers: await headers() });
+        const session = await getSessionWithFallback(request);
         if (!session?.user?.id) {
             return errorResponse("Unauthorized", 401);
         }
@@ -100,9 +121,9 @@ export async function DELETE(request: NextRequest) {
 }
 
 // GET - Get list of blocked users
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({ headers: await headers() });
+        const session = await getSessionWithFallback(request);
         if (!session?.user?.id) {
             return errorResponse("Unauthorized", 401);
         }
