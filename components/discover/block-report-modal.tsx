@@ -61,6 +61,8 @@ export function BlockReportModal({
     const [selectedReason, setSelectedReason] = useState<ReportReason | null>(null);
     const [details, setDetails] = useState("");
     const [reportStep, setReportStep] = useState<"reason" | "details">("reason");
+    const [successState, setSuccessState] = useState<"blocked" | "reported" | null>(null);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     // Animation values
     const translateY = useSharedValue(SCREEN_HEIGHT);
@@ -78,6 +80,8 @@ export function BlockReportModal({
         setSelectedReason(null);
         setDetails("");
         setReportStep("reason");
+        setSuccessState(null);
+        setErrorMessage(null);
     }, []);
 
     const handleCloseCallback = useCallback(() => {
@@ -163,18 +167,17 @@ export function BlockReportModal({
 
     const handleBlock = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        setErrorMessage(null);
         blockUser(userId, {
             onSuccess: () => {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                closeSheet();
-                setTimeout(() => {
-                    onSuccess();
-                }, 400);
+                setSuccessState("blocked");
             },
             onError: (error) => {
                 console.error("Block error:", error);
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                closeSheet();
+                const message = error instanceof Error ? error.message : "Failed to block user";
+                setErrorMessage(message);
             },
         });
     };
@@ -183,6 +186,7 @@ export function BlockReportModal({
         if (!selectedReason) return;
 
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        setErrorMessage(null);
         reportUser(
             {
                 reportedUserId: userId,
@@ -192,19 +196,23 @@ export function BlockReportModal({
             {
                 onSuccess: () => {
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    resetReportState();
-                    closeSheet();
-                    setTimeout(() => {
-                        onSuccess();
-                    }, 400);
+                    setSuccessState("reported");
                 },
                 onError: (error) => {
                     console.error("Report error:", error);
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                    closeSheet();
+                    const message = error instanceof Error ? error.message : "Failed to submit report";
+                    setErrorMessage(message);
                 },
             }
         );
+    };
+
+    const handleDone = () => {
+        closeSheet();
+        setTimeout(() => {
+            onSuccess();
+        }, 400);
     };
 
     const handleClose = () => {
@@ -221,6 +229,63 @@ export function BlockReportModal({
         { icon: "chatbubble-ellipses", text: "They won't be able to message you" },
         { icon: "shield-checkmark", text: "We'll block any other accounts they create" },
     ];
+
+    const renderSuccessContent = () => (
+        <View style={styles.content}>
+            {/* Success Icon */}
+            <View style={styles.successIconContainer}>
+                <LinearGradient
+                    colors={["#10b981", "#059669"]}
+                    style={styles.successIconGradient}
+                >
+                    <Ionicons name="checkmark" size={48} color="#fff" />
+                </LinearGradient>
+            </View>
+
+            {/* Success Title */}
+            <Text style={[styles.successTitle, { color: isDark ? "#fff" : "#1a1a2e" }]}>
+                {successState === "blocked" ? `You've blocked ${userName}` : `You've reported ${userName}`}
+            </Text>
+
+            {/* Success Message */}
+            <Text style={[styles.successMessage, { color: isDark ? "#94a3b8" : "#6b7280" }]}>
+                Thank you for helping keep the Strathspace community safe.
+                {successState === "reported" 
+                    ? " We'll review your report and take appropriate action within 24 hours."
+                    : " You won't see each other anymore."}
+            </Text>
+
+            {/* What happens next */}
+            <View style={[styles.infoBox, { 
+                backgroundColor: isDark ? "rgba(16, 185, 129, 0.1)" : "rgba(16, 185, 129, 0.08)",
+                borderColor: isDark ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.15)",
+            }]}>
+                <Ionicons name="information-circle" size={20} color="#10b981" />
+                <Text style={[styles.infoBoxText, { color: isDark ? "#a7f3d0" : "#065f46" }]}>
+                    {successState === "blocked" 
+                        ? "This action can be undone from your settings."
+                        : "You'll receive an update once we've reviewed this report."}
+                </Text>
+            </View>
+
+            {/* Done Button */}
+            <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={handleDone}
+                activeOpacity={0.8}
+            >
+                <LinearGradient
+                    colors={["#10b981", "#059669"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.primaryButtonGradient}
+                >
+                    <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                    <Text style={styles.primaryButtonText}>Done</Text>
+                </LinearGradient>
+            </TouchableOpacity>
+        </View>
+    );
 
     const renderBlockContent = () => (
         <View style={styles.content}>
@@ -266,6 +331,16 @@ export function BlockReportModal({
                     </View>
                 ))}
             </View>
+
+            {errorMessage && (
+                <View style={[styles.errorBanner, { backgroundColor: isDark ? "rgba(239, 68, 68, 0.15)" : "rgba(239, 68, 68, 0.1)" }]}>
+                    <Ionicons name="alert-circle" size={20} color="#ef4444" />
+                    <Text style={styles.errorText}>{errorMessage}</Text>
+                    <TouchableOpacity onPress={() => setErrorMessage(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Ionicons name="close" size={18} color={isDark ? "#94a3b8" : "#6b7280"} />
+                    </TouchableOpacity>
+                </View>
+            )}
 
             <TouchableOpacity
                 style={styles.primaryButton}
@@ -452,6 +527,16 @@ export function BlockReportModal({
                 {details.length}/500
             </Text>
 
+            {errorMessage && (
+                <View style={[styles.errorBanner, { backgroundColor: isDark ? "rgba(239, 68, 68, 0.15)" : "rgba(239, 68, 68, 0.1)" }]}>
+                    <Ionicons name="alert-circle" size={20} color="#ef4444" />
+                    <Text style={styles.errorText}>{errorMessage}</Text>
+                    <TouchableOpacity onPress={() => setErrorMessage(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Ionicons name="close" size={18} color={isDark ? "#94a3b8" : "#6b7280"} />
+                    </TouchableOpacity>
+                </View>
+            )}
+
             <TouchableOpacity
                 style={styles.primaryButton}
                 onPress={handleSubmitReport}
@@ -531,7 +616,7 @@ export function BlockReportModal({
                                 {/* Close button */}
                                 <TouchableOpacity
                                     style={styles.closeButton}
-                                    onPress={handleClose}
+                                    onPress={successState ? handleDone : handleClose}
                                 >
                                     <Ionicons name="close" size={24} color={isDark ? "#94a3b8" : "#6b7280"} />
                                 </TouchableOpacity>
@@ -542,9 +627,13 @@ export function BlockReportModal({
                                     bounces={false}
                                     keyboardShouldPersistTaps="handled"
                                 >
-                                    {mode === "block" && renderBlockContent()}
-                                    {mode === "report" && reportStep === "reason" && renderReportReasonStep()}
-                                    {mode === "report" && reportStep === "details" && renderReportDetailsStep()}
+                                    {successState ? renderSuccessContent() : (
+                                        <>
+                                            {mode === "block" && renderBlockContent()}
+                                            {mode === "report" && reportStep === "reason" && renderReportReasonStep()}
+                                            {mode === "report" && reportStep === "details" && renderReportDetailsStep()}
+                                        </>
+                                    )}
                                 </ScrollView>
                             </Animated.View>
                         </GestureDetector>
@@ -754,5 +843,68 @@ const styles = StyleSheet.create({
         fontSize: 13,
         lineHeight: 18,
         marginTop: 16,
+    },
+    // Success state styles
+    successIconContainer: {
+        alignItems: "center",
+        marginBottom: 24,
+        marginTop: 16,
+    },
+    successIconGradient: {
+        width: 88,
+        height: 88,
+        borderRadius: 44,
+        alignItems: "center",
+        justifyContent: "center",
+        shadowColor: "#10b981",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
+        elevation: 12,
+    },
+    successTitle: {
+        fontSize: 22,
+        fontWeight: "700",
+        textAlign: "center",
+        marginBottom: 12,
+    },
+    successMessage: {
+        fontSize: 15,
+        textAlign: "center",
+        lineHeight: 22,
+        marginBottom: 24,
+        paddingHorizontal: 8,
+    },
+    infoBox: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        padding: 16,
+        borderRadius: 14,
+        borderWidth: 1,
+        marginBottom: 28,
+        gap: 12,
+    },
+    infoBoxText: {
+        flex: 1,
+        fontSize: 14,
+        lineHeight: 20,
+        fontWeight: "500",
+    },
+    errorBanner: {
+        flexDirection: "row",
+        alignItems: "center",
+        padding: 14,
+        borderRadius: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: "rgba(239, 68, 68, 0.3)",
+        gap: 10,
+    },
+    errorText: {
+        flex: 1,
+        fontSize: 14,
+        fontWeight: "500",
+        color: "#ef4444",
+        lineHeight: 20,
     },
 });

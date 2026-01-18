@@ -6,7 +6,6 @@ import {
     Image,
     Pressable,
     ScrollView,
-    Alert,
 } from 'react-native';
 import Animated, {
     SharedValue,
@@ -272,18 +271,8 @@ export function SwipeCard({
                         setBlockReportMode(null);
                         if (wasBlock) {
                             onBlock?.(profile);
-                            Alert.alert(
-                                'User Blocked',
-                                `You won't see ${displayName} anymore.`,
-                                [{ text: 'OK' }]
-                            );
                         } else {
                             onReport?.(profile);
-                            Alert.alert(
-                                'Report Submitted',
-                                'Thank you for helping keep our community safe.',
-                                [{ text: 'OK' }]
-                            );
                         }
                     }}
                     onSwitchMode={() => setBlockReportMode(blockReportMode === "block" ? "report" : "block")}
