@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Dimensions, Pressable } from 'react-native';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import { CompletionHalo } from '@/components/profile/completion-halo';
@@ -7,11 +7,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Skeleton } from '@/components/ui/skeleton';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get('window');
 
 export default function ProfileScreen() {
-    const { colors } = useTheme();
+    const { colors, colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
     const { data: profile, isLoading } = useProfile();
     const router = useRouter();
 
@@ -44,36 +47,30 @@ export default function ProfileScreen() {
 
     const completion = calculateCompletion();
 
+    const handlePress = (route: string) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        router.push(route as any);
+    };
+
     if (isLoading) {
         return (
             <View style={[styles.container, { backgroundColor: colors.background }]}>
+                {/* Gradient Background */}
+                {isDark && (
+                    <LinearGradient
+                        colors={['#2d1b47', '#1a0d2e', '#0f0a1a']}
+                        style={StyleSheet.absoluteFill}
+                    />
+                )}
                 <View style={styles.headerActions}>
                     <View style={{ width: 24, height: 24 }} />
                 </View>
 
                 <View style={[styles.heroSection, { marginTop: 20 }]}>
-                    {/* Profile Image Skeleton */}
                     <Skeleton width={140} height={140} borderRadius={70} style={{ marginBottom: 16 }} />
-
-                    {/* Name & Details Skeleton */}
                     <Skeleton width={200} height={32} borderRadius={8} style={{ marginBottom: 8 }} />
                     <Skeleton width={150} height={20} borderRadius={4} style={{ marginBottom: 4 }} />
                     <Skeleton width={100} height={20} borderRadius={4} />
-                </View>
-
-                <View style={styles.section}>
-                    <Skeleton width={80} height={16} borderRadius={4} style={{ marginBottom: 12 }} />
-                    <Skeleton width="100%" height={16} borderRadius={4} style={{ marginBottom: 8 }} />
-                    <Skeleton width="80%" height={16} borderRadius={4} />
-                </View>
-
-                <View style={styles.section}>
-                    <Skeleton width={80} height={16} borderRadius={4} style={{ marginBottom: 12 }} />
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <Skeleton width={80} height={32} borderRadius={16} />
-                        <Skeleton width={100} height={32} borderRadius={16} />
-                        <Skeleton width={70} height={32} borderRadius={16} />
-                    </View>
                 </View>
             </View>
         );
@@ -81,117 +78,312 @@ export default function ProfileScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            {/* Animated Gradient Background for Dark Mode */}
+            {isDark && (
+                <LinearGradient
+                    colors={['#2d1b47', '#1a0d2e', '#0f0a1a']}
+                    style={StyleSheet.absoluteFill}
+                />
+            )}
+
+            {/* Decorative Blurs */}
+            {isDark && (
+                <>
+                    <View style={[styles.decorBlur, styles.decorBlur1]} />
+                    <View style={[styles.decorBlur, styles.decorBlur2]} />
+                </>
+            )}
+
+            <ScrollView 
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
                 {/* Header Actions */}
-                <View style={styles.headerActions}>
+                <Animated.View 
+                    entering={FadeIn.delay(100)}
+                    style={styles.headerActions}
+                >
                     <TouchableOpacity
-                        style={styles.iconButton}
-                        onPress={() => router.push('/settings')}
+                        style={[
+                            styles.iconButton,
+                            isDark && styles.iconButtonDark
+                        ]}
+                        onPress={() => handlePress('/settings')}
                     >
-                        <Ionicons name="settings-outline" size={24} color={colors.foreground} />
+                        <Ionicons name="settings-outline" size={22} color={colors.foreground} />
                     </TouchableOpacity>
-                </View>
+                </Animated.View>
 
                 {/* Hero Section */}
-                <View style={styles.heroSection}>
-                    <CompletionHalo percentage={completion} radius={70} strokeWidth={6}>
-                        <Image
-                            source={{ uri: profile?.profilePhoto || profile?.user?.image || 'https://via.placeholder.com/150' }}
-                            style={styles.profileImage}
-                        />
-                    </CompletionHalo>
+                <Animated.View 
+                    entering={FadeInDown.delay(200).springify()}
+                    style={styles.heroSection}
+                >
+                    {/* Profile Image with Glow Effect */}
+                    <View style={styles.profileImageContainer}>
+                        {isDark && (
+                            <LinearGradient
+                                colors={['#E91E8C', '#00f2ff', '#E91E8C']}
+                                style={styles.profileGlow}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            />
+                        )}
+                        <CompletionHalo percentage={completion} radius={70} strokeWidth={6}>
+                            <Image
+                                source={{ uri: profile?.profilePhoto || profile?.user?.image || 'https://via.placeholder.com/150' }}
+                                style={styles.profileImage}
+                            />
+                        </CompletionHalo>
+                    </View>
 
                     <View style={styles.identityContainer}>
                         <Text style={[styles.name, { color: colors.foreground }]}>
                             {profile?.firstName} {profile?.lastName}
                             {profile?.age ? `, ${profile.age}` : ''}
                         </Text>
-                        <Text style={[styles.uniDetails, { color: colors.muted }]}>
+                        <Text style={[styles.uniDetails, { color: isDark ? 'rgba(255,255,255,0.5)' : colors.muted }]}>
                             {profile?.course} • Year {profile?.yearOfStudy}
                         </Text>
-                        <Text style={[styles.uniName, { color: colors.primary }]}>
-                            {profile?.university}
-                        </Text>
+                        <LinearGradient
+                            colors={['#E91E8C', '#00f2ff']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.uniNameGradient}
+                        >
+                            <Text style={styles.uniNameText}>
+                                {profile?.university}
+                            </Text>
+                        </LinearGradient>
                     </View>
 
+                    {/* Completion CTA - Glassmorphism Style */}
                     {completion < 100 && (
-                        <TouchableOpacity
-                            style={styles.completeButton}
-                            onPress={() => router.push('/edit-profile')}
+                        <Pressable
+                            onPress={() => handlePress('/edit-profile')}
+                            style={({ pressed }) => [
+                                styles.completeButton,
+                                pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }
+                            ]}
                         >
                             <LinearGradient
-                                colors={['rgba(0, 242, 255, 0.2)', 'rgba(255, 0, 85, 0.2)']}
+                                colors={isDark 
+                                    ? ['rgba(233, 30, 140, 0.3)', 'rgba(0, 242, 255, 0.2)']
+                                    : ['rgba(233, 30, 140, 0.15)', 'rgba(0, 242, 255, 0.1)']
+                                }
                                 style={styles.completeGradient}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 0 }}
                             >
-                                <Text style={styles.completeText}>⚡ Complete Your Profile ({completion}%)</Text>
+                                <Text style={styles.completeEmoji}>⚡</Text>
+                                <Text style={[styles.completeText, { color: isDark ? '#fff' : '#E91E8C' }]}>
+                                    Complete Your Profile
+                                </Text>
+                                <View style={[styles.completeBadge, { backgroundColor: isDark ? '#E91E8C' : 'rgba(233, 30, 140, 0.2)' }]}>
+                                    <Text style={[styles.completeBadgeText, { color: isDark ? '#fff' : '#E91E8C' }]}>
+                                        {completion}%
+                                    </Text>
+                                </View>
                             </LinearGradient>
-                        </TouchableOpacity>
+                        </Pressable>
                     )}
-                </View>
+                </Animated.View>
 
                 {/* Photos Carousel */}
                 {profile?.photos && profile.photos.length > 0 && (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
-                        {profile.photos.map((photo: any, index: React.Key | null | undefined) => (
-                            <Image key={index} source={{ uri: photo }} style={styles.extraPhoto} />
-                        ))}
-                    </ScrollView>
+                    <Animated.View entering={FadeInDown.delay(300).springify()}>
+                        <ScrollView 
+                            horizontal 
+                            showsHorizontalScrollIndicator={false} 
+                            style={styles.photosScroll}
+                            contentContainerStyle={{ paddingRight: 16 }}
+                        >
+                            {profile.photos.map((photo: any, index: React.Key | null | undefined) => (
+                                <View key={index} style={styles.photoContainer}>
+                                    <Image source={{ uri: photo }} style={styles.extraPhoto} />
+                                    {isDark && <LinearGradient
+                                        colors={['transparent', 'rgba(0,0,0,0.3)']}
+                                        style={styles.photoOverlay}
+                                    />}
+                                </View>
+                            ))}
+                        </ScrollView>
+                    </Animated.View>
                 )}
 
-                {/* Bio */}
-                <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.muted }]}>ABOUT ME</Text>
+                {/* Bio Section - Card Style */}
+                <Animated.View 
+                    entering={FadeInDown.delay(400).springify()}
+                    style={[
+                        styles.card,
+                        { 
+                            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                            borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                        },
+                        !isDark && styles.cardLightShadow
+                    ]}
+                >
+                    <View style={styles.cardHeader}>
+                        <View style={[styles.cardIcon, { backgroundColor: isDark ? 'rgba(233, 30, 140, 0.2)' : 'rgba(233, 30, 140, 0.1)' }]}>
+                            <Ionicons name="person" size={16} color="#E91E8C" />
+                        </View>
+                        <Text style={[styles.cardTitle, { color: isDark ? 'rgba(255,255,255,0.6)' : colors.muted }]}>
+                            ABOUT ME
+                        </Text>
+                    </View>
                     <Text style={[styles.bioText, { color: colors.foreground }]}>
                         {profile?.bio || "No bio yet. Tap edit to add one!"}
                     </Text>
-                </View>
+                </Animated.View>
 
-                {/* Vibe Chips */}
-                <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.muted }]}>THE VIBE</Text>
+                {/* Vibe Section */}
+                <Animated.View 
+                    entering={FadeInDown.delay(500).springify()}
+                    style={[
+                        styles.card,
+                        { 
+                            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                            borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                        },
+                        !isDark && styles.cardLightShadow
+                    ]}
+                >
+                    <View style={styles.cardHeader}>
+                        <View style={[styles.cardIcon, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(139, 92, 246, 0.1)' }]}>
+                            <Ionicons name="sparkles" size={16} color="#8B5CF6" />
+                        </View>
+                        <Text style={[styles.cardTitle, { color: isDark ? 'rgba(255,255,255,0.6)' : colors.muted }]}>
+                            THE VIBE
+                        </Text>
+                    </View>
                     <View style={styles.chipContainer}>
                         {profile?.zodiacSign && (
-                            <View style={[styles.chip, { borderColor: colors.border }]}>
-                                <Text style={[styles.chipText, { color: colors.foreground }]}>✨ {profile.zodiacSign}</Text>
-                            </View>
+                            <LinearGradient
+                                colors={isDark ? ['rgba(233, 30, 140, 0.3)', 'rgba(139, 92, 246, 0.3)'] : ['rgba(233, 30, 140, 0.15)', 'rgba(139, 92, 246, 0.15)']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={styles.vibeChip}
+                            >
+                                <Text style={[styles.chipText, { color: isDark ? '#fff' : '#9333EA' }]}>✨ {profile.zodiacSign}</Text>
+                            </LinearGradient>
                         )}
                         {profile?.personalityType && (
-                            <View style={[styles.chip, { borderColor: colors.border }]}>
-                                <Text style={[styles.chipText, { color: colors.foreground }]}>🧠 {profile.personalityType}</Text>
-                            </View>
+                            <LinearGradient
+                                colors={isDark ? ['rgba(0, 242, 255, 0.3)', 'rgba(59, 130, 246, 0.3)'] : ['rgba(0, 242, 255, 0.15)', 'rgba(59, 130, 246, 0.15)']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={styles.vibeChip}
+                            >
+                                <Text style={[styles.chipText, { color: isDark ? '#fff' : '#0284C7' }]}>🧠 {profile.personalityType}</Text>
+                            </LinearGradient>
+                        )}
+                        {profile?.loveLanguage && (
+                            <LinearGradient
+                                colors={isDark ? ['rgba(255, 0, 85, 0.3)', 'rgba(255, 107, 107, 0.3)'] : ['rgba(255, 0, 85, 0.15)', 'rgba(255, 107, 107, 0.15)']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={styles.vibeChip}
+                            >
+                                <Text style={[styles.chipText, { color: isDark ? '#fff' : '#DB2777' }]}>💕 {profile.loveLanguage}</Text>
+                            </LinearGradient>
                         )}
                         {profile?.interests?.map((interest: string, index: number) => (
-                            <View key={index} style={[styles.chip, { borderColor: colors.border }]}>
-                                <Text style={[styles.chipText, { color: colors.foreground }]}>{interest}</Text>
+                            <View 
+                                key={index} 
+                                style={[
+                                    styles.interestChip, 
+                                    { 
+                                        backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F3F4F6',
+                                        borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'transparent',
+                                    }
+                                ]}
+                            >
+                                <Text style={[styles.chipText, { color: isDark ? 'rgba(255,255,255,0.9)' : '#4B5563' }]}>
+                                    {interest}
+                                </Text>
                             </View>
                         ))}
                     </View>
-                </View>
+                </Animated.View>
 
-                {/* Socials */}
-                <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.muted }]}>SOCIALS</Text>
-                    <View style={styles.socialsRow}>
-                        {profile?.instagram && <Ionicons name="logo-instagram" size={24} color="#E1306C" style={styles.socialIcon} />}
-                        {profile?.spotify && <Ionicons name="musical-notes" size={24} color="#1DB954" style={styles.socialIcon} />}
-                        {profile?.snapchat && <Ionicons name="logo-snapchat" size={24} color="#FFFC00" style={styles.socialIcon} />}
+                {/* Socials Section */}
+                <Animated.View 
+                    entering={FadeInDown.delay(600).springify()}
+                    style={[
+                        styles.card,
+                        { 
+                            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                            borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                        },
+                        !isDark && styles.cardLightShadow
+                    ]}
+                >
+                    <View style={styles.cardHeader}>
+                        <View style={[styles.cardIcon, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)' }]}>
+                            <Ionicons name="link" size={16} color="#3B82F6" />
+                        </View>
+                        <Text style={[styles.cardTitle, { color: isDark ? 'rgba(255,255,255,0.6)' : colors.muted }]}>
+                            SOCIALS
+                        </Text>
                     </View>
-                </View>
+                    <View style={styles.socialsRow}>
+                        {profile?.instagram && (
+                            <View style={[styles.socialBadge, { backgroundColor: isDark ? 'rgba(225, 48, 108, 0.15)' : 'rgba(225, 48, 108, 0.12)' }]}>
+                                <Ionicons name="logo-instagram" size={22} color="#E1306C" />
+                                <Text style={[styles.socialHandle, { color: '#C13584' }]}>
+                                    @{profile.instagram}
+                                </Text>
+                            </View>
+                        )}
+                        {profile?.spotify && (
+                            <View style={[styles.socialBadge, { backgroundColor: isDark ? 'rgba(29, 185, 84, 0.15)' : 'rgba(29, 185, 84, 0.12)' }]}>
+                                <Ionicons name="musical-notes" size={22} color="#1DB954" />
+                                <Text style={[styles.socialHandle, { color: '#1AA34A' }]}>
+                                    Spotify
+                                </Text>
+                            </View>
+                        )}
+                        {profile?.snapchat && (
+                            <View style={[styles.socialBadge, { backgroundColor: isDark ? 'rgba(255, 252, 0, 0.15)' : '#FEF9C3' }]}>
+                                <Ionicons name="logo-snapchat" size={22} color={isDark ? '#FFFC00' : '#CA8A04'} />
+                                <Text style={[styles.socialHandle, { color: isDark ? '#FFFC00' : '#A16207' }]}>
+                                    @{profile.snapchat}
+                                </Text>
+                            </View>
+                        )}
+                        {!profile?.instagram && !profile?.spotify && !profile?.snapchat && (
+                            <Text style={[styles.noSocialsText, { color: isDark ? 'rgba(255,255,255,0.4)' : '#9CA3AF' }]}>
+                                No socials linked yet
+                            </Text>
+                        )}
+                    </View>
+                </Animated.View>
 
-                <View style={{ height: 100 }} />
+                <View style={{ height: 120 }} />
             </ScrollView>
 
-            {/* Fixed Footer */}
-            <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
-                <TouchableOpacity
-                    style={[styles.editButton, { backgroundColor: colors.foreground }]}
-                    onPress={() => router.push('/edit-profile')}
+            {/* Fixed Footer - Floating Button */}
+            <Animated.View 
+                entering={FadeInDown.delay(700)}
+                style={styles.footer}
+            >
+                <Pressable
+                    onPress={() => handlePress('/edit-profile')}
+                    style={({ pressed }) => [
+                        pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }
+                    ]}
                 >
-                    <Text style={[styles.editButtonText, { color: colors.background }]}>EDIT PROFILE</Text>
-                </TouchableOpacity>
-            </View>
+                    <LinearGradient
+                        colors={isDark ? ['#3d2459', '#2d1b47'] : ['#E91E8C', '#D946EF']}
+                        style={styles.editButton}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                    >
+                        <Ionicons name="pencil" size={18} color="#fff" style={{ marginRight: 8 }} />
+                        <Text style={styles.editButtonText}>EDIT PROFILE</Text>
+                    </LinearGradient>
+                </Pressable>
+            </Animated.View>
         </View>
     );
 }
@@ -199,6 +391,23 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    decorBlur: {
+        position: 'absolute',
+        width: 200,
+        height: 200,
+        borderRadius: 100,
+        opacity: 0.3,
+    },
+    decorBlur1: {
+        top: -50,
+        right: -50,
+        backgroundColor: '#E91E8C',
+    },
+    decorBlur2: {
+        bottom: 200,
+        left: -80,
+        backgroundColor: '#00f2ff',
     },
     scrollContent: {
         paddingBottom: 20,
@@ -210,11 +419,27 @@ const styles = StyleSheet.create({
         paddingTop: 60,
     },
     iconButton: {
-        padding: 8,
+        padding: 10,
+        borderRadius: 12,
+    },
+    iconButtonDark: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
     },
     heroSection: {
         alignItems: 'center',
         marginBottom: 24,
+    },
+    profileImageContainer: {
+        position: 'relative',
+    },
+    profileGlow: {
+        position: 'absolute',
+        top: -8,
+        left: -8,
+        right: -8,
+        bottom: -8,
+        borderRadius: 80,
+        opacity: 0.4,
     },
     profileImage: {
         width: 130,
@@ -226,50 +451,109 @@ const styles = StyleSheet.create({
         marginTop: 16,
     },
     name: {
-        fontSize: 24,
-        fontWeight: 'bold',
+        fontSize: 28,
+        fontWeight: '800',
+        letterSpacing: -0.5,
     },
     uniDetails: {
         fontSize: 14,
         marginTop: 4,
     },
-    uniName: {
-        fontSize: 14,
-        fontWeight: '600',
-        marginTop: 2,
+    uniNameGradient: {
+        marginTop: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    uniNameText: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '700',
     },
     completeButton: {
-        marginTop: 16,
-        borderRadius: 20,
+        marginTop: 20,
+        borderRadius: 16,
         overflow: 'hidden',
     },
     completeGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
         paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingVertical: 12,
+        gap: 8,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+    completeEmoji: {
+        fontSize: 16,
     },
     completeText: {
-        color: '#00f2ff',
-        fontWeight: 'bold',
+        fontWeight: '600',
         fontSize: 14,
     },
+    completeBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 10,
+        marginLeft: 4,
+    },
+    completeBadgeText: {
+        fontSize: 12,
+        fontWeight: '700',
+    },
     photosScroll: {
-        marginBottom: 24,
-        paddingLeft: 16,
+        marginBottom: 20,
+        paddingLeft: 20,
+    },
+    photoContainer: {
+        position: 'relative',
+        marginRight: 12,
     },
     extraPhoto: {
         width: 120,
         height: 160,
-        borderRadius: 12,
-        marginRight: 12,
+        borderRadius: 16,
     },
-    section: {
-        paddingHorizontal: 20,
-        marginBottom: 24,
+    photoOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 60,
+        borderBottomLeftRadius: 16,
+        borderBottomRightRadius: 16,
     },
-    sectionTitle: {
-        fontSize: 12,
-        fontWeight: 'bold',
+    card: {
+        marginHorizontal: 20,
+        marginBottom: 16,
+        padding: 16,
+        borderRadius: 20,
+        borderWidth: 1,
+    },
+    cardLightShadow: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginBottom: 12,
+        gap: 10,
+    },
+    cardIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    cardTitle: {
+        fontSize: 12,
+        fontWeight: '700',
         letterSpacing: 1,
     },
     bioText: {
@@ -281,39 +565,63 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
         gap: 8,
     },
-    chip: {
-        borderWidth: 1,
+    vibeChip: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
         borderRadius: 20,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
+    },
+    interestChip: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 20,
+        borderWidth: 1,
     },
     chipText: {
         fontSize: 14,
+        fontWeight: '500',
     },
     socialsRow: {
         flexDirection: 'row',
-        gap: 16,
+        flexWrap: 'wrap',
+        gap: 12,
     },
-    socialIcon: {
-        opacity: 0.8,
+    socialBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 14,
+        gap: 8,
+    },
+    socialHandle: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    noSocialsText: {
+        fontSize: 14,
     },
     footer: {
         position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        padding: 16,
-        borderTopWidth: 1,
-        paddingBottom: 30,
+        bottom: 34,
+        left: 20,
+        right: 20,
     },
     editButton: {
-        height: 50,
-        borderRadius: 25,
+        flexDirection: 'row',
+        height: 56,
+        borderRadius: 28,
         justifyContent: 'center',
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+        elevation: 12,
     },
     editButtonText: {
-        fontWeight: 'bold',
-        fontSize: 16,
+        color: '#fff',
+        fontWeight: '700',
+        fontSize: 15,
+        letterSpacing: 0.5,
     },
 });
