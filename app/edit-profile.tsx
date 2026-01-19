@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, Alert, KeyboardAvoidingView, Platform, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile, Profile } from '@/hooks/use-profile';
 import { StrengthMeter } from '@/components/profile/strength-meter';
@@ -20,7 +20,15 @@ import {
     DRINKING_PREFERENCES,
     WORKOUT_FREQUENCY,
     SOCIAL_MEDIA_USAGE,
-    COMMUNICATION_STYLE
+    COMMUNICATION_STYLE,
+    QUALITIES_OPTIONS,
+    HEIGHT_OPTIONS,
+    EDUCATION_OPTIONS,
+    SMOKING_OPTIONS,
+    POLITICS_OPTIONS,
+    RELIGION_OPTIONS,
+    LANGUAGE_OPTIONS,
+    PROMPT_OPTIONS,
 } from '@/constants/profile-options';
 
 export default function EditProfileScreen() {
@@ -46,6 +54,11 @@ export default function EditProfileScreen() {
             case 'workoutFrequency': return WORKOUT_FREQUENCY;
             case 'socialMediaUsage': return SOCIAL_MEDIA_USAGE;
             case 'communicationStyle': return COMMUNICATION_STYLE;
+            case 'height': return HEIGHT_OPTIONS;
+            case 'education': return EDUCATION_OPTIONS;
+            case 'smoking': return SMOKING_OPTIONS;
+            case 'politics': return POLITICS_OPTIONS;
+            case 'religion': return RELIGION_OPTIONS;
             default: return [];
         }
     };
@@ -62,6 +75,11 @@ export default function EditProfileScreen() {
             case 'workoutFrequency': return 'Workout Frequency';
             case 'socialMediaUsage': return 'Social Media Usage';
             case 'communicationStyle': return 'Communication Style';
+            case 'height': return 'Height';
+            case 'education': return 'Education Level';
+            case 'smoking': return 'Smoking';
+            case 'politics': return 'Politics';
+            case 'religion': return 'Religion';
             default: return '';
         }
     };
@@ -193,21 +211,33 @@ export default function EditProfileScreen() {
         if (!formData) return 0;
         let score = 0;
 
-        // Basic Info (30%)
-        if (formData.firstName && formData.lastName) score += 10;
-        if (formData.bio) score += 10;
-        if (formData.profilePhoto) score += 10;
+        // Basic Info (20%)
+        if (formData.firstName && formData.lastName) score += 7;
+        if (formData.bio || formData.aboutMe) score += 7;
+        if (formData.profilePhoto) score += 6;
 
-        // Uni Life (20%)
-        if (formData.university) score += 10;
-        if (formData.course && formData.yearOfStudy) score += 10;
+        // Uni Life (15%)
+        if (formData.university) score += 8;
+        if (formData.course && formData.yearOfStudy) score += 7;
 
-        // Vibe (30%)
-        if (formData.interests && formData.interests.length > 0) score += 10;
-        if (formData.zodiacSign) score += 5;
-        if (formData.personalityType) score += 5;
-        if (formData.loveLanguage) score += 5;
-        if (formData.photos && formData.photos.length > 0) score += 5;
+        // Vibe (25%)
+        if (formData.interests && formData.interests.length > 0) score += 5;
+        if (formData.zodiacSign) score += 3;
+        if (formData.personalityType) score += 3;
+        if (formData.loveLanguage) score += 3;
+        if (formData.photos && formData.photos.length > 0) score += 3;
+        if (formData.qualities && formData.qualities.length > 0) score += 4;
+        if (formData.prompts && formData.prompts.length > 0) score += 4;
+
+        // Know More (20%)
+        if (formData.height) score += 3;
+        if (formData.education) score += 3;
+        if (formData.workoutFrequency) score += 2;
+        if (formData.smoking) score += 2;
+        if (formData.lookingFor) score += 3;
+        if (formData.politics) score += 2;
+        if (formData.religion) score += 3;
+        if (formData.languages && formData.languages.length > 0) score += 2;
 
         // Socials (20%)
         if (formData.instagram) score += 10;
@@ -544,6 +574,168 @@ export default function EditProfileScreen() {
                                 >
                                     <Ionicons name="arrow-up" size={24} color="white" />
                                 </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* Qualities */}
+                    <View style={styles.section}>
+                        {renderSectionHeader("MY QUALITIES")}
+                        <Text style={[styles.helperText, { color: colors.muted, marginBottom: 16, marginTop: -4 }]}>
+                            Select up to 5 qualities that describe you
+                        </Text>
+                        <View style={[styles.inputGroup, { backgroundColor: colors.card, padding: 16 }]}>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                {QUALITIES_OPTIONS.map((quality) => {
+                                    const isSelected = formData.qualities?.includes(quality.value);
+                                    const canSelect = (formData.qualities?.length || 0) < 5 || isSelected;
+                                    return (
+                                        <TouchableOpacity
+                                            key={quality.value}
+                                            onPress={() => {
+                                                if (isSelected) {
+                                                    handleChange('qualities', formData.qualities?.filter(q => q !== quality.value) || []);
+                                                } else if (canSelect) {
+                                                    handleChange('qualities', [...(formData.qualities || []), quality.value]);
+                                                }
+                                            }}
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                backgroundColor: isSelected ? colors.primary + '20' : colors.background,
+                                                paddingHorizontal: 14,
+                                                paddingVertical: 10,
+                                                borderRadius: 20,
+                                                borderWidth: 1,
+                                                borderColor: isSelected ? colors.primary : colors.border,
+                                                opacity: canSelect ? 1 : 0.5,
+                                            }}
+                                        >
+                                            <Text style={{ marginRight: 6 }}>{quality.emoji}</Text>
+                                            <Text style={{ color: isSelected ? colors.primary : colors.foreground, fontWeight: isSelected ? '600' : '400' }}>{quality.label}</Text>
+                                            {isSelected && <Ionicons name="checkmark" size={16} color={colors.primary} style={{ marginLeft: 6 }} />}
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* Prompts */}
+                    <View style={styles.section}>
+                        {renderSectionHeader("PROMPTS")}
+                        <Text style={[styles.helperText, { color: colors.muted, marginBottom: 16, marginTop: -4 }]}>
+                            Answer these prompts to show your personality
+                        </Text>
+                        <View style={[styles.inputGroup, { backgroundColor: colors.card }]}>
+                            {PROMPT_OPTIONS.map((prompt, index) => {
+                                const currentPrompt = formData.prompts?.find(p => p.promptId === prompt.id);
+                                return (
+                                    <View key={prompt.id} style={[styles.inputRow, { flexDirection: 'column', alignItems: 'flex-start', borderBottomColor: index < PROMPT_OPTIONS.length - 1 ? colors.border : 'transparent' }]}>
+                                        <Text style={[styles.label, { color: colors.primary, fontWeight: '600', width: '100%', marginBottom: 8 }]}>{prompt.label}</Text>
+                                        <TextInput
+                                            style={[styles.input, { color: colors.foreground, width: '100%', minHeight: 60 }]}
+                                            value={currentPrompt?.response || ''}
+                                            onChangeText={(text) => {
+                                                const newPrompts = [...(formData.prompts || [])];
+                                                const existingIndex = newPrompts.findIndex(p => p.promptId === prompt.id);
+                                                if (existingIndex >= 0) {
+                                                    newPrompts[existingIndex] = { promptId: prompt.id, response: text };
+                                                } else {
+                                                    newPrompts.push({ promptId: prompt.id, response: text });
+                                                }
+                                                handleChange('prompts', newPrompts);
+                                            }}
+                                            placeholder="Write your response..."
+                                            placeholderTextColor={colors.muted}
+                                            multiline
+                                            maxLength={150}
+                                        />
+                                        <Text style={{ color: colors.muted, fontSize: 12, marginTop: 4 }}>{(currentPrompt?.response?.length || 0)}/150</Text>
+                                    </View>
+                                );
+                            })}
+                        </View>
+                    </View>
+
+                    {/* About Me */}
+                    <View style={styles.section}>
+                        {renderSectionHeader("MORE ABOUT ME")}
+                        <View style={[styles.inputGroup, { backgroundColor: colors.card }]}>
+                            <View style={styles.inputRow}>
+                                <TextInput
+                                    style={[styles.input, { color: colors.foreground, minHeight: 100, paddingTop: 12 }]}
+                                    value={formData.aboutMe}
+                                    onChangeText={(text) => handleChange('aboutMe', text)}
+                                    placeholder="Share a bit more about yourself, your passions, goals..."
+                                    placeholderTextColor={colors.muted}
+                                    multiline
+                                    textAlignVertical="top"
+                                    maxLength={500}
+                                />
+                            </View>
+                        </View>
+                        <Text style={[styles.helperText, { color: colors.muted }]}>{(formData.aboutMe?.length || 0)}/500</Text>
+                    </View>
+
+                    {/* Know More About Me */}
+                    <View style={styles.section}>
+                        {renderSectionHeader("GET TO KNOW ME")}
+                        <View style={[styles.inputGroup, { backgroundColor: colors.card }]}>
+                            {[
+                                { label: 'Height', field: 'height' },
+                                { label: 'Education', field: 'education' },
+                                { label: 'Smoking', field: 'smoking' },
+                                { label: 'Politics', field: 'politics' },
+                                { label: 'Religion', field: 'religion' },
+                            ].map((item, index, arr) => (
+                                <TouchableOpacity
+                                    key={item.field}
+                                    style={[styles.inputRow, index < arr.length - 1 && { borderBottomColor: colors.border }]}
+                                    onPress={() => setActiveField(item.field)}
+                                >
+                                    <Text style={[styles.label, { color: colors.foreground }]}>{item.label}</Text>
+                                    <View style={styles.selectValueContainer}>
+                                        <Text style={[styles.inputText, { color: formData[item.field as keyof Profile] ? colors.primary : colors.muted }]}>
+                                            {formData[item.field as keyof Profile] as string || 'Select'}
+                                        </Text>
+                                        <Ionicons name="chevron-forward" size={20} color={colors.muted} style={{ marginLeft: 8 }} />
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+
+                    {/* Languages */}
+                    <View style={styles.section}>
+                        {renderSectionHeader("LANGUAGES I SPEAK")}
+                        <View style={[styles.inputGroup, { backgroundColor: colors.card, padding: 16 }]}>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                {LANGUAGE_OPTIONS.map((lang) => {
+                                    const isSelected = formData.languages?.includes(lang);
+                                    return (
+                                        <TouchableOpacity
+                                            key={lang}
+                                            onPress={() => {
+                                                if (isSelected) {
+                                                    handleChange('languages', formData.languages?.filter(l => l !== lang) || []);
+                                                } else {
+                                                    handleChange('languages', [...(formData.languages || []), lang]);
+                                                }
+                                            }}
+                                            style={{
+                                                backgroundColor: isSelected ? colors.primary + '20' : colors.background,
+                                                paddingHorizontal: 14,
+                                                paddingVertical: 10,
+                                                borderRadius: 20,
+                                                borderWidth: 1,
+                                                borderColor: isSelected ? colors.primary : colors.border,
+                                            }}
+                                        >
+                                            <Text style={{ color: isSelected ? colors.primary : colors.foreground, fontWeight: isSelected ? '600' : '400' }}>{lang}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
                             </View>
                         </View>
                     </View>

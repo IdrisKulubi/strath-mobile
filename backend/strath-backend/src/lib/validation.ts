@@ -30,6 +30,19 @@ export const updateProfileSchema = z.object({
     anonymousAvatar: z.string().nullable().optional(),
     isComplete: z.boolean().nullable().optional(),
     profilePhoto: z.string().nullable().optional(),
+    // New enhanced onboarding fields
+    qualities: z.array(z.string()).nullable().optional(),
+    prompts: z.array(z.object({
+        promptId: z.string(),
+        response: z.string().max(150),
+    })).nullable().optional(),
+    aboutMe: z.string().max(500).nullable().optional(),
+    height: z.string().nullable().optional(),
+    education: z.string().nullable().optional(),
+    smoking: z.string().nullable().optional(),
+    politics: z.string().nullable().optional(),
+    religion: z.string().nullable().optional(),
+    languages: z.array(z.string()).nullable().optional(),
 });
 
 export const swipeSchema = z.object({

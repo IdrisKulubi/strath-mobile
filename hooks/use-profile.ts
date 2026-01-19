@@ -39,6 +39,16 @@ export interface Profile {
     anonymousAvatar?: string;
     readReceiptsEnabled?: boolean;
     showActiveStatus?: boolean;
+    // New enhanced profile fields
+    qualities?: string[];
+    prompts?: { promptId: string; response: string }[];
+    aboutMe?: string;
+    height?: string;
+    education?: string;
+    smoking?: string;
+    politics?: string;
+    religion?: string;
+    languages?: string[];
     user?: {
         name: string;
         email: string;

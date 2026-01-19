@@ -22,6 +22,21 @@ const ProfileSchema = z.object({
     photos: z.array(z.string()).nullable().optional(),
     profilePhoto: z.string().nullable().optional(),
     score: z.number().optional(),
+    // New enhanced profile fields
+    qualities: z.array(z.string()).nullable().optional(),
+    prompts: z.array(z.object({
+        promptId: z.string(),
+        response: z.string(),
+    })).nullable().optional(),
+    aboutMe: z.string().nullable().optional(),
+    height: z.string().nullable().optional(),
+    education: z.string().nullable().optional(),
+    smoking: z.string().nullable().optional(),
+    workoutFrequency: z.string().nullable().optional(),
+    lookingFor: z.string().nullable().optional(),
+    politics: z.string().nullable().optional(),
+    religion: z.string().nullable().optional(),
+    languages: z.array(z.string()).nullable().optional(),
     user: z.object({
         id: z.string(),
         name: z.string(),

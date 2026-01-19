@@ -153,6 +153,16 @@ export const profiles = pgTable("profiles", {
     readReceiptsEnabled: boolean("read_receipts_enabled").default(true),
     showActiveStatus: boolean("show_active_status").default(true),
     username: text("username"),
+    // New profile fields for enhanced onboarding
+    qualities: json("qualities").$type<string[]>(), // ['humor', 'kindness', 'optimism', 'loyalty', 'sarcasm', etc.]
+    prompts: json("prompts").$type<{ promptId: string; response: string }[]>(), // Array of prompt responses
+    aboutMe: text("about_me"), // Personal bio/description
+    height: text("height"), // e.g., "5'10\""
+    education: text("education"), // 'high_school', 'bachelors', 'masters', 'phd'
+    smoking: text("smoking"), // 'yes', 'no', 'sometimes'
+    politics: text("politics"), // 'liberal', 'conservative', 'moderate', 'prefer_not_to_say'
+    religion: text("religion"), // Open text field
+    languages: json("languages").$type<string[]>(), // ['English', 'Spanish', 'French', etc.]
 }, (table) => ({
     userIdIdx: index("profile_user_id_idx").on(table.userId),
     isVisibleIdx: index("profile_is_visible_idx").on(table.isVisible),
@@ -161,6 +171,9 @@ export const profiles = pgTable("profiles", {
     completedIdx: index("profile_completed_idx").on(table.profileCompleted),
     usernameIdx: index("profile_username_idx").on(table.username),
     anonymousIdx: index("profile_anonymous_idx").on(table.anonymous),
+    educationIdx: index("profile_education_idx").on(table.education),
+    smokingIdx: index("profile_smoking_idx").on(table.smoking),
+    politicsIdx: index("profile_politics_idx").on(table.politics),
 }));
 
 // Swipes/Likes

@@ -11,9 +11,25 @@ import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { DiscoverProfile } from '@/hooks/use-discover';
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import { GraduationCap, MapPin, CalendarBlank, User, X } from 'phosphor-react-native';
+import {
+    GraduationCap,
+    MapPin,
+    CalendarBlank,
+    User,
+    X,
+    Ruler,
+    Dumbbell,
+    Cigarette,
+    Heart,
+    Sparkles,
+    Globe,
+    Church,
+} from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { forwardRef, useCallback, useMemo } from 'react';
+import { QualityBadge } from '@/components/ui/quality-badge';
+import { PromptCard } from '@/components/ui/prompt-card';
+import { ProfileInfoRow } from '@/components/ui/profile-info-row';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PHOTO_SIZE = SCREEN_WIDTH - 40;
@@ -25,7 +41,7 @@ interface ProfileDetailSheetProps {
 
 export const ProfileDetailSheet = forwardRef<BottomSheetModal, ProfileDetailSheetProps>(
     ({ profile, onClose }, ref) => {
-        const { colors } = useTheme();
+        const { colors, isDark } = useTheme();
         const insets = useSafeAreaInsets();
 
         const snapPoints = useMemo(() => ['85%'], []);
@@ -162,6 +178,140 @@ export const ProfileDetailSheet = forwardRef<BottomSheetModal, ProfileDetailShee
                             </View>
                         </View>
                     )}
+
+                    {/* Qualities */}
+                    {(profile as any)?.qualities && (profile as any).qualities.length > 0 && (
+                        <View style={styles.section}>
+                            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                                Qualities
+                            </Text>
+                            <View style={styles.qualitiesContainer}>
+                                {(profile as any).qualities.map((quality: string, index: number) => (
+                                    <QualityBadge
+                                        key={index}
+                                        quality={quality}
+                                        isDark={isDark}
+                                    />
+                                ))}
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Prompts */}
+                    {(profile as any)?.prompts && (profile as any).prompts.length > 0 && (
+                        <View style={styles.section}>
+                            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                                About Me
+                            </Text>
+                            {(profile as any).prompts.map((prompt: any, index: number) => (
+                                <PromptCard
+                                    key={index}
+                                    promptId={prompt.promptId}
+                                    response={prompt.response}
+                                    isDark={isDark}
+                                />
+                            ))}
+                        </View>
+                    )}
+
+                    {/* About Me (New Field) */}
+                    {(profile as any)?.aboutMe && (
+                        <View style={styles.section}>
+                            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                                About Them
+                            </Text>
+                            <Text style={[styles.bioText, { color: colors.mutedForeground }]}>
+                                {(profile as any).aboutMe}
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* Know More About Me - Info Rows */}
+                    {((profile as any)?.height ||
+                        (profile as any)?.education ||
+                        (profile as any)?.smoking ||
+                        (profile as any)?.lookingFor ||
+                        (profile as any)?.politics ||
+                        (profile as any)?.religion ||
+                        (profile as any)?.languages) && (
+                        <View style={styles.section}>
+                            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                                Get to Know Them
+                            </Text>
+
+                            {(profile as any)?.height && (
+                                <ProfileInfoRow
+                                    icon={<Ruler size={20} color="#ec4899" />}
+                                    label="Height"
+                                    value={(profile as any).height}
+                                    isDark={isDark}
+                                />
+                            )}
+
+                            {(profile as any)?.education && (
+                                <ProfileInfoRow
+                                    icon={<GraduationCap size={20} color="#3b82f6" />}
+                                    label="Education"
+                                    value={(profile as any).education}
+                                    isDark={isDark}
+                                />
+                            )}
+
+                            {(profile as any)?.workoutFrequency && (
+                                <ProfileInfoRow
+                                    icon={<Dumbbell size={20} color="#10b981" />}
+                                    label="Exercise"
+                                    value={(profile as any).workoutFrequency}
+                                    isDark={isDark}
+                                />
+                            )}
+
+                            {(profile as any)?.smoking && (
+                                <ProfileInfoRow
+                                    icon={<Cigarette size={20} color="#f97316" />}
+                                    label="Smoking"
+                                    value={(profile as any).smoking}
+                                    isDark={isDark}
+                                />
+                            )}
+
+                            {(profile as any)?.lookingFor && (
+                                <ProfileInfoRow
+                                    icon={<Heart size={20} color="#ef4444" />}
+                                    label="Looking For"
+                                    value={(profile as any).lookingFor}
+                                    isDark={isDark}
+                                />
+                            )}
+
+                            {(profile as any)?.politics && (
+                                <ProfileInfoRow
+                                    icon={<Sparkles size={20} color="#8b5cf6" />}
+                                    label="Politics"
+                                    value={(profile as any).politics}
+                                    isDark={isDark}
+                                />
+                            )}
+
+                            {(profile as any)?.religion && (
+                                <ProfileInfoRow
+                                    icon={<Church size={20} color="#06b6d4" />}
+                                    label="Religion"
+                                    value={(profile as any).religion}
+                                    isDark={isDark}
+                                />
+                            )}
+
+                            {(profile as any)?.languages && (profile as any).languages.length > 0 && (
+                                <ProfileInfoRow
+                                    icon={<Globe size={20} color="#14b8a6" />}
+                                    label="Languages"
+                                    value={(profile as any).languages}
+                                    isDark={isDark}
+                                />
+                            )}
+                        </View>
+                    )}
                 </BottomSheetScrollView>
             </BottomSheetModal>
         );
@@ -238,5 +388,10 @@ const styles = StyleSheet.create({
     interestText: {
         fontSize: 14,
         fontWeight: '500',
+    },
+    qualitiesContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
     },
 });

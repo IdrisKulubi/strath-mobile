@@ -16,7 +16,7 @@ export interface OnboardingData {
     // Phase 3: Vibe Check
     interests: string[];
 
-    // Phase 4: Deep Dive
+    // Phase 4: Deep Dive (Original)
     zodiacSign: string;
     personalityType: string;
     loveLanguage: string;
@@ -26,7 +26,24 @@ export interface OnboardingData {
     socialMediaUsage: string;
     communicationStyle: string;
 
-    // Phase 5: Social Connect
+    // Phase 4: Qualities (NEW)
+    qualities: string[]; // ['humor', 'kindness', 'optimism', 'loyalty', 'sarcasm', etc.]
+
+    // Phase 5: Prompts (NEW)
+    prompts: { promptId: string; response: string }[];
+
+    // Phase 6: About Me (NEW)
+    aboutMe: string;
+
+    // Phase 7: Know More About Me (NEW)
+    height: string;
+    education: string;
+    smoking: string;
+    politics: string;
+    religion: string;
+    languages: string[];
+
+    // Phase 5/Social: Social Connect (ORIGINAL)
     instagram: string;
     spotify: string;
     snapchat: string;

@@ -4,23 +4,29 @@ import { useRouter } from 'expo-router';
 import { OnboardingData } from '../../components/digital-dna/types';
 import Phase1IDCard from '../../components/digital-dna/Phase1IDCard';
 import Phase2ProfileEssentials from '../../components/digital-dna/Phase2ProfileEssentials';
-import Phase3VibeCheck from '../../components/digital-dna/Phase2VibeCheck'; // Renamed but keeping current file
-import Phase4DeepDive from '../../components/digital-dna/Phase3DeepDive'; // Renamed but keeping current file
+import Phase3VibeCheck from '../../components/digital-dna/Phase2VibeCheck';
+import Phase4DeepDive from '../../components/digital-dna/Phase3DeepDive';
+import { Phase4Qualities } from '../../components/digital-dna/Phase4Qualities';
+import { Phase5Prompts } from '../../components/digital-dna/Phase5Prompts';
+import { Phase6AboutMe } from '../../components/digital-dna/Phase6AboutMe';
+import { Phase7KnowMore } from '../../components/digital-dna/Phase7KnowMore';
 import Phase5SocialConnect from '../../components/digital-dna/Phase5SocialConnect';
-import Phase6Launch from '../../components/digital-dna/Phase5Launch'; // Renamed but keeping current file
+import Phase6Launch from '../../components/digital-dna/Phase5Launch';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/theme';
 import { useImageUpload } from '@/hooks/use-image-upload';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function OnboardingScreen() {
     const router = useRouter();
+    const { isDark } = useTheme();
     const [phase, setPhase] = useState(1);
     const progressAnim = new Animated.Value(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { uploadImage } = useImageUpload();
 
     const [formData, setFormData] = useState<OnboardingData>({
-        // Phase 1
+        // Phase 1: ID Card
         firstName: '',
         lastName: '',
         university: 'Strathmore University',
@@ -28,13 +34,13 @@ export default function OnboardingScreen() {
         yearOfStudy: '',
         age: '',
         gender: '',
-        // Phase 2
+        // Phase 2: Profile Essentials
         bio: '',
         lookingFor: '',
         photos: [],
-        // Phase 3
+        // Phase 3: Vibe Check
         interests: [],
-        // Phase 4
+        // Phase 4: Deep Dive
         zodiacSign: '',
         personalityType: '',
         loveLanguage: '',
@@ -43,7 +49,20 @@ export default function OnboardingScreen() {
         workoutFrequency: '',
         socialMediaUsage: '',
         communicationStyle: '',
-        // Phase 5
+        // Phase 4: Qualities (NEW)
+        qualities: [],
+        // Phase 5: Prompts (NEW)
+        prompts: [],
+        // Phase 6: About Me (NEW)
+        aboutMe: '',
+        // Phase 7: Know More About Me (NEW)
+        height: '',
+        education: '',
+        smoking: '',
+        politics: '',
+        religion: '',
+        languages: [],
+        // Phase 8: Social Connect
         instagram: '',
         spotify: '',
         snapchat: '',
@@ -62,20 +81,26 @@ export default function OnboardingScreen() {
         }).start();
     }, [phase]);
 
-    // Dynamic gradient colors based on phase (6 phases)
+    // Dynamic gradient colors based on phase (9 phases)
     const getGradientColors = (): [string, string, ...string[]] => {
         switch (phase) {
-            case 1: // ID Card - Deep purple to dark purple
+            case 1: // ID Card
                 return [Colors.dark.backgroundGradientStart, Colors.dark.backgroundGradientEnd, '#0f0820'];
-            case 2: // Profile Essentials - Purple with pink glow
+            case 2: // Profile Essentials
                 return [Colors.dark.backgroundGradientStart, '#2d1347', Colors.dark.backgroundGradientEnd];
-            case 3: // Vibe Check - Brighter purple
+            case 3: // Vibe Check
                 return ['#3d1b5f', Colors.dark.backgroundGradientStart, '#1a0d2e'];
-            case 4: // Deep Dive - Darker purple with magenta
+            case 4: // Deep Dive
                 return ['#2d1b47', '#3d1347', '#2d0d3e'];
-            case 5: // Social Connect - Vibrant gradient
-                return ['#4d1b67', Colors.dark.backgroundGradientStart, Colors.dark.backgroundGradientEnd];
-            case 6: // Launch - Celebratory pink-purple
+            case 5: // Qualities
+                return ['#4d1b5f', Colors.dark.backgroundGradientStart, '#2d0d3e'];
+            case 6: // Prompts
+                return ['#5d1b67', Colors.dark.backgroundGradientStart, '#3d1347'];
+            case 7: // About Me
+                return ['#3d1347', Colors.dark.backgroundGradientStart, '#2d0d3e'];
+            case 8: // Know More
+                return ['#4d1b5f', '#3d1347', Colors.dark.backgroundGradientEnd];
+            case 9: // Social Connect & Launch
                 return ['#5d1b77', '#3d1b5f', Colors.dark.backgroundGradientEnd];
             default:
                 return [Colors.dark.backgroundGradientStart, Colors.dark.backgroundGradientEnd, '#1a0d2e'];
@@ -87,7 +112,7 @@ export default function OnboardingScreen() {
     };
 
     const handleNext = async () => {
-        if (phase < 6) {
+        if (phase < 9) {
             setPhase(phase + 1);
         } else {
             await submitData();
@@ -98,6 +123,7 @@ export default function OnboardingScreen() {
         if (phase > 1) {
             setPhase(phase - 1);
         }
+    };
     };
 
     const submitData = async () => {
@@ -176,9 +202,57 @@ export default function OnboardingScreen() {
             case 4:
                 return <Phase4DeepDive {...props} />;
             case 5:
-                return <Phase5SocialConnect {...props} />;
+                return (
+                    <Phase4Qualities
+                        selectedQualities={formData.qualities}
+                        onSelect={(qualities) => updateData('qualities', qualities)}
+                        isDark={isDark}
+                    />
+                );
             case 6:
-                return <Phase6Launch {...props} />;
+                return (
+                    <Phase5Prompts
+                        prompts={formData.prompts}
+                        onUpdate={(prompts) => updateData('prompts', prompts)}
+                        isDark={isDark}
+                    />
+                );
+            case 7:
+                return (
+                    <Phase6AboutMe
+                        aboutMe={formData.aboutMe}
+                        onUpdate={(aboutMe) => updateData('aboutMe', aboutMe)}
+                        isDark={isDark}
+                    />
+                );
+            case 8:
+                return (
+                    <Phase7KnowMore
+                        data={{
+                            height: formData.height,
+                            exercise: formData.workoutFrequency,
+                            education: formData.education,
+                            smoking: formData.smoking,
+                            lookingFor: formData.lookingFor,
+                            politics: formData.politics,
+                            religion: formData.religion,
+                            languages: formData.languages,
+                        }}
+                        onUpdate={(updates) => {
+                            if (updates.height !== undefined) updateData('height', updates.height);
+                            if (updates.exercise !== undefined) updateData('workoutFrequency', updates.exercise);
+                            if (updates.education !== undefined) updateData('education', updates.education);
+                            if (updates.smoking !== undefined) updateData('smoking', updates.smoking);
+                            if (updates.lookingFor !== undefined) updateData('lookingFor', updates.lookingFor);
+                            if (updates.politics !== undefined) updateData('politics', updates.politics);
+                            if (updates.religion !== undefined) updateData('religion', updates.religion);
+                            if (updates.languages !== undefined) updateData('languages', updates.languages);
+                        }}
+                        isDark={isDark}
+                    />
+                );
+            case 9:
+                return <Phase5SocialConnect {...props} />;
             default:
                 return null;
         }
@@ -197,9 +271,9 @@ export default function OnboardingScreen() {
                 {renderPhase()}
             </View>
 
-            {/* Enhanced Progress Indicator */}
+            {/* Enhanced Progress Indicator - 9 phases */}
             <View style={styles.progressContainer}>
-                {[1, 2, 3, 4, 5, 6].map((step) => (
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((step) => (
                     <View
                         key={step}
                         style={[

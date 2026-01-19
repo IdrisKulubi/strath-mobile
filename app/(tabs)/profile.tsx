@@ -9,6 +9,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Skeleton } from '@/components/ui/skeleton';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { QualityBadge } from '@/components/ui/quality-badge';
+import { PromptCard } from '@/components/ui/prompt-card';
+import {
+    Ruler,
+    Barbell,
+    GraduationCap,
+    Cigarette,
+    Heart,
+    Sparkle,
+    Globe,
+    Church,
+} from 'phosphor-react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -22,21 +34,33 @@ export default function ProfileScreen() {
         if (!profile) return 0;
         let score = 0;
 
-        // Basic Info (30%)
-        if (profile.firstName && profile.lastName) score += 10;
-        if (profile.bio) score += 10;
-        if (profile.profilePhoto) score += 10;
+        // Basic Info (20%)
+        if (profile.firstName && profile.lastName) score += 7;
+        if (profile.bio || profile.aboutMe) score += 7;
+        if (profile.profilePhoto) score += 6;
 
-        // Uni Life (20%)
-        if (profile.university) score += 10;
-        if (profile.course && profile.yearOfStudy) score += 10;
+        // Uni Life (15%)
+        if (profile.university) score += 8;
+        if (profile.course && profile.yearOfStudy) score += 7;
 
-        // Vibe (30%)
-        if (profile.interests && profile.interests.length > 0) score += 10;
-        if (profile.zodiacSign) score += 5;
-        if (profile.personalityType) score += 5;
-        if (profile.loveLanguage) score += 5;
-        if (profile.photos && profile.photos.length > 0) score += 5;
+        // Vibe (25%)
+        if (profile.interests && profile.interests.length > 0) score += 5;
+        if (profile.zodiacSign) score += 3;
+        if (profile.personalityType) score += 3;
+        if (profile.loveLanguage) score += 3;
+        if (profile.photos && profile.photos.length > 0) score += 3;
+        if (profile.qualities && profile.qualities.length > 0) score += 4;
+        if (profile.prompts && profile.prompts.length > 0) score += 4;
+
+        // Know More (20%)
+        if (profile.height) score += 3;
+        if (profile.education) score += 3;
+        if (profile.workoutFrequency) score += 2;
+        if (profile.smoking) score += 2;
+        if (profile.lookingFor) score += 3;
+        if (profile.politics) score += 2;
+        if (profile.religion) score += 3;
+        if (profile.languages && profile.languages.length > 0) score += 2;
 
         // Socials (20%)
         if (profile.instagram) score += 10;
@@ -306,7 +330,174 @@ export default function ProfileScreen() {
                     </View>
                 </Animated.View>
 
-                {/* Socials Section */}
+                {/* Qualities Section */}
+                {profile?.qualities && profile.qualities.length > 0 && (
+                    <Animated.View
+                        entering={FadeInDown.delay(550).springify()}
+                        style={[
+                            styles.card,
+                            {
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                                borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                            },
+                            !isDark && styles.cardLightShadow
+                        ]}
+                    >
+                        <View style={styles.cardHeader}>
+                            <View style={[styles.cardIcon, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.1)' }]}>
+                                <Ionicons name="heart" size={16} color="#10b981" />
+                            </View>
+                            <Text style={[styles.cardTitle, { color: isDark ? 'rgba(255,255,255,0.6)' : colors.muted }]}>
+                                MY QUALITIES
+                            </Text>
+                        </View>
+                        <View style={styles.qualitiesContainer}>
+                            {profile.qualities.map((quality: string, index: number) => (
+                                <QualityBadge key={index} quality={quality} />
+                            ))}
+                        </View>
+                    </Animated.View>
+                )}
+
+                {/* Prompts Section */}
+                {profile?.prompts && profile.prompts.length > 0 && (
+                    <Animated.View
+                        entering={FadeInDown.delay(575).springify()}
+                        style={[
+                            styles.card,
+                            {
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                                borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                            },
+                            !isDark && styles.cardLightShadow
+                        ]}
+                    >
+                        <View style={styles.cardHeader}>
+                            <View style={[styles.cardIcon, { backgroundColor: isDark ? 'rgba(249, 115, 22, 0.2)' : 'rgba(249, 115, 22, 0.1)' }]}>
+                                <Ionicons name="chatbubble-ellipses" size={16} color="#f97316" />
+                            </View>
+                            <Text style={[styles.cardTitle, { color: isDark ? 'rgba(255,255,255,0.6)' : colors.muted }]}>
+                                MY PROMPTS
+                            </Text>
+                        </View>
+                        <View style={{ gap: 12 }}>
+                            {profile.prompts.map((prompt: { promptId: string; response: string }, index: number) => (
+                                <PromptCard key={index} promptId={prompt.promptId} response={prompt.response} />
+                            ))}
+                        </View>
+                    </Animated.View>
+                )}
+
+                {/* About Me Section (new field) */}
+                {profile?.aboutMe && (
+                    <Animated.View
+                        entering={FadeInDown.delay(585).springify()}
+                        style={[
+                            styles.card,
+                            {
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                                borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                            },
+                            !isDark && styles.cardLightShadow
+                        ]}
+                    >
+                        <View style={styles.cardHeader}>
+                            <View style={[styles.cardIcon, { backgroundColor: isDark ? 'rgba(168, 85, 247, 0.2)' : 'rgba(168, 85, 247, 0.1)' }]}>
+                                <Ionicons name="document-text" size={16} color="#a855f7" />
+                            </View>
+                            <Text style={[styles.cardTitle, { color: isDark ? 'rgba(255,255,255,0.6)' : colors.muted }]}>
+                                MORE ABOUT ME
+                            </Text>
+                        </View>
+                        <Text style={[styles.bioText, { color: colors.foreground }]}>
+                            {profile.aboutMe}
+                        </Text>
+                    </Animated.View>
+                )}
+
+                {/* Know More Section */}
+                {(profile?.height || profile?.education || profile?.workoutFrequency || profile?.smoking || profile?.lookingFor || profile?.politics || profile?.religion || (profile?.languages && profile.languages.length > 0)) && (
+                    <Animated.View
+                        entering={FadeInDown.delay(590).springify()}
+                        style={[
+                            styles.card,
+                            {
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                                borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                            },
+                            !isDark && styles.cardLightShadow
+                        ]}
+                    >
+                        <View style={styles.cardHeader}>
+                            <View style={[styles.cardIcon, { backgroundColor: isDark ? 'rgba(6, 182, 212, 0.2)' : 'rgba(6, 182, 212, 0.1)' }]}>
+                                <Ionicons name="information-circle" size={16} color="#06b6d4" />
+                            </View>
+                            <Text style={[styles.cardTitle, { color: isDark ? 'rgba(255,255,255,0.6)' : colors.muted }]}>
+                                GET TO KNOW ME
+                            </Text>
+                        </View>
+                        <View style={styles.infoGrid}>
+                            {profile?.height && (
+                                <View style={[styles.infoItem, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f9fafb' }]}>
+                                    <Ruler size={18} color={isDark ? '#94a3b8' : '#6b7280'} />
+                                    <Text style={[styles.infoLabel, { color: isDark ? '#94a3b8' : '#6b7280' }]}>Height</Text>
+                                    <Text style={[styles.infoValue, { color: colors.foreground }]}>{profile.height}</Text>
+                                </View>
+                            )}
+                            {profile?.education && (
+                                <View style={[styles.infoItem, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f9fafb' }]}>
+                                    <GraduationCap size={18} color={isDark ? '#94a3b8' : '#6b7280'} />
+                                    <Text style={[styles.infoLabel, { color: isDark ? '#94a3b8' : '#6b7280' }]}>Education</Text>
+                                    <Text style={[styles.infoValue, { color: colors.foreground }]}>{profile.education}</Text>
+                                </View>
+                            )}
+                            {profile?.workoutFrequency && (
+                                <View style={[styles.infoItem, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f9fafb' }]}>
+                                    <Barbell size={18} color={isDark ? '#94a3b8' : '#6b7280'} />
+                                    <Text style={[styles.infoLabel, { color: isDark ? '#94a3b8' : '#6b7280' }]}>Exercise</Text>
+                                    <Text style={[styles.infoValue, { color: colors.foreground }]}>{profile.workoutFrequency}</Text>
+                                </View>
+                            )}
+                            {profile?.smoking && (
+                                <View style={[styles.infoItem, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f9fafb' }]}>
+                                    <Cigarette size={18} color={isDark ? '#94a3b8' : '#6b7280'} />
+                                    <Text style={[styles.infoLabel, { color: isDark ? '#94a3b8' : '#6b7280' }]}>Smoking</Text>
+                                    <Text style={[styles.infoValue, { color: colors.foreground }]}>{profile.smoking}</Text>
+                                </View>
+                            )}
+                            {profile?.lookingFor && (
+                                <View style={[styles.infoItem, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f9fafb' }]}>
+                                    <Heart size={18} color={isDark ? '#94a3b8' : '#6b7280'} />
+                                    <Text style={[styles.infoLabel, { color: isDark ? '#94a3b8' : '#6b7280' }]}>Looking For</Text>
+                                    <Text style={[styles.infoValue, { color: colors.foreground }]}>{profile.lookingFor}</Text>
+                                </View>
+                            )}
+                            {profile?.politics && (
+                                <View style={[styles.infoItem, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f9fafb' }]}>
+                                    <Sparkle size={18} color={isDark ? '#94a3b8' : '#6b7280'} />
+                                    <Text style={[styles.infoLabel, { color: isDark ? '#94a3b8' : '#6b7280' }]}>Politics</Text>
+                                    <Text style={[styles.infoValue, { color: colors.foreground }]}>{profile.politics}</Text>
+                                </View>
+                            )}
+                            {profile?.religion && (
+                                <View style={[styles.infoItem, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f9fafb' }]}>
+                                    <Church size={18} color={isDark ? '#94a3b8' : '#6b7280'} />
+                                    <Text style={[styles.infoLabel, { color: isDark ? '#94a3b8' : '#6b7280' }]}>Religion</Text>
+                                    <Text style={[styles.infoValue, { color: colors.foreground }]}>{profile.religion}</Text>
+                                </View>
+                            )}
+                            {profile?.languages && profile.languages.length > 0 && (
+                                <View style={[styles.infoItem, styles.infoItemFull, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f9fafb' }]}>
+                                    <Globe size={18} color={isDark ? '#94a3b8' : '#6b7280'} />
+                                    <Text style={[styles.infoLabel, { color: isDark ? '#94a3b8' : '#6b7280' }]}>Languages</Text>
+                                    <Text style={[styles.infoValue, { color: colors.foreground }]}>{profile.languages.join(', ')}</Text>
+                                </View>
+                            )}
+                        </View>
+                    </Animated.View>
+                )}
+
+                {/* Socials Section */
                 <Animated.View 
                     entering={FadeInDown.delay(600).springify()}
                     style={[
@@ -599,6 +790,36 @@ const styles = StyleSheet.create({
     },
     noSocialsText: {
         fontSize: 14,
+    },
+    qualitiesContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    infoGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    infoItem: {
+        width: '48%',
+        padding: 12,
+        borderRadius: 12,
+        gap: 4,
+    },
+    infoItemFull: {
+        width: '100%',
+    },
+    infoLabel: {
+        fontSize: 11,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginTop: 4,
+    },
+    infoValue: {
+        fontSize: 14,
+        fontWeight: '500',
     },
     footer: {
         position: 'absolute',
