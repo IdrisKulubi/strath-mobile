@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useMatches, Match } from '@/hooks/use-matches';
+import { useNotificationCounts } from '@/hooks/use-notification-counts';
 import { MatchesListV2 } from '@/components/matches/matches-list-v2';
 import { ArchivedChatsSheet } from '@/components/matches/archived-chats-sheet';
 import * as Haptics from 'expo-haptics';
@@ -19,6 +20,7 @@ export default function MatchesScreen() {
     const queryClient = useQueryClient();
 
     const { data, isLoading, refetch } = useMatches();
+    const { markMatchAsOpened } = useNotificationCounts();
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showArchivedSheet, setShowArchivedSheet] = useState(false);
     
@@ -41,8 +43,10 @@ export default function MatchesScreen() {
 
     const handleMatchPress = useCallback((match: Match) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        // Mark the match as opened to clear the badge
+        markMatchAsOpened(match.id);
         router.push({ pathname: '/chat/[matchId]', params: { matchId: match.id } } as any);
-    }, [router]);
+    }, [router, markMatchAsOpened]);
 
     const handleExplore = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

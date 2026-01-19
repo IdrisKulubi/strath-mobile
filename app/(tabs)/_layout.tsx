@@ -1,13 +1,15 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { useTheme } from '@/hooks/use-theme';
+import { useNotificationCounts, formatBadgeCount } from '@/hooks/use-notification-counts';
 
 export default function TabLayout() {
   const { colors } = useTheme();
+  const { unopenedMatches, unreadMessages } = useNotificationCounts();
 
   return (
     <Tabs
@@ -30,7 +32,16 @@ export default function TabLayout() {
           fontSize: 11,
           fontWeight: '500',
           marginTop: 4,
-        }
+        },
+        tabBarBadgeStyle: {
+          backgroundColor: colors.primary,
+          color: '#fff',
+          fontSize: 10,
+          fontWeight: '600',
+          minWidth: 18,
+          height: 18,
+          borderRadius: 9,
+        },
       }}>
       <Tabs.Screen
         name="profile"
@@ -58,6 +69,7 @@ export default function TabLayout() {
         options={{
           title: 'Matches',
           tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "heart" : "heart-outline"} color={color} />,
+          tabBarBadge: formatBadgeCount(unopenedMatches),
         }}
       />
       <Tabs.Screen
@@ -65,6 +77,7 @@ export default function TabLayout() {
         options={{
           title: 'Chats',
           tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "chatbubble" : "chatbubble-outline"} color={color} />,
+          tabBarBadge: formatBadgeCount(unreadMessages),
         }}
       />
     </Tabs>

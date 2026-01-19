@@ -41,6 +41,7 @@ const MatchSchema = z.object({
     partner: MatchPartnerSchema,
     lastMessage: LastMessageSchema.nullable().optional(),
     unreadCount: z.number().optional().default(0),
+    isNew: z.boolean().optional().default(false), // Whether the user hasn't opened this match yet
     sparkScore: z.number().optional().default(70),
     createdAt: z.string(),
 });

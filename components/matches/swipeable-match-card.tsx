@@ -54,6 +54,7 @@ export function SwipeableMatchCard({ match, onPress, onArchive, onUnmatch }: Swi
 
     const unreadCount = match.unreadCount || 0;
     const hasUnread = unreadCount > 0;
+    const isNew = match.isNew === true; // Whether this is a new/unopened match
     const sparkScore = match.sparkScore || 70;
     const { text: activeStatus, isOnline } = getLastActiveStatus(match.partner.lastActive);
     const interests = match.partner.profile?.interests?.slice(0, 2) || [];
@@ -248,6 +249,13 @@ export function SwipeableMatchCard({ match, onPress, onArchive, onUnmatch }: Swi
                                 <Text style={styles.unreadText}>
                                     {unreadCount > 99 ? '99+' : unreadCount}
                                 </Text>
+                            </View>
+                        )}
+                        
+                        {/* NEW badge for unopened matches */}
+                        {isNew && !hasUnread && (
+                            <View style={styles.newBadge}>
+                                <Text style={styles.newBadgeText}>NEW</Text>
                             </View>
                         )}
                     </View>
@@ -462,6 +470,21 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 10,
         fontWeight: '700',
+    },
+    newBadge: {
+        position: 'absolute',
+        top: -6,
+        right: -8,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+        backgroundColor: '#8b5cf6', // Purple for "new" to differentiate from unread
+    },
+    newBadgeText: {
+        color: '#fff',
+        fontSize: 9,
+        fontWeight: '800',
+        letterSpacing: 0.5,
     },
     contentSection: {
         flex: 1,

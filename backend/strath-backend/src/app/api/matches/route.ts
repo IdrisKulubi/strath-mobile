@@ -119,6 +119,9 @@ export async function GET(req: NextRequest) {
             const partner = isUser1 ? match.user2 : match.user1;
             const currentUserProfile = isUser1 ? match.user1.profile : match.user2.profile;
             
+            // Check if this match is unopened for the current user
+            const isNew = isUser1 ? !match.user1Opened : !match.user2Opened;
+            
             // Calculate compatibility/spark score based on shared interests
             let sparkScore = 70; // Base score
             const partnerInterests = partner.profile?.interests || [];
@@ -147,6 +150,7 @@ export async function GET(req: NextRequest) {
                 },
                 lastMessage: match.messages[0] || null,
                 unreadCount: unreadMap.get(match.id) || 0,
+                isNew, // Whether the user hasn't opened this match yet
                 sparkScore,
                 createdAt: match.createdAt.toISOString(),
             };

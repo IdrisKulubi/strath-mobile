@@ -213,6 +213,8 @@ export const matches = pgTable(
             .references(() => user.id),
         user1Typing: boolean("user1_typing").default(false),
         user2Typing: boolean("user2_typing").default(false),
+        user1Opened: boolean("user1_opened").default(false), // Track if user1 has opened/seen this match
+        user2Opened: boolean("user2_opened").default(false), // Track if user2 has opened/seen this match
         lastMessageAt: timestamp("last_message_at"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at").defaultNow().notNull(),
