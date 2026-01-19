@@ -497,7 +497,7 @@ export default function ProfileScreen() {
                     </Animated.View>
                 )}
 
-                {/* Socials Section */
+                {/* Socials Section */}
                 <Animated.View 
                     entering={FadeInDown.delay(600).springify()}
                     style={[

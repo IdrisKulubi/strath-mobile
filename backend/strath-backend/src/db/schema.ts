@@ -32,11 +32,13 @@ export const user = pgTable(
         profilePhoto: text("profile_photo"),
         phoneNumber: text("phone_number"),
         pushToken: text("push_token"),
+        deletedAt: timestamp("deleted_at"), // Soft delete - when set, account is marked as deleted
     },
     (table) => ({
         emailIdx: index("user_email_idx").on(table.email),
         createdAtIdx: index("user_created_at_idx").on(table.createdAt),
         lastActiveIdx: index("user_last_active_idx").on(table.lastActive),
+        deletedAtIdx: index("user_deleted_at_idx").on(table.deletedAt),
     })
 );
 

@@ -124,7 +124,6 @@ export default function OnboardingScreen() {
             setPhase(phase - 1);
         }
     };
-    };
 
     const submitData = async () => {
         setIsSubmitting(true);

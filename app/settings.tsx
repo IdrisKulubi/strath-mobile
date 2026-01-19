@@ -1,20 +1,48 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Platform, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
+import { authClient } from '@/lib/auth-client';
+import * as SecureStore from 'expo-secure-store';
 
 export default function SettingsScreen() {
     const router = useRouter();
     const { colors, isDark, toggleTheme } = useTheme();
     const { data: profile } = useProfile();
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Mock state
     const [dateMode, setDateMode] = useState(true);
     const [incognito, setIncognito] = useState(false);
     const [spotlight, setSpotlight] = useState(false);
     const [pushEnabled, setPushEnabled] = useState(true);
+
+    const clearAllLocalData = async () => {
+        try {
+            // Clear SecureStore items used by auth
+            const keysToDelete = [
+                'strathspace_session_token',
+                'strathspace_session',
+                'strathspace_user',
+                'strathspace.session_token',
+                'strathspace.session',
+                'strathspace.user',
+            ];
+            
+            for (const key of keysToDelete) {
+                try {
+                    await SecureStore.deleteItemAsync(key);
+                } catch (e) {
+                    // Key might not exist, continue
+                }
+            }
+        } catch (error) {
+            console.error('Error clearing local data:', error);
+        }
+    };
 
     const handleLogout = () => {
         Alert.alert(
@@ -25,7 +53,26 @@ export default function SettingsScreen() {
                 {
                     text: "Log Out",
                     style: "destructive",
-                    onPress: () => router.replace('/(auth)/login')
+                    onPress: async () => {
+                        setIsLoggingOut(true);
+                        try {
+                            // Sign out from the server
+                            await authClient.signOut();
+                            
+                            // Clear all local data
+                            await clearAllLocalData();
+                            
+                            // Navigate to login
+                            router.replace('/(auth)/login');
+                        } catch (error) {
+                            console.error('Logout error:', error);
+                            // Even if server signout fails, clear local data and redirect
+                            await clearAllLocalData();
+                            router.replace('/(auth)/login');
+                        } finally {
+                            setIsLoggingOut(false);
+                        }
+                    }
                 }
             ]
         );
@@ -34,15 +81,73 @@ export default function SettingsScreen() {
     const handleDeleteAccount = () => {
         Alert.alert(
             "Delete Account",
-            "This action is irreversible. All your data will be permanently removed.",
+            "Are you sure you want to delete your account? You won't be able to log back in to this account, but you can create a new one with a different email.",
             [
                 { text: "Cancel", style: "cancel" },
                 {
                     text: "Delete",
                     style: "destructive",
                     onPress: () => {
-                        Alert.alert("Account Deleted", "Your account has been scheduled for deletion.");
-                        router.replace('/(auth)/login');
+                        // Second confirmation
+                        Alert.alert(
+                            "Confirm Deletion",
+                            "This action cannot be undone. Your account will be permanently deactivated.",
+                            [
+                                { text: "Cancel", style: "cancel" },
+                                {
+                                    text: "Yes, Delete My Account",
+                                    style: "destructive",
+                                    onPress: async () => {
+                                        setIsDeleting(true);
+                                        try {
+                                            // Get auth token
+                                            const session = await authClient.getSession();
+                                            const token = session.data?.session?.token;
+
+                                            if (!token) {
+                                                throw new Error('Not authenticated');
+                                            }
+
+                                            // Call delete account API
+                                            const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/user/delete-account`, {
+                                                method: 'DELETE',
+                                                headers: {
+                                                    'Authorization': `Bearer ${token}`,
+                                                    'Content-Type': 'application/json',
+                                                },
+                                            });
+
+                                            if (!response.ok) {
+                                                const errorData = await response.json().catch(() => ({}));
+                                                throw new Error(errorData.error || 'Failed to delete account');
+                                            }
+
+                                            // Clear all local data
+                                            await clearAllLocalData();
+
+                                            Alert.alert(
+                                                "Account Deleted",
+                                                "Your account has been deleted. You can create a new account if you wish.",
+                                                [
+                                                    {
+                                                        text: "OK",
+                                                        onPress: () => router.replace('/(auth)/login')
+                                                    }
+                                                ]
+                                            );
+                                        } catch (error) {
+                                            console.error('Delete account error:', error);
+                                            Alert.alert(
+                                                "Error",
+                                                error instanceof Error ? error.message : "Failed to delete account. Please try again."
+                                            );
+                                        } finally {
+                                            setIsDeleting(false);
+                                        }
+                                    }
+                                }
+                            ]
+                        );
                     }
                 }
             ]
@@ -231,12 +336,28 @@ export default function SettingsScreen() {
 
                 {/* Actions */}
                 <View style={styles.actionsContainer}>
-                    <TouchableOpacity style={styles.actionButton} onPress={handleLogout}>
-                        <Text style={[styles.actionButtonText, { color: colors.mutedForeground }]}>Log Out</Text>
+                    <TouchableOpacity 
+                        style={styles.actionButton} 
+                        onPress={handleLogout}
+                        disabled={isLoggingOut || isDeleting}
+                    >
+                        {isLoggingOut ? (
+                            <ActivityIndicator size="small" color={colors.mutedForeground} />
+                        ) : (
+                            <Text style={[styles.actionButtonText, { color: colors.mutedForeground }]}>Log Out</Text>
+                        )}
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.actionButton} onPress={handleDeleteAccount}>
-                        <Text style={[styles.actionButtonText, { color: colors.mutedForeground }]}>Delete Account</Text>
+                    <TouchableOpacity 
+                        style={styles.actionButton} 
+                        onPress={handleDeleteAccount}
+                        disabled={isLoggingOut || isDeleting}
+                    >
+                        {isDeleting ? (
+                            <ActivityIndicator size="small" color="#ef4444" />
+                        ) : (
+                            <Text style={[styles.actionButtonText, { color: '#ef4444' }]}>Delete Account</Text>
+                        )}
                     </TouchableOpacity>
                 </View>
 
