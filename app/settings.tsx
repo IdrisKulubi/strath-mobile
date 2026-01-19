@@ -325,13 +325,13 @@ export default function SettingsScreen() {
 
                 {/* Legal & Support */}
                 <SettingCard title="Legal & Support">
-                    <SettingItem label="Help Center" type="link" onPress={() => { }} />
+                    <SettingItem label="Help Center" type="link" onPress={() => router.push('/legal?section=help')} />
                     <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                    <SettingItem label="Privacy Policy" type="link" onPress={() => { }} />
+                    <SettingItem label="Privacy Policy" type="link" onPress={() => router.push('/legal?section=privacy')} />
                     <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                    <SettingItem label="Terms of Service" type="link" onPress={() => { }} />
+                    <SettingItem label="Terms of Service" type="link" onPress={() => router.push('/legal?section=terms')} />
                     <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                    <SettingItem label="Licenses" type="link" onPress={() => { }} />
+                    <SettingItem label="Licenses" type="link" onPress={() => router.push('/legal?section=licenses')} />
                 </SettingCard>
 
                 {/* Actions */}
