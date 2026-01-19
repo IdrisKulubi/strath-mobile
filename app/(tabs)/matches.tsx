@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, StyleSheet, StatusBar, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useMatches, Match } from '@/hooks/use-matches';
@@ -13,6 +13,28 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, Archive } from 'phosphor-react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { authClient } from '@/lib/auth-client';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+// Unmatch API call
+async function unmatchUser(matchId: string): Promise<void> {
+    const session = await authClient.getSession();
+    const token = session.data?.session?.token;
+
+    const response = await fetch(`${API_URL}/api/matches/${matchId}`, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+            'Content-Type': 'application/json',
+        },
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to unmatch');
+    }
+}
 
 export default function MatchesScreen() {
     const { colors, colorScheme, isDark } = useTheme();
@@ -67,22 +89,43 @@ export default function MatchesScreen() {
         });
     }, []);
 
+    // Unmatch mutation
+    const unmatchMutation = useMutation({
+        mutationFn: unmatchUser,
+        onSuccess: () => {
+            // Refresh matches list after successful unmatch
+            queryClient.invalidateQueries({ queryKey: ['matches'] });
+            queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+        },
+        onError: (error) => {
+            Alert.alert('Error', error instanceof Error ? error.message : 'Failed to unmatch');
+        },
+    });
+
     const handleUnmatch = useCallback((match: Match) => {
-        // TODO: Implement unmatch API call
         Alert.alert(
-            'Unmatched',
-            `You have unmatched with ${match.partner.name}. This action cannot be undone.`,
-            [{ text: 'OK' }]
+            'Unmatch',
+            `Are you sure you want to unmatch with ${match.partner.name}? This will delete your conversation and cannot be undone.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Unmatch',
+                    style: 'destructive',
+                    onPress: async () => {
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                        // Remove from archived if it was archived
+                        setArchivedMatchIds(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(match.id);
+                            return newSet;
+                        });
+                        // Call the unmatch API
+                        unmatchMutation.mutate(match.id);
+                    },
+                },
+            ]
         );
-        // Remove from archived if it was archived
-        setArchivedMatchIds(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(match.id);
-            return newSet;
-        });
-        // Invalidate matches query to refetch
-        queryClient.invalidateQueries({ queryKey: ['matches'] });
-    }, [queryClient]);
+    }, [unmatchMutation]);
 
     const handleDeleteArchived = useCallback((match: Match) => {
         Alert.alert(
