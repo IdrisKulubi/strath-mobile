@@ -1,13 +1,13 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { reports } from "@/db/schema";
 import { successResponse, errorResponse } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
     try {
         const session = await auth.api.getSession({ headers: req.headers });
-        if (!session || session.user.role !== "admin") {
+        const user = session?.user as { id: string; role?: string } | undefined;
+        if (!session || user?.role !== "admin") {
             return errorResponse(new Error("Unauthorized: Admin only"), 403);
         }
 
