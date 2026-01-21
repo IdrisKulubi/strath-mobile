@@ -21,10 +21,10 @@ import { MessageBubble, ChatInput, ChatHeader } from '@/components/chat';
 import { SafetyToolkitModal } from '@/components/chat/safety-toolkit-modal';
 import { BlockReportModal } from '@/components/discover/block-report-modal';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { 
-    useAnimatedStyle, 
-    useSharedValue, 
-    withSpring, 
+import Animated, {
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
     runOnJS,
     interpolate,
     Extrapolation,
@@ -39,7 +39,7 @@ export default function ChatScreen() {
     const { colors, colorScheme, isDark } = useTheme();
     const router = useRouter();
     const flatListRef = useRef<FlatList>(null);
-    
+
     // Modal states
     const [isSafetyModalVisible, setIsSafetyModalVisible] = useState(false);
     const [blockReportModalVisible, setBlockReportModalVisible] = useState(false);
@@ -88,18 +88,18 @@ export default function ChatScreen() {
     // Safety Actions
     const handleUnmatch = useCallback(() => {
         setIsSafetyModalVisible(false);
-        
+
         Alert.alert(
-            'Unmatch',
-            `Are you sure you want to unmatch with ${partner?.name || 'this person'}?\n\nThis will:\n• Remove them from your matches\n• Delete all your messages\n• This action cannot be undone`,
+            'Disconnect',
+            `Are you sure you want to disconnect from ${partner?.name || 'this person'}?\n\nThis will:\n• Remove them from your connections\n• Delete all your messages\n• This action cannot be undone`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Unmatch',
+                    text: 'Disconnect',
                     style: 'destructive',
                     onPress: () => {
                         if (!matchId) return;
-                        
+
                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                         unmatch(
                             { matchId },
@@ -110,7 +110,7 @@ export default function ChatScreen() {
                                 },
                                 onError: (error) => {
                                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                                    Alert.alert('Error', error.message || 'Failed to unmatch');
+                                    Alert.alert('Error', error.message || 'Failed to disconnect');
                                 },
                             }
                         );
@@ -213,7 +213,7 @@ export default function ChatScreen() {
         return (
             <View style={styles.listHeader}>
                 <Text style={styles.matchedText}>
-                    YOU MATCHED WITH {partner?.profile?.firstName?.toUpperCase() || 'THEM'} ON {dateString}
+                    YOU CONNECTED WITH {partner?.profile?.firstName?.toUpperCase() || 'THEM'} ON {dateString}
                 </Text>
             </View>
         );
@@ -248,7 +248,7 @@ export default function ChatScreen() {
         <View style={styles.emptyContainer}>
             {renderListHeader()}
             <Text className="text-muted-foreground text-center text-base mt-8">
-                No messages yet.{'\n'}Say hi to {partner?.name || 'your match'}! 👋
+                No messages yet.{'\n'}Say hi to {partner?.name || 'your connection'}! 👋
             </Text>
         </View>
     );
@@ -256,15 +256,15 @@ export default function ChatScreen() {
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             {/* Backdrop that shows when swiping */}
-            <Animated.View 
+            <Animated.View
                 style={[
-                    StyleSheet.absoluteFill, 
+                    StyleSheet.absoluteFill,
                     { backgroundColor: '#000' },
                     backdropStyle
-                ]} 
+                ]}
                 pointerEvents="none"
             />
-            
+
             <GestureDetector gesture={swipeGesture}>
                 <Animated.View style={[{ flex: 1 }, screenStyle]}>
                     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>

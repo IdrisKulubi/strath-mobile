@@ -122,9 +122,9 @@ export function MatchModal({
                 <View style={styles.content}>
                     {/* Title */}
                     <Animated.View style={[styles.titleContainer, titleStyle]}>
-                        <Text style={styles.matchText}>It's a Match! 🎉</Text>
+                        <Text style={styles.matchText}>You're Connected! 🎉</Text>
                         <Text style={styles.subText}>
-                            You and {displayName} have liked each other
+                            You and {displayName} want to connect
                         </Text>
                     </Animated.View>
 
@@ -164,7 +164,7 @@ export function MatchModal({
                         </Pressable>
 
                         <Pressable style={styles.keepSwipingButton} onPress={onClose}>
-                            <Text style={styles.keepSwipingText}>Keep Swiping</Text>
+                            <Text style={styles.keepSwipingText}>Keep Exploring</Text>
                         </Pressable>
                     </Animated.View>
                 </View>

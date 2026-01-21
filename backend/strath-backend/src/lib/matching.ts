@@ -1,6 +1,27 @@
 import { db } from "./db";
 import { profiles, swipes, blocks } from "../db/schema";
-import { eq, and, notInArray } from "drizzle-orm";
+import { eq, and, notInArray, inArray, or } from "drizzle-orm";
+
+/**
+ * Get the genders a user wants to see based on their interestedIn preference.
+ * Defaults to opposite gender if not specified.
+ */
+function getTargetGenders(userGender: string | null, interestedIn: string[] | null): string[] {
+    // If user explicitly set their preferences, use those
+    if (interestedIn && interestedIn.length > 0) {
+        return interestedIn;
+    }
+    
+    // Default: show opposite gender (traditional dating app behavior)
+    if (userGender === 'male') {
+        return ['female'];
+    } else if (userGender === 'female') {
+        return ['male'];
+    }
+    
+    // If user hasn't set gender or is 'other', show all genders
+    return ['male', 'female', 'other'];
+}
 
 export async function getRecommendations(userId: string, limit: number = 20, offset: number = 0, vibe: string = 'all') {
     // 1. Get current user profile
@@ -9,6 +30,12 @@ export async function getRecommendations(userId: string, limit: number = 20, off
     });
 
     if (!currentUserProfile) return [];
+    
+    // Get target genders based on user's preferences
+    const targetGenders = getTargetGenders(
+        currentUserProfile.gender,
+        currentUserProfile.interestedIn as string[] | null
+    );
 
     // 2. Get users already swiped or blocked
     const swipedUsers = await db
@@ -33,21 +60,48 @@ export async function getRecommendations(userId: string, limit: number = 20, off
         ...blockedByUsers.map((u) => u.id),
     ];
 
-    // 3. Fetch potential matches
+    // 3. Fetch potential matches (filtered by gender preferences)
+    // Build gender filter - only show profiles whose gender matches what the user is interested in
+    // AND whose interestedIn includes the current user's gender (mutual interest)
     const candidates = await db.query.profiles.findMany({
         where: and(
             notInArray(profiles.userId, excludedIds),
             eq(profiles.isVisible, true),
-            eq(profiles.profileCompleted, true)
+            eq(profiles.profileCompleted, true),
+            // Filter: candidate's gender must be in user's target genders
+            targetGenders.length > 0 
+                ? inArray(profiles.gender, targetGenders)
+                : undefined
         ),
         with: {
             user: true,
         },
-        limit: limit + offset + 20,
+        limit: limit + offset + 50, // Fetch more to account for mutual interest filtering
+    });
+    
+    // Additional filter: Check if the candidate would also be interested in the current user
+    // (mutual interest check for better matching)
+    const filteredCandidates = candidates.filter(candidate => {
+        const candidateInterestedIn = candidate.interestedIn as string[] | null;
+        
+        // If candidate has no preference set, check default behavior
+        if (!candidateInterestedIn || candidateInterestedIn.length === 0) {
+            // Default: opposite gender logic
+            if (candidate.gender === 'male' && currentUserProfile.gender === 'female') return true;
+            if (candidate.gender === 'female' && currentUserProfile.gender === 'male') return true;
+            if (candidate.gender === 'other' || !candidate.gender) return true;
+            if (!currentUserProfile.gender || currentUserProfile.gender === 'other') return true;
+            return false;
+        }
+        
+        // If candidate has preferences, check if current user's gender is included
+        return currentUserProfile.gender 
+            ? candidateInterestedIn.includes(currentUserProfile.gender)
+            : true; // If current user has no gender set, show them anyway
     });
 
     // 4. Scoring Algorithm
-    const scoredCandidates = candidates.map((candidate) => {
+    const scoredCandidates = filteredCandidates.map((candidate) => {
         let score = 0;
 
         // University proximity (Bonus weight)

@@ -60,15 +60,15 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'People',
+          title: 'Connect',
           tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "people" : "people-outline"} color={color} />,
         }}
       />
       <Tabs.Screen
         name="matches"
         options={{
-          title: 'Matches',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "heart" : "heart-outline"} color={color} />,
+          title: 'Connections',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "hand-right" : "hand-right-outline"} color={color} />,
           tabBarBadge: formatBadgeCount(unopenedMatches),
         }}
       />

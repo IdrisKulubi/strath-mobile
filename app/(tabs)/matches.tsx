@@ -45,13 +45,13 @@ export default function MatchesScreen() {
     const { markMatchAsOpened } = useNotificationCounts();
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showArchivedSheet, setShowArchivedSheet] = useState(false);
-    
+
     // For now, archived matches are stored locally
     // In production, this would come from the API
     const [archivedMatchIds, setArchivedMatchIds] = useState<Set<string>>(new Set());
 
     const allMatches = data?.matches ?? [];
-    
+
     // Filter out archived matches from main list
     const matches = allMatches.filter(m => !archivedMatchIds.has(m.id));
     const archivedMatches = allMatches.filter(m => archivedMatchIds.has(m.id));
@@ -104,12 +104,12 @@ export default function MatchesScreen() {
 
     const handleUnmatch = useCallback((match: Match) => {
         Alert.alert(
-            'Unmatch',
-            `Are you sure you want to unmatch with ${match.partner.name}? This will delete your conversation and cannot be undone.`,
+            'Disconnect',
+            `Are you sure you want to disconnect from ${match.partner.name}? This will remove your conversation and cannot be undone.`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Unmatch',
+                    text: 'Disconnect',
                     style: 'destructive',
                     onPress: async () => {
                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -174,10 +174,10 @@ export default function MatchesScreen() {
                             <Heart size={18} color="#fff" weight="fill" />
                         </LinearGradient>
                         <Text style={[styles.headerTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                            Matches
+                            Connections
                         </Text>
                     </View>
-                    
+
                     {/* Archive Button */}
                     <Pressable
                         style={[
@@ -196,7 +196,7 @@ export default function MatchesScreen() {
                         )}
                     </Pressable>
                 </View>
-                
+
                 {matches.length > 0 && (
                     <Animated.View entering={FadeIn}>
                         <Text style={[styles.headerSubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>

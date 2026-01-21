@@ -4,6 +4,13 @@ export const GENDER_OPTIONS = [
     { value: 'other', label: 'Other', emoji: '⚥' },
 ];
 
+// Who the user wants to see/connect with
+export const INTERESTED_IN_OPTIONS = [
+    { value: 'male', label: 'Men', emoji: '♂' },
+    { value: 'female', label: 'Women', emoji: '♀' },
+    { value: 'other', label: 'Everyone', emoji: '⚥' },
+];
+
 export const LOOKING_FOR_OPTIONS = [
     { value: 'friendship', label: 'Friendship', emoji: '🤝' },
     { value: 'dating', label: 'Dating', emoji: '💘' },

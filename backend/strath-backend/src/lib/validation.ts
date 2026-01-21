@@ -43,6 +43,7 @@ export const updateProfileSchema = z.object({
     politics: z.string().nullable().optional(),
     religion: z.string().nullable().optional(),
     languages: z.array(z.string()).nullable().optional(),
+    interestedIn: z.array(z.enum(["male", "female", "other"])).nullable().optional(),
 });
 
 export const swipeSchema = z.object({

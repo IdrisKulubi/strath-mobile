@@ -165,6 +165,7 @@ export const profiles = pgTable("profiles", {
     politics: text("politics"), // 'liberal', 'conservative', 'moderate', 'prefer_not_to_say'
     religion: text("religion"), // Open text field
     languages: json("languages").$type<string[]>(), // ['English', 'Spanish', 'French', etc.]
+    interestedIn: json("interested_in").$type<string[]>(), // ['male', 'female', 'other'] - genders the user wants to see
 }, (table) => ({
     userIdIdx: index("profile_user_id_idx").on(table.userId),
     isVisibleIdx: index("profile_is_visible_idx").on(table.isVisible),

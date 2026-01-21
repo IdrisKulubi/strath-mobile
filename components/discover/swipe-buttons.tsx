@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
-import { Heart, X, Star } from 'phosphor-react-native';
+import { HandWaving, X, Star } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 
 interface SwipeButtonsProps {
@@ -52,7 +52,7 @@ export function SwipeButtons({
                 </Pressable>
             )}
 
-            {/* Like Button - Right side (Larger) */}
+            {/* Connect Button - Right side (Larger) */}
             <Pressable
                 style={({ pressed }) => [
                     styles.button,
@@ -62,7 +62,7 @@ export function SwipeButtons({
                 onPress={() => handlePress(onLike)}
                 disabled={disabled}
             >
-                <Heart size={32} color="#000000" weight="fill" />
+                <HandWaving size={32} color="#000000" weight="fill" />
             </Pressable>
         </View>
     );

@@ -49,6 +49,7 @@ export interface Profile {
     politics?: string;
     religion?: string;
     languages?: string[];
+    interestedIn?: string[]; // Genders the user wants to see: ['male', 'female', 'other']
     user?: {
         name: string;
         email: string;

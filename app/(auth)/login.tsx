@@ -20,8 +20,13 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleLogo } from '@/components/icons/google-logo';
 
+// Demo account credentials for Apple Review
+const DEMO_EMAIL = "demo@strathspace.com";
+const DEMO_PASSWORD = "AppleReview2026!";
+
 export default function LoginScreen() {
     const [loading, setLoading] = useState(false);
+    const [demoLoading, setDemoLoading] = useState(false);
     const router = useRouter();
     const toast = useToast();
 
@@ -50,18 +55,50 @@ export default function LoginScreen() {
         }
     };
 
+    // Demo login for Apple reviewers
+    const handleDemoLogin = async () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setDemoLoading(true);
+
+        try {
+            const result = await signIn.email({
+                email: DEMO_EMAIL,
+                password: DEMO_PASSWORD,
+                callbackURL: "/",
+            });
+
+            if (result.data) {
+                toast.show({
+                    message: 'Welcome, Demo User!',
+                    variant: 'success'
+                });
+                router.replace('/');
+            } else if (result.error) {
+                toast.show({
+                    message: 'Demo login failed. Please try Google Sign-In.',
+                    variant: 'danger'
+                });
+            }
+        } catch (error) {
+            console.error("Demo auth error:", error);
+            toast.show({ message: 'Demo login failed. Please try again.', variant: 'danger' });
+        } finally {
+            setDemoLoading(false);
+        }
+    };
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
-            
+
             <SafeAreaView style={styles.safeArea}>
-                <ScrollView 
+                <ScrollView
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                     bounces={false}
                 >
                     {/* Logo Section */}
-                    <Animated.View 
+                    <Animated.View
                         entering={FadeInDown.delay(100).springify()}
                         style={styles.logoSection}
                     >
@@ -74,7 +111,7 @@ export default function LoginScreen() {
                     </Animated.View>
 
                     {/* Headline Section */}
-                    <Animated.View 
+                    <Animated.View
                         entering={FadeInDown.delay(200).springify()}
                         style={styles.headlineSection}
                     >
@@ -137,14 +174,14 @@ export default function LoginScreen() {
                     </View>
 
                     {/* Bottom Auth Section */}
-                    <Animated.View 
+                    <Animated.View
                         entering={FadeInUp.delay(600).springify()}
                         style={styles.authSection}
                     >
                         {/* Google Sign In Button */}
                         <Button
                             onPress={handleGoogleAuth}
-                            disabled={loading}
+                            disabled={loading || demoLoading}
                             variant="secondary"
                             size="lg"
                             className="w-full h-14 rounded-full bg-white border-0 shadow-lg shadow-black/20"
@@ -159,6 +196,26 @@ export default function LoginScreen() {
                             )}
                         </Button>
 
+                        {/* Demo Login Button - For Apple Review */}
+                        <Pressable
+                            onPress={handleDemoLogin}
+                            disabled={loading || demoLoading}
+                            style={({ pressed }) => [
+                                styles.demoButton,
+                                pressed && styles.demoButtonPressed,
+                                (loading || demoLoading) && styles.demoButtonDisabled,
+                            ]}
+                        >
+                            {demoLoading ? (
+                                <ActivityIndicator color="#6B7280" size="small" />
+                            ) : (
+                                <>
+                                    <Ionicons name="person-circle-outline" size={20} color="#6B7280" />
+                                    <Text style={styles.demoButtonText}>Demo Login (For Review)</Text>
+                                </>
+                            )}
+                        </Pressable>
+
                         {/* Terms Text - Below Button */}
                         <Text style={styles.termsText}>
                             By continuing, you agree to our{' '}
@@ -167,7 +224,7 @@ export default function LoginScreen() {
 
                         {/* Sign In Link - Separate Section */}
                         <View style={styles.signInSection}>
-                            <Pressable 
+                            <Pressable
                                 onPress={handleGoogleAuth}
                                 style={({ pressed }) => [
                                     styles.signInButton,
@@ -344,4 +401,30 @@ const styles = StyleSheet.create({
         color: '#E91E8C',
         fontWeight: '700',
     },
+
+    // Demo Login Button
+    demoButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 25,
+        backgroundColor: '#F0F0F0',
+        gap: 8,
+    },
+    demoButtonPressed: {
+        opacity: 0.7,
+        backgroundColor: '#E5E5E5',
+    },
+    demoButtonDisabled: {
+        opacity: 0.5,
+    },
+    demoButtonText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#6B7280',
+    },
 });
+
