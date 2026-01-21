@@ -216,7 +216,6 @@ export default function LoginScreen() {
                                 <ActivityIndicator color="#6B7280" size="small" />
                             ) : (
                                 <>
-                                    <Ionicons name="person-circle-outline" size={20} color="#6B7280" />
                                     <Text style={styles.demoButtonText}>Demo Login (For Review)</Text>
                                 </>
                             )}

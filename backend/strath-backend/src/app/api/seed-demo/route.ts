@@ -20,44 +20,43 @@ export async function POST(request: NextRequest) {
 
         if (existingUser.length > 0) {
             return NextResponse.json({
+                success: true,
                 message: "Demo account already exists",
                 email: DEMO_EMAIL
             });
         }
 
-        // Hash the password using Better Auth's password utility (uses scrypt by default)
-        const ctx = await auth.$context;
-        const hashedPassword = await ctx.password.hash(DEMO_PASSWORD);
-
-        // Create demo user
-        await db.insert(user).values({
-            id: DEMO_USER_ID,
-            name: "Demo User",
-            email: DEMO_EMAIL,
-            emailVerified: true,
-            role: "user",
-            image: "https://api.dicebear.com/7.x/avataaars/png?seed=demo",
-            profilePhoto: "https://api.dicebear.com/7.x/avataaars/png?seed=demo",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            lastActive: new Date(),
-            isOnline: false,
+        // Use Better Auth's signUpEmail API to create the user properly
+        // This ensures the password is hashed correctly with Better Auth's algorithm
+        const signUpResult = await auth.api.signUpEmail({
+            body: {
+                email: DEMO_EMAIL,
+                password: DEMO_PASSWORD,
+                name: "Demo User",
+            }
         });
 
-        // Create credential account for email/password login
-        await db.insert(account).values({
-            id: `account-${DEMO_USER_ID}`,
-            userId: DEMO_USER_ID,
-            accountId: DEMO_USER_ID,
-            providerId: "credential", // Better Auth uses "credential" for email/password
-            password: hashedPassword,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        });
+        if (!signUpResult?.user) {
+            throw new Error("Failed to create user via Better Auth");
+        }
+
+        const createdUserId = signUpResult.user.id;
+
+        // Update the user with additional fields
+        await db.update(user)
+            .set({
+                emailVerified: true,
+                role: "user",
+                image: "https://api.dicebear.com/7.x/avataaars/png?seed=demo",
+                profilePhoto: "https://api.dicebear.com/7.x/avataaars/png?seed=demo",
+                lastActive: new Date(),
+                isOnline: false,
+            })
+            .where(eq(user.id, createdUserId));
 
         // Create demo profile
         await db.insert(profiles).values({
-            userId: DEMO_USER_ID,
+            userId: createdUserId,
             bio: "Hi! I'm the demo account for Apple reviewers. Feel free to explore the app!",
             course: "Computer Science",
             yearOfStudy: 3,
