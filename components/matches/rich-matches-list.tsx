@@ -81,7 +81,7 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
                 No matches yet
             </Text>
             <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                When you and someone else both like each other, you&apos;ll see them here. Keep swiping!
+                When you and someone else both want to connect, you&apos;ll see them here. Keep exploring!
             </Text>
 
             {onExplore && (

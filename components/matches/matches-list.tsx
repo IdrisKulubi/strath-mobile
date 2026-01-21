@@ -51,7 +51,7 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
                 No matches yet
             </Text>
             <Text className="text-muted-foreground text-center mt-2 px-8">
-                Keep swiping! When you and someone else both like each other, you'll see them here.
+                Keep exploring! When you and someone else both want to connect, you'll see them here.
             </Text>
             {onExplore && (
                 <Pressable

@@ -279,14 +279,14 @@ export function SwipeCard({
                 />
             )}
 
-            {/* FIXED LAYER: LIKE/NOPE Stamps - Sits on top of everything, centered */}
+            {/* FIXED LAYER: CONNECT/PASS Stamps - Sits on top of everything, centered */}
             {isTop && (
                 <View style={styles.stampOverlay} pointerEvents="none">
                     <Animated.View style={[styles.likeStamp, likeStampStyle]}>
-                        <Text style={[styles.stampText, { color: '#34C759' }]}>LIKE</Text>
+                        <Text style={[styles.stampText, { color: '#34C759' }]}>CONNECT</Text>
                     </Animated.View>
                     <Animated.View style={[styles.nopeStamp, nopeStampStyle]}>
-                        <Text style={[styles.stampText, { color: '#FF3B30' }]}>NOPE</Text>
+                        <Text style={[styles.stampText, { color: '#FF3B30' }]}>PASS</Text>
                     </Animated.View>
                 </View>
             )}
@@ -445,11 +445,11 @@ const styles = StyleSheet.create({
     likeStamp: {
         position: 'absolute',
         top: '25%',
-        left: 40,
+        left: 20,
         borderWidth: 4,
         borderColor: '#34C759',
         borderRadius: 8,
-        paddingHorizontal: 12,
+        paddingHorizontal: 10,
         paddingVertical: 4,
         transform: [{ rotate: '-15deg' }],
         minHeight: 50, // Ensure height for text
@@ -457,19 +457,19 @@ const styles = StyleSheet.create({
     nopeStamp: {
         position: 'absolute',
         top: '25%',
-        right: 40,
+        right: 30,
         borderWidth: 4,
         borderColor: '#FF3B30',
         borderRadius: 8,
-        paddingHorizontal: 12,
+        paddingHorizontal: 10,
         paddingVertical: 4,
         transform: [{ rotate: '15deg' }],
         minHeight: 50, // Ensure height for text
     },
     stampText: {
-        fontSize: 32,
+        fontSize: 28,
         fontWeight: '900',
-        lineHeight: 40, // Increased to prevent clipping
+        lineHeight: 36, // Increased to prevent clipping
         textAlign: 'center',
     },
 });
