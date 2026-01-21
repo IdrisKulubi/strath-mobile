@@ -61,16 +61,22 @@ export default function LoginScreen() {
         setDemoLoading(true);
 
         try {
-            // First, try to seed the demo account (in case it doesn't exist)
+            // First, try to seed the demo account (in case it doesn't exist or needs recreation)
             const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
-            await fetch(`${apiUrl}/api/seed-demo`, { method: 'POST' }).catch(() => {});
+            console.log("[Demo Login] Seeding demo account at:", apiUrl);
+            
+            const seedResponse = await fetch(`${apiUrl}/api/seed-demo`, { method: 'POST' });
+            const seedData = await seedResponse.json().catch(() => ({}));
+            console.log("[Demo Login] Seed response:", seedData);
             
             // Now attempt login with email/password
+            console.log("[Demo Login] Attempting signIn.email with:", DEMO_EMAIL);
             const result = await signIn.email({
                 email: DEMO_EMAIL,
                 password: DEMO_PASSWORD,
-                callbackURL: "/",
             });
+
+            console.log("[Demo Login] SignIn result:", result);
 
             if (result.data) {
                 toast.show({
@@ -81,7 +87,7 @@ export default function LoginScreen() {
             } else if (result.error) {
                 console.error("Demo login error:", result.error);
                 toast.show({
-                    message: 'Demo login failed. Please try Google Sign-In.',
+                    message: `Demo login failed: ${result.error.message || 'Unknown error'}`,
                     variant: 'danger'
                 });
             }
