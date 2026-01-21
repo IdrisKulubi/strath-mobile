@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { user, account, profiles } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { hash } from "bcrypt";
+import { auth } from "@/lib/auth";
 
 // Demo account credentials
 const DEMO_EMAIL = "demo@strathspace.com";
@@ -25,8 +25,9 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // Hash the password using bcrypt (should be installed in Next.js projects)
-        const hashedPassword = await hash(DEMO_PASSWORD, 10);
+        // Hash the password using Better Auth's password utility (uses scrypt by default)
+        const ctx = await auth.$context;
+        const hashedPassword = await ctx.password.hash(DEMO_PASSWORD);
 
         // Create demo user
         await db.insert(user).values({
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
             id: `account-${DEMO_USER_ID}`,
             userId: DEMO_USER_ID,
             accountId: DEMO_USER_ID,
-            providerId: "credential",
+            providerId: "credential", // Better Auth uses "credential" for email/password
             password: hashedPassword,
             createdAt: new Date(),
             updatedAt: new Date(),

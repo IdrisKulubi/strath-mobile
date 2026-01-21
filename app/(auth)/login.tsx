@@ -61,6 +61,11 @@ export default function LoginScreen() {
         setDemoLoading(true);
 
         try {
+            // First, try to seed the demo account (in case it doesn't exist)
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
+            await fetch(`${apiUrl}/api/seed-demo`, { method: 'POST' }).catch(() => {});
+            
+            // Now attempt login with email/password
             const result = await signIn.email({
                 email: DEMO_EMAIL,
                 password: DEMO_PASSWORD,
@@ -74,6 +79,7 @@ export default function LoginScreen() {
                 });
                 router.replace('/');
             } else if (result.error) {
+                console.error("Demo login error:", result.error);
                 toast.show({
                     message: 'Demo login failed. Please try Google Sign-In.',
                     variant: 'danger'
