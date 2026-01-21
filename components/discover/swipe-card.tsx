@@ -194,13 +194,14 @@ export function SwipeCard({
                     </View>
                 )}
 
-                {/* Looking For */}
+                {/* Looking For - COMMENTED OUT FOR APP STORE REVIEW (uncomment after approval)
                 <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Text style={[styles.sectionTitle, { color: colors.foreground }]}>I'm looking for</Text>
                     <View style={styles.tagsContainer}>
                         <Tag icon={<Heart size={16} color={colors.foreground} />} label="A long-term relationship" colors={colors} />
                     </View>
                 </View>
+                */}
 
                 {/* Interests */}
                 {interests.length > 0 && (

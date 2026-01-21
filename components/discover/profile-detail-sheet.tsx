@@ -275,6 +275,7 @@ export const ProfileDetailSheet = forwardRef<BottomSheetModal, ProfileDetailShee
                                 />
                             )}
 
+                            {/* Looking For - COMMENTED OUT FOR APP STORE REVIEW (uncomment after approval)
                             {(profile as any)?.lookingFor && (
                                 <ProfileInfoRow
                                     icon={<Heart size={20} color="#ef4444" />}
@@ -283,6 +284,7 @@ export const ProfileDetailSheet = forwardRef<BottomSheetModal, ProfileDetailShee
                                     isDark={isDark}
                                 />
                             )}
+                            */}
 
                             {(profile as any)?.politics && (
                                 <ProfileInfoRow

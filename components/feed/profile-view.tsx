@@ -63,7 +63,7 @@ export function ProfileView({ profile, onLike, onPass }: ProfileViewProps) {
                         </View>
                     )}
 
-                    {/* Looking For Section */}
+                    {/* Looking For Section - COMMENTED OUT FOR APP STORE REVIEW (uncomment after approval)
                     {profile.lookingFor && (
                         <View style={styles.section}>
                             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Looking For</Text>
@@ -73,6 +73,7 @@ export function ProfileView({ profile, onLike, onPass }: ProfileViewProps) {
                             </View>
                         </View>
                     )}
+                    */}
 
                     {/* Interests Section */}
                     {profile.interests && profile.interests.length > 0 && (
