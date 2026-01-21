@@ -186,7 +186,7 @@ export function OpeningLine({ prompts, aboutMe, onUpdate, onComplete }: OpeningL
                         <Animated.View entering={FadeIn.delay(300)} style={styles.tipContainer}>
                             <Lightbulb size={18} color="#f59e0b" weight="fill" />
                             <Text style={styles.tipText}>
-                                Funny, creative answers get more matches!
+                                Funny, creative answers get more connections!
                             </Text>
                         </Animated.View>
                     </Animated.View>

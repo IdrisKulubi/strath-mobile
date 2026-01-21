@@ -64,7 +64,7 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
                 No conversations yet
             </Text>
             <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                Start chatting with your matches!{'\n'}Your conversations will appear here.
+                Start chatting with your connections!{'\n'}Your conversations will appear here.
             </Text>
         </Animated.View>
     );

@@ -79,7 +79,7 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
             </View>
 
             <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                No matches yet
+                No Connections yet
             </Text>
             <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
                 When you and someone else both want to connect, they&apos;ll appear here
@@ -105,7 +105,7 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
             ]}>
                 <Sparkle size={18} color="#f59e0b" weight="fill" />
                 <Text style={[styles.tipText, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                    Pro tip: Complete your profile to get 3x more matches!
+                    Pro tip: Complete your profile to get 3x more connections!
                 </Text>
             </View>
         </View>

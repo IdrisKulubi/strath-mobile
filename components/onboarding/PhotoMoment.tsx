@@ -335,7 +335,7 @@ export function PhotoMoment({ photos, onUpdate, onNext }: PhotoMomentProps) {
                     <Text style={styles.title}>Show your best self</Text>
                     <Text style={styles.subtitle}>
                         Add at least 2 photos to continue.{'\n'}
-                        Tip: Profiles with 4+ photos get 3x more matches! 📸
+                        Tip: Profiles with 4+ photos get 3x more connections! 📸
                     </Text>
 
                     {/* Photo grid */}

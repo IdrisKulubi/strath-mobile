@@ -81,7 +81,7 @@ export function SafetyToolkitModal({
                                             UNMATCH FROM {partnerName.toUpperCase()}
                                         </Text>
                                         <Text style={[styles.optionDesc, { color: mutedColor }]}>
-                                            No longer interested? Remove them from your matches.
+                                            No longer interested? Remove them from your connections.
                                         </Text>
                                     </View>
                                 </Pressable>
@@ -97,7 +97,7 @@ export function SafetyToolkitModal({
                                             BLOCK {partnerName.toUpperCase()}
                                         </Text>
                                         <Text style={[styles.optionDesc, { color: mutedColor }]}>
-                                            You won't see them, and they won't see you.
+                                            You won&apos;t see them, and they won&apos;t see you.
                                         </Text>
                                     </View>
                                 </Pressable>
@@ -113,7 +113,7 @@ export function SafetyToolkitModal({
                                             REPORT {partnerName.toUpperCase()}
                                         </Text>
                                         <Text style={[styles.optionDesc, { color: mutedColor }]}>
-                                            Don't worry—we won't tell them.
+                                            Don&apos;t worry—we won&apos;t tell them.
                                         </Text>
                                     </View>
                                 </Pressable>

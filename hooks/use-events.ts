@@ -51,7 +51,9 @@ async function fetchEvents(
             throw new Error(`Failed to fetch events: ${response.status}`);
         }
 
-        const data = await response.json();
+        const json = await response.json();
+        // API wraps response in { success: true, data: { events, total } }
+        const data = json.data || json;
         console.log("[useEvents] Got", data.events?.length, "events");
         return data;
     } catch (error) {
@@ -70,7 +72,8 @@ async function fetchEvent(eventId: string): Promise<{ event: CampusEvent }> {
         throw new Error(`Failed to fetch event: ${response.status}`);
     }
 
-    return response.json();
+    const json = await response.json();
+    return json.data || json;
 }
 
 // Create event
@@ -89,7 +92,8 @@ async function createEvent(data: CreateEventData): Promise<{ event: CampusEvent 
         throw new Error(errorText || 'Failed to create event');
     }
 
-    return response.json();
+    const json = await response.json();
+    return json.data || json;
 }
 
 // RSVP to event
@@ -117,7 +121,8 @@ async function rsvpToEvent(
         throw new Error(errorText || 'Failed to RSVP');
     }
 
-    return response.json();
+    const json = await response.json();
+    return json.data || json;
 }
 
 // Fetch event attendees
@@ -143,7 +148,8 @@ async function fetchAttendees(
         throw new Error(`Failed to fetch attendees: ${response.status}`);
     }
 
-    return response.json();
+    const json = await response.json();
+    return json.data || json;
 }
 
 // ============================================

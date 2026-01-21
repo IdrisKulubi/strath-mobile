@@ -48,10 +48,10 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
                 <Heart size={48} color={colors.primary} />
             </View>
             <Text className="text-foreground text-xl font-bold text-center mt-4">
-                No matches yet
+                No Connections yet
             </Text>
             <Text className="text-muted-foreground text-center mt-2 px-8">
-                Keep exploring! When you and someone else both want to connect, you'll see them here.
+                Keep exploring! When you and someone else both want to connect, you&apos;ll see them here.
             </Text>
             {onExplore && (
                 <Pressable
@@ -77,7 +77,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
                 Something went wrong
             </Text>
             <Text className="text-muted-foreground text-center mt-2">
-                We couldn't load your matches
+                We couldn&apos;t load your connections
             </Text>
             <Pressable
                 style={[styles.retryButton, { borderColor: colors.primary }]}
