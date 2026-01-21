@@ -197,7 +197,7 @@ export default function LoginScreen() {
                             ) : (
                                 <>
                                     <GoogleLogo size={22} />
-                                    <Text className="text-lg font-semibold text-gray-900 ml-3">Continue with Google</Text>
+                                    <Text className="text-lg font-semibold text-gray-900">Continue with Google</Text>
                                 </>
                             )}
                         </Button>

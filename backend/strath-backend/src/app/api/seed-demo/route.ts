@@ -18,12 +18,16 @@ export async function POST(request: NextRequest) {
             .where(eq(user.email, DEMO_EMAIL))
             .limit(1);
 
+        // If user exists, delete it first to recreate with correct password hash
         if (existingUser.length > 0) {
-            return NextResponse.json({
-                success: true,
-                message: "Demo account already exists",
-                email: DEMO_EMAIL
-            });
+            const existingUserId = existingUser[0].id;
+            
+            // Delete related records first (profiles, accounts)
+            await db.delete(profiles).where(eq(profiles.userId, existingUserId));
+            await db.delete(account).where(eq(account.userId, existingUserId));
+            await db.delete(user).where(eq(user.id, existingUserId));
+            
+            console.log("Deleted existing demo user to recreate with correct hash");
         }
 
         // Use Better Auth's signUpEmail API to create the user properly
