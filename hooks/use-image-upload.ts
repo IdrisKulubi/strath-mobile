@@ -18,7 +18,7 @@ export const useImageUpload = () => {
             const session = await authClient.getSession();
             const token = session.data?.session?.token;
 
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || "https://www.strathspace.com";
 
             console.log("[useImageUpload] Token:", token ? "Present" : "Missing");
             console.log("[useImageUpload] API URL:", apiUrl);

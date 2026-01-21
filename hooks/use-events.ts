@@ -8,7 +8,7 @@ import type {
     EventAttendee,
 } from "@/types/events";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
+const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://www.strathspace.com";
 
 // Helper to get auth headers
 async function getAuthHeaders(): Promise<HeadersInit> {

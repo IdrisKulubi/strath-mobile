@@ -14,14 +14,14 @@
 - [ ] Ensure `strathspace.com` domain is configured and pointing to Vercel
 - [ ] Update environment variables in Vercel:
   ```
-  NEXT_PUBLIC_APP_URL=https://strathspace.com
-  BETTER_AUTH_URL=https://strathspace.com
+  NEXT_PUBLIC_APP_URL=https://www.strathspace.com
+  BETTER_AUTH_URL=https://www.strathspace.com
   ```
 
 ### 1.2 Update Mobile App API URL
 - [ ] In `strath-mobile/.env` or `app.json`, set:
   ```
-  EXPO_PUBLIC_API_URL=https://strathspace.com
+  EXPO_PUBLIC_API_URL=https://www.strathspace.com
   ```
 
 ### 1.3 Verify Backend is Deployed

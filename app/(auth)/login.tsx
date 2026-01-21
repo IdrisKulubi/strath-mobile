@@ -62,7 +62,7 @@ export default function LoginScreen() {
 
         try {
             // First, try to seed the demo account (in case it doesn't exist or needs recreation)
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || "https://www.strathspace.com";
             console.log("[Demo Login] Seeding demo account at:", apiUrl);
             
             const seedResponse = await fetch(`${apiUrl}/api/seed-demo`, { method: 'POST' });
