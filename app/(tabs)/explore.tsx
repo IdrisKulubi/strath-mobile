@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   StatusBar,
-  ScrollView,
   RefreshControl,
   Pressable,
   FlatList,
@@ -12,39 +11,42 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
-import { useDiscoverSections } from '@/hooks/use-discover-sections';
 import { useProfile } from '@/hooks/use-profile';
 import { useOpportunities, useToggleSaveOpportunity } from '@/hooks/use-opportunities';
-import { MatchModal, DiscoverSectionView, DiscoverProfileModal } from '@/components/discover';
+import { useEvents, useRsvpEvent } from '@/hooks/use-events';
 import { OpportunityCard, CategoryFilter, OpportunityDetailSheet, OpportunityListSkeleton } from '@/components/opportunities';
-import { Question, Clock, ArrowClockwise, Briefcase, Users } from 'phosphor-react-native';
+import { EventCard, EventDetailSheet, CreateEventSheet } from '@/components/events';
+import { Question, ArrowClockwise, Briefcase, CalendarBlank, Plus } from 'phosphor-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { DiscoverProfile } from '@/types/discover';
 import { type Opportunity, type OpportunityCategory } from '@/types/opportunities';
+import { type CampusEvent, type EventCategory, EVENT_CATEGORIES } from '@/types/events';
 import * as Haptics from 'expo-haptics';
 
-type ExploreTab = 'people' | 'opportunities';
+type ExploreTab = 'events' | 'opportunities';
 
 export default function ExploreScreen() {
   const { colors, colorScheme } = useTheme();
-  const { data: currentUserProfile } = useProfile();
+  useProfile(); // Pre-fetch profile for later use
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<ExploreTab>('opportunities');
+  const [activeTab, setActiveTab] = useState<ExploreTab>('events');
 
-  // People/Discover state
-  const {
-    sections,
-    isLoading: isLoadingPeople,
-    isError: isErrorPeople,
-    refetch: refetchPeople,
-  } = useDiscoverSections();
-
-  const [selectedProfile, setSelectedProfile] = useState<DiscoverProfile | null>(null);
-  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  // Events state
+  const [selectedEventCategory, setSelectedEventCategory] = useState<EventCategory | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<CampusEvent | null>(null);
+  const [eventDetailVisible, setEventDetailVisible] = useState(false);
+  const [createEventVisible, setCreateEventVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [matchedProfile, setMatchedProfile] = useState<DiscoverProfile | null>(null);
+
+  const {
+    data: eventsData,
+    isLoading: isLoadingEvents,
+    isError: isErrorEvents,
+    refetch: refetchEvents,
+  } = useEvents({ category: selectedEventCategory, time: 'week' });
+
+  const rsvpMutation = useRsvpEvent();
 
   // Opportunities state
   const [selectedCategory, setSelectedCategory] = useState<OpportunityCategory | null>(null);
@@ -66,23 +68,19 @@ export default function ExploreScreen() {
     setActiveTab(tab);
   };
 
-  // People handlers
-  const handleProfilePress = useCallback((profile: DiscoverProfile) => {
-    setSelectedProfile(profile);
-    setProfileModalVisible(true);
+  // Events handlers
+  const handleEventPress = useCallback((event: CampusEvent) => {
+    setSelectedEvent(event);
+    setEventDetailVisible(true);
   }, []);
 
-  const handleLikeProfile = useCallback((profile: DiscoverProfile) => {
-    console.log('Liked:', profile.firstName);
-  }, []);
+  const handleEventRsvp = useCallback((eventId: string, status: "going" | "interested") => {
+    rsvpMutation.mutate({ eventId, status });
+  }, [rsvpMutation]);
 
-  const handlePassProfile = useCallback((profile: DiscoverProfile) => {
-    console.log('Passed:', profile.firstName);
-  }, []);
-
-  const handleCloseProfileModal = useCallback(() => {
-    setProfileModalVisible(false);
-    setSelectedProfile(null);
+  const handleCloseEventDetail = useCallback(() => {
+    setEventDetailVisible(false);
+    setSelectedEvent(null);
   }, []);
 
   // Opportunities handlers
@@ -107,17 +105,63 @@ export default function ExploreScreen() {
   // Refresh handler
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    if (activeTab === 'people') {
-      await refetchPeople();
+    if (activeTab === 'events') {
+      await refetchEvents();
     } else {
       await refetchOpportunities();
     }
     setRefreshing(false);
-  }, [activeTab, refetchPeople, refetchOpportunities]);
+  }, [activeTab, refetchEvents, refetchOpportunities]);
 
-  const isEmptyPeople = !isLoadingPeople && sections.length === 0;
+  const events = eventsData?.events || [];
+  const isEmptyEvents = !isLoadingEvents && events.length === 0;
   const opportunities = opportunitiesData?.opportunities || [];
   const isEmptyOpportunities = !isLoadingOpportunities && opportunities.length === 0;
+
+  // Event category filter items with "All" option
+  const categoryFilterItems = [
+    { value: null as EventCategory | null, label: 'All', icon: '🎯', color: colors.primary },
+    ...EVENT_CATEGORIES,
+  ];
+
+  // Event category filter component
+  const EventCategoryFilter = () => (
+    <View style={styles.categoryFilterContainer}>
+      <FlatList
+        horizontal
+        data={categoryFilterItems}
+        keyExtractor={(item) => item.value || 'all'}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryFilterList}
+        renderItem={({ item }) => {
+          const isSelected = selectedEventCategory === item.value;
+          return (
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setSelectedEventCategory(item.value);
+              }}
+              style={[
+                styles.categoryChip,
+                { 
+                  backgroundColor: isSelected ? colors.primary : colors.muted,
+                  borderColor: isSelected ? colors.primary : colors.border,
+                },
+              ]}
+            >
+              <Text style={styles.categoryEmoji}>{item.icon}</Text>
+              <Text style={[
+                styles.categoryLabel,
+                { color: isSelected ? '#FFF' : colors.foreground },
+              ]}>
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        }}
+      />
+    </View>
+  );
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -127,32 +171,45 @@ export default function ExploreScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>Explore</Text>
-          <Pressable style={styles.helpButton}>
-            <Question size={24} color={colors.mutedForeground} />
-          </Pressable>
+          <View style={styles.headerRight}>
+            {activeTab === 'events' && (
+              <Pressable 
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setCreateEventVisible(true);
+                }}
+                style={[styles.createButton, { backgroundColor: colors.primary }]}
+              >
+                <Plus size={18} color="#fff" weight="bold" />
+              </Pressable>
+            )}
+            <Pressable style={styles.helpButton}>
+              <Question size={24} color={colors.mutedForeground} />
+            </Pressable>
+          </View>
         </View>
 
         {/* Tab Switcher */}
         <View style={styles.tabContainer}>
           <View style={[styles.tabBar, { backgroundColor: colors.muted }]}>
             <Pressable
-              onPress={() => handleTabChange('people')}
+              onPress={() => handleTabChange('events')}
               style={[
                 styles.tab,
-                activeTab === 'people' && [styles.tabActive, { backgroundColor: colors.background }],
+                activeTab === 'events' && [styles.tabActive, { backgroundColor: colors.background }],
               ]}
             >
-              <Users 
+              <CalendarBlank 
                 size={18} 
-                weight={activeTab === 'people' ? 'fill' : 'regular'}
-                color={activeTab === 'people' ? colors.primary : colors.mutedForeground} 
+                weight={activeTab === 'events' ? 'fill' : 'regular'}
+                color={activeTab === 'events' ? colors.primary : colors.mutedForeground} 
               />
               <Text style={[
                 styles.tabText,
-                { color: activeTab === 'people' ? colors.primary : colors.mutedForeground },
-                activeTab === 'people' && styles.tabTextActive,
+                { color: activeTab === 'events' ? colors.primary : colors.mutedForeground },
+                activeTab === 'events' && styles.tabTextActive,
               ]}>
-                People
+                Events
               </Text>
             </Pressable>
             <Pressable
@@ -179,77 +236,76 @@ export default function ExploreScreen() {
         </View>
 
         {/* Content */}
-        {activeTab === 'people' ? (
-          // PEOPLE TAB
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={colors.primary}
-              />
-            }
-          >
-            {/* Countdown Badge */}
-            <View style={[styles.countdownBadge, { backgroundColor: colors.primary }]}>
-              <Clock size={14} color="#FFF" weight="bold" />
-              <Text style={styles.countdownText}>See new people in 24 hours</Text>
-            </View>
+        {activeTab === 'events' ? (
+          // EVENTS TAB
+          <View style={styles.eventsContainer}>
+            {/* Category Filter */}
+            <EventCategoryFilter />
 
-            {/* Subtitle */}
-            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-              Connect over common ground with people who match your vibe, refreshed every day.
-            </Text>
-
-            {/* Loading State */}
-            {isLoadingPeople && (
+            {/* Events List */}
+            {isLoadingEvents ? (
               <View style={styles.centerState}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={{ color: colors.mutedForeground, marginTop: 12 }}>Finding people for you...</Text>
+                <Text style={{ color: colors.mutedForeground, marginTop: 12 }}>Loading events...</Text>
               </View>
-            )}
-
-            {/* Error State */}
-            {isErrorPeople && !isLoadingPeople && (
+            ) : isErrorEvents ? (
               <View style={styles.centerState}>
                 <Text style={{ color: colors.foreground, fontWeight: '600' }}>
-                  Couldn&apos;t load profiles
+                  Couldn&apos;t load events
                 </Text>
                 <Pressable
-                  onPress={() => refetchPeople()}
+                  onPress={() => refetchEvents()}
                   style={[styles.retryButton, { backgroundColor: colors.primary }]}
                 >
                   <ArrowClockwise size={18} color="#FFF" />
                   <Text style={{ color: '#FFF', fontWeight: '600' }}>Try Again</Text>
                 </Pressable>
               </View>
-            )}
-
-            {/* Empty State */}
-            {isEmptyPeople && !isLoadingPeople && !isErrorPeople && (
+            ) : isEmptyEvents ? (
               <View style={styles.centerState}>
-                <Text style={{ color: colors.foreground, fontWeight: '600', fontSize: 18 }}>
-                  No profiles yet
+                <CalendarBlank size={48} color={colors.mutedForeground} />
+                <Text style={{ color: colors.foreground, fontWeight: '600', fontSize: 18, marginTop: 16 }}>
+                  No events yet
                 </Text>
                 <Text style={{ color: colors.mutedForeground, textAlign: 'center', marginTop: 8 }}>
-                  Check back soon as more students join!
+                  {selectedEventCategory 
+                    ? 'Try selecting a different category' 
+                    : 'Be the first to create an event!'}
                 </Text>
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    setCreateEventVisible(true);
+                  }}
+                  style={[styles.createEventButton, { backgroundColor: colors.primary }]}
+                >
+                  <Plus size={18} color="#FFF" weight="bold" />
+                  <Text style={{ color: '#FFF', fontWeight: '600' }}>Create Event</Text>
+                </Pressable>
               </View>
-            )}
-
-            {/* Render Sections */}
-            {!isLoadingPeople && !isErrorPeople && sections.map(section => (
-              <DiscoverSectionView
-                key={section.id}
-                section={section}
-                onProfilePress={handleProfilePress}
-                onLikePress={handleLikeProfile}
+            ) : (
+              <FlatList
+                data={events}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <EventCard
+                    event={item}
+                    onPress={() => handleEventPress(item)}
+                    onRsvp={(status) => handleEventRsvp(item.id, status)}
+                  />
+                )}
+                contentContainerStyle={styles.eventsList}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    tintColor={colors.primary}
+                  />
+                }
               />
-            ))}
-          </ScrollView>
+            )}
+          </View>
         ) : (
           // OPPORTUNITIES TAB
           <View style={styles.opportunitiesContainer}>
@@ -312,21 +368,17 @@ export default function ExploreScreen() {
           </View>
         )}
 
-        {/* Full Profile Modal - People */}
-        <DiscoverProfileModal
-          visible={profileModalVisible}
-          profile={selectedProfile}
-          onClose={handleCloseProfileModal}
-          onLike={handleLikeProfile}
-          onPass={handlePassProfile}
+        {/* Event Detail Sheet */}
+        <EventDetailSheet
+          eventId={selectedEvent?.id || null}
+          visible={eventDetailVisible}
+          onClose={handleCloseEventDetail}
         />
 
-        {/* Match Modal */}
-        <MatchModal
-          visible={!!matchedProfile}
-          profile={matchedProfile}
-          currentUserImage={currentUserProfile?.profilePhoto || currentUserProfile?.photos?.[0]}
-          onClose={() => setMatchedProfile(null)}
+        {/* Create Event Sheet */}
+        <CreateEventSheet
+          visible={createEventVisible}
+          onClose={() => setCreateEventVisible(false)}
         />
 
         {/* Opportunity Detail Sheet */}
@@ -357,6 +409,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 40,
     paddingVertical: 4,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  createButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   helpButton: {
     padding: 8,
@@ -393,34 +457,36 @@ const styles = StyleSheet.create({
   tabTextActive: {
     fontWeight: '700',
   },
-  scrollView: {
+  eventsContainer: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: 100,
+  categoryFilterContainer: {
+    paddingBottom: 8,
   },
-  countdownBadge: {
+  categoryFilterList: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginHorizontal: 20,
-    marginTop: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
+    borderWidth: 1,
     gap: 6,
   },
-  countdownText: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: '600',
+  categoryEmoji: {
+    fontSize: 14,
   },
-  subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    paddingHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 24,
+  categoryLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  eventsList: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 100,
   },
   centerState: {
     alignItems: 'center',
@@ -436,6 +502,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 20,
     marginTop: 16,
+  },
+  createEventButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 24,
+    marginTop: 20,
   },
   opportunitiesContainer: {
     flex: 1,

@@ -622,3 +622,105 @@ export type Opportunity = typeof opportunities.$inferSelect;
 export type NewOpportunity = typeof opportunities.$inferInsert;
 export type SavedOpportunity = typeof savedOpportunities.$inferSelect;
 export type OpportunityApplication = typeof opportunityApplications.$inferSelect;
+
+// ===============================
+// CAMPUS EVENTS
+// ===============================
+
+export const campusEvents = pgTable(
+    "campus_events",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        title: text("title").notNull(),
+        description: text("description"),
+        category: text("category").$type<
+            | "social"
+            | "academic"
+            | "sports"
+            | "career"
+            | "arts"
+            | "gaming"
+            | "faith"
+            | "clubs"
+        >().notNull(),
+        coverImage: text("cover_image"),
+        
+        // Location
+        university: text("university").notNull(),
+        location: text("location"), // "Main Auditorium", "Student Center"
+        isVirtual: boolean("is_virtual").default(false),
+        virtualLink: text("virtual_link"),
+        
+        // Time
+        startTime: timestamp("start_time").notNull(),
+        endTime: timestamp("end_time"),
+        
+        // Creator
+        creatorId: text("creator_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        organizerName: text("organizer_name"), // "Tech Club", "Student Government"
+        
+        // Stats & Settings
+        maxAttendees: integer("max_attendees"),
+        isPublic: boolean("is_public").default(true),
+        
+        // Timestamps
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        universityIdx: index("event_university_idx").on(table.university),
+        categoryIdx: index("event_category_idx").on(table.category),
+        startTimeIdx: index("event_start_time_idx").on(table.startTime),
+        creatorIdx: index("event_creator_idx").on(table.creatorId),
+        publicIdx: index("event_public_idx").on(table.isPublic),
+    })
+);
+
+export const eventRsvps = pgTable(
+    "event_rsvps",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        eventId: uuid("event_id")
+            .notNull()
+            .references(() => campusEvents.id, { onDelete: "cascade" }),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        status: text("status").$type<"going" | "interested">().default("going"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        eventIdx: index("rsvp_event_idx").on(table.eventId),
+        userIdx: index("rsvp_user_idx").on(table.userId),
+        uniqueRsvp: index("rsvp_unique_idx").on(table.eventId, table.userId),
+    })
+);
+
+// Relations for Events
+export const campusEventsRelations = relations(campusEvents, ({ one, many }) => ({
+    creator: one(user, {
+        fields: [campusEvents.creatorId],
+        references: [user.id],
+    }),
+    rsvps: many(eventRsvps),
+}));
+
+export const eventRsvpsRelations = relations(eventRsvps, ({ one }) => ({
+    event: one(campusEvents, {
+        fields: [eventRsvps.eventId],
+        references: [campusEvents.id],
+    }),
+    user: one(user, {
+        fields: [eventRsvps.userId],
+        references: [user.id],
+    }),
+}));
+
+// Event Types
+export type CampusEvent = typeof campusEvents.$inferSelect;
+export type NewCampusEvent = typeof campusEvents.$inferInsert;
+export type EventRsvp = typeof eventRsvps.$inferSelect;
+export type NewEventRsvp = typeof eventRsvps.$inferInsert;
+export type EventCategory = "social" | "academic" | "sports" | "career" | "arts" | "gaming" | "faith" | "clubs";
