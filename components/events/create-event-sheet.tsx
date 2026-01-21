@@ -8,11 +8,15 @@ import {
     KeyboardAvoidingView,
     Platform,
     Alert,
+    Modal,
+    Image,
+    ActivityIndicator,
 } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useCreateEvent } from '@/hooks/use-events';
+import { useImageUpload } from '@/hooks/use-image-upload';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {
     X,
@@ -21,9 +25,12 @@ import {
     Clock,
     Users,
     Link as LinkIcon,
+    Camera,
+    Image as ImageIcon,
 } from 'phosphor-react-native';
 import { EVENT_CATEGORIES, EventCategory, CreateEventData } from '@/types/events';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 
 interface CreateEventSheetProps {
     visible: boolean;
@@ -34,10 +41,12 @@ interface CreateEventSheetProps {
 export function CreateEventSheet({ visible, onClose, onSuccess }: CreateEventSheetProps) {
     const { colors, isDark } = useTheme();
     const createEventMutation = useCreateEvent();
+    const { uploadImage, isUploading } = useImageUpload();
 
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [category, setCategory] = useState<EventCategory>('social');
+    const [coverImage, setCoverImage] = useState<string | null>(null);
     const [location, setLocation] = useState('');
     const [isVirtual, setIsVirtual] = useState(false);
     const [virtualLink, setVirtualLink] = useState('');
@@ -48,7 +57,31 @@ export function CreateEventSheet({ visible, onClose, onSuccess }: CreateEventShe
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showTimePicker, setShowTimePicker] = useState(false);
 
-    if (!visible) return null;
+    const handlePickImage = async () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        
+        const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permissionResult.granted) {
+            Alert.alert('Permission Required', 'Please allow access to your photos to add a cover image.');
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [16, 9],
+            quality: 0.8,
+        });
+
+        if (!result.canceled && result.assets[0]) {
+            try {
+                const uploadedUrl = await uploadImage(result.assets[0].uri);
+                setCoverImage(uploadedUrl);
+            } catch {
+                Alert.alert('Upload Failed', 'Could not upload image. Please try again.');
+            }
+        }
+    };
 
     const handleCreate = async () => {
         if (!title.trim()) {
@@ -62,6 +95,7 @@ export function CreateEventSheet({ visible, onClose, onSuccess }: CreateEventShe
             title: title.trim(),
             description: description.trim() || undefined,
             category,
+            coverImage: coverImage || undefined,
             location: location.trim() || undefined,
             isVirtual,
             virtualLink: isVirtual ? virtualLink.trim() : undefined,
@@ -78,6 +112,7 @@ export function CreateEventSheet({ visible, onClose, onSuccess }: CreateEventShe
             setTitle('');
             setDescription('');
             setCategory('social');
+            setCoverImage(null);
             setLocation('');
             setIsVirtual(false);
             setVirtualLink('');
@@ -115,20 +150,25 @@ export function CreateEventSheet({ visible, onClose, onSuccess }: CreateEventShe
     };
 
     return (
-        <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-            <Pressable style={styles.backdrop} onPress={onClose} />
-            
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.keyboardView}
-            >
-                <Animated.View 
-                    entering={FadeIn}
-                    style={[
-                        styles.sheet,
-                        { backgroundColor: isDark ? colors.card : '#fff' }
-                    ]}
+        <Modal
+            visible={visible}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={onClose}
+        >
+            <View style={styles.modalContainer}>
+                <Pressable style={styles.backdrop} onPress={onClose} />
+                
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.keyboardView}
                 >
+                    <View 
+                        style={[
+                            styles.sheet,
+                            { backgroundColor: isDark ? colors.card : '#fff' }
+                        ]}
+                    >
                     {/* Header */}
                     <View style={[styles.header, { borderBottomColor: colors.border }]}>
                         <Pressable onPress={onClose} style={styles.closeButton}>
@@ -156,7 +196,49 @@ export function CreateEventSheet({ visible, onClose, onSuccess }: CreateEventShe
                         style={styles.content}
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={styles.scrollContent}
+                        keyboardShouldPersistTaps="handled"
                     >
+                        {/* Cover Image */}
+                        <Animated.View entering={FadeInDown.delay(25)}>
+                            <Text style={[styles.label, { color: colors.foreground, marginTop: 0 }]}>
+                                Cover Image
+                            </Text>
+                            <Pressable
+                                onPress={handlePickImage}
+                                disabled={isUploading}
+                                style={[
+                                    styles.coverImagePicker,
+                                    { 
+                                        backgroundColor: colors.muted,
+                                        borderColor: colors.border,
+                                    },
+                                    coverImage && styles.coverImagePickerWithImage,
+                                ]}
+                            >
+                                {isUploading ? (
+                                    <ActivityIndicator size="large" color={colors.primary} />
+                                ) : coverImage ? (
+                                    <>
+                                        <Image 
+                                            source={{ uri: coverImage }} 
+                                            style={styles.coverImagePreview} 
+                                        />
+                                        <View style={styles.coverImageOverlay}>
+                                            <Camera size={24} color="#fff" />
+                                            <Text style={styles.coverImageChangeText}>Change</Text>
+                                        </View>
+                                    </>
+                                ) : (
+                                    <View style={styles.coverImagePlaceholder}>
+                                        <ImageIcon size={32} color={colors.mutedForeground} />
+                                        <Text style={[styles.coverImagePlaceholderText, { color: colors.mutedForeground }]}>
+                                            Add cover image
+                                        </Text>
+                                    </View>
+                                )}
+                            </Pressable>
+                        </Animated.View>
+
                         {/* Title */}
                         <Animated.View entering={FadeInDown.delay(50)}>
                             <Text style={[styles.label, { color: colors.foreground }]}>
@@ -170,6 +252,7 @@ export function CreateEventSheet({ visible, onClose, onSuccess }: CreateEventShe
                                         backgroundColor: colors.muted,
                                         color: colors.foreground,
                                         borderColor: colors.border,
+                                        borderWidth: 1,
                                     }
                                 ]}
                                 placeholder="What's happening?"
@@ -177,6 +260,7 @@ export function CreateEventSheet({ visible, onClose, onSuccess }: CreateEventShe
                                 value={title}
                                 onChangeText={setTitle}
                                 maxLength={100}
+                                autoFocus={false}
                             />
                         </Animated.View>
 
@@ -386,27 +470,27 @@ export function CreateEventSheet({ visible, onClose, onSuccess }: CreateEventShe
                         {/* Spacer */}
                         <View style={{ height: 40 }} />
                     </ScrollView>
-                </Animated.View>
+                </View>
             </KeyboardAvoidingView>
-        </View>
+            </View>
+        </Modal>
     );
 }
 
 const styles = StyleSheet.create({
-    overlay: {
-        ...StyleSheet.absoluteFillObject,
+    modalContainer: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'flex-end',
-        zIndex: 1000,
     },
     backdrop: {
-        ...StyleSheet.absoluteFillObject,
+        flex: 1,
     },
     keyboardView: {
-        flex: 1,
         justifyContent: 'flex-end',
     },
     sheet: {
-        maxHeight: '90%',
+        height: '85%',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         overflow: 'hidden',
@@ -442,6 +526,45 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         padding: 20,
+        paddingBottom: 40,
+    },
+    coverImagePicker: {
+        height: 160,
+        borderRadius: 16,
+        borderWidth: 2,
+        borderStyle: 'dashed',
+        justifyContent: 'center',
+        alignItems: 'center',
+        overflow: 'hidden',
+    },
+    coverImagePickerWithImage: {
+        borderStyle: 'solid',
+        borderWidth: 0,
+    },
+    coverImagePreview: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    coverImageOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    coverImageChangeText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+        marginTop: 4,
+    },
+    coverImagePlaceholder: {
+        alignItems: 'center',
+        gap: 8,
+    },
+    coverImagePlaceholderText: {
+        fontSize: 14,
+        fontWeight: '500',
     },
     label: {
         fontSize: 14,
@@ -453,6 +576,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         padding: 14,
         fontSize: 16,
+        minHeight: 50,
     },
     titleInput: {
         fontSize: 18,

@@ -54,13 +54,22 @@ export async function GET(request: NextRequest) {
         });
 
         const targetUniversity = university || userProfile?.university || "Strathmore University";
+        
+        console.log("[Events API] User:", session.user.id);
+        console.log("[Events API] Target university:", targetUniversity);
+        console.log("[Events API] User profile university:", userProfile?.university);
 
-        // Build conditions
+        // Build conditions - include events that haven't ended yet
         type EventCategory = "social" | "academic" | "sports" | "career" | "arts" | "gaming" | "faith" | "clubs";
+        const now = new Date();
+        now.setHours(0, 0, 0, 0); // Start of today
+        
+        console.log("[Events API] Filtering events from:", now.toISOString());
+        
         const conditions = [
             eq(campusEvents.isPublic, true),
             eq(campusEvents.university, targetUniversity),
-            gte(campusEvents.startTime, new Date()), // Only future events
+            gte(campusEvents.startTime, now), // Events starting from today
         ];
 
         if (category) {
@@ -104,10 +113,16 @@ export async function GET(request: NextRequest) {
             .limit(limit)
             .offset(offset);
 
+        console.log("[Events API] Found", events.length, "events");
+        if (events.length > 0) {
+            console.log("[Events API] First event:", events[0].title, "at", events[0].startTime);
+        }
+
         // Get RSVP counts and user's RSVP status for each event
         const eventIds = events.map(e => e.id);
         
         if (eventIds.length === 0) {
+            console.log("[Events API] No events found, returning empty array");
             return successResponse({ events: [], total: 0 });
         }
 
