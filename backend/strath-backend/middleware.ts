@@ -9,6 +9,7 @@ export async function middleware(request: NextRequest) {
     const publicPaths = [
         "/api/auth",
         "/api/test-db",
+        "/api/seed-demo",
         "/_next",
         "/favicon.ico",
         "/public",
