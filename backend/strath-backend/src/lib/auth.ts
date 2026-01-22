@@ -26,7 +26,6 @@ export const auth = betterAuth({
         // Production backend
         "https://www.strathspace.com",
         "https://strathspace.com",
-        "https://strath-mobile-j9lv.vercel.app",
 
         // Expo Go development - ADD YOUR CURRENT IP HERE
         "exp://172.20.10.4:8081",
