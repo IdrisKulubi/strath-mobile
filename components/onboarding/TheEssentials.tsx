@@ -21,11 +21,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Calendar, User, MagnifyingGlass, CheckCircle } from 'phosphor-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Phone } from 'phosphor-react-native';
 
 interface TheEssentialsProps {
     data: {
         firstName: string;
         lastName: string;
+        phoneNumber: string;
         age: number;
         zodiacSign: string;
         gender: string;
@@ -133,16 +135,17 @@ const ChipSelector = ({
 };
 
 export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
-    const [step, setStep] = useState(0); // 0: name, 1: birthday, 2: gender, 3: looking for
+    const [step, setStep] = useState(0); // 0: name, 1: phone, 2: birthday, 3: gender, 4: looking for
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [birthday, setBirthday] = useState<Date | null>(null);
     const [firstName, setFirstName] = useState(data.firstName || '');
     const [lastName, setLastName] = useState(data.lastName || '');
+    const [phoneNumber, setPhoneNumber] = useState(data.phoneNumber || '');
 
     const progressWidth = useSharedValue(0);
 
     useEffect(() => {
-        progressWidth.value = withSpring(((step + 1) / 4) * 100, { damping: 15 });
+        progressWidth.value = withSpring(((step + 1) / 5) * 100, { damping: 15 });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [step]);
 
@@ -155,6 +158,53 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             onUpdate({ firstName: firstName.trim(), lastName: lastName.trim() });
             setStep(1);
+        }
+    };
+
+    // Format phone number for display (Kenyan format)
+    const formatPhoneNumber = (text: string) => {
+        // Remove all non-digits
+        const digits = text.replace(/\D/g, '');
+        
+        // Limit to 12 digits (including country code)
+        const limited = digits.slice(0, 12);
+        
+        // Format based on length
+        if (limited.startsWith('254')) {
+            // Already has country code
+            if (limited.length <= 3) return `+${limited}`;
+            if (limited.length <= 6) return `+${limited.slice(0, 3)} ${limited.slice(3)}`;
+            return `+${limited.slice(0, 3)} ${limited.slice(3, 6)} ${limited.slice(6)}`;
+        } else if (limited.startsWith('0')) {
+            // Local format starting with 0
+            if (limited.length <= 4) return limited;
+            if (limited.length <= 7) return `${limited.slice(0, 4)} ${limited.slice(4)}`;
+            return `${limited.slice(0, 4)} ${limited.slice(4, 7)} ${limited.slice(7)}`;
+        } else {
+            // Just digits
+            return limited;
+        }
+    };
+
+    const handlePhoneChange = (text: string) => {
+        const formatted = formatPhoneNumber(text);
+        setPhoneNumber(formatted);
+    };
+
+    const isPhoneValid = () => {
+        const digits = phoneNumber.replace(/\D/g, '');
+        // Valid if it's 10 digits (local) or 12 digits (with country code)
+        return digits.length === 10 || digits.length === 12;
+    };
+
+    const handlePhoneContinue = () => {
+        if (isPhoneValid()) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            // Store in standardized format with country code
+            const digits = phoneNumber.replace(/\D/g, '');
+            const standardized = digits.startsWith('254') ? `+${digits}` : `+254${digits.slice(1)}`;
+            onUpdate({ phoneNumber: standardized });
+            setStep(2);
         }
     };
 
@@ -174,14 +224,14 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
     const handleBirthdayContinue = () => {
         if (birthday && data.age >= 18) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setStep(2);
+            setStep(3);
         }
     };
 
     const handleGenderSelect = (gender: string) => {
         onUpdate({ gender });
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setTimeout(() => setStep(3), 300);
+        setTimeout(() => setStep(4), 300);
     };
 
     const handleLookingForSelect = (lookingFor: string) => {
@@ -282,8 +332,52 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                     </Animated.View>
                 )}
 
-                {/* Step 1: Birthday */}
+                {/* Step 1: Phone Number */}
                 {step === 1 && (
+                    <Animated.View entering={SlideInRight.springify()} style={styles.stepContainer}>
+                        <View style={styles.iconContainer}>
+                            <Phone size={32} color="#ec4899" weight="fill" />
+                        </View>
+                        <Text style={styles.stepTitle}>{"What's your number?"}</Text>
+                        <Text style={styles.stepSubtitle}>
+                            {"We'll use this to help you connect with matches"}
+                        </Text>
+
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="+254 7XX XXX XXX"
+                                placeholderTextColor="#64748b"
+                                value={phoneNumber}
+                                onChangeText={handlePhoneChange}
+                                keyboardType="phone-pad"
+                                autoFocus
+                            />
+                        </View>
+
+                        <Text style={[styles.phoneHint, { color: '#64748b' }]}>
+                            Enter your Kenyan phone number
+                        </Text>
+
+                        <TouchableOpacity
+                            onPress={handlePhoneContinue}
+                            disabled={!isPhoneValid()}
+                            activeOpacity={0.8}
+                        >
+                            <LinearGradient
+                                colors={isPhoneValid() ? ['#ec4899', '#f43f5e'] : ['#374151', '#374151']}
+                                style={styles.continueButton}
+                            >
+                                <Text style={[styles.continueButtonText, !isPhoneValid() && styles.disabledText]}>
+                                    Continue
+                                </Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </Animated.View>
+                )}
+
+                {/* Step 2: Birthday */}
+                {step === 2 && (
                     <Animated.View entering={SlideInRight.springify()} style={styles.stepContainer}>
                         <View style={styles.iconContainer}>
                             <Calendar size={32} color="#ec4899" weight="fill" />
@@ -354,8 +448,8 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                     </Animated.View>
                 )}
 
-                {/* Step 2: Gender */}
-                {step === 2 && (
+                {/* Step 3: Gender */}
+                {step === 3 && (
                     <Animated.View entering={SlideInRight.springify()} style={styles.stepContainer}>
                         <View style={styles.iconContainer}>
                             <User size={32} color="#ec4899" weight="fill" />
@@ -373,8 +467,8 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                     </Animated.View>
                 )}
 
-                {/* Step 3: Looking For */}
-                {step === 3 && (
+                {/* Step 4: Looking For */}
+                {step === 4 && (
                     <Animated.View entering={SlideInRight.springify()} style={styles.stepContainer}>
                         <View style={styles.iconContainer}>
                             <MagnifyingGlass size={32} color="#ec4899" weight="fill" />
@@ -503,6 +597,15 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#f472b6',
         fontWeight: '600',
+    },
+    phoneHint: {
+        fontSize: 14,
+        textAlign: 'center',
+        marginTop: -8,
+        marginBottom: 24,
+    },
+    inputContainer: {
+        marginBottom: 16,
     },
     errorBanner: {
         backgroundColor: 'rgba(239, 68, 68, 0.15)',

@@ -2,6 +2,7 @@ export interface OnboardingData {
     // Phase 1: ID Card
     firstName: string;
     lastName: string;
+    phoneNumber: string;
     university: string;
     course: string;
     yearOfStudy: string;

@@ -15,6 +15,7 @@ export const updateProfileSchema = z.object({
     snapchat: z.string().nullable().optional(),
     firstName: z.string().nullable().optional(),
     lastName: z.string().nullable().optional(),
+    phoneNumber: z.string().nullable().optional(),
     drinkingPreference: z.string().nullable().optional(),
     workoutFrequency: z.string().nullable().optional(),
     socialMediaUsage: z.string().nullable().optional(),
@@ -29,6 +30,7 @@ export const updateProfileSchema = z.object({
     anonymous: z.boolean().nullable().optional(),
     anonymousAvatar: z.string().nullable().optional(),
     isComplete: z.boolean().nullable().optional(),
+    profileCompleted: z.boolean().nullable().optional(),
     profilePhoto: z.string().nullable().optional(),
     // New enhanced onboarding fields
     qualities: z.array(z.string()).nullable().optional(),

@@ -3,13 +3,37 @@ import { profiles, swipes, blocks } from "../db/schema";
 import { eq, and, notInArray, inArray, or } from "drizzle-orm";
 
 /**
- * Get the genders a user wants to see based on their interestedIn preference.
- * Defaults to opposite gender if not specified.
+ * Convert lookingFor string to interestedIn array
+ * This handles legacy users who have lookingFor but not interestedIn set
  */
-function getTargetGenders(userGender: string | null, interestedIn: string[] | null): string[] {
+function lookingForToInterestedIn(lookingFor: string | null): string[] | null {
+    if (!lookingFor) return null;
+    switch (lookingFor) {
+        case 'women':
+            return ['female'];
+        case 'men':
+            return ['male'];
+        case 'everyone':
+            return ['male', 'female', 'other'];
+        default:
+            return null;
+    }
+}
+
+/**
+ * Get the genders a user wants to see based on their interestedIn preference.
+ * Falls back to lookingFor if interestedIn not set, then defaults to opposite gender.
+ */
+function getTargetGenders(userGender: string | null, interestedIn: string[] | null, lookingFor: string | null = null): string[] {
     // If user explicitly set their preferences, use those
     if (interestedIn && interestedIn.length > 0) {
         return interestedIn;
+    }
+    
+    // Fallback: derive from lookingFor if set (for legacy users)
+    const derivedFromLookingFor = lookingForToInterestedIn(lookingFor);
+    if (derivedFromLookingFor && derivedFromLookingFor.length > 0) {
+        return derivedFromLookingFor;
     }
     
     // Default: show opposite gender (traditional dating app behavior)
@@ -33,16 +57,18 @@ export async function getRecommendations(userId: string, limit: number = 20, off
     console.log('[Matching] Current user profile:', currentUserProfile ? {
         gender: currentUserProfile.gender,
         interestedIn: currentUserProfile.interestedIn,
+        lookingFor: currentUserProfile.lookingFor,
         isVisible: currentUserProfile.isVisible,
         profileCompleted: currentUserProfile.profileCompleted,
     } : 'NOT FOUND');
 
     if (!currentUserProfile) return [];
     
-    // Get target genders based on user's preferences
+    // Get target genders based on user's preferences (with lookingFor fallback)
     const targetGenders = getTargetGenders(
         currentUserProfile.gender,
-        currentUserProfile.interestedIn as string[] | null
+        currentUserProfile.interestedIn as string[] | null,
+        currentUserProfile.lookingFor
     );
     
     console.log('[Matching] Target genders to search for:', targetGenders);
@@ -94,6 +120,7 @@ export async function getRecommendations(userId: string, limit: number = 20, off
         userId: c.userId,
         gender: c.gender,
         interestedIn: c.interestedIn,
+        lookingFor: c.lookingFor,
         isVisible: c.isVisible,
         profileCompleted: c.profileCompleted,
     })));
@@ -101,9 +128,15 @@ export async function getRecommendations(userId: string, limit: number = 20, off
     // Additional filter: Check if the candidate would also be interested in the current user
     // (mutual interest check for better matching)
     const filteredCandidates = candidates.filter(candidate => {
-        const candidateInterestedIn = candidate.interestedIn as string[] | null;
+        // Get candidate's interested in - either from interestedIn array or derived from lookingFor
+        let candidateInterestedIn = candidate.interestedIn as string[] | null;
         
-        // If candidate has no preference set, check default behavior
+        // If no interestedIn, try to derive from lookingFor
+        if (!candidateInterestedIn || candidateInterestedIn.length === 0) {
+            candidateInterestedIn = lookingForToInterestedIn(candidate.lookingFor);
+        }
+        
+        // If still no preference set, use default opposite gender logic
         if (!candidateInterestedIn || candidateInterestedIn.length === 0) {
             // Default: opposite gender logic
             if (candidate.gender === 'male' && currentUserProfile.gender === 'female') return true;

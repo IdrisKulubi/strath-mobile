@@ -29,6 +29,7 @@ export default function OnboardingScreen() {
         // Essentials
         firstName: '',
         lastName: '',
+        phoneNumber: '',
         university: 'Strathmore University',
         course: '',
         yearOfStudy: '',
@@ -93,12 +94,27 @@ export default function OnboardingScreen() {
                 }));
             }
 
+            // Convert lookingFor to interestedIn array for matching algorithm
+            const getInterestedIn = (lookingFor: string): string[] => {
+                switch (lookingFor) {
+                    case 'women':
+                        return ['female'];
+                    case 'men':
+                        return ['male'];
+                    case 'everyone':
+                        return ['male', 'female', 'other'];
+                    default:
+                        return [];
+                }
+            };
+
             // Prepare data for API - convert string fields to proper types
             const payload = {
                 ...formData,
                 photos: uploadedPhotos,
                 age: formData.age ? parseInt(String(formData.age)) : undefined,
                 yearOfStudy: formData.yearOfStudy ? parseInt(String(formData.yearOfStudy)) : undefined,
+                interestedIn: getInterestedIn(formData.lookingFor), // Set interestedIn from lookingFor selection
                 isComplete: true,
                 profileCompleted: true,
             };
@@ -150,13 +166,14 @@ export default function OnboardingScreen() {
                     />
                 );
 
-            // Step 2: The Essentials (Name, Birthday/Zodiac, Gender, Looking For)
+            // Step 2: The Essentials (Name, Phone, Birthday/Zodiac, Gender, Looking For)
             case 2:
                 return (
                     <TheEssentials
                         data={{
                             firstName: formData.firstName,
                             lastName: formData.lastName,
+                            phoneNumber: formData.phoneNumber,
                             age: typeof formData.age === 'string' ? parseInt(formData.age) || 0 : formData.age || 0,
                             zodiacSign: formData.zodiacSign,
                             gender: formData.gender,
