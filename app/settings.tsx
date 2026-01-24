@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import { authClient } from '@/lib/auth-client';
+import { getAuthToken } from '@/lib/auth-helpers';
 import * as SecureStore from 'expo-secure-store';
 
 export default function SettingsScreen() {
@@ -100,9 +101,8 @@ export default function SettingsScreen() {
                                     onPress: async () => {
                                         setIsDeleting(true);
                                         try {
-                                            // Get auth token
-                                            const session = await authClient.getSession();
-                                            const token = session.data?.session?.token;
+                                            // Get auth token (works with Apple Sign In)
+                                            const token = await getAuthToken();
 
                                             if (!token) {
                                                 throw new Error('Not authenticated');

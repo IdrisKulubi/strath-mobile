@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAuthToken } from "@/lib/auth-helpers";
+import { getAuthToken, getCurrentUserId } from "@/lib/auth-helpers";
+import { useState, useEffect } from "react";
 import type { 
     Opportunity, 
     OpportunitiesResponse, 
@@ -115,58 +116,64 @@ async function toggleSaveOpportunity(
     }
 }
 
+// Custom hook to get user ID
+function useUserId() {
+    const [userId, setUserId] = useState<string | null>(null);
+    
+    useEffect(() => {
+        getCurrentUserId().then(setUserId);
+    }, []);
+    
+    return userId;
+}
+
 // Main hook for opportunities
 export function useOpportunities(filters: OpportunityFilters = {}) {
-    const { data: session } = useSession();
-    const userId = session?.user?.id;
+    const userId = useUserId();
 
     return useQuery({
         queryKey: ["opportunities", filters, userId],
-        queryFn: () => fetchOpportunities(filters, userId),
+        queryFn: () => fetchOpportunities(filters, userId || undefined),
         staleTime: 1000 * 60 * 5, // 5 minutes
     });
 }
 
 // Hook for featured opportunities
 export function useFeaturedOpportunities() {
-    const { data: session } = useSession();
-    const userId = session?.user?.id;
+    const userId = useUserId();
 
     return useQuery({
         queryKey: ["opportunities", "featured", userId],
-        queryFn: () => fetchOpportunities({ featured: true }, userId, 5),
+        queryFn: () => fetchOpportunities({ featured: true }, userId || undefined, 5),
         staleTime: 1000 * 60 * 5,
     });
 }
 
 // Hook for opportunities by category
 export function useOpportunitiesByCategory(category: OpportunityCategory) {
-    const { data: session } = useSession();
-    const userId = session?.user?.id;
+    const userId = useUserId();
 
     return useQuery({
         queryKey: ["opportunities", "category", category, userId],
-        queryFn: () => fetchOpportunities({ category }, userId),
+        queryFn: () => fetchOpportunities({ category }, userId || undefined),
         staleTime: 1000 * 60 * 5,
     });
 }
 
 // Hook for single opportunity
 export function useOpportunity(id: string) {
-    const { data: session } = useSession();
-    const userId = session?.user?.id;
+    const userId = useUserId();
 
     return useQuery({
         queryKey: ["opportunity", id, userId],
-        queryFn: () => fetchOpportunity(id, userId),
+        queryFn: () => fetchOpportunity(id, userId || undefined),
         enabled: !!id,
     });
 }
 
 // Hook for saved opportunities
 export function useSavedOpportunities() {
-    const { data: session } = useSession();
-    const userId = session?.user?.id;
+    const userId = useUserId();
 
     return useQuery({
         queryKey: ["opportunities", "saved", userId],
@@ -178,8 +185,7 @@ export function useSavedOpportunities() {
 
 // Hook for toggling save status
 export function useToggleSaveOpportunity() {
-    const { data: session } = useSession();
-    const userId = session?.user?.id;
+    const userId = useUserId();
     const queryClient = useQueryClient();
 
     return useMutation({

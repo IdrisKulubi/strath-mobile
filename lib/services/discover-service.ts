@@ -1,4 +1,4 @@
-import { authClient } from '@/lib/auth-client';
+import { getAuthToken } from '@/lib/auth-helpers';
 import {
     DiscoverProfile,
     DiscoverSection,
@@ -15,8 +15,7 @@ export const DiscoverService = {
      * Get pre-organized sections for the discover screen
      */
     async getSections(): Promise<{ sections: DiscoverSection[]; refreshAt?: string }> {
-        const session = await authClient.getSession();
-        const token = session.data?.session?.token;
+        const token = await getAuthToken();
 
         const response = await fetch(`${API_URL}/api/discover/sections`, {
             headers: {
@@ -39,8 +38,7 @@ export const DiscoverService = {
      * Get raw recommended profiles (fallback for sections)
      */
     async getRecommended(limit: number = 10): Promise<DiscoverProfile[]> {
-        const session = await authClient.getSession();
-        const token = session.data?.session?.token;
+        const token = await getAuthToken();
 
         const response = await fetch(`${API_URL}/api/discover?limit=${limit}`, {
             headers: {

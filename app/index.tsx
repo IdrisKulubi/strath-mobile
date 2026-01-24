@@ -1,8 +1,9 @@
 import { Redirect, useRouter } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
 import { useSession } from '../lib/auth-client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { getAuthToken } from '@/lib/auth-helpers';
 
 export default function Index() {
     const { data: session, isPending } = useSession();
@@ -34,29 +35,13 @@ export default function Index() {
         }
     }, [session, isPending]);
 
-    useEffect(() => {
-        if (session || hasManualSession) {
-            checkProfile();
-        }
-    }, [session, hasManualSession]);
-
-    const checkProfile = async () => {
+    const checkProfile = useCallback(async () => {
         setIsCheckingProfile(true);
         try {
-            // Get token from either Better Auth session or manual storage
-            // @ts-ignore
-            let token = session?.session?.token;
-            
-            if (!token) {
-                // Try to get from manual storage (Apple Sign In)
-                const storedSession = await SecureStore.getItemAsync('strathspace_session');
-                if (storedSession) {
-                    const parsed = JSON.parse(storedSession);
-                    token = parsed?.session?.token;
-                }
-            }
+            // Get token using shared helper (handles both Better Auth and Apple Sign In)
+            const token = await getAuthToken();
 
-            const headers: any = { 'Content-Type': 'application/json' };
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
             if (token) {
                 headers['Authorization'] = `Bearer ${token}`;
             }
@@ -86,7 +71,13 @@ export default function Index() {
         } finally {
             setIsCheckingProfile(false);
         }
-    };
+    }, [router]);
+
+    useEffect(() => {
+        if (session || hasManualSession) {
+            checkProfile();
+        }
+    }, [session, hasManualSession, checkProfile]);
 
     // Still loading Better Auth session or checking manual session
     if (isPending || hasManualSession === null) {

@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, Animated, Easing } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { Sparkle, Flame, UsersThree } from 'phosphor-react-native';
-import { authClient } from '@/lib/auth-client';
+import { getAuthToken } from '@/lib/auth-helpers';
 
 interface PulseEvent {
     id: string;
@@ -23,8 +23,7 @@ export function PulseBar() {
         let eventSource: any;
 
         const setupSSE = async () => {
-            const session = await authClient.getSession();
-            const token = session.data?.session?.token;
+            const token = await getAuthToken();
 
             if (!token) return;
 

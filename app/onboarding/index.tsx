@@ -14,6 +14,7 @@ import {
     LaunchCelebration,
 } from '../../components/onboarding';
 import { useImageUpload } from '@/hooks/use-image-upload';
+import { getAuthToken } from '@/lib/auth-helpers';
 
 // Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=OpeningLine, 8=Celebration
 type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
@@ -74,9 +75,8 @@ export default function OnboardingScreen() {
     const submitData = async () => {
         setIsSubmitting(true);
         try {
-            // Get auth session for Authorization header
-            const session = await import('@/lib/auth-client').then(m => m.authClient.getSession());
-            const token = session.data?.session?.token;
+            // Get auth token (works with both Better Auth and Apple Sign In)
+            const token = await getAuthToken();
 
             if (!token) {
                 throw new Error('Not authenticated. Please log in again.');

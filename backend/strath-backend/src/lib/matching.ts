@@ -29,6 +29,14 @@ export async function getRecommendations(userId: string, limit: number = 20, off
         where: eq(profiles.userId, userId),
     });
 
+    console.log('[Matching] User ID:', userId);
+    console.log('[Matching] Current user profile:', currentUserProfile ? {
+        gender: currentUserProfile.gender,
+        interestedIn: currentUserProfile.interestedIn,
+        isVisible: currentUserProfile.isVisible,
+        profileCompleted: currentUserProfile.profileCompleted,
+    } : 'NOT FOUND');
+
     if (!currentUserProfile) return [];
     
     // Get target genders based on user's preferences
@@ -36,6 +44,8 @@ export async function getRecommendations(userId: string, limit: number = 20, off
         currentUserProfile.gender,
         currentUserProfile.interestedIn as string[] | null
     );
+    
+    console.log('[Matching] Target genders to search for:', targetGenders);
 
     // 2. Get users already swiped or blocked
     const swipedUsers = await db
@@ -79,6 +89,15 @@ export async function getRecommendations(userId: string, limit: number = 20, off
         limit: limit + offset + 50, // Fetch more to account for mutual interest filtering
     });
     
+    console.log('[Matching] Candidates found (after DB query):', candidates.length);
+    console.log('[Matching] Candidate details:', candidates.map(c => ({
+        userId: c.userId,
+        gender: c.gender,
+        interestedIn: c.interestedIn,
+        isVisible: c.isVisible,
+        profileCompleted: c.profileCompleted,
+    })));
+    
     // Additional filter: Check if the candidate would also be interested in the current user
     // (mutual interest check for better matching)
     const filteredCandidates = candidates.filter(candidate => {
@@ -99,6 +118,8 @@ export async function getRecommendations(userId: string, limit: number = 20, off
             ? candidateInterestedIn.includes(currentUserProfile.gender)
             : true; // If current user has no gender set, show them anyway
     });
+
+    console.log('[Matching] Filtered candidates (after mutual interest):', filteredCandidates.length);
 
     // 4. Scoring Algorithm
     const scoredCandidates = filteredCandidates.map((candidate) => {
