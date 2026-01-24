@@ -44,7 +44,6 @@ export async function GET(req: NextRequest) {
         const allProfiles = await db.query.profiles.findMany({
             columns: {
                 userId: true,
-                displayName: true,
                 gender: true,
                 interestedIn: true,
                 isVisible: true,
@@ -59,7 +58,6 @@ export async function GET(req: NextRequest) {
             },
             currentUserProfile: currentUserProfile ? {
                 userId: currentUserProfile.userId,
-                displayName: currentUserProfile.displayName,
                 gender: currentUserProfile.gender,
                 interestedIn: currentUserProfile.interestedIn,
                 isVisible: currentUserProfile.isVisible,
