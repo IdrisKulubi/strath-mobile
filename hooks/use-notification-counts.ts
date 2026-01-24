@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { authClient } from '@/lib/auth-client';
+import { getAuthToken } from '@/lib/auth-helpers';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -15,8 +15,7 @@ interface NotificationCounts {
  * Fetch notification counts from the API
  */
 async function fetchNotificationCounts(): Promise<NotificationCounts> {
-    const session = await authClient.getSession();
-    const token = session.data?.session?.token;
+    const token = await getAuthToken();
 
     if (!token) {
         return { unopenedMatches: 0, unreadMessages: 0, total: 0 };
@@ -42,8 +41,7 @@ async function fetchNotificationCounts(): Promise<NotificationCounts> {
  * Mark a match as opened
  */
 async function markMatchAsOpened(matchId: string): Promise<void> {
-    const session = await authClient.getSession();
-    const token = session.data?.session?.token;
+    const token = await getAuthToken();
 
     if (!token) return;
 

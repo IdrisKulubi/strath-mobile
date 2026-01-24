@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { authClient } from '@/lib/auth-client';
+import { getAuthToken } from '@/lib/auth-helpers';
 
 export const useImageUpload = () => {
     const [isUploading, setIsUploading] = useState(false);
@@ -15,8 +15,7 @@ export const useImageUpload = () => {
             const type = match ? `image/${match[1]}` : `image/jpeg`;
 
             // Get session token for authorization
-            const session = await authClient.getSession();
-            const token = session.data?.session?.token;
+            const token = await getAuthToken();
 
             const apiUrl = process.env.EXPO_PUBLIC_API_URL || "https://www.strathspace.com";
 

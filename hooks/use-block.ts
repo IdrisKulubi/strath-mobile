@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { authClient } from "@/lib/auth-client";
+import { getAuthToken } from "@/lib/auth-helpers";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -9,8 +9,8 @@ export function useBlockUser() {
 
     return useMutation({
         mutationFn: async (blockedUserId: string) => {
-            const session = await authClient.getSession();
-            if (!session?.data?.session?.token) {
+            const token = await getAuthToken();
+            if (!token) {
                 throw new Error("Not authenticated");
             }
 
@@ -18,7 +18,7 @@ export function useBlockUser() {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${session.data.session.token}`,
+                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({ blockedUserId }),
             });
@@ -46,15 +46,15 @@ export function useUnblockUser() {
 
     return useMutation({
         mutationFn: async (blockedUserId: string) => {
-            const session = await authClient.getSession();
-            if (!session?.data?.session?.token) {
+            const token = await getAuthToken();
+            if (!token) {
                 throw new Error("Not authenticated");
             }
 
             const response = await fetch(`${API_URL}/api/user/block?userId=${blockedUserId}`, {
                 method: "DELETE",
                 headers: {
-                    Authorization: `Bearer ${session.data.session.token}`,
+                    Authorization: `Bearer ${token}`,
                 },
             });
 
@@ -76,14 +76,14 @@ export function useBlockedUsers() {
     return useQuery({
         queryKey: ["blocked-users"],
         queryFn: async () => {
-            const session = await authClient.getSession();
-            if (!session?.data?.session?.token) {
+            const token = await getAuthToken();
+            if (!token) {
                 throw new Error("Not authenticated");
             }
 
             const response = await fetch(`${API_URL}/api/user/block`, {
                 headers: {
-                    Authorization: `Bearer ${session.data.session.token}`,
+                    Authorization: `Bearer ${token}`,
                 },
             });
 

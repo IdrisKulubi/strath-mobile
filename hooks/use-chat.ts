@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { z } from 'zod';
-import { authClient } from '@/lib/auth-client';
+import { getAuthToken } from '@/lib/auth-helpers';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -21,8 +21,7 @@ export type Message = z.infer<typeof MessageSchema>;
 
 // Fetch messages for a match
 async function fetchMessages(matchId: string): Promise<Message[]> {
-    const session = await authClient.getSession();
-    const token = session.data?.session?.token;
+    const token = await getAuthToken();
 
     const response = await fetch(`${API_URL}/api/messages/${matchId}`, {
         headers: {
@@ -44,8 +43,7 @@ async function fetchMessages(matchId: string): Promise<Message[]> {
 
 // Send a message
 async function sendMessage(matchId: string, content: string): Promise<Message> {
-    const session = await authClient.getSession();
-    const token = session.data?.session?.token;
+    const token = await getAuthToken();
 
     const response = await fetch(`${API_URL}/api/messages/${matchId}`, {
         method: 'POST',
@@ -67,8 +65,7 @@ async function sendMessage(matchId: string, content: string): Promise<Message> {
 // Mark messages as read
 async function markMessagesAsRead(matchId: string): Promise<void> {
     console.log('[markAsRead] Starting for matchId:', matchId);
-    const session = await authClient.getSession();
-    const token = session.data?.session?.token;
+    const token = await getAuthToken();
     console.log('[markAsRead] Token:', token ? 'Present' : 'Missing');
 
     try {
@@ -97,11 +94,8 @@ async function markMessagesAsRead(matchId: string): Promise<void> {
     }
 }
 
-// Get current user ID helper
-async function getCurrentUserId(): Promise<string | null> {
-    const session = await authClient.getSession();
-    return session.data?.user?.id || null;
-}
+// Get current user ID helper - uses the shared auth helper
+import { getCurrentUserId } from '@/lib/auth-helpers';
 
 /**
  * Smart polling hook for chat messages

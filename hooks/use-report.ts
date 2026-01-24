@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { authClient } from "@/lib/auth-client";
+import { getAuthToken } from "@/lib/auth-helpers";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -28,8 +28,8 @@ export function useReportUser() {
 
     return useMutation({
         mutationFn: async ({ reportedUserId, reason, details }: ReportUserParams) => {
-            const session = await authClient.getSession();
-            if (!session?.data?.session?.token) {
+            const token = await getAuthToken();
+            if (!token) {
                 throw new Error("Not authenticated");
             }
 
@@ -40,7 +40,7 @@ export function useReportUser() {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${session.data.session.token}`,
+                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({ reportedUserId, reason, details }),
             });
@@ -75,14 +75,14 @@ export function useReportReasons() {
     return useQuery({
         queryKey: ["report-reasons"],
         queryFn: async () => {
-            const session = await authClient.getSession();
-            if (!session?.data?.session?.token) {
+            const token = await getAuthToken();
+            if (!token) {
                 return { reasons: REPORT_REASONS.map(r => r.id) };
             }
 
             const response = await fetch(`${API_URL}/api/user/report`, {
                 headers: {
-                    Authorization: `Bearer ${session.data.session.token}`,
+                    Authorization: `Bearer ${token}`,
                 },
             });
 

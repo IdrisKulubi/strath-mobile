@@ -2,7 +2,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import { useState, useEffect, useCallback } from 'react';
 import { Image } from 'react-native';
 import { z } from 'zod';
-import { authClient } from '@/lib/auth-client';
+import { getAuthToken } from '@/lib/auth-helpers';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -56,8 +56,7 @@ export type DiscoverResponse = z.infer<typeof DiscoverResponseSchema>;
 
 // Fetch profiles from discover API
 async function fetchProfiles(offset: number = 0, limit: number = 10, vibe: string = 'all'): Promise<DiscoverResponse> {
-    const session = await authClient.getSession();
-    const token = session.data?.session?.token;
+    const token = await getAuthToken();
 
     const url = `${API_URL}/api/discover?limit=${limit}&offset=${offset}&vibe=${vibe}`;
 
@@ -84,8 +83,7 @@ async function swipeProfile(targetUserId: string, action: 'like' | 'pass'): Prom
     isMatch: boolean;
     match?: any;
 }> {
-    const session = await authClient.getSession();
-    const token = session.data?.session?.token;
+    const token = await getAuthToken();
 
     const response = await fetch(`${API_URL}/api/swipe`, {
         method: 'POST',

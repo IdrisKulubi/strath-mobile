@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { authClient } from '@/lib/auth-client';
-import * as SecureStore from 'expo-secure-store';
+import { getAuthToken } from '@/lib/auth-helpers';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.strathspace.com';
 
@@ -60,14 +59,8 @@ export interface Profile {
 async function fetchProfile() {
     console.log('[useProfile] Fetching profile...');
 
-    const session = await authClient.getSession();
-    const token = session?.data?.session?.token;
-    console.log('[useProfile] Token from session:', token ? 'Present' : 'Missing');
-
-    // Fallback to SecureStore if token is not in session (though better-auth usually handles this)
-    const storedToken = await SecureStore.getItemAsync('strathmobile.session_token');
-    const finalToken = token || storedToken;
-    console.log('[useProfile] Final token:', finalToken ? 'Present' : 'Missing');
+    const finalToken = await getAuthToken();
+    console.log('[useProfile] Token:', finalToken ? 'Present' : 'Missing');
 
     if (!finalToken) {
         console.error('[useProfile] No auth token available');
@@ -118,10 +111,7 @@ async function fetchProfile() {
 }
 
 async function updateProfile(updates: Partial<Profile>) {
-    const session = await authClient.getSession();
-    const token = session?.data?.session?.token;
-    const storedToken = await SecureStore.getItemAsync('strathmobile.session_token');
-    const finalToken = token || storedToken;
+    const finalToken = await getAuthToken();
 
     const headers: HeadersInit = {
         'Content-Type': 'application/json',

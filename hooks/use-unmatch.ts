@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { authClient } from "@/lib/auth-client";
+import { getAuthToken } from "@/lib/auth-helpers";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -17,8 +17,8 @@ export function useUnmatch() {
 
     return useMutation({
         mutationFn: async ({ matchId }: UnmatchParams): Promise<UnmatchResponse> => {
-            const session = await authClient.getSession();
-            if (!session?.data?.session?.token) {
+            const token = await getAuthToken();
+            if (!token) {
                 throw new Error("Not authenticated");
             }
 
@@ -26,7 +26,7 @@ export function useUnmatch() {
                 method: "DELETE",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${session.data.session.token}`,
+                    Authorization: `Bearer ${token}`,
                 },
             });
 

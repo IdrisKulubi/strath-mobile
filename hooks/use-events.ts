@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { authClient } from "@/lib/auth-client";
-import * as SecureStore from 'expo-secure-store';
+import { getAuthToken } from "@/lib/auth-helpers";
 import type { 
     CampusEvent, 
     EventFilters,
@@ -12,14 +11,11 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://www.strathspace.com"
 
 // Helper to get auth headers
 async function getAuthHeaders(): Promise<HeadersInit> {
-    const session = await authClient.getSession();
-    const token = session?.data?.session?.token;
-    const storedToken = await SecureStore.getItemAsync('strathmobile.session_token');
-    const finalToken = token || storedToken;
+    const token = await getAuthToken();
 
     return {
         'Content-Type': 'application/json',
-        ...(finalToken && { 'Authorization': `Bearer ${finalToken}` }),
+        ...(token && { 'Authorization': `Bearer ${token}` }),
     };
 }
 

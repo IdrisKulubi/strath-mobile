@@ -1,6 +1,6 @@
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { z } from 'zod';
-import { authClient } from '@/lib/auth-client';
+import { getAuthToken } from '@/lib/auth-helpers';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -62,8 +62,7 @@ export type MatchesResponse = z.infer<typeof MatchesResponseSchema>;
 async function fetchMatches(cursor?: string): Promise<MatchesResponse> {
     console.log('[useMatches] Fetching matches...');
 
-    const session = await authClient.getSession();
-    const token = session.data?.session?.token;
+    const token = await getAuthToken();
     console.log('[useMatches] Token:', token ? 'Present' : 'Missing');
 
     const url = new URL(`${API_URL}/api/matches`);
