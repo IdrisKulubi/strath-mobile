@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { OnboardingData } from '../../components/digital-dna/types';
 import {
     WelcomeSplash,
+    TermsAcceptance,
     TheEssentials,
     PhotoMoment,
     VibeCheckGame,
@@ -14,8 +15,8 @@ import {
 } from '../../components/onboarding';
 import { useImageUpload } from '@/hooks/use-image-upload';
 
-// Steps: 0=Splash, 1=Essentials, 2=Photos, 3=VibeCheck, 4=Bubbles, 5=QuickFire, 6=OpeningLine, 7=Celebration
-type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+// Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=OpeningLine, 8=Celebration
+type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 export default function OnboardingScreen() {
     const router = useRouter();
@@ -141,8 +142,16 @@ export default function OnboardingScreen() {
                     />
                 );
 
-            // Step 1: The Essentials (Name, Birthday/Zodiac, Gender, Looking For)
+            // Step 1: Terms & Privacy Acceptance (Required by Apple Guideline 1.2)
             case 1:
+                return (
+                    <TermsAcceptance
+                        onAccept={() => setStep(2)}
+                    />
+                );
+
+            // Step 2: The Essentials (Name, Birthday/Zodiac, Gender, Looking For)
+            case 2:
                 return (
                     <TheEssentials
                         data={{
@@ -154,22 +163,22 @@ export default function OnboardingScreen() {
                             lookingFor: formData.lookingFor,
                         }}
                         onUpdate={(data) => updateData(data as Partial<OnboardingData>)}
-                        onNext={() => setStep(2)}
-                    />
-                );
-
-            // Step 2: Photo Moment
-            case 2:
-                return (
-                    <PhotoMoment
-                        photos={formData.photos}
-                        onUpdate={(photos) => updateData({ photos })}
                         onNext={() => setStep(3)}
                     />
                 );
 
-            // Step 3: Vibe Check Game (This or That)
+            // Step 3: Photo Moment
             case 3:
+                return (
+                    <PhotoMoment
+                        photos={formData.photos}
+                        onUpdate={(photos) => updateData({ photos })}
+                        onNext={() => setStep(4)}
+                    />
+                );
+
+            // Step 4: Vibe Check Game (This or That)
+            case 4:
                 return (
                     <VibeCheckGame
                         onComplete={(results) => {
@@ -182,27 +191,27 @@ export default function OnboardingScreen() {
                                 drinkingPreference: results.drinkingPreference,
                                 loveLanguage: results.loveLanguage,
                             });
-                            setStep(4);
+                            setStep(5);
                         }}
                     />
                 );
 
-            // Step 4: Bubble Picker for Interests
-            case 4:
+            // Step 5: Bubble Picker for Interests
+            case 5:
                 return (
                     <BubblePicker
                         interests={formData.interests}
                         onComplete={(interests) => {
                             updateData({ interests });
-                            setStep(5);
+                            setStep(6);
                         }}
                         minSelection={3}
                         maxSelection={10}
                     />
                 );
 
-            // Step 5: Quick Fire (Height, Year, Drinking, Smoking, Religion)
-            case 5:
+            // Step 6: Quick Fire (Height, Year, Drinking, Smoking, Religion)
+            case 6:
                 return (
                     <QuickFire
                         data={{
@@ -227,12 +236,12 @@ export default function OnboardingScreen() {
                             if (data.education !== undefined) updates.education = data.education;
                             updateData(updates);
                         }}
-                        onComplete={() => setStep(6)}
+                        onComplete={() => setStep(7)}
                     />
                 );
 
-            // Step 6: Opening Line (Prompts + Bio)
-            case 6:
+            // Step 7: Opening Line (Prompts + Bio)
+            case 7:
                 return (
                     <OpeningLine
                         prompts={formData.prompts}
@@ -241,12 +250,12 @@ export default function OnboardingScreen() {
                             if (data.prompts) updateData({ prompts: data.prompts });
                             if (data.aboutMe) updateData({ aboutMe: data.aboutMe, bio: data.aboutMe });
                         }}
-                        onComplete={() => setStep(7)}
+                        onComplete={() => setStep(8)}
                     />
                 );
 
-            // Step 7: Launch Celebration
-            case 7:
+            // Step 8: Launch Celebration
+            case 8:
                 return (
                     <LaunchCelebration
                         userName={formData.firstName}

@@ -1,4 +1,5 @@
 export { WelcomeSplash } from './WelcomeSplash';
+export { TermsAcceptance } from './TermsAcceptance';
 export { TheEssentials } from './TheEssentials';
 export { PhotoMoment } from './PhotoMoment';
 export { VibeCheckGame } from './VibeCheckGame';

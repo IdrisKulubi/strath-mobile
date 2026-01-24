@@ -122,7 +122,7 @@ We'll notify you of significant changes via email or in-app notification.`
     },
     terms: {
         title: 'Terms of Service',
-        content: `StrathSpace Terms of Service
+        content: `StrathSpace Terms of Service (EULA)
 Last Updated: January 2026
 
 1. Acceptance of Terms
@@ -144,7 +144,35 @@ To use StrathSpace, you must:
 • All information must be accurate
 • One account per person
 
-4. Community Guidelines
+4. ZERO TOLERANCE POLICY
+━━━━━━━━━━━━━━━━━━━━━━
+StrathSpace has ZERO TOLERANCE for objectionable content or abusive users. This includes but is not limited to:
+
+PROHIBITED CONTENT:
+• Harassment, bullying, or intimidation
+• Hate speech, discrimination, or prejudice
+• Explicit, pornographic, or sexually suggestive content
+• Violence, threats, or promoting self-harm
+• Spam, scams, or fraudulent behavior
+• Impersonation or fake profiles
+• Illegal activities or content
+
+CONSEQUENCES:
+• Violating users will be immediately removed
+• Content will be deleted without notice
+• Accounts may be permanently banned
+• Serious violations may be reported to authorities
+
+5. Reporting & Moderation
+━━━━━━━━━━━━━━━━━━━━━━━
+• Use the Report feature to flag inappropriate content or users
+• Use the Block feature to prevent contact from any user
+• All reports are reviewed within 24 hours
+• We take immediate action on verified violations
+• Repeat offenders face permanent bans
+• Blocking a user removes them from your experience immediately
+
+6. Community Guidelines
 ━━━━━━━━━━━━━━━━━━━━
 You agree NOT to:
 • Harass, bully, or intimidate others
@@ -155,60 +183,62 @@ You agree NOT to:
 • Share others' private information
 • Violate any laws or university policies
 
-5. Content Ownership
+7. Content Ownership
 ━━━━━━━━━━━━━━━━━━
 • You own your content (photos, messages)
 • You grant us license to display your content
 • Don't post content you don't have rights to
 • We may remove content that violates guidelines
 
-6. Matching & Interactions
+8. Matching & Interactions
 ━━━━━━━━━━━━━━━━━━━━━━
 • Matches don't guarantee relationships
 • We don't screen users' backgrounds
 • Always meet in public places first
 • Report any suspicious behavior
 
-7. Premium Features
+9. Premium Features
 ━━━━━━━━━━━━━━━━━
 • Some features may require payment
 • Purchases are non-refundable
 • Subscriptions auto-renew unless cancelled
 • Prices may change with notice
 
-8. Termination
-━━━━━━━━━━━━━
+10. Termination
+━━━━━━━━━━━━━━
 We may suspend or terminate your account if you:
 • Violate these terms
 • Engage in harmful behavior
 • Create multiple accounts
 • Don't verify your email
+• Receive multiple reports from other users
 
 You can delete your account anytime in Settings.
 
-9. Disclaimers
-━━━━━━━━━━━━━
+11. Disclaimers
+━━━━━━━━━━━━━━
 • Service provided "as is"
 • We don't guarantee matches or outcomes
 • We're not responsible for user behavior
 • App may have bugs or downtime
 
-10. Limitation of Liability
-━━━━━━━━━━━━━━━━━━━━━━
+12. Limitation of Liability
+━━━━━━━━━━━━━━━━━━━━━━━
 To the maximum extent permitted by law, StrathSpace is not liable for any indirect, incidental, or consequential damages.
 
-11. Dispute Resolution
-━━━━━━━━━━━━━━━━━━━━
+13. Dispute Resolution
+━━━━━━━━━━━━━━━━━━━━━
 • Disputes governed by Kenyan law
 • Attempt informal resolution first
 • Formal disputes in Nairobi courts
 
-12. Contact
-━━━━━━━━
+14. Contact
+━━━━━━━━━
 Questions: legal@strathspace.com
+Report Issues: support@strathspace.com
 
-13. Changes
-━━━━━━━━
+15. Changes
+━━━━━━━━━
 We'll notify you of significant changes. Continued use means acceptance.`
     },
     licenses: {

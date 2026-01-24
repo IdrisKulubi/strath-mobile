@@ -3,7 +3,7 @@
     "owner": "vehemgroup",
     "name": "strathSpace",
     "slug": "strathSpace",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "strathspace",
@@ -12,12 +12,18 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.strathspace.mobile",
-      "buildNumber": "15",
+      "buildNumber": "16",
+      "usesAppleSignIn": true,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Strathspace needs camera access so you can take photos for your  profile. Your photos help other students see who you are and make meaningful connections on campus.",
+        "NSPhotoLibraryUsageDescription": "Strathspace needs access to your photo library so you can select and upload photos to your  profile. Choose your best photos to showcase your personality to other students.",
+        "NSPhotoLibraryAddUsageDescription": "Strathspace needs permission to save photos to your library when you want to keep images from conversations or your profile."
       }
     },
     "android": {
+      "package": "com.strathspace.mobile",
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -36,8 +42,11 @@
       [
         "expo-splash-screen",
         {
+          "image": "./assets/images/splash.png",
+          "resizeMode": "contain",
           "backgroundColor": "#7B4397",
           "dark": {
+            "image": "./assets/images/splash.png",
             "backgroundColor": "#7B4397"
           }
         }
@@ -45,7 +54,8 @@
       "expo-secure-store",
       "expo-web-browser",
       "@react-native-community/datetimepicker",
-      "expo-font"
+      "expo-font",
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true,

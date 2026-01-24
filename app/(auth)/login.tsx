@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleLogo } from '@/components/icons/google-logo';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
 // Demo account credentials for Apple Review
 const DEMO_EMAIL = "demo@strathspace.com";
@@ -26,6 +27,7 @@ const DEMO_PASSWORD = "AppleReview2026!";
 
 export default function LoginScreen() {
     const [loading, setLoading] = useState(false);
+    const [appleLoading, setAppleLoading] = useState(false);
     const [demoLoading, setDemoLoading] = useState(false);
     const router = useRouter();
     const toast = useToast();
@@ -96,6 +98,84 @@ export default function LoginScreen() {
             toast.show({ message: 'Demo login failed. Please try again.', variant: 'danger' });
         } finally {
             setDemoLoading(false);
+        }
+    };
+
+    // Sign in with Apple
+    const handleAppleAuth = async () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setAppleLoading(true);
+
+        try {
+            const credential = await AppleAuthentication.signInAsync({
+                requestedScopes: [
+                    AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+                    AppleAuthentication.AppleAuthenticationScope.EMAIL,
+                ],
+            });
+
+            // Send the credential to our backend for verification and user creation/login
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL || "https://www.strathspace.com";
+            const response = await fetch(`${apiUrl}/api/auth/apple`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    identityToken: credential.identityToken,
+                    authorizationCode: credential.authorizationCode,
+                    fullName: credential.fullName,
+                    email: credential.email,
+                    user: credential.user,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Apple sign in failed');
+            }
+
+            const data = await response.json();
+            
+            // Store the session token
+            if (data.token) {
+                // Use Better Auth to handle the session
+                const result = await signIn.social({
+                    provider: "apple",
+                    callbackURL: "/",
+                    idToken: {
+                        token: credential.identityToken!,
+                        nonce: credential.authorizationCode || undefined,
+                    }
+                });
+
+                if (result.data) {
+                    toast.show({
+                        message: 'Welcome to Strathspace!',
+                        variant: 'success'
+                    });
+                    router.replace('/');
+                    return;
+                }
+            }
+
+            toast.show({
+                message: 'Welcome to Strathspace!',
+                variant: 'success'
+            });
+            router.replace('/');
+        } catch (error: any) {
+            if (error.code === 'ERR_REQUEST_CANCELED') {
+                // User canceled the sign-in flow
+                return;
+            }
+            console.error("Apple auth error:", error);
+            toast.show({ 
+                message: error.message || 'Apple sign in failed. Please try again.', 
+                variant: 'danger' 
+            });
+        } finally {
+            setAppleLoading(false);
         }
     };
 
@@ -208,14 +288,32 @@ export default function LoginScreen() {
                             )}
                         </Button>
 
+                        {/* Sign in with Apple - Required by Apple Guidelines 4.8 */}
+                        {Platform.OS === 'ios' && (
+                            <View style={styles.appleButtonContainer}>
+                                <AppleAuthentication.AppleAuthenticationButton
+                                    buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                                    buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                                    cornerRadius={28}
+                                    style={styles.appleButton}
+                                    onPress={handleAppleAuth}
+                                />
+                                {appleLoading && (
+                                    <View style={styles.appleLoadingOverlay}>
+                                        <ActivityIndicator color="#FFFFFF" size="small" />
+                                    </View>
+                                )}
+                            </View>
+                        )}
+
                         {/* Demo Login Button - For Apple Review */}
                         <Pressable
                             onPress={handleDemoLogin}
-                            disabled={loading || demoLoading}
+                            disabled={loading || demoLoading || appleLoading}
                             style={({ pressed }) => [
                                 styles.demoButton,
                                 pressed && styles.demoButtonPressed,
-                                (loading || demoLoading) && styles.demoButtonDisabled,
+                                (loading || demoLoading || appleLoading) && styles.demoButtonDisabled,
                             ]}
                         >
                             {demoLoading ? (
@@ -230,7 +328,19 @@ export default function LoginScreen() {
                         {/* Terms Text - Below Button */}
                         <Text style={styles.termsText}>
                             By continuing, you agree to our{' '}
-                            <Text style={styles.termsLink}>Terms</Text>
+                            <Text 
+                                style={styles.termsLink}
+                                onPress={() => router.push('/legal?section=terms')}
+                            >
+                                Terms of Service
+                            </Text>
+                            {' '}and{' '}
+                            <Text 
+                                style={styles.termsLink}
+                                onPress={() => router.push('/legal?section=privacy')}
+                            >
+                                Privacy Policy
+                            </Text>
                         </Text>
 
                         {/* Sign In Link - Separate Section */}
@@ -436,6 +546,28 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '500',
         color: '#6B7280',
+    },
+
+    // Apple Sign In Button
+    appleButtonContainer: {
+        width: '100%',
+        marginTop: 12,
+        position: 'relative',
+    },
+    appleButton: {
+        width: '100%',
+        height: 56,
+    },
+    appleLoadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+        borderRadius: 28,
     },
 });
 
