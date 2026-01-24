@@ -2,23 +2,59 @@ import { Redirect, useRouter } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
 import { useSession } from '../lib/auth-client';
 import { useEffect, useState } from 'react';
+import * as SecureStore from 'expo-secure-store';
 
 export default function Index() {
     const { data: session, isPending } = useSession();
     const [isCheckingProfile, setIsCheckingProfile] = useState(false);
+    const [hasManualSession, setHasManualSession] = useState<boolean | null>(null);
     const router = useRouter();
 
+    // Check for manually stored session (Apple Sign In)
     useEffect(() => {
-        if (session) {
+        const checkManualSession = async () => {
+            try {
+                const storedSession = await SecureStore.getItemAsync('strathspace_session');
+                if (storedSession) {
+                    const parsed = JSON.parse(storedSession);
+                    if (parsed?.session?.token && parsed?.user) {
+                        console.log("[Index] Found manual session for user:", parsed.user.id);
+                        setHasManualSession(true);
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.error("[Index] Error checking manual session:", e);
+            }
+            setHasManualSession(false);
+        };
+        
+        if (!session && !isPending) {
+            checkManualSession();
+        }
+    }, [session, isPending]);
+
+    useEffect(() => {
+        if (session || hasManualSession) {
             checkProfile();
         }
-    }, [session]);
+    }, [session, hasManualSession]);
 
     const checkProfile = async () => {
         setIsCheckingProfile(true);
         try {
+            // Get token from either Better Auth session or manual storage
             // @ts-ignore
-            const token = session?.session?.token;
+            let token = session?.session?.token;
+            
+            if (!token) {
+                // Try to get from manual storage (Apple Sign In)
+                const storedSession = await SecureStore.getItemAsync('strathspace_session');
+                if (storedSession) {
+                    const parsed = JSON.parse(storedSession);
+                    token = parsed?.session?.token;
+                }
+            }
 
             const headers: any = { 'Content-Type': 'application/json' };
             if (token) {
@@ -52,7 +88,8 @@ export default function Index() {
         }
     };
 
-    if (isPending || (session && isCheckingProfile)) {
+    // Still loading Better Auth session or checking manual session
+    if (isPending || hasManualSession === null) {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
                 <ActivityIndicator size="large" color="#fff" />
@@ -60,7 +97,17 @@ export default function Index() {
         );
     }
 
-    if (!session) {
+    // Checking profile after finding a session
+    if ((session || hasManualSession) && isCheckingProfile) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+                <ActivityIndicator size="large" color="#fff" />
+            </View>
+        );
+    }
+
+    // No session at all - go to login
+    if (!session && !hasManualSession) {
         return <Redirect href="/(auth)/login" />;
     }
 

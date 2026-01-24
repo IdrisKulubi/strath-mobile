@@ -5,6 +5,9 @@ import { eq, and } from "drizzle-orm";
 import * as jose from "jose";
 import { randomUUID } from "crypto";
 
+// Apple Sign In endpoint - handles token verification and user creation
+// Last updated: 2026-01-25 - Fixed audience mismatch for Expo Go testing
+
 // Apple's public keys endpoint
 const APPLE_KEYS_URL = "https://appleid.apple.com/auth/keys";
 

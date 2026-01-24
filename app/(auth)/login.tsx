@@ -114,6 +114,8 @@ export default function LoginScreen() {
                 ],
             });
 
+            console.log("[Apple Auth] Got credential, user:", credential.user);
+
             // Send the credential to our backend for verification and user creation/login
             const apiUrl = process.env.EXPO_PUBLIC_API_URL || "https://www.strathspace.com";
             const response = await fetch(`${apiUrl}/api/auth/apple`, {
@@ -130,40 +132,48 @@ export default function LoginScreen() {
                 }),
             });
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || 'Apple sign in failed');
+            const data = await response.json();
+            console.log("[Apple Auth] Backend response:", data);
+
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Apple sign in failed');
             }
 
-            const data = await response.json();
+            // Store the session token in SecureStore with Better Auth's expected format
+            // Better Auth expo client uses prefix "strathspace" and stores session data
+            const SecureStore = await import('expo-secure-store');
             
-            // Store the session token
-            if (data.token) {
-                // Use Better Auth to handle the session
-                const result = await signIn.social({
-                    provider: "apple",
-                    callbackURL: "/",
-                    idToken: {
-                        token: credential.identityToken!,
-                        nonce: credential.authorizationCode || undefined,
-                    }
-                });
-
-                if (result.data) {
-                    toast.show({
-                        message: 'Welcome to Strathspace!',
-                        variant: 'success'
-                    });
-                    router.replace('/');
-                    return;
-                }
+            if (data.data?.token && data.data?.user) {
+                // Store session in Better Auth's expected format
+                const sessionData = {
+                    session: {
+                        token: data.data.token,
+                        userId: data.data.user.id,
+                        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                    },
+                    user: data.data.user,
+                };
+                
+                await SecureStore.setItemAsync('strathspace_session', JSON.stringify(sessionData));
+                console.log("[Apple Auth] Session stored in SecureStore");
+                
+                // Also store just the token for API calls
+                await SecureStore.setItemAsync('strathspace_session_token', data.data.token);
             }
 
             toast.show({
                 message: 'Welcome to Strathspace!',
                 variant: 'success'
             });
-            router.replace('/');
+            
+            // Navigate based on whether user is new
+            if (data.data?.isNewUser) {
+                console.log("[Apple Auth] New user, going to onboarding");
+                router.replace('/onboarding');
+            } else {
+                console.log("[Apple Auth] Existing user, going to tabs");
+                router.replace('/(tabs)');
+            }
         } catch (error: any) {
             if (error.code === 'ERR_REQUEST_CANCELED') {
                 // User canceled the sign-in flow
