@@ -211,7 +211,13 @@ export default function SettingsScreen() {
                 )}
 
                 {type === 'value' && (
-                    <Text style={[styles.valueText, { color: colors.mutedForeground }]}>{value}</Text>
+                    <Text 
+                        style={[styles.valueText, { color: colors.mutedForeground }]}
+                        numberOfLines={1}
+                        ellipsizeMode="middle"
+                    >
+                        {value}
+                    </Text>
                 )}
             </View>
 
@@ -435,10 +441,14 @@ const styles = StyleSheet.create({
     settingLabel: {
         fontSize: 16,
         fontWeight: '500',
+        flexShrink: 0,
     },
     valueText: {
-        fontSize: 16,
+        fontSize: 14,
         marginRight: 8,
+        flexShrink: 1,
+        textAlign: 'right',
+        maxWidth: '60%',
     },
     description: {
         fontSize: 13,
