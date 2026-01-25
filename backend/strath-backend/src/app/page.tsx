@@ -177,7 +177,7 @@ export default function Home() {
         {/* Footer */}
         <div className={`mt-12 text-center text-gray-500 text-sm transition-all duration-1000 ${mounted ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "900ms" }}>
           <p className="text-gray-400 mb-2">Same vibes, better experience ✨</p>
-          <p>Built for Strathmore University Students 🇰🇪</p>
+          <p>Built for  University Students 🇰🇪</p>
           <p className="mt-2">© 2026 Strathspace. All rights reserved.</p>
         </div>
       </div>

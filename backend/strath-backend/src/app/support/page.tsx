@@ -51,7 +51,7 @@ export default function SupportPage() {
                     </h3>
                     <p style={{ color: '#555' }}>
                         Download the app from the App Store and sign in with your Google account.
-                        For the best experience, use your Strathmore University email.
+                        For the best experience, use your  University email.
                     </p>
                 </div>
 

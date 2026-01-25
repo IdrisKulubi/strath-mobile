@@ -14,7 +14,7 @@ const LEGAL_CONTENT: Record<LegalSection, { title: string; content: string }> = 
 
 Getting Started
 ━━━━━━━━━━━━━━━
-StrathSpace is a dating and social networking app exclusively for Strathmore University students. To get started, you'll need to verify your university email address.
+StrathSpace is a dating and social networking app exclusively forUniversity students. To get started, you'll need to verify your university email address.
 
 Creating Your Profile
 ━━━━━━━━━━━━━━━━━━━
@@ -104,7 +104,7 @@ We may share information:
 
 7. University Data
 ━━━━━━━━━━━━━━━━
-• We verify Strathmore email addresses
+• We verify  email addresses
 • We do not access university academic records
 • We operate independently from the university
 
@@ -133,8 +133,8 @@ By using StrathSpace, you agree to these terms. If you don't agree, please don't
 ━━━━━━━━━━━━━
 To use StrathSpace, you must:
 • Be at least 18 years old
-• Be a current Strathmore University student or alumni
-• Have a valid @strathmore.edu email
+• Be a current  University student or alumni
+• Have a valid .edu email
 • Be legally able to enter a binding contract
 
 3. Your Account
