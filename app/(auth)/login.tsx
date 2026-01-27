@@ -280,25 +280,7 @@ export default function LoginScreen() {
                         entering={FadeInUp.delay(600).springify()}
                         style={styles.authSection}
                     >
-                        {/* Google Sign In Button */}
-                        <Button
-                            onPress={handleGoogleAuth}
-                            disabled={loading || demoLoading}
-                            variant="secondary"
-                            size="lg"
-                            className="w-full h-14 rounded-full bg-white border-0 shadow-lg shadow-black/20"
-                        >
-                            {loading ? (
-                                <ActivityIndicator color="#4285F4" size="small" />
-                            ) : (
-                                <>
-                                    <GoogleLogo size={22} />
-                                    <Text className="text-lg font-semibold text-gray-900">Continue with Google</Text>
-                                </>
-                            )}
-                        </Button>
-
-                        {/* Sign in with Apple - Required by Apple Guidelines 4.8 */}
+                        {/* Sign in with Apple - FIRST for iOS (Apple Guidelines 4.8) */}
                         {Platform.OS === 'ios' && (
                             <View style={styles.appleButtonContainer}>
                                 <AppleAuthentication.AppleAuthenticationButton
@@ -316,24 +298,48 @@ export default function LoginScreen() {
                             </View>
                         )}
 
-                        {/* Demo Login Button - For Apple Review */}
-                        <Pressable
-                            onPress={handleDemoLogin}
-                            disabled={loading || demoLoading || appleLoading}
-                            style={({ pressed }) => [
-                                styles.demoButton,
-                                pressed && styles.demoButtonPressed,
-                                (loading || demoLoading || appleLoading) && styles.demoButtonDisabled,
-                            ]}
+                        {/* Google Sign In Button */}
+                        <Button
+                            onPress={handleGoogleAuth}
+                            disabled={loading || demoLoading}
+                            variant="secondary"
+                            size="lg"
+                            className="w-full h-14 rounded-full bg-white border-0 shadow-lg shadow-black/20"
+                            style={{ marginTop: Platform.OS === 'ios' ? 12 : 0 }}
                         >
-                            {demoLoading ? (
-                                <ActivityIndicator color="#6B7280" size="small" />
+                            {loading ? (
+                                <ActivityIndicator color="#4285F4" size="small" />
                             ) : (
                                 <>
-                                    <Text style={styles.demoButtonText}>Demo Login (For Review)</Text>
+                                    <GoogleLogo size={22} />
+                                    <Text className="text-lg font-semibold text-gray-900">Continue with Google</Text>
                                 </>
                             )}
-                        </Pressable>
+                        </Button>
+
+                        {/* Demo Login Section - For Apple Review */}
+                        <View style={styles.demoContainer}>
+                            <Text style={styles.demoLabel}>For Apple Reviewers:</Text>
+                            <Pressable
+                                onPress={handleDemoLogin}
+                                disabled={loading || demoLoading || appleLoading}
+                                style={({ pressed }) => [
+                                    styles.demoButton,
+                                    pressed && styles.demoButtonPressed,
+                                    (loading || demoLoading || appleLoading) && styles.demoButtonDisabled,
+                                ]}
+                            >
+                                {demoLoading ? (
+                                    <ActivityIndicator color="#6B7280" size="small" />
+                                ) : (
+                                    <Text style={styles.demoButtonText}>Demo Login</Text>
+                                )}
+                            </Pressable>
+                            <Text style={styles.demoCredentials}>
+                                Email: demo@strathspace.com{"\n"}
+                                Password: AppleReview2026!
+                            </Text>
+                        </View>
 
                         {/* Terms Text - Below Button */}
                         <Text style={styles.termsText}>
@@ -533,17 +539,31 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
 
-    // Demo Login Button
+    // Demo Login Section
+    demoContainer: {
+        marginTop: 24,
+        paddingTop: 20,
+        borderTopWidth: 1,
+        borderTopColor: '#E5E5E5',
+        alignItems: 'center',
+        width: '100%',
+    },
+    demoLabel: {
+        fontSize: 13,
+        color: '#6B7280',
+        marginBottom: 12,
+        fontWeight: '600',
+    },
     demoButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 16,
-        paddingVertical: 12,
-        paddingHorizontal: 20,
+        paddingVertical: 14,
+        paddingHorizontal: 32,
         borderRadius: 25,
         backgroundColor: '#F0F0F0',
-        gap: 8,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
     },
     demoButtonPressed: {
         opacity: 0.7,
@@ -553,9 +573,17 @@ const styles = StyleSheet.create({
         opacity: 0.5,
     },
     demoButtonText: {
-        fontSize: 14,
-        fontWeight: '500',
+        fontSize: 15,
+        fontWeight: '600',
         color: '#6B7280',
+    },
+    demoCredentials: {
+        fontSize: 12,
+        color: '#9CA3AF',
+        textAlign: 'center',
+        marginTop: 12,
+        lineHeight: 18,
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     },
 
     // Apple Sign In Button
