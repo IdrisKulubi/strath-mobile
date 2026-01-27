@@ -183,17 +183,7 @@ const seedOpportunities = async () => {
             isFeatured: true,
             tags: ["full scholarship", "secondary", "university", "need-based"],
         },
-        {
-            title: "DAAD Germany Scholarship",
-            description: "Study in Germany! Full scholarship for Master's and PhD programs in German universities. Covers tuition, living expenses, and travel.",
-            category: "scholarship",
-            organization: "DAAD",
-            logo: "https://www.daad.de/logo.svg",
-            deadline: new Date("2026-05-15"),
-            applicationUrl: "https://www.daad.de/en/study-and-research-in-germany/scholarships",
-            requirements: ["Bachelor's degree", "Good academic record", "English/German proficiency"],
-            tags: ["international", "masters", "PhD", "Germany", "Europe"],
-        },
+    
 
         // ============ GRANTS ============
         {
