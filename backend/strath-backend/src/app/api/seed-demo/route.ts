@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { user, account, profiles, matches, messages, swipes, blocks, reports, profileViews, session, starredProfiles } from "@/db/schema";
+import { user, account, profiles, matches, messages, swipes, blocks, reports, profileViews, session, starredProfiles, campusEvents, eventRsvps } from "@/db/schema";
 import { eq, or, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { randomUUID } from "crypto";
@@ -40,6 +40,75 @@ const DEMO_MATCHES = [
         yearOfStudy: 4,
         interests: ["Design", "Art", "Photography", "Yoga"],
         photo: "https://api.dicebear.com/7.x/avataaars/png?seed=emma",
+    },
+];
+
+// Demo events for Apple reviewers to see app functionality
+const DEMO_EVENTS = [
+    {
+        id: "demo-event-1",
+        title: "Tech Talk: AI & Machine Learning",
+        description: "Join us for an exciting evening exploring the latest trends in AI and Machine Learning. Guest speakers from leading tech companies will share insights on career opportunities and emerging technologies. Free pizza and networking afterwards! 🍕",
+        category: "academic" as const,
+        coverImage: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&h=400&fit=crop",
+        university: "Strathmore University",
+        location: "Auditorium B, Main Campus",
+        isVirtual: false,
+        organizerName: "Computer Science Club",
+        maxAttendees: 150,
+        hoursFromNow: 48, // Event in 2 days
+    },
+    {
+        id: "demo-event-2",
+        title: "Campus Music Night 🎵",
+        description: "An evening of live performances by talented student musicians! Come support your fellow students as they showcase their musical talents. Open mic session at the end - bring your instrument!",
+        category: "arts" as const,
+        coverImage: "https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=800&h=400&fit=crop",
+        university: "Strathmore University",
+        location: "Student Center Courtyard",
+        isVirtual: false,
+        organizerName: "Music Society",
+        maxAttendees: 200,
+        hoursFromNow: 72, // Event in 3 days
+    },
+    {
+        id: "demo-event-3",
+        title: "Career Fair 2026",
+        description: "Connect with top employers looking to hire Strathmore graduates! Over 50 companies will be present including Google, Microsoft, Safaricom, and more. Bring your CV and dress professionally. 💼",
+        category: "career" as const,
+        coverImage: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&h=400&fit=crop",
+        university: "Strathmore University",
+        location: "Sports Complex",
+        isVirtual: false,
+        organizerName: "Career Services",
+        maxAttendees: 500,
+        hoursFromNow: 120, // Event in 5 days
+    },
+    {
+        id: "demo-event-4",
+        title: "Basketball Tournament Finals 🏀",
+        description: "The moment we've all been waiting for! Watch the championship game between Business School and Engineering. Come cheer for your faculty! Refreshments will be provided.",
+        category: "sports" as const,
+        coverImage: "https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=400&fit=crop",
+        university: "Strathmore University",
+        location: "Indoor Sports Arena",
+        isVirtual: false,
+        organizerName: "Sports Department",
+        maxAttendees: 300,
+        hoursFromNow: 24, // Event tomorrow
+    },
+    {
+        id: "demo-event-5",
+        title: "Game Night: Board Games & Chill",
+        description: "Take a break from studying! Join us for a relaxing evening of board games, card games, and video games. We have Monopoly, Uno, FIFA, and more. Bring your friends! 🎮",
+        category: "social" as const,
+        coverImage: "https://images.unsplash.com/photo-1611371805429-8b5c1b2c34ba?w=800&h=400&fit=crop",
+        university: "Strathmore University",
+        location: "Common Room, Residence Hall",
+        isVirtual: false,
+        organizerName: "Social Committee",
+        maxAttendees: 50,
+        hoursFromNow: 6, // Event tonight
     },
 ];
 
@@ -135,6 +204,13 @@ export async function POST(request: NextRequest) {
                     inArray(starredProfiles.starredId, allDemoUserIds)
                 )
             );
+
+            // 7.5. Event RSVPs (delete before events)
+            const demoEventIds = DEMO_EVENTS.map(e => e.id);
+            await db.delete(eventRsvps).where(inArray(eventRsvps.eventId, demoEventIds));
+            
+            // 7.6. Campus Events created by demo users
+            await db.delete(campusEvents).where(inArray(campusEvents.id, demoEventIds));
 
             // 8. Sessions (has cascade but delete explicitly to be safe)
             await db.delete(session).where(inArray(session.userId, allDemoUserIds));
@@ -266,9 +342,47 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // Create demo campus events
+        console.log("Creating demo campus events...");
+        for (const eventData of DEMO_EVENTS) {
+            const startTime = new Date(Date.now() + eventData.hoursFromNow * 3600000);
+            const endTime = new Date(startTime.getTime() + 2 * 3600000); // 2 hours duration
+            
+            await db.insert(campusEvents).values({
+                id: eventData.id,
+                title: eventData.title,
+                description: eventData.description,
+                category: eventData.category,
+                coverImage: eventData.coverImage,
+                university: eventData.university,
+                location: eventData.location,
+                isVirtual: eventData.isVirtual,
+                organizerName: eventData.organizerName,
+                maxAttendees: eventData.maxAttendees,
+                startTime: startTime,
+                endTime: endTime,
+                creatorId: demoUserId,
+                isPublic: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            });
+
+            // Add some RSVPs from demo match users to make it look active
+            const rsvpCount = Math.floor(Math.random() * 3) + 1; // 1-3 RSVPs
+            for (let i = 0; i < rsvpCount && i < DEMO_MATCHES.length; i++) {
+                await db.insert(eventRsvps).values({
+                    eventId: eventData.id,
+                    userId: DEMO_MATCHES[i].id,
+                    status: Math.random() > 0.3 ? "going" : "interested",
+                    createdAt: new Date(Date.now() - Math.random() * 86400000), // Random in last day
+                });
+            }
+        }
+        console.log(`Created ${DEMO_EVENTS.length} demo events with RSVPs`);
+
         return NextResponse.json({
             success: true,
-            message: "Demo account created with pre-populated matches and conversations",
+            message: "Demo account created with pre-populated matches, conversations, and events",
             credentials: {
                 email: DEMO_EMAIL,
                 password: DEMO_PASSWORD
@@ -276,7 +390,8 @@ export async function POST(request: NextRequest) {
             features: {
                 matches: DEMO_MATCHES.length,
                 messagesPerMatch: 5,
-                note: "Demo account has 3 matches with active conversations"
+                events: DEMO_EVENTS.length,
+                note: "Demo account has 3 matches with active conversations and 5 upcoming campus events"
             }
         });
 
