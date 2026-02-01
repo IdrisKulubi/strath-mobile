@@ -75,24 +75,32 @@ export default function OnboardingScreen() {
 
     const submitData = async () => {
         setIsSubmitting(true);
+        console.log('[Onboarding] Starting profile submission...');
+        
         try {
             // Get auth token (works with both Better Auth and Apple Sign In)
             const token = await getAuthToken();
+            console.log('[Onboarding] Token retrieved:', token ? `${token.substring(0, 20)}...` : 'null');
 
             if (!token) {
                 throw new Error('Not authenticated. Please log in again.');
             }
 
             // Upload photos first
+            console.log('[Onboarding] Photos to upload:', formData.photos.length);
             let uploadedPhotos = [...formData.photos];
             if (uploadedPhotos.length > 0) {
-                uploadedPhotos = await Promise.all(uploadedPhotos.map(async (photo) => {
+                uploadedPhotos = await Promise.all(uploadedPhotos.map(async (photo, index) => {
                     if (photo && !photo.startsWith('http')) {
-                        return await uploadImage(photo);
+                        console.log(`[Onboarding] Uploading photo ${index + 1}...`);
+                        const uploaded = await uploadImage(photo);
+                        console.log(`[Onboarding] Photo ${index + 1} uploaded:`, uploaded ? 'success' : 'failed');
+                        return uploaded;
                     }
                     return photo;
                 }));
             }
+            console.log('[Onboarding] Photos after upload:', uploadedPhotos);
 
             // Convert lookingFor to interestedIn array for matching algorithm
             const getInterestedIn = (lookingFor: string): string[] => {
@@ -119,6 +127,9 @@ export default function OnboardingScreen() {
                 profileCompleted: true,
             };
 
+            console.log('[Onboarding] Payload keys:', Object.keys(payload));
+            console.log('[Onboarding] API URL:', `${process.env.EXPO_PUBLIC_API_URL}/api/user/me`);
+
             const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/user/me`, {
                 method: 'PATCH',
                 headers: {
@@ -128,20 +139,30 @@ export default function OnboardingScreen() {
                 body: JSON.stringify(payload),
             });
 
-            const responseData = await response.json().catch(() => ({}));
+            console.log('[Onboarding] Response status:', response.status);
+            
+            const responseText = await response.text();
+            console.log('[Onboarding] Response text:', responseText.substring(0, 500));
+            
+            let responseData: any = {};
+            try {
+                responseData = JSON.parse(responseText);
+            } catch (e) {
+                console.error('[Onboarding] Failed to parse response as JSON');
+            }
             
             if (!response.ok) {
-                console.error('Profile update failed:', response.status, responseData);
-                const errorMessage = responseData.error?.message || responseData.message || `Server error: ${response.status}`;
+                console.error('[Onboarding] Profile update failed:', response.status, responseData);
+                const errorMessage = responseData.error || responseData.message || `Server error: ${response.status}`;
                 throw new Error(errorMessage);
             }
 
-            console.log('Profile saved successfully:', responseData);
+            console.log('[Onboarding] Profile saved successfully!');
 
             // Navigate to main app
             router.replace('/(tabs)');
         } catch (error: any) {
-            console.error('Onboarding error:', error);
+            console.error('[Onboarding] Error:', error.message || error);
             Alert.alert('Error', error.message || 'Failed to save your profile. Please try again.');
         } finally {
             setIsSubmitting(false);
