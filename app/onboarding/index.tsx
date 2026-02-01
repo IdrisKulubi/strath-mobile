@@ -23,6 +23,7 @@ export default function OnboardingScreen() {
     const router = useRouter();
     const [step, setStep] = useState<OnboardingStep>(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
     const { uploadImage } = useImageUpload();
 
     const [formData, setFormData] = useState<OnboardingData>({
@@ -75,6 +76,7 @@ export default function OnboardingScreen() {
 
     const submitData = async () => {
         setIsSubmitting(true);
+        setSubmitError(null);
         console.log('[Onboarding] Starting profile submission...');
         
         try {
@@ -163,7 +165,7 @@ export default function OnboardingScreen() {
             router.replace('/(tabs)');
         } catch (error: any) {
             console.error('[Onboarding] Error:', error.message || error);
-            Alert.alert('Error', error.message || 'Failed to save your profile. Please try again.');
+            setSubmitError(error.message || 'Failed to save your profile. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
@@ -303,7 +305,10 @@ export default function OnboardingScreen() {
                         userName={formData.firstName}
                         mainPhoto={formData.photos[0]}
                         onComplete={handleCelebrationComplete}
+                        onRetry={handleCelebrationComplete}
                         isLoading={isSubmitting}
+                        hasError={!!submitError}
+                        errorMessage={submitError || undefined}
                     />
                 );
 

@@ -5,6 +5,8 @@ import {
     StyleSheet,
     Dimensions,
     Image,
+    Pressable,
+    ActivityIndicator,
 } from 'react-native';
 import Animated, {
     useSharedValue,
@@ -20,7 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Heart, Star, Sparkle, Rocket, CheckCircle } from 'phosphor-react-native';
+import { Heart, Star, Sparkle, Rocket, CheckCircle, ArrowClockwise } from 'phosphor-react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -105,7 +107,10 @@ interface LaunchCelebrationProps {
     userName: string;
     mainPhoto?: string;
     onComplete: () => void;
+    onRetry?: () => void;
     isLoading?: boolean;
+    hasError?: boolean;
+    errorMessage?: string;
 }
 
 // Animated floating element
@@ -159,7 +164,7 @@ const FloatingIcon = ({
     );
 };
 
-export function LaunchCelebration({ userName, mainPhoto, onComplete, isLoading }: LaunchCelebrationProps) {
+export function LaunchCelebration({ userName, mainPhoto, onComplete, onRetry, isLoading, hasError, errorMessage }: LaunchCelebrationProps) {
     const mainScale = useSharedValue(0);
     const mainOpacity = useSharedValue(0);
     const textScale = useSharedValue(0.8);
@@ -188,9 +193,11 @@ export function LaunchCelebration({ userName, mainPhoto, onComplete, isLoading }
             true
         ));
 
-        // Auto-navigate after celebration
+        // Auto-navigate after celebration (only if no error)
         const timer = setTimeout(() => {
-            onComplete();
+            if (!hasError) {
+                onComplete();
+            }
         }, 5000);
 
         return () => clearTimeout(timer);
@@ -284,10 +291,32 @@ export function LaunchCelebration({ userName, mainPhoto, onComplete, isLoading }
                     </View>
                 </Animated.View>
 
-                {/* CTA hint */}
-                <Animated.Text style={[styles.ctaHint, buttonStyle]}>
-                    {isLoading ? 'Setting up your profile... 🚀' : 'Taking you to discover... ✨'}
-                </Animated.Text>
+                {/* CTA hint or Error/Retry */}
+                {hasError ? (
+                    <Animated.View style={[styles.errorContainer, buttonStyle]}>
+                        <Text style={styles.errorText}>
+                            {errorMessage || 'Something went wrong. Please try again.'}
+                        </Text>
+                        <Pressable
+                            style={styles.retryButton}
+                            onPress={onRetry}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? (
+                                <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                                <>
+                                    <ArrowClockwise size={20} color="#fff" weight="bold" />
+                                    <Text style={styles.retryButtonText}>Retry</Text>
+                                </>
+                            )}
+                        </Pressable>
+                    </Animated.View>
+                ) : (
+                    <Animated.Text style={[styles.ctaHint, buttonStyle]}>
+                        {isLoading ? 'Setting up your profile... 🚀' : 'Taking you to discover... ✨'}
+                    </Animated.Text>
+                )}
             </View>
         </View>
     );
@@ -380,5 +409,29 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#64748b',
         fontStyle: 'italic',
+    },
+    errorContainer: {
+        alignItems: 'center',
+        gap: 16,
+    },
+    errorText: {
+        fontSize: 14,
+        color: '#f87171',
+        textAlign: 'center',
+        maxWidth: 280,
+    },
+    retryButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: '#ec4899',
+        paddingHorizontal: 32,
+        paddingVertical: 14,
+        borderRadius: 30,
+    },
+    retryButtonText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#fff',
     },
 });
