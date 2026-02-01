@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     StyleSheet,
@@ -29,8 +29,26 @@ export default function LoginScreen() {
     const [loading, setLoading] = useState(false);
     const [appleLoading, setAppleLoading] = useState(false);
     const [demoLoading, setDemoLoading] = useState(false);
+    const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
     const router = useRouter();
     const toast = useToast();
+
+    // Check if Apple Authentication is available on this device
+    useEffect(() => {
+        const checkAppleAuth = async () => {
+            if (Platform.OS === 'ios') {
+                try {
+                    const isAvailable = await AppleAuthentication.isAvailableAsync();
+                    console.log("[Apple Auth] Available:", isAvailable);
+                    setAppleAuthAvailable(isAvailable);
+                } catch (error) {
+                    console.log("[Apple Auth] Check failed:", error);
+                    setAppleAuthAvailable(false);
+                }
+            }
+        };
+        checkAppleAuth();
+    }, []);
 
     const handleGoogleAuth = async () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -63,22 +81,37 @@ export default function LoginScreen() {
         setDemoLoading(true);
 
         try {
-            // First, try to seed the demo account (in case it doesn't exist or needs recreation)
             const apiUrl = process.env.EXPO_PUBLIC_API_URL || "https://www.strathspace.com";
-            console.log("[Demo Login] Seeding demo account at:", apiUrl);
+            console.log("[Demo Login] Starting demo login flow at:", apiUrl);
             
-            const seedResponse = await fetch(`${apiUrl}/api/seed-demo`, { method: 'POST' });
-            const seedData = await seedResponse.json().catch(() => ({}));
-            console.log("[Demo Login] Seed response:", seedData);
+            // Step 1: Seed the demo account (creates or recreates with correct password)
+            console.log("[Demo Login] Seeding demo account...");
+            const seedResponse = await fetch(`${apiUrl}/api/seed-demo`, { 
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
             
-            // Now attempt login with email/password
+            const seedData = await seedResponse.json().catch(() => ({ error: 'Failed to parse response' }));
+            console.log("[Demo Login] Seed response:", JSON.stringify(seedData));
+            
+            if (!seedResponse.ok) {
+                console.error("[Demo Login] Seed failed:", seedData);
+                // Continue anyway - the account might already exist and be valid
+            }
+            
+            // Step 2: Wait a moment for the database to settle
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Step 3: Attempt login with email/password
             console.log("[Demo Login] Attempting signIn.email with:", DEMO_EMAIL);
             const result = await signIn.email({
                 email: DEMO_EMAIL,
                 password: DEMO_PASSWORD,
             });
 
-            console.log("[Demo Login] SignIn result:", result);
+            console.log("[Demo Login] SignIn result:", JSON.stringify(result));
 
             if (result.data) {
                 toast.show({
@@ -86,16 +119,52 @@ export default function LoginScreen() {
                     variant: 'success'
                 });
                 router.replace('/');
-            } else if (result.error) {
-                console.error("Demo login error:", result.error);
+                return;
+            }
+            
+            // If first attempt failed, try seeding again and retry
+            if (result.error) {
+                console.log("[Demo Login] First attempt failed, retrying with fresh seed...");
+                
+                // Re-seed the account
+                await fetch(`${apiUrl}/api/seed-demo`, { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Retry login
+                const retryResult = await signIn.email({
+                    email: DEMO_EMAIL,
+                    password: DEMO_PASSWORD,
+                });
+                
+                console.log("[Demo Login] Retry result:", JSON.stringify(retryResult));
+                
+                if (retryResult.data) {
+                    toast.show({
+                        message: 'Welcome, Demo User!',
+                        variant: 'success'
+                    });
+                    router.replace('/');
+                    return;
+                }
+                
+                // Show specific error message
+                const errorMsg = retryResult.error?.message || result.error?.message || 'Unknown error';
+                console.error("[Demo Login] Final error:", errorMsg);
                 toast.show({
-                    message: `Demo login failed: ${result.error.message || 'Unknown error'}`,
+                    message: `Demo login failed: ${errorMsg}. Please try again.`,
                     variant: 'danger'
                 });
             }
-        } catch (error) {
-            console.error("Demo auth error:", error);
-            toast.show({ message: 'Demo login failed. Please try again.', variant: 'danger' });
+        } catch (error: any) {
+            console.error("[Demo Login] Exception:", error);
+            toast.show({ 
+                message: `Demo login error: ${error.message || 'Network error'}. Please check your connection and try again.`, 
+                variant: 'danger' 
+            });
         } finally {
             setDemoLoading(false);
         }
@@ -281,7 +350,8 @@ export default function LoginScreen() {
                         style={styles.authSection}
                     >
                         {/* Sign in with Apple - FIRST for iOS (Apple Guidelines 4.8) */}
-                        {Platform.OS === 'ios' && (
+                        {/* Must be shown as equivalent option to other login methods */}
+                        {appleAuthAvailable && (
                             <View style={styles.appleButtonContainer}>
                                 <AppleAuthentication.AppleAuthenticationButton
                                     buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
@@ -305,7 +375,7 @@ export default function LoginScreen() {
                             variant="secondary"
                             size="lg"
                             className="w-full h-14 rounded-full bg-white border-0 shadow-lg shadow-black/20"
-                            style={{ marginTop: Platform.OS === 'ios' ? 12 : 0 }}
+                            style={{ marginTop: appleAuthAvailable ? 12 : 0 }}
                         >
                             {loading ? (
                                 <ActivityIndicator color="#4285F4" size="small" />
@@ -505,6 +575,9 @@ const styles = StyleSheet.create({
         marginTop: 50,
         alignItems: 'center',
         paddingBottom: Platform.OS === 'ios' ? 20 : 30,
+        width: '100%',
+        maxWidth: 400, // Limit width on iPad for better UX
+        alignSelf: 'center',
     },
     termsText: {
         fontSize: 12,
