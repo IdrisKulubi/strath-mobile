@@ -82,16 +82,27 @@ export async function PATCH(req: NextRequest) {
                             session: dbSession,
                             user: dbSession.user
                         } as any;
+                    } else {
+                        console.error('[PATCH /api/user/me] Session expired');
+                        return errorResponse(new Error("Session expired. Please log in again."), 401);
                     }
+                } else {
+                    console.error('[PATCH /api/user/me] Token not found in database');
                 }
+            } else {
+                console.error('[PATCH /api/user/me] No authorization header');
             }
         }
 
         if (!session) {
-            return errorResponse(new Error("Unauthorized"), 401);
+            return errorResponse(new Error("Unauthorized. Please log in again."), 401);
         }
 
+        console.log('[PATCH /api/user/me] User ID:', session.user.id);
+
         const body = await req.json();
+        console.log('[PATCH /api/user/me] Request body keys:', Object.keys(body));
+        
         const validatedData = updateProfileSchema.parse(body);
 
         // Filter out null values (keep undefined to not overwrite DB values)
@@ -134,8 +145,15 @@ export async function PATCH(req: NextRequest) {
         }
 
         return successResponse(resultProfile);
-    } catch (error) {
+    } catch (error: any) {
         console.error('[PATCH /api/user/me] Error:', error);
+        
+        // Check for Zod validation errors
+        if (error.name === 'ZodError') {
+            const message = error.errors?.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ') || 'Validation error';
+            return errorResponse(new Error(message), 400);
+        }
+        
         return errorResponse(error);
     }
 }

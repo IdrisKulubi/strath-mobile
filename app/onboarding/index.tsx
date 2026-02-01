@@ -128,17 +128,21 @@ export default function OnboardingScreen() {
                 body: JSON.stringify(payload),
             });
 
+            const responseData = await response.json().catch(() => ({}));
+            
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                console.error('Profile update failed:', response.status, errorData);
-                throw new Error(errorData.message || 'Failed to update profile');
+                console.error('Profile update failed:', response.status, responseData);
+                const errorMessage = responseData.error?.message || responseData.message || `Server error: ${response.status}`;
+                throw new Error(errorMessage);
             }
+
+            console.log('Profile saved successfully:', responseData);
 
             // Navigate to main app
             router.replace('/(tabs)');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Onboarding error:', error);
-            Alert.alert('Error', 'Failed to save your profile. Please try again.');
+            Alert.alert('Error', error.message || 'Failed to save your profile. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
