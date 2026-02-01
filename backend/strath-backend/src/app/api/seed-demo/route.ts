@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { user, account, profiles, matches, messages } from "@/db/schema";
-import { eq, or } from "drizzle-orm";
+import { user, account, profiles, matches, messages, swipes, blocks, reports, profileViews, session, starredProfiles } from "@/db/schema";
+import { eq, or, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { randomUUID } from "crypto";
 
@@ -45,47 +45,110 @@ const DEMO_MATCHES = [
 
 export async function POST(request: NextRequest) {
     try {
-        // Check if demo user already exists
-        const existingUser = await db
-            .select()
-            .from(user)
-            .where(eq(user.email, DEMO_EMAIL))
-            .limit(1);
+        // Collect all demo user IDs (main demo user + demo match users)
+        const allDemoEmails = [DEMO_EMAIL, ...DEMO_MATCHES.map(m => m.email)];
+        const allDemoUserIds: string[] = [];
+
+        // Find all existing demo users
+        for (const email of allDemoEmails) {
+            const existing = await db.select({ id: user.id }).from(user).where(eq(user.email, email)).limit(1);
+            if (existing.length > 0) {
+                allDemoUserIds.push(existing[0].id);
+            }
+        }
+
+        // Also add the hardcoded demo match IDs in case they exist with different emails
+        for (const matchUser of DEMO_MATCHES) {
+            if (!allDemoUserIds.includes(matchUser.id)) {
+                const existing = await db.select({ id: user.id }).from(user).where(eq(user.id, matchUser.id)).limit(1);
+                if (existing.length > 0) {
+                    allDemoUserIds.push(matchUser.id);
+                }
+            }
+        }
 
         let demoUserId: string;
 
-        // If user exists, delete it first to recreate with correct password hash
-        if (existingUser.length > 0) {
-            demoUserId = existingUser[0].id;
-            
-            // Delete related records first (messages, matches, profiles, accounts)
-            await db.delete(messages).where(
+        // If any demo users exist, clean them up completely
+        if (allDemoUserIds.length > 0) {
+            console.log("Cleaning up existing demo users:", allDemoUserIds);
+
+            // Get all match IDs involving demo users to delete their messages
+            const demoMatches = await db.select({ id: matches.id }).from(matches).where(
                 or(
-                    eq(messages.senderId, demoUserId),
-                    ...DEMO_MATCHES.map(m => eq(messages.senderId, m.id))
+                    inArray(matches.user1Id, allDemoUserIds),
+                    inArray(matches.user2Id, allDemoUserIds)
                 )
             );
+            const matchIds = demoMatches.map(m => m.id);
+
+            // Delete in correct order to respect foreign key constraints
+            // 1. Messages (references matches and users)
+            if (matchIds.length > 0) {
+                await db.delete(messages).where(inArray(messages.matchId, matchIds));
+            }
+
+            // 2. Matches (references users)
             await db.delete(matches).where(
                 or(
-                    eq(matches.user1Id, demoUserId),
-                    eq(matches.user2Id, demoUserId)
+                    inArray(matches.user1Id, allDemoUserIds),
+                    inArray(matches.user2Id, allDemoUserIds)
                 )
             );
-            await db.delete(profiles).where(eq(profiles.userId, demoUserId));
-            await db.delete(account).where(eq(account.userId, demoUserId));
-            await db.delete(user).where(eq(user.id, demoUserId));
-            
-            console.log("Deleted existing demo user to recreate with correct hash");
-        }
 
-        // Clean up demo match users too
-        for (const matchUser of DEMO_MATCHES) {
-            const existing = await db.select().from(user).where(eq(user.email, matchUser.email)).limit(1);
-            if (existing.length > 0) {
-                await db.delete(messages).where(eq(messages.senderId, existing[0].id));
-                await db.delete(profiles).where(eq(profiles.userId, existing[0].id));
-                await db.delete(user).where(eq(user.id, existing[0].id));
-            }
+            // 3. Swipes (references users)
+            await db.delete(swipes).where(
+                or(
+                    inArray(swipes.swiperId, allDemoUserIds),
+                    inArray(swipes.swipedId, allDemoUserIds)
+                )
+            );
+
+            // 4. Blocks (references users)
+            await db.delete(blocks).where(
+                or(
+                    inArray(blocks.blockerId, allDemoUserIds),
+                    inArray(blocks.blockedId, allDemoUserIds)
+                )
+            );
+
+            // 5. Reports (references users)
+            await db.delete(reports).where(
+                or(
+                    inArray(reports.reporterId, allDemoUserIds),
+                    inArray(reports.reportedUserId, allDemoUserIds)
+                )
+            );
+
+            // 6. Profile views (references users)
+            await db.delete(profileViews).where(
+                or(
+                    inArray(profileViews.viewerId, allDemoUserIds),
+                    inArray(profileViews.viewedId, allDemoUserIds)
+                )
+            );
+
+            // 7. Starred profiles (has cascade but delete explicitly to be safe)
+            await db.delete(starredProfiles).where(
+                or(
+                    inArray(starredProfiles.userId, allDemoUserIds),
+                    inArray(starredProfiles.starredId, allDemoUserIds)
+                )
+            );
+
+            // 8. Sessions (has cascade but delete explicitly to be safe)
+            await db.delete(session).where(inArray(session.userId, allDemoUserIds));
+
+            // 8. Profiles (has cascade but delete explicitly)
+            await db.delete(profiles).where(inArray(profiles.userId, allDemoUserIds));
+
+            // 9. Accounts (has cascade but delete explicitly)
+            await db.delete(account).where(inArray(account.userId, allDemoUserIds));
+
+            // 10. Finally delete the users
+            await db.delete(user).where(inArray(user.id, allDemoUserIds));
+
+            console.log("Successfully deleted all demo users and related data");
         }
 
         // Use Better Auth's signUpEmail API to create the user properly
