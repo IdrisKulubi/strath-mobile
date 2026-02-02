@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { swipes, matches, user } from "@/db/schema";
 import { swipeSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/api-response";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 import { sendPushNotification } from "@/lib/notifications";
@@ -64,69 +64,132 @@ export async function POST(req: NextRequest) {
 
         const isLike = action === "like";
 
-        // Record the swipe
-        await db.insert(swipes).values({
-            swiperId: session.user.id,
-            swipedId: targetUserId,
-            isLike,
+        // Check if user already swiped on this person (prevent duplicates)
+        const existingSwipe = await db.query.swipes.findFirst({
+            where: and(
+                eq(swipes.swiperId, session.user.id),
+                eq(swipes.swipedId, targetUserId)
+            ),
         });
+
+        // If already swiped, update the existing swipe instead of creating a new one
+        if (existingSwipe) {
+            await db
+                .update(swipes)
+                .set({ isLike, createdAt: new Date() })
+                .where(eq(swipes.id, existingSwipe.id));
+        } else {
+            // Record the new swipe
+            await db.insert(swipes).values({
+                swiperId: session.user.id,
+                swipedId: targetUserId,
+                isLike,
+            });
+        }
 
         let isMatch = false;
         let matchData = null;
 
         if (isLike) {
-            // Check if the other user already liked us
-            const otherSwipe = await db.query.swipes.findFirst({
-                where: and(
-                    eq(swipes.swiperId, targetUserId),
-                    eq(swipes.swipedId, session.user.id),
-                    eq(swipes.isLike, true)
+            // First check if a match already exists between these users
+            const existingMatch = await db.query.matches.findFirst({
+                where: or(
+                    and(
+                        eq(matches.user1Id, session.user.id),
+                        eq(matches.user2Id, targetUserId)
+                    ),
+                    and(
+                        eq(matches.user1Id, targetUserId),
+                        eq(matches.user2Id, session.user.id)
+                    )
                 ),
             });
 
-            if (otherSwipe) {
+            if (existingMatch) {
+                // Match already exists, return it
                 isMatch = true;
-                // Create match
-                const [newMatch] = await db
-                    .insert(matches)
-                    .values({
-                        user1Id: session.user.id,
-                        user2Id: targetUserId,
-                    })
-                    .returning();
-
-                matchData = newMatch;
-
-                // Fetch users to get push tokens
-                const user1 = await db.query.user.findFirst({
-                    where: eq(user.id, session.user.id),
-                });
-                const user2 = await db.query.user.findFirst({
-                    where: eq(user.id, targetUserId),
+                matchData = existingMatch;
+                console.log(`[SWIPE] Match already exists between ${session.user.id} and ${targetUserId}`);
+            } else {
+                // Check if the other user already liked us
+                const otherSwipe = await db.query.swipes.findFirst({
+                    where: and(
+                        eq(swipes.swiperId, targetUserId),
+                        eq(swipes.swipedId, session.user.id),
+                        eq(swipes.isLike, true)
+                    ),
                 });
 
-                // Notify user 2 (target)
-                if (user2?.pushToken) {
-                    await sendPushNotification(
-                        user2.pushToken,
-                        "New Match! 🎉",
-                        { matchId: newMatch.id, partnerId: session.user.id }
-                    );
+                console.log(`[SWIPE] User ${session.user.id} liked ${targetUserId}. Other user's swipe:`, otherSwipe ? 'EXISTS (liked)' : 'NOT FOUND or PASS');
+
+                if (otherSwipe) {
+                    isMatch = true;
+                    // Create match
+                    try {
+                        const [newMatch] = await db
+                            .insert(matches)
+                            .values({
+                                user1Id: session.user.id,
+                                user2Id: targetUserId,
+                            })
+                            .returning();
+
+                        matchData = newMatch;
+                        console.log(`[SWIPE] NEW MATCH CREATED! ID: ${newMatch.id}`);
+
+                        // Fetch users to get push tokens
+                        const user1 = await db.query.user.findFirst({
+                            where: eq(user.id, session.user.id),
+                        });
+                        const user2 = await db.query.user.findFirst({
+                            where: eq(user.id, targetUserId),
+                        });
+
+                        // Notify user 2 (target)
+                        if (user2?.pushToken) {
+                            await sendPushNotification(
+                                user2.pushToken,
+                                "New Match! 🎉",
+                                { matchId: newMatch.id, partnerId: session.user.id }
+                            );
+                        }
+
+                        // Notify user 1 (current) - optional, usually UI handles this immediately
+                        if (user1?.pushToken) {
+                            await sendPushNotification(
+                                user1.pushToken,
+                                "It's a Match! 🎉",
+                                { matchId: newMatch.id, partnerId: targetUserId }
+                            );
+                        }
+
+                        // Log Pulse Event for Match
+                        await logPulseEvent('match', `New match just happened! 🔥`, {
+                            university: user1?.name ? user1.name.split(' ')[0] : 'Someone'
+                        });
+                    } catch (matchError) {
+                        console.error(`[SWIPE] Error creating match:`, matchError);
+                        // Match creation failed, but swipe was recorded
+                        // This could happen due to race condition - check if match now exists
+                        const raceMatch = await db.query.matches.findFirst({
+                            where: or(
+                                and(
+                                    eq(matches.user1Id, session.user.id),
+                                    eq(matches.user2Id, targetUserId)
+                                ),
+                                and(
+                                    eq(matches.user1Id, targetUserId),
+                                    eq(matches.user2Id, session.user.id)
+                                )
+                            ),
+                        });
+                        if (raceMatch) {
+                            isMatch = true;
+                            matchData = raceMatch;
+                            console.log(`[SWIPE] Race condition resolved - match found: ${raceMatch.id}`);
+                        }
+                    }
                 }
-
-                // Notify user 1 (current) - optional, usually UI handles this immediately
-                if (user1?.pushToken) {
-                    await sendPushNotification(
-                        user1.pushToken,
-                        "It's a Match! 🎉",
-                        { matchId: newMatch.id, partnerId: targetUserId }
-                    );
-                }
-
-                // Log Pulse Event for Match
-                await logPulseEvent('match', `New match just happened! 🔥`, {
-                    university: user1?.name ? user1.name.split(' ')[0] : 'Someone'
-                });
             }
         }
 

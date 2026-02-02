@@ -28,6 +28,16 @@ interface Match {
   profile: Profile;
 }
 
+interface CurrentUser {
+  id: string;
+  name?: string;
+  image?: string;
+  profile?: {
+    profilePhoto?: string;
+    photos?: string[];
+  };
+}
+
 // Icons
 const XIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -53,10 +63,24 @@ export default function DiscoverPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [matchedProfile, setMatchedProfile] = useState<Match | null>(null);
   const [swipeDirection, setSwipeDirection] = useState<"left" | "right" | null>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
   useEffect(() => {
     fetchProfiles();
+    fetchCurrentUser();
   }, []);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch("/api/user/me");
+      const data = await response.json();
+      if (data.success) {
+        setCurrentUser(data.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch current user:", error);
+    }
+  };
 
   const fetchProfiles = async () => {
     try {
@@ -225,6 +249,7 @@ export default function DiscoverPage() {
       {/* Match Modal */}
       <MatchModal
         match={matchedProfile}
+        currentUserPhoto={currentUser?.profile?.profilePhoto || currentUser?.profile?.photos?.[0] || currentUser?.image}
         onClose={() => setMatchedProfile(null)}
       />
     </div>

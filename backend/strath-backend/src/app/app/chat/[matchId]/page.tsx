@@ -24,20 +24,38 @@ interface Message {
   read: boolean;
 }
 
-interface MatchProfile {
-  userId: string;
-  firstName: string;
+interface PartnerProfile {
+  firstName?: string;
   lastName?: string;
   profilePhoto?: string;
-  photos: string[];
+  photos?: string[];
   course?: string;
-  age: number;
+  age?: number;
+}
+
+interface Partner {
+  id: string;
+  name?: string;
+  image?: string;
+  profile?: PartnerProfile;
 }
 
 interface MatchData {
   id: string;
-  profile: MatchProfile;
-  messages: Message[];
+  partner?: Partner;
+  // Legacy support for old structure
+  profile?: {
+    userId: string;
+    firstName: string;
+    lastName?: string;
+    profilePhoto?: string;
+    photos: string[];
+    course?: string;
+    age: number;
+  };
+  messages?: Message[];
+  lastMessage?: Message | null;
+  createdAt?: string;
 }
 
 // Icons
@@ -91,8 +109,10 @@ export default function ChatPage() {
       const response = await fetch(`/api/matches/${matchId}`);
       const data = await response.json();
       if (data.success) {
-        setMatchData(data.data);
-        setMessages(data.data.messages || []);
+        // Handle both API response structures: data.data.match or data.data directly
+        const matchInfo = data.data?.match || data.data;
+        setMatchData(matchInfo);
+        setMessages(matchInfo?.messages || []);
       }
     } catch (error) {
       console.error("Failed to fetch match:", error);
@@ -103,7 +123,7 @@ export default function ChatPage() {
 
   const fetchMessages = useCallback(async () => {
     try {
-      const response = await fetch(`/api/matches/${matchId}/messages`);
+      const response = await fetch(`/api/messages/${matchId}`);
       const data = await response.json();
       if (data.success) {
         setMessages(data.data || []);
@@ -148,7 +168,7 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, tempMessage]);
 
     try {
-      const response = await fetch(`/api/matches/${matchId}/messages`, {
+      const response = await fetch(`/api/messages/${matchId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: messageContent }),
@@ -157,6 +177,7 @@ export default function ChatPage() {
       const data = await response.json();
       if (!data.success) {
         // Remove optimistic message on error
+        console.error("Send message failed:", data);
         setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
       }
     } catch (error) {
@@ -181,11 +202,18 @@ export default function ChatPage() {
   const handleBlock = async () => {
     if (!confirm("Are you sure you want to block this user? They won't be able to see your profile.")) return;
 
+    // Get partner ID from either structure
+    const blockUserId = matchData?.partner?.id || matchData?.profile?.userId;
+    if (!blockUserId) {
+      console.error("No user ID found to block");
+      return;
+    }
+
     try {
       await fetch("/api/block", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blockedUserId: matchData?.profile.userId }),
+        body: JSON.stringify({ blockedUserId: blockUserId }),
       });
       router.push("/app/matches");
     } catch (error) {
@@ -222,7 +250,13 @@ export default function ChatPage() {
     );
   }
 
-  const profilePhoto = matchData.profile.profilePhoto || matchData.profile.photos?.[0];
+  // Get partner info - handle both API structures (new: partner.profile, legacy: profile directly)
+  const partner = matchData.partner;
+  const partnerProfile = partner?.profile || matchData.profile;
+  const partnerId = partner?.id || matchData.profile?.userId;
+  const partnerName = partnerProfile?.firstName || partner?.name?.split(' ')[0] || 'User';
+  const profilePhoto = partnerProfile?.profilePhoto || partnerProfile?.photos?.[0] || partner?.image;
+  const partnerCourse = partnerProfile?.course;
 
   return (
     <div className="flex flex-col h-screen">
@@ -238,12 +272,12 @@ export default function ChatPage() {
             <ArrowLeftIcon />
           </Button>
           
-          <Link href={`/app/profile/${matchData.profile.userId}`} className="flex items-center gap-2 md:gap-3 active:opacity-70 transition-opacity">
+          <Link href={`/app/profile/${partnerId}`} className="flex items-center gap-2 md:gap-3 active:opacity-70 transition-opacity">
             <div className="w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden ring-2 ring-pink-500/30">
               {profilePhoto ? (
                 <Image
                   src={profilePhoto}
-                  alt={matchData.profile.firstName}
+                  alt={partnerName}
                   width={40}
                   height={40}
                   className="object-cover w-full h-full"
@@ -256,10 +290,10 @@ export default function ChatPage() {
             </div>
             <div className="min-w-0">
               <h2 className="font-semibold text-white text-sm md:text-base truncate">
-                {matchData.profile.firstName}
+                {partnerName}
               </h2>
               <p className="text-[10px] md:text-xs text-gray-400 truncate">
-                {matchData.profile.course || "Strathmore University"}
+                {partnerCourse || "Strathmore University"}
               </p>
             </div>
           </Link>
@@ -298,7 +332,7 @@ export default function ChatPage() {
               {profilePhoto ? (
                 <Image
                   src={profilePhoto}
-                  alt={matchData.profile.firstName}
+                  alt={partnerName}
                   width={80}
                   height={80}
                   className="object-cover w-full h-full"
@@ -310,7 +344,7 @@ export default function ChatPage() {
               )}
             </div>
             <h3 className="text-base md:text-lg font-semibold text-white mb-1">
-              You matched with {matchData.profile.firstName}!
+              You matched with {partnerName}!
             </h3>
             <p className="text-xs md:text-sm text-gray-400">
               Start the conversation 💬
