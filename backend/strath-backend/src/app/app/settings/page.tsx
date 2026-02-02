@@ -126,40 +126,40 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6 pb-20">
+    <div className="max-w-2xl mx-auto p-4 md:p-6 pb-24 md:pb-20">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
+      <div className="flex items-center gap-3 md:gap-4 mb-6 md:mb-8">
         <Link href="/app/profile">
-          <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white hover:bg-white/5">
+          <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white hover:bg-white/5 active:bg-white/10 w-10 h-10">
             <ArrowLeftIcon />
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-white">Settings</h1>
-          <p className="text-gray-400 text-sm">Manage your account preferences</p>
+          <h1 className="text-xl md:text-2xl font-bold text-white">Settings</h1>
+          <p className="text-gray-400 text-xs md:text-sm">Manage your account preferences</p>
         </div>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Discovery Settings */}
         <Card className="bg-[#1a1a2e] border-white/10 overflow-hidden">
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 px-4 md:px-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500/20 to-rose-500/20 flex items-center justify-center">
+              <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-pink-500/20 to-rose-500/20 flex items-center justify-center">
                 <EyeIcon />
               </div>
               <div>
-                <CardTitle className="text-white text-lg">Discovery</CardTitle>
-                <CardDescription className="text-gray-400 text-sm">
+                <CardTitle className="text-white text-base md:text-lg">Discovery</CardTitle>
+                <CardDescription className="text-gray-400 text-xs md:text-sm">
                   Control who can see your profile
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-1 pt-4">
-            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors">
-              <div>
-                <Label htmlFor="show-profile" className="text-white font-medium cursor-pointer">
+          <CardContent className="space-y-1 pt-4 px-4 md:px-6">
+            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 active:bg-white/10 transition-colors">
+              <div className="flex-1 min-w-0 pr-3">
+                <Label htmlFor="show-profile" className="text-white font-medium cursor-pointer text-sm md:text-base">
                   Show my profile
                 </Label>
                 <p className="text-gray-500 text-xs mt-0.5">Others can discover you</p>
@@ -171,9 +171,9 @@ export default function SettingsPage() {
                 className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-pink-500 data-[state=checked]:to-rose-500"
               />
             </div>
-            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors">
-              <div>
-                <Label htmlFor="show-distance" className="text-white font-medium cursor-pointer">
+            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 active:bg-white/10 transition-colors">
+              <div className="flex-1 min-w-0 pr-3">
+                <Label htmlFor="show-distance" className="text-white font-medium cursor-pointer text-sm md:text-base">
                   Show distance
                 </Label>
                 <p className="text-gray-500 text-xs mt-0.5">Display distance on your profile</p>
@@ -190,23 +190,23 @@ export default function SettingsPage() {
 
         {/* Notifications */}
         <Card className="bg-[#1a1a2e] border-white/10 overflow-hidden">
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 px-4 md:px-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
+              <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
                 <BellIcon />
               </div>
               <div>
-                <CardTitle className="text-white text-lg">Notifications</CardTitle>
-                <CardDescription className="text-gray-400 text-sm">
+                <CardTitle className="text-white text-base md:text-lg">Notifications</CardTitle>
+                <CardDescription className="text-gray-400 text-xs md:text-sm">
                   Manage your notification preferences
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-1 pt-4">
-            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors">
-              <div>
-                <Label htmlFor="email-matches" className="text-white font-medium cursor-pointer">
+          <CardContent className="space-y-1 pt-4 px-4 md:px-6">
+            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 active:bg-white/10 transition-colors">
+              <div className="flex-1 min-w-0 pr-3">
+                <Label htmlFor="email-matches" className="text-white font-medium cursor-pointer text-sm md:text-base">
                   New matches
                 </Label>
                 <p className="text-gray-500 text-xs mt-0.5">Get notified when you match</p>
@@ -218,9 +218,9 @@ export default function SettingsPage() {
                 className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-pink-500 data-[state=checked]:to-rose-500"
               />
             </div>
-            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors">
-              <div>
-                <Label htmlFor="email-messages" className="text-white font-medium cursor-pointer">
+            <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 active:bg-white/10 transition-colors">
+              <div className="flex-1 min-w-0 pr-3">
+                <Label htmlFor="email-messages" className="text-white font-medium cursor-pointer text-sm md:text-base">
                   New messages
                 </Label>
                 <p className="text-gray-500 text-xs mt-0.5">Get notified for new messages</p>
@@ -237,48 +237,48 @@ export default function SettingsPage() {
 
         {/* Legal */}
         <Card className="bg-[#1a1a2e] border-white/10 overflow-hidden">
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 px-4 md:px-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center">
+              <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center">
                 <ShieldIcon />
               </div>
               <div>
-                <CardTitle className="text-white text-lg">Legal & Support</CardTitle>
-                <CardDescription className="text-gray-400 text-sm">
+                <CardTitle className="text-white text-base md:text-lg">Legal & Support</CardTitle>
+                <CardDescription className="text-gray-400 text-xs md:text-sm">
                   Policies and help resources
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-4">
+          <CardContent className="pt-4 px-4 md:px-6">
             <div className="space-y-1">
               <Link 
                 href="/terms" 
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors group"
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 active:bg-white/10 transition-colors group"
               >
                 <div className="flex items-center gap-3">
                   <FileTextIcon />
-                  <span className="text-white font-medium">Terms of Service</span>
+                  <span className="text-white font-medium text-sm md:text-base">Terms of Service</span>
                 </div>
                 <ChevronRightIcon />
               </Link>
               <Link 
                 href="/privacy" 
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors group"
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 active:bg-white/10 transition-colors group"
               >
                 <div className="flex items-center gap-3">
                   <LockIcon />
-                  <span className="text-white font-medium">Privacy Policy</span>
+                  <span className="text-white font-medium text-sm md:text-base">Privacy Policy</span>
                 </div>
                 <ChevronRightIcon />
               </Link>
               <Link 
                 href="/support" 
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors group"
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 active:bg-white/10 transition-colors group"
               >
                 <div className="flex items-center gap-3">
                   <HeadphonesIcon />
-                  <span className="text-white font-medium">Contact Support</span>
+                  <span className="text-white font-medium text-sm md:text-base">Contact Support</span>
                 </div>
                 <ChevronRightIcon />
               </Link>
@@ -288,13 +288,13 @@ export default function SettingsPage() {
 
         {/* Account Actions */}
         <Card className="bg-[#1a1a2e] border-white/10 overflow-hidden">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-white text-lg">Account</CardTitle>
+          <CardHeader className="pb-2 px-4 md:px-6">
+            <CardTitle className="text-white text-base md:text-lg">Account</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 pt-4">
+          <CardContent className="space-y-3 pt-4 px-4 md:px-6">
             <Button
               variant="outline"
-              className="w-full h-12 border-white/10 text-white hover:text-white hover:bg-white/5 justify-start gap-3 font-medium"
+              className="w-full h-11 md:h-12 border-white/10 text-white hover:text-white hover:bg-white/5 active:bg-white/10 justify-start gap-3 font-medium text-sm md:text-base"
               onClick={handleSignOut}
             >
               <LogOutIcon />
@@ -305,28 +305,28 @@ export default function SettingsPage() {
               <AlertDialogTrigger asChild>
                 <Button
                   variant="outline"
-                  className="w-full h-12 border-red-500/20 text-red-400 hover:text-red-300 hover:bg-red-500/10 justify-start gap-3 font-medium"
+                  className="w-full h-11 md:h-12 border-red-500/20 text-red-400 hover:text-red-300 hover:bg-red-500/10 active:bg-red-500/20 justify-start gap-3 font-medium text-sm md:text-base"
                 >
                   <TrashIcon />
                   Delete Account
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent className="bg-[#1a1a2e] border-white/10">
+              <AlertDialogContent className="bg-[#1a1a2e] border-white/10 mx-4 max-w-[calc(100vw-2rem)] md:max-w-lg">
                 <AlertDialogHeader>
-                  <AlertDialogTitle className="text-white text-xl">Delete Account?</AlertDialogTitle>
-                  <AlertDialogDescription className="text-gray-400">
+                  <AlertDialogTitle className="text-white text-lg md:text-xl">Delete Account?</AlertDialogTitle>
+                  <AlertDialogDescription className="text-gray-400 text-sm">
                     This action cannot be undone. This will permanently delete your account,
                     profile, matches, and all messages.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
-                <AlertDialogFooter className="gap-3">
-                  <AlertDialogCancel className="bg-white/5 border-white/10 text-gray-300 hover:text-white hover:bg-white/10">
+                <AlertDialogFooter className="gap-2 md:gap-3 flex-col sm:flex-row">
+                  <AlertDialogCancel className="bg-white/5 border-white/10 text-gray-300 hover:text-white hover:bg-white/10 w-full sm:w-auto">
                     Cancel
                   </AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleDeleteAccount}
                     disabled={isDeleting}
-                    className="bg-red-500 hover:bg-red-600 text-white"
+                    className="bg-red-500 hover:bg-red-600 text-white w-full sm:w-auto"
                   >
                     {isDeleting ? "Deleting..." : "Delete Account"}
                   </AlertDialogAction>
@@ -337,12 +337,12 @@ export default function SettingsPage() {
         </Card>
 
         {/* App Info */}
-        <div className="text-center py-8">
+        <div className="text-center py-6 md:py-8">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 mb-3">
-            <span className="text-sm text-gray-400">Strathspace Web</span>
+            <span className="text-xs md:text-sm text-gray-400">Strathspace Web</span>
             <span className="text-xs px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-400">v1.0.0</span>
           </div>
-          <p className="text-gray-500 text-sm flex items-center justify-center gap-1">
+          <p className="text-gray-500 text-xs md:text-sm flex items-center justify-center gap-1">
             Made with <HeartIcon /> for Strathmore students
           </p>
         </div>

@@ -227,19 +227,19 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-screen">
       {/* Header */}
-      <header className="flex items-center justify-between p-4 border-b border-white/10 bg-[#1a1a2e]/50 backdrop-blur-sm">
-        <div className="flex items-center gap-4">
+      <header className="flex items-center justify-between p-3 md:p-4 border-b border-white/10 bg-[#1a1a2e]/80 backdrop-blur-lg safe-area-top">
+        <div className="flex items-center gap-2 md:gap-4">
           <Button
             variant="ghost"
             size="icon"
-            className="text-gray-400 hover:text-white"
+            className="text-gray-400 hover:text-white active:bg-white/10 w-10 h-10"
             onClick={() => router.push("/app/matches")}
           >
             <ArrowLeftIcon />
           </Button>
           
-          <Link href={`/app/profile/${matchData.profile.userId}`} className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full overflow-hidden">
+          <Link href={`/app/profile/${matchData.profile.userId}`} className="flex items-center gap-2 md:gap-3 active:opacity-70 transition-opacity">
+            <div className="w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden ring-2 ring-pink-500/30">
               {profilePhoto ? (
                 <Image
                   src={profilePhoto}
@@ -250,15 +250,15 @@ export default function ChatPage() {
                 />
               ) : (
                 <div className="w-full h-full bg-linear-to-br from-pink-500 to-purple-500 flex items-center justify-center">
-                  <span className="text-lg">👤</span>
+                  <span className="text-base md:text-lg">👤</span>
                 </div>
               )}
             </div>
-            <div>
-              <h2 className="font-semibold text-white">
+            <div className="min-w-0">
+              <h2 className="font-semibold text-white text-sm md:text-base truncate">
                 {matchData.profile.firstName}
               </h2>
-              <p className="text-xs text-gray-400">
+              <p className="text-[10px] md:text-xs text-gray-400 truncate">
                 {matchData.profile.course || "Strathmore University"}
               </p>
             </div>
@@ -267,20 +267,20 @@ export default function ChatPage() {
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white">
+            <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white active:bg-white/10 w-10 h-10">
               <MoreVerticalIcon />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="bg-[#1a1a2e] border-white/10">
             <DropdownMenuItem 
-              className="text-gray-300 focus:text-white focus:bg-white/10"
+              className="text-gray-300 focus:text-white focus:bg-white/10 active:bg-white/10"
               onClick={handleUnmatch}
             >
               Unmatch
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-white/10" />
             <DropdownMenuItem 
-              className="text-red-400 focus:text-red-300 focus:bg-red-500/10"
+              className="text-red-400 focus:text-red-300 focus:bg-red-500/10 active:bg-red-500/10"
               onClick={handleBlock}
             >
               Block & Report
@@ -290,11 +290,11 @@ export default function ChatPage() {
       </header>
 
       {/* Messages */}
-      <ScrollArea ref={scrollRef} className="flex-1 p-4">
-        <div className="space-y-4 max-w-2xl mx-auto">
+      <ScrollArea ref={scrollRef} className="flex-1 p-3 md:p-4">
+        <div className="space-y-3 md:space-y-4 max-w-2xl mx-auto">
           {/* Match notification */}
-          <div className="text-center py-8">
-            <div className="w-20 h-20 rounded-full overflow-hidden mx-auto mb-4 ring-2 ring-pink-500 ring-offset-2 ring-offset-[#0f0d23]">
+          <div className="text-center py-6 md:py-8">
+            <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden mx-auto mb-3 md:mb-4 ring-2 ring-pink-500 ring-offset-2 ring-offset-[#0f0d23]">
               {profilePhoto ? (
                 <Image
                   src={profilePhoto}
@@ -305,14 +305,14 @@ export default function ChatPage() {
                 />
               ) : (
                 <div className="w-full h-full bg-linear-to-br from-pink-500 to-purple-500 flex items-center justify-center">
-                  <span className="text-3xl">👤</span>
+                  <span className="text-2xl md:text-3xl">👤</span>
                 </div>
               )}
             </div>
-            <h3 className="text-lg font-semibold text-white mb-1">
+            <h3 className="text-base md:text-lg font-semibold text-white mb-1">
               You matched with {matchData.profile.firstName}!
             </h3>
-            <p className="text-sm text-gray-400">
+            <p className="text-xs md:text-sm text-gray-400">
               Start the conversation 💬
             </p>
           </div>
@@ -326,14 +326,14 @@ export default function ChatPage() {
                 className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[70%] px-4 py-3 rounded-2xl ${
+                  className={`max-w-[80%] md:max-w-[70%] px-3 md:px-4 py-2 md:py-3 rounded-2xl ${
                     isOwn
                       ? "bg-linear-to-r from-pink-500 to-rose-500 text-white rounded-br-md"
                       : "bg-white/10 text-white rounded-bl-md"
                   }`}
                 >
                   <p className="text-sm">{message.content}</p>
-                  <p className={`text-xs mt-1 ${isOwn ? "text-pink-100" : "text-gray-500"}`}>
+                  <p className={`text-[10px] md:text-xs mt-1 ${isOwn ? "text-pink-100" : "text-gray-500"}`}>
                     {formatTime(message.createdAt)}
                   </p>
                 </div>
@@ -344,20 +344,20 @@ export default function ChatPage() {
       </ScrollArea>
 
       {/* Message Input */}
-      <div className="p-4 border-t border-white/10 bg-[#1a1a2e]/50">
-        <form onSubmit={sendMessage} className="flex items-center gap-3 max-w-2xl mx-auto">
+      <div className="p-3 md:p-4 border-t border-white/10 bg-[#1a1a2e]/80 backdrop-blur-lg safe-area-bottom">
+        <form onSubmit={sendMessage} className="flex items-center gap-2 md:gap-3 max-w-2xl mx-auto">
           <Input
             ref={inputRef}
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type a message..."
-            className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-gray-500 h-12 rounded-full px-5"
+            className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-gray-500 h-11 md:h-12 rounded-full px-4 md:px-5 text-sm md:text-base"
           />
           <Button
             type="submit"
             size="icon"
             disabled={!newMessage.trim() || isSending}
-            className="w-12 h-12 rounded-full bg-linear-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 disabled:opacity-50"
+            className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-linear-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 active:scale-95 disabled:opacity-50 transition-transform"
           >
             <SendIcon />
           </Button>

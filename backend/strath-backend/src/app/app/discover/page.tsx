@@ -128,9 +128,9 @@ export default function DiscoverPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen px-4">
         <div className="w-full max-w-md space-y-4">
-          <Skeleton className="h-[600px] w-full rounded-3xl bg-white/5" />
+          <Skeleton className="h-[70vh] md:h-[600px] w-full rounded-3xl bg-white/5" />
         </div>
       </div>
     );
@@ -160,9 +160,9 @@ export default function DiscoverPage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-6">
-      {/* Card Stack */}
-      <div className="relative w-full max-w-md h-[600px]">
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-6">
+      {/* Card Stack - responsive height */}
+      <div className="relative w-full max-w-md h-[65vh] md:h-[600px]">
         {/* Next card (behind) */}
         {nextProfile && (
           <div className="absolute inset-0 scale-95 opacity-50">
@@ -181,12 +181,12 @@ export default function DiscoverPage() {
         </AnimatePresence>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex items-center justify-center gap-6 mt-8">
+      {/* Action Buttons - larger touch targets on mobile */}
+      <div className="flex items-center justify-center gap-4 md:gap-6 mt-6 md:mt-8">
         <Button
           variant="outline"
           size="icon"
-          className="w-14 h-14 rounded-full border-2 border-red-500 bg-transparent hover:bg-red-500/10 text-red-500"
+          className="w-16 h-16 md:w-14 md:h-14 rounded-full border-2 border-red-500 bg-transparent hover:bg-red-500/10 active:bg-red-500/20 text-red-500 transition-all active:scale-95"
           onClick={() => handleSwipe("left")}
         >
           <XIcon />
@@ -195,7 +195,7 @@ export default function DiscoverPage() {
         <Button
           variant="outline"
           size="icon"
-          className="w-12 h-12 rounded-full border-2 border-yellow-500 bg-transparent hover:bg-yellow-500/10 text-yellow-500"
+          className="w-12 h-12 rounded-full border-2 border-yellow-500 bg-transparent hover:bg-yellow-500/10 active:bg-yellow-500/20 text-yellow-500 transition-all active:scale-95"
           onClick={() => {
             if (currentIndex > 0) {
               setCurrentIndex((prev) => prev - 1);
@@ -209,15 +209,15 @@ export default function DiscoverPage() {
         <Button
           variant="outline"
           size="icon"
-          className="w-14 h-14 rounded-full border-2 border-green-500 bg-transparent hover:bg-green-500/10 text-green-500"
+          className="w-16 h-16 md:w-14 md:h-14 rounded-full border-2 border-green-500 bg-transparent hover:bg-green-500/10 active:bg-green-500/20 text-green-500 transition-all active:scale-95"
           onClick={() => handleSwipe("right")}
         >
           <HeartIcon />
         </Button>
       </div>
 
-      {/* Keyboard hints */}
-      <p className="text-gray-500 text-sm mt-4">
+      {/* Keyboard hints - hidden on mobile */}
+      <p className="hidden md:block text-gray-500 text-sm mt-4">
         Use <kbd className="px-2 py-1 bg-white/10 rounded text-xs">←</kbd> and{" "}
         <kbd className="px-2 py-1 bg-white/10 rounded text-xs">→</kbd> keys to swipe
       </p>

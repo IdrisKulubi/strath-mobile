@@ -92,15 +92,16 @@ export function ProfileView({ user, profile, isOwnProfile }: ProfileViewProps) {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
+    <div className="max-w-2xl mx-auto p-4 md:p-6">
       {/* Header */}
       {isOwnProfile && (
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-white">My Profile</h1>
+        <div className="flex items-center justify-between mb-4 md:mb-6">
+          <h1 className="text-xl md:text-2xl font-bold text-white">My Profile</h1>
           <Link href="/app/profile/edit">
-            <Button className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600">
+            <Button className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 h-10 md:h-11 px-3 md:px-4 text-sm md:text-base">
               <EditIcon />
-              <span className="ml-2">Edit Profile</span>
+              <span className="ml-2 hidden sm:inline">Edit Profile</span>
+              <span className="ml-1 sm:hidden">Edit</span>
             </Button>
           </Link>
         </div>
@@ -109,7 +110,7 @@ export function ProfileView({ user, profile, isOwnProfile }: ProfileViewProps) {
       {/* Profile Card */}
       <Card className="bg-[#1a1a2e] border-white/10 overflow-hidden">
         {/* Photo Section */}
-        <div className="relative aspect-[3/4] max-h-[500px]">
+        <div className="relative aspect-[3/4] max-h-[60vh] md:max-h-[500px]">
           {photos.length > 0 ? (
             <Image
               src={photos[currentPhotoIndex]}
@@ -119,41 +120,44 @@ export function ProfileView({ user, profile, isOwnProfile }: ProfileViewProps) {
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-pink-500/20 to-purple-500/20 flex items-center justify-center">
-              <span className="text-8xl">👤</span>
+              <span className="text-6xl md:text-8xl">👤</span>
             </div>
           )}
 
           {/* Photo indicators */}
           {photos.length > 1 && (
-            <div className="absolute top-4 left-4 right-4 flex gap-1">
+            <div className="absolute top-3 md:top-4 left-3 md:left-4 right-3 md:right-4 flex gap-1">
               {photos.map((_, index) => (
-                <div
+                <button
                   key={index}
+                  onClick={() => setCurrentPhotoIndex(index)}
                   className={`h-1 flex-1 rounded-full transition-colors ${
-                    index === currentPhotoIndex ? "bg-white" : "bg-white/30"
+                    index === currentPhotoIndex ? "bg-white shadow-[0_0_8px_rgba(255,255,255,0.5)]" : "bg-white/30"
                   }`}
                 />
               ))}
             </div>
           )}
 
-          {/* Photo navigation */}
+          {/* Photo navigation - tap zones on mobile */}
           {photos.length > 1 && (
             <>
-              <button
-                onClick={prevPhoto}
-                className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/20 hover:bg-black/40 rounded-full flex items-center justify-center text-white transition-colors"
-                disabled={currentPhotoIndex === 0}
-              >
-                <ChevronLeftIcon />
-              </button>
-              <button
-                onClick={nextPhoto}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/20 hover:bg-black/40 rounded-full flex items-center justify-center text-white transition-colors"
-                disabled={currentPhotoIndex === photos.length - 1}
-              >
-                <ChevronRightIcon />
-              </button>
+              {currentPhotoIndex > 0 && (
+                <button
+                  onClick={prevPhoto}
+                  className="absolute left-0 top-0 bottom-0 w-1/3 md:left-2 md:top-1/2 md:bottom-auto md:-translate-y-1/2 md:w-10 md:h-10 md:bg-black/20 md:hover:bg-black/40 md:rounded-full flex items-center justify-center text-white transition-colors"
+                >
+                  <span className="hidden md:block"><ChevronLeftIcon /></span>
+                </button>
+              )}
+              {currentPhotoIndex < photos.length - 1 && (
+                <button
+                  onClick={nextPhoto}
+                  className="absolute right-0 top-0 bottom-0 w-1/3 md:right-2 md:top-1/2 md:bottom-auto md:-translate-y-1/2 md:w-10 md:h-10 md:bg-black/20 md:hover:bg-black/40 md:rounded-full flex items-center justify-center text-white transition-colors"
+                >
+                  <span className="hidden md:block"><ChevronRightIcon /></span>
+                </button>
+              )}
             </>
           )}
 
@@ -162,50 +166,50 @@ export function ProfileView({ user, profile, isOwnProfile }: ProfileViewProps) {
         </div>
 
         {/* Profile Info */}
-        <div className="p-6 -mt-20 relative">
-          <div className="flex items-end justify-between mb-4">
+        <div className="p-4 md:p-6 -mt-16 md:-mt-20 relative">
+          <div className="flex items-end justify-between mb-3 md:mb-4">
             <div>
-              <h2 className="text-3xl font-bold text-white">
+              <h2 className="text-2xl md:text-3xl font-bold text-white">
                 {profile.firstName}
                 {profile.lastName ? ` ${profile.lastName}` : ""},{" "}
                 <span className="font-normal">{profile.age}</span>
               </h2>
               
               {profile.course && (
-                <p className="text-gray-300 mt-1">
+                <p className="text-gray-300 text-sm md:text-base mt-1">
                   📚 {profile.course}
                   {profile.yearOfStudy && ` • Year ${profile.yearOfStudy}`}
                 </p>
               )}
 
               {profile.university && (
-                <p className="text-gray-400 text-sm mt-1">🏫 {profile.university}</p>
+                <p className="text-gray-400 text-xs md:text-sm mt-1">🏫 {profile.university}</p>
               )}
             </div>
           </div>
 
           {/* Bio */}
           {profile.bio && (
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">
+            <div className="mb-4 md:mb-6">
+              <h3 className="text-xs md:text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">
                 About
               </h3>
-              <p className="text-gray-200">{profile.bio}</p>
+              <p className="text-gray-200 text-sm md:text-base">{profile.bio}</p>
             </div>
           )}
 
           {/* Interests */}
           {interests.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+              <h3 className="text-xs md:text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2 md:mb-3">
                 Interests
               </h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 md:gap-2">
                 {interests.map((interest) => (
                   <Badge
                     key={interest}
                     variant="secondary"
-                    className="bg-white/10 text-white border-0 px-3 py-1"
+                    className="bg-white/10 text-white border-0 px-2.5 md:px-3 py-0.5 md:py-1 text-xs md:text-sm"
                   >
                     {interest}
                   </Badge>
@@ -218,28 +222,28 @@ export function ProfileView({ user, profile, isOwnProfile }: ProfileViewProps) {
 
       {/* Account Info (only for own profile) */}
       {isOwnProfile && (
-        <div className="mt-6 space-y-4">
-          <Card className="bg-[#1a1a2e] border-white/10 p-4">
-            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+        <div className="mt-4 md:mt-6 space-y-3 md:space-y-4">
+          <Card className="bg-[#1a1a2e] border-white/10 p-3 md:p-4">
+            <h3 className="text-xs md:text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2 md:mb-3">
               Account
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-2 md:space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-gray-400">Email</span>
-                <span className="text-white">{user.email}</span>
+                <span className="text-gray-400 text-sm">Email</span>
+                <span className="text-white text-sm truncate ml-4 max-w-[200px]">{user.email}</span>
               </div>
             </div>
           </Card>
 
           <Link href="/app/settings" className="block">
-            <Card className="bg-[#1a1a2e] border-white/10 p-4 hover:bg-white/5 transition-all cursor-pointer group">
+            <Card className="bg-[#1a1a2e] border-white/10 p-3 md:p-4 hover:bg-white/5 active:bg-white/10 transition-all cursor-pointer group">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500/20 to-rose-500/20 flex items-center justify-center text-pink-400 group-hover:from-pink-500/30 group-hover:to-rose-500/30 transition-colors">
+                  <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-pink-500/20 to-rose-500/20 flex items-center justify-center text-pink-400 group-hover:from-pink-500/30 group-hover:to-rose-500/30 transition-colors">
                     <SettingsIcon />
                   </div>
                   <div>
-                    <span className="text-white font-medium">Settings</span>
+                    <span className="text-white font-medium text-sm md:text-base">Settings</span>
                     <p className="text-gray-500 text-xs">Privacy, notifications & more</p>
                   </div>
                 </div>

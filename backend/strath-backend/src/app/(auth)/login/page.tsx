@@ -71,26 +71,26 @@ export default function LoginPage() {
   };
 
   return (
-    <Card className="bg-[#1a1a2e]/90 backdrop-blur-xl border-white/10 shadow-2xl">
-      <CardHeader className="text-center space-y-4">
-        <div className="mx-auto w-16 h-16 bg-gradient-to-br from-pink-500 via-rose-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+    <Card className="bg-[#1a1a2e]/90 backdrop-blur-xl border-white/10 shadow-2xl mx-2">
+      <CardHeader className="text-center space-y-3 md:space-y-4 px-4 md:px-6">
+        <div className="mx-auto w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br from-pink-500 via-rose-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
           <Image
             src="/logo.png"
             alt="Strathspace"
             width={40}
             height={40}
-            className="object-contain"
+            className="object-contain w-8 h-8 md:w-10 md:h-10"
           />
         </div>
         <div>
-          <CardTitle className="text-2xl font-bold text-white">Welcome back</CardTitle>
-          <CardDescription className="text-gray-400">
+          <CardTitle className="text-xl md:text-2xl font-bold text-white">Welcome back</CardTitle>
+          <CardDescription className="text-gray-400 text-sm">
             Sign in to continue to Strathspace
           </CardDescription>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 px-4 md:px-6">
         {error && (
           <div className="p-3 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg">
             {error}
@@ -99,7 +99,7 @@ export default function LoginPage() {
 
         <Button
           variant="outline"
-          className="w-full bg-white hover:bg-gray-100 text-gray-900 border-0 h-12"
+          className="w-full bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-900 border-0 h-11 md:h-12 text-sm md:text-base"
           onClick={handleGoogleLogin}
           disabled={isLoading}
         >
@@ -133,7 +133,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleEmailLogin} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-gray-300">Email</Label>
+            <Label htmlFor="email" className="text-gray-300 text-sm">Email</Label>
             <Input
               id="email"
               type="email"
@@ -141,13 +141,13 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 h-12 focus:border-pink-500 focus:ring-pink-500"
+              className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 h-11 md:h-12 focus:border-pink-500 focus:ring-pink-500 text-sm md:text-base"
             />
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password" className="text-gray-300">Password</Label>
+              <Label htmlFor="password" className="text-gray-300 text-sm">Password</Label>
               <Link href="/forgot-password" className="text-xs text-pink-400 hover:text-pink-300">
                 Forgot password?
               </Link>
@@ -159,21 +159,21 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 h-12 focus:border-pink-500 focus:ring-pink-500"
+              className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 h-11 md:h-12 focus:border-pink-500 focus:ring-pink-500 text-sm md:text-base"
             />
           </div>
 
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full h-12 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-semibold"
+            className="w-full h-11 md:h-12 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 active:scale-[0.98] text-white font-semibold text-sm md:text-base transition-transform"
           >
             {isLoading ? "Signing in..." : "Sign in"}
           </Button>
         </form>
       </CardContent>
 
-      <CardFooter className="justify-center">
+      <CardFooter className="justify-center px-4 md:px-6">
         <p className="text-sm text-gray-400">
           Don&apos;t have an account?{" "}
           <Link href="/register" className="text-pink-400 hover:text-pink-300 font-medium">

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { profiles } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { AppSidebar } from "@/components/web/app-sidebar";
+import { MobileNav } from "@/components/web/mobile-nav";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 
 async function getProfile(userId: string) {
@@ -32,9 +33,19 @@ export default async function AppLayout({
 
   return (
     <SidebarProvider>
-      <AppSidebar user={session.user} profile={profile} />
+      {/* Desktop sidebar - hidden on mobile */}
+      <div className="hidden md:block">
+        <AppSidebar user={session.user} profile={profile} />
+      </div>
+      
       <SidebarInset className="bg-[#0f0d23]">
-        {children}
+        {/* Main content with bottom padding on mobile for nav */}
+        <div className="pb-20 md:pb-0">
+          {children}
+        </div>
+        
+        {/* Mobile bottom navigation */}
+        <MobileNav />
       </SidebarInset>
     </SidebarProvider>
   );

@@ -411,42 +411,42 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
   };
 
   return (
-    <div className="relative max-w-4xl mx-auto p-6 pb-28">
+    <div className="relative max-w-4xl mx-auto p-4 md:p-6 pb-32 md:pb-28">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
+      <div className="flex items-center gap-3 md:gap-4 mb-6 md:mb-8">
         <Link href="/app/profile">
-          <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white">
+          <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white active:bg-white/10 w-10 h-10">
             <ArrowLeftIcon />
           </Button>
         </Link>
-        <h1 className="text-2xl font-bold text-white">Edit Profile</h1>
+        <h1 className="text-xl md:text-2xl font-bold text-white">Edit Profile</h1>
       </div>
 
       {/* Error/Success Messages */}
       {error && (
-        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">
+        <div className="mb-4 md:mb-6 p-3 md:p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400">
+        <div className="mb-4 md:mb-6 p-3 md:p-4 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 text-sm">
           {success}
         </div>
       )}
 
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Photos Section */}
         <Card className="bg-[#1a1a2e] border-white/10">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <span className="text-2xl">📸</span> Photos
+          <CardHeader className="px-4 md:px-6 pb-2 md:pb-4">
+            <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
+              <span className="text-xl md:text-2xl">📸</span> Photos
             </CardTitle>
-            <p className="text-sm text-gray-400">Add up to 6 photos. First photo is your main profile picture.</p>
+            <p className="text-xs md:text-sm text-gray-400">Add up to 6 photos. First photo is your main profile picture.</p>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-4">
+          <CardContent className="px-4 md:px-6">
+            <div className="grid grid-cols-3 gap-2 md:gap-4">
               {photoStates.map((photo, index) => (
-                <div key={index} className="relative aspect-square rounded-xl overflow-hidden bg-white/5">
+                <div key={index} className="relative aspect-square rounded-lg md:rounded-xl overflow-hidden bg-white/5">
                   <Image
                     src={photo.previewUrl}
                     alt={`Photo ${index + 1}`}
@@ -465,12 +465,12 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
                   )}
                   <button
                     onClick={() => removePhoto(index)}
-                    className="absolute top-2 right-2 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center text-white hover:bg-black/80"
+                    className="absolute top-1.5 md:top-2 right-1.5 md:right-2 w-5 h-5 md:w-6 md:h-6 bg-black/60 rounded-full flex items-center justify-center text-white hover:bg-black/80 active:bg-black"
                   >
                     <XIcon />
                   </button>
                   {index === 0 && (
-                    <div className="absolute bottom-2 left-2 bg-pink-500 text-white text-xs px-2 py-1 rounded-full">
+                    <div className="absolute bottom-1.5 md:bottom-2 left-1.5 md:left-2 bg-pink-500 text-white text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 md:py-1 rounded-full">
                       Main
                     </div>
                   )}
@@ -478,9 +478,9 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
               ))}
               
               {photoStates.length < 6 && (
-                <label className="aspect-square rounded-xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center cursor-pointer hover:border-pink-500/50 transition-colors">
+                <label className="aspect-square rounded-lg md:rounded-xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center cursor-pointer hover:border-pink-500/50 active:border-pink-500 transition-colors">
                   <CameraIcon />
-                  <span className="text-sm text-gray-400 mt-2">Add Photo</span>
+                  <span className="text-xs md:text-sm text-gray-400 mt-1 md:mt-2">Add Photo</span>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -497,49 +497,49 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
 
         {/* Basic Info */}
         <Card className="bg-[#1a1a2e] border-white/10">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <span className="text-2xl">👤</span> Basic Info
+          <CardHeader className="px-4 md:px-6 pb-2 md:pb-4">
+            <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
+              <span className="text-xl md:text-2xl">👤</span> Basic Info
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          <CardContent className="space-y-4 px-4 md:px-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
               <div>
-                <Label className="text-gray-300">First Name *</Label>
+                <Label className="text-gray-300 text-sm">First Name *</Label>
                 <Input
                   value={formData.firstName}
                   onChange={(e) => updateField("firstName", e.target.value)}
-                  className="bg-white/5 border-white/10 text-white mt-1"
+                  className="bg-white/5 border-white/10 text-white mt-1 h-11"
                   placeholder="Your first name"
                 />
               </div>
               <div>
-                <Label className="text-gray-300">Last Name</Label>
+                <Label className="text-gray-300 text-sm">Last Name</Label>
                 <Input
                   value={formData.lastName}
                   onChange={(e) => updateField("lastName", e.target.value)}
-                  className="bg-white/5 border-white/10 text-white mt-1"
+                  className="bg-white/5 border-white/10 text-white mt-1 h-11"
                   placeholder="Your last name"
                 />
               </div>
             </div>
 
             <div>
-              <Label className="text-gray-300">Gender</Label>
+              <Label className="text-gray-300 text-sm">Gender</Label>
               <div className="flex gap-2 mt-2">
                 {GENDER_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
                     onClick={() => updateField("gender", option.value)}
-                    className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all ${
+                    className={`flex-1 py-2.5 md:py-3 px-2 md:px-4 rounded-xl text-xs md:text-sm font-medium transition-all active:scale-95 ${
                       formData.gender === option.value
                         ? "bg-pink-500 text-white"
                         : "bg-white/5 text-gray-300 hover:bg-white/10"
                     }`}
                   >
-                    <span className="mr-2">{option.emoji}</span>
-                    {option.label}
+                    <span className="mr-1 md:mr-2">{option.emoji}</span>
+                    <span className="hidden sm:inline">{option.label}</span>
                   </button>
                 ))}
               </div>
@@ -549,18 +549,18 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
 
         {/* About */}
         <Card className="bg-[#1a1a2e] border-white/10">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <span className="text-2xl">💭</span> About You
+          <CardHeader className="px-4 md:px-6 pb-2 md:pb-4">
+            <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
+              <span className="text-xl md:text-2xl">💭</span> About You
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-4 md:px-6">
             <div>
-              <Label className="text-gray-300">Bio</Label>
+              <Label className="text-gray-300 text-sm">Bio</Label>
               <Textarea
                 value={formData.bio}
                 onChange={(e) => updateField("bio", e.target.value.slice(0, 500))}
-                className="bg-white/5 border-white/10 text-white mt-1 min-h-[120px]"
+                className="bg-white/5 border-white/10 text-white mt-1 min-h-[100px] md:min-h-[120px] text-sm"
                 placeholder="Tell others about yourself..."
               />
               <p className="text-xs text-gray-500 mt-1">{formData.bio.length}/500</p>
@@ -570,48 +570,48 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
 
         {/* Looking For */}
         <Card className="bg-[#1a1a2e] border-white/10">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <span className="text-2xl">💕</span> Looking For
+          <CardHeader className="px-4 md:px-6 pb-2 md:pb-4">
+            <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
+              <span className="text-xl md:text-2xl">💕</span> Looking For
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-4 md:px-6">
             <div>
-              <Label className="text-gray-300">Interested In</Label>
+              <Label className="text-gray-300 text-sm">Interested In</Label>
               <div className="flex gap-2 mt-2">
                 {INTERESTED_IN_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
                     onClick={() => toggleInterestedIn(option.value)}
-                    className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all ${
+                    className={`flex-1 py-2.5 md:py-3 px-2 md:px-4 rounded-xl text-xs md:text-sm font-medium transition-all active:scale-95 ${
                       formData.interestedIn.includes(option.value)
                         ? "bg-pink-500 text-white"
                         : "bg-white/5 text-gray-300 hover:bg-white/10"
                     }`}
                   >
-                    <span className="mr-2">{option.emoji}</span>
-                    {option.label}
+                    <span className="mr-1 md:mr-2">{option.emoji}</span>
+                    <span className="hidden sm:inline">{option.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
             <div>
-              <Label className="text-gray-300">What are you looking for?</Label>
+              <Label className="text-gray-300 text-sm">What are you looking for?</Label>
               <div className="grid grid-cols-2 gap-2 mt-2">
                 {LOOKING_FOR_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
                     onClick={() => updateField("lookingFor", option.value)}
-                    className={`py-3 px-4 rounded-xl text-sm font-medium transition-all ${
+                    className={`py-2.5 md:py-3 px-2 md:px-4 rounded-xl text-xs md:text-sm font-medium transition-all active:scale-95 ${
                       formData.lookingFor === option.value
                         ? "bg-pink-500 text-white"
                         : "bg-white/5 text-gray-300 hover:bg-white/10"
                     }`}
                   >
-                    <span className="mr-2">{option.emoji}</span>
+                    <span className="mr-1 md:mr-2">{option.emoji}</span>
                     {option.label}
                   </button>
                 ))}
@@ -622,18 +622,18 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
 
         {/* Academic Info */}
         <Card className="bg-[#1a1a2e] border-white/10">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <span className="text-2xl">🎓</span> Academic
+          <CardHeader className="px-4 md:px-6 pb-2 md:pb-4">
+            <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
+              <span className="text-xl md:text-2xl">🎓</span> Academic
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-4 md:px-6">
             <div>
-              <Label className="text-gray-300">Course</Label>
+              <Label className="text-gray-300 text-sm">Course</Label>
               <select
                 value={formData.course}
                 onChange={(e) => updateField("course", e.target.value)}
-                className="w-full mt-1 p-3 rounded-xl bg-white/5 border border-white/10 text-white appearance-none"
+                className="w-full mt-1 p-2.5 md:p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm appearance-none"
               >
                 <option value="" className="bg-[#1a1a2e]">Select your course</option>
                 {COURSE_OPTIONS.map((course) => (
@@ -645,14 +645,14 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
             </div>
 
             <div>
-              <Label className="text-gray-300">Year of Study</Label>
-              <div className="flex gap-2 mt-2">
+              <Label className="text-gray-300 text-sm">Year of Study</Label>
+              <div className="flex flex-wrap gap-2 mt-2">
                 {YEAR_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
                     onClick={() => updateField("yearOfStudy", option.value)}
-                    className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all ${
+                    className={`flex-1 min-w-[60px] py-2.5 md:py-3 px-2 md:px-4 rounded-xl text-xs md:text-sm font-medium transition-all active:scale-95 ${
                       formData.yearOfStudy === option.value
                         ? "bg-pink-500 text-white"
                         : "bg-white/5 text-gray-300 hover:bg-white/10"
@@ -668,18 +668,18 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
 
         {/* Lifestyle */}
         <Card className="bg-[#1a1a2e] border-white/10">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <span className="text-2xl">🌟</span> Lifestyle
+          <CardHeader className="px-4 md:px-6 pb-2 md:pb-4">
+            <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
+              <span className="text-xl md:text-2xl">🌟</span> Lifestyle
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-4 md:px-6">
             <div>
-              <Label className="text-gray-300">Height</Label>
+              <Label className="text-gray-300 text-sm">Height</Label>
               <select
                 value={formData.height}
                 onChange={(e) => updateField("height", e.target.value)}
-                className="w-full mt-1 p-3 rounded-xl bg-white/5 border border-white/10 text-white appearance-none"
+                className="w-full mt-1 p-2.5 md:p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm appearance-none"
               >
                 <option value="" className="bg-[#1a1a2e]">Select height</option>
                 {HEIGHT_OPTIONS.map((height) => (
@@ -690,13 +690,13 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3 md:gap-4">
               <div>
-                <Label className="text-gray-300">Drinking</Label>
+                <Label className="text-gray-300 text-sm">Drinking</Label>
                 <select
                   value={formData.drinkingPreference}
                   onChange={(e) => updateField("drinkingPreference", e.target.value)}
-                  className="w-full mt-1 p-3 rounded-xl bg-white/5 border border-white/10 text-white appearance-none"
+                  className="w-full mt-1 p-2.5 md:p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm appearance-none"
                 >
                   <option value="" className="bg-[#1a1a2e]">Select</option>
                   {DRINKING_OPTIONS.map((option) => (
@@ -707,11 +707,11 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
                 </select>
               </div>
               <div>
-                <Label className="text-gray-300">Smoking</Label>
+                <Label className="text-gray-300 text-sm">Smoking</Label>
                 <select
                   value={formData.smoking}
                   onChange={(e) => updateField("smoking", e.target.value)}
-                  className="w-full mt-1 p-3 rounded-xl bg-white/5 border border-white/10 text-white appearance-none"
+                  className="w-full mt-1 p-2.5 md:p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm appearance-none"
                 >
                   <option value="" className="bg-[#1a1a2e]">Select</option>
                   {SMOKING_OPTIONS.map((option) => (
@@ -724,11 +724,11 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
             </div>
 
             <div>
-              <Label className="text-gray-300">Religion</Label>
+              <Label className="text-gray-300 text-sm">Religion</Label>
               <select
                 value={formData.religion}
                 onChange={(e) => updateField("religion", e.target.value)}
-                className="w-full mt-1 p-3 rounded-xl bg-white/5 border border-white/10 text-white appearance-none"
+                className="w-full mt-1 p-2.5 md:p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm appearance-none"
               >
                 <option value="" className="bg-[#1a1a2e]">Select religion</option>
                 {RELIGION_OPTIONS.map((option) => (
@@ -743,20 +743,20 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
 
         {/* Interests */}
         <Card className="bg-[#1a1a2e] border-white/10">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <span className="text-2xl">✨</span> Interests
+          <CardHeader className="px-4 md:px-6 pb-2 md:pb-4">
+            <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
+              <span className="text-xl md:text-2xl">✨</span> Interests
             </CardTitle>
-            <p className="text-sm text-gray-400">Select 3-10 interests</p>
+            <p className="text-xs md:text-sm text-gray-400">Select 3-10 interests</p>
           </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
+          <CardContent className="px-4 md:px-6">
+            <div className="flex flex-wrap gap-1.5 md:gap-2">
               {INTERESTS_DATA.map((interest) => (
                 <button
                   key={interest}
                   type="button"
                   onClick={() => toggleInterest(interest)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs md:text-sm font-medium transition-all active:scale-95 ${
                     formData.interests.includes(interest)
                       ? "bg-pink-500 text-white"
                       : "bg-white/5 text-gray-300 hover:bg-white/10"
@@ -772,30 +772,30 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
 
         {/* Social Links */}
         <Card className="bg-[#1a1a2e] border-white/10">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <span className="text-2xl">🔗</span> Social Links
+          <CardHeader className="px-4 md:px-6 pb-2 md:pb-4">
+            <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
+              <span className="text-xl md:text-2xl">🔗</span> Social Links
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-4 md:px-6">
             <div>
-              <Label className="text-gray-300">Instagram</Label>
+              <Label className="text-gray-300 text-sm">Instagram</Label>
               <div className="relative mt-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">@</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">@</span>
                 <Input
                   value={formData.instagram}
                   onChange={(e) => updateField("instagram", e.target.value.replace("@", ""))}
-                  className="bg-white/5 border-white/10 text-white pl-8"
+                  className="bg-white/5 border-white/10 text-white pl-8 h-11 text-sm"
                   placeholder="username"
                 />
               </div>
             </div>
             <div>
-              <Label className="text-gray-300">Spotify</Label>
+              <Label className="text-gray-300 text-sm">Spotify</Label>
               <Input
                 value={formData.spotify}
                 onChange={(e) => updateField("spotify", e.target.value)}
-                className="bg-white/5 border-white/10 text-white mt-1"
+                className="bg-white/5 border-white/10 text-white mt-1 h-11 text-sm"
                 placeholder="Your favorite song or artist"
               />
             </div>
@@ -803,21 +803,21 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
         </Card>
 
         {/* Spacer for floating buttons */}
-        <div className="h-24" />
+        <div className="h-20 md:h-24" />
       </div>
 
       {/* Floating Save Button - positioned relative to form container */}
-      <div className="sticky bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#0f0d23] via-[#0f0d23] to-transparent z-50 -mx-6 px-6">
-        <div className="flex gap-4">
+      <div className="sticky bottom-0 left-0 right-0 p-3 md:p-4 bg-gradient-to-t from-[#0f0d23] via-[#0f0d23] to-transparent z-50 -mx-4 md:-mx-6 px-4 md:px-6 safe-area-bottom">
+        <div className="flex gap-3 md:gap-4">
           <Link href="/app/profile" className="flex-1">
-            <Button variant="outline" className="w-full h-12 border-white/10 text-gray-300 hover:bg-white/5 bg-[#1a1a2e]">
+            <Button variant="outline" className="w-full h-11 md:h-12 border-white/10 text-gray-300 hover:bg-white/5 active:bg-white/10 bg-[#1a1a2e] text-sm md:text-base">
               Cancel
             </Button>
           </Link>
           <Button
             onClick={handleSubmit}
             disabled={isSubmitting || hasUploadingPhotos || !hasChanges}
-            className={`flex-1 h-12 transition-all ${
+            className={`flex-1 h-11 md:h-12 transition-all active:scale-[0.98] text-sm md:text-base ${
               hasChanges 
                 ? "bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600" 
                 : "bg-gray-600 cursor-not-allowed"
