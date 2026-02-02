@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
+import { toast } from "@/components/ui/custom-toast";
 
 // Icons (using simple SVGs since phosphor-icons may need different import)
 const CompassIcon = () => (
@@ -98,6 +99,7 @@ export function AppSidebar({ user, profile }: AppSidebarProps) {
   const router = useRouter();
 
   const handleSignOut = async () => {
+    toast.info("Signing out...", "See you soon! 👋");
     await authClient.signOut();
     router.push("/login");
   };
@@ -106,23 +108,21 @@ export function AppSidebar({ user, profile }: AppSidebarProps) {
   const avatarUrl = profile?.profilePhoto || user.image;
 
   return (
-    <Sidebar className="border-r border-white/10 bg-[#1a1a2e]">
-      <SidebarHeader className="border-b border-white/10 p-4">
+    <Sidebar className="border-r border-white/10 !bg-[#0f0d23]" style={{ backgroundColor: '#0f0d23' }}>
+      <SidebarHeader className="border-b border-white/10 p-4 bg-[#0f0d23]">
         <Link href="/app/discover" className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-pink-500 via-rose-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-            <Image
-              src="/logo.png"
-              alt="Strathspace"
-              width={24}
-              height={24}
-              className="object-contain"
-            />
-          </div>
+          <Image
+            src="/logo.png"
+            alt="Strathspace"
+            width={40}
+            height={40}
+            className="object-contain"
+          />
           <span className="text-xl font-bold text-white">Strathspace</span>
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="p-2">
+      <SidebarContent className="p-2 bg-[#0f0d23]">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -133,10 +133,10 @@ export function AppSidebar({ user, profile }: AppSidebarProps) {
                     <SidebarMenuButton
                       asChild
                       isActive={isActive}
-                      className={`h-12 text-base ${
+                      className={`h-12 text-base transition-all duration-200 ${
                         isActive 
-                          ? "bg-gradient-to-r from-pink-500/20 to-rose-500/20 text-pink-400 border-l-2 border-pink-500" 
-                          : "text-gray-400 hover:text-white hover:bg-white/5"
+                          ? "!bg-pink-500/20 !text-pink-400 border-l-2 border-pink-500" 
+                          : "!text-white hover:!text-white hover:!bg-white/10"
                       }`}
                     >
                       <Link href={item.href}>
@@ -152,12 +152,12 @@ export function AppSidebar({ user, profile }: AppSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-white/10 p-2">
+      <SidebarFooter className="border-t border-white/10 p-2 bg-[#0f0d23]">
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <SidebarMenuButton className="h-14 text-white hover:bg-white/5">
+                <SidebarMenuButton className="h-14 !text-white hover:!bg-white/10">
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={avatarUrl || undefined} />
                     <AvatarFallback className="bg-gradient-to-br from-pink-500 to-rose-500 text-white">
@@ -165,8 +165,8 @@ export function AppSidebar({ user, profile }: AppSidebarProps) {
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col items-start text-left">
-                    <span className="text-sm font-medium">{displayName}</span>
-                    <span className="text-xs text-gray-500 truncate max-w-[120px]">
+                    <span className="text-sm font-medium text-white">{displayName}</span>
+                    <span className="text-xs text-gray-300 truncate max-w-[120px]">
                       {user.email}
                     </span>
                   </div>
@@ -176,9 +176,9 @@ export function AppSidebar({ user, profile }: AppSidebarProps) {
               <DropdownMenuContent
                 side="top"
                 align="start"
-                className="w-56 bg-[#1a1a2e] border-white/10"
+                className="w-56 bg-[#1a1a2e] border-white/10 text-white"
               >
-                <DropdownMenuItem asChild className="text-gray-300 hover:text-white focus:text-white focus:bg-white/10">
+                <DropdownMenuItem asChild className="text-gray-200 hover:!text-white focus:!text-white hover:!bg-white/10 focus:!bg-white/10 cursor-pointer">
                   <Link href="/app/settings">
                     <SettingsIcon />
                     <span className="ml-2">Settings</span>
@@ -187,7 +187,7 @@ export function AppSidebar({ user, profile }: AppSidebarProps) {
                 <DropdownMenuSeparator className="bg-white/10" />
                 <DropdownMenuItem 
                   onClick={handleSignOut}
-                  className="text-red-400 hover:text-red-300 focus:text-red-300 focus:bg-red-500/10"
+                  className="text-red-400 hover:!text-red-300 focus:!text-red-300 hover:!bg-red-500/10 focus:!bg-red-500/10 cursor-pointer"
                 >
                   <LogoutIcon />
                   <span className="ml-2">Sign out</span>

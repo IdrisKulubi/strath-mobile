@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
+import { toast } from "@/components/ui/custom-toast";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,9 +31,12 @@ export default function LoginPage() {
       });
 
       if (authError) {
+        toast.error("Login failed", authError.message || "Invalid credentials");
         setError(authError.message || "Invalid credentials");
         return;
       }
+
+      toast.success("Welcome back! 👋", "Signing you in...");
 
       // Check if user has completed onboarding
       const response = await fetch("/api/user/me");
@@ -44,6 +48,7 @@ export default function LoginPage() {
         router.push("/onboarding");
       }
     } catch {
+      toast.error("Oops!", "Something went wrong. Please try again.");
       setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);

@@ -6,6 +6,7 @@ import { SwipeCard } from "@/components/web/discover/swipe-card";
 import { MatchModal } from "@/components/web/discover/match-modal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/components/ui/custom-toast";
 
 interface Profile {
   id: string;
@@ -90,7 +91,8 @@ export default function DiscoverPage() {
       const data = await response.json();
       
       if (data.success && data.data?.matched) {
-        // Show match modal
+        // Show match modal and toast
+        toast.match(currentProfile.firstName);
         setMatchedProfile({
           matchId: data.data.matchId,
           profile: currentProfile,
@@ -98,6 +100,7 @@ export default function DiscoverPage() {
       }
     } catch (error) {
       console.error("Swipe error:", error);
+      toast.error("Swipe failed", "Please try again");
     }
 
     // Move to next profile after animation

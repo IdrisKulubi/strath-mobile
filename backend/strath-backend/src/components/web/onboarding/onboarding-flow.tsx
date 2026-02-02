@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { toast } from "@/components/ui/custom-toast";
 
 // Import stages
 import { 
@@ -232,14 +233,14 @@ export function OnboardingFlow({ user, existingProfile }: OnboardingFlowProps) {
     setError("");
 
     if (hasUploadingPhotos) {
-      setError("Please wait for photos to finish uploading...");
+      toast.warning("Please wait", "Photos are still uploading...");
       setIsSubmitting(false);
       return;
     }
 
     const uploadedPhotos = getUploadedPhotoUrls();
     if (uploadedPhotos.length === 0) {
-      setError("Please add at least one photo");
+      toast.error("Missing photos", "Please add at least one photo");
       setIsSubmitting(false);
       return;
     }
@@ -263,11 +264,14 @@ export function OnboardingFlow({ user, existingProfile }: OnboardingFlowProps) {
 
       const data = await response.json();
       if (data.success) {
+        toast.success("Profile created! 🎉", "Welcome to Strathspace!");
         router.push("/app/discover");
       } else {
+        toast.error("Failed to save", data.message || "Something went wrong");
         setError(data.message || "Failed to save profile");
       }
     } catch {
+      toast.error("Oops!", "Something went wrong. Please try again.");
       setError("Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);

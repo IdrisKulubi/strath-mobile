@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { authClient } from "@/lib/auth-client";
+import { toast } from "@/components/ui/custom-toast";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -29,18 +30,21 @@ export default function RegisterPage() {
 
     // Validation
     if (password !== confirmPassword) {
+      toast.error("Passwords don't match", "Please check your password");
       setError("Passwords don't match");
       setIsLoading(false);
       return;
     }
 
     if (password.length < 8) {
+      toast.error("Password too short", "Must be at least 8 characters");
       setError("Password must be at least 8 characters");
       setIsLoading(false);
       return;
     }
 
     if (!agreeToTerms) {
+      toast.error("Terms required", "You must agree to the terms");
       setError("You must agree to the terms and conditions");
       setIsLoading(false);
       return;
@@ -50,6 +54,7 @@ export default function RegisterPage() {
     const emailDomain = email.split("@")[1]?.toLowerCase();
     const validDomains = ["strathmore.edu", "students.strathmore.edu"];
     if (!validDomains.some(d => emailDomain?.includes(d))) {
+      toast.error("Invalid email", "Please use your university email");
       setError("Please use your university email (@strathmore.edu)");
       setIsLoading(false);
       return;
@@ -63,13 +68,17 @@ export default function RegisterPage() {
       });
 
       if (authError) {
+        toast.error("Registration failed", authError.message || "Please try again");
         setError(authError.message || "Registration failed");
         return;
       }
 
+      toast.success("Account created! 🎉", "Let's set up your profile");
+
       // Redirect to onboarding
       router.push("/onboarding");
     } catch {
+      toast.error("Oops!", "Something went wrong. Please try again.");
       setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
