@@ -41,10 +41,13 @@ export const auth = betterAuth({
 
         // Web/API development
         "http://172.20.10.4:3000",
+        "http://172.20.10.4:3001",
         "http://192.168.100.24:3000",
+        "http://192.168.100.24:3001",
         "http://localhost:8081",
         "http://localhost:8082",
         "http://localhost:3000",
+        "http://localhost:3001",
     ],
     user: {
         additionalFields: {
