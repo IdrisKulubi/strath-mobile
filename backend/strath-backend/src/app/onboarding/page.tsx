@@ -21,9 +21,9 @@ export default async function OnboardingPage() {
 
   // Check if already completed onboarding
   const profile = await getProfile(session.user.id);
-  if (profile?.onboardingCompleted) {
+  if (profile?.profileCompleted) {
     redirect("/app/discover");
   }
 
-  return <OnboardingFlow user={session.user} existingProfile={profile} />;
+  return <OnboardingFlow user={session.user} existingProfile={profile ?? null} />;
 }

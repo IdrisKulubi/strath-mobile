@@ -9,24 +9,31 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 interface Match {
   id: string;
-  matchedAt: string;
-  lastMessageAt?: string;
-  profile: {
-    userId: string;
-    firstName: string;
-    lastName?: string;
-    profilePhoto?: string;
-    photos: string[];
-    course?: string;
-    age: number;
+  createdAt: string;
+  isNew: boolean;
+  sparkScore: number;
+  unreadCount: number;
+  partner: {
+    id: string;
+    name: string;
+    image?: string;
+    lastActive?: string;
+    profile: {
+      firstName?: string;
+      lastName?: string;
+      profilePhoto?: string;
+      photos?: string[];
+      course?: string;
+      age?: number;
+      interests?: string[];
+    } | null;
   };
   lastMessage?: {
     content: string;
     senderId: string;
     createdAt: string;
-    read: boolean;
-  };
-  unreadCount: number;
+    status: string;
+  } | null;
 }
 
 const SearchIcon = () => (
@@ -48,22 +55,30 @@ export default function MatchesPage() {
     try {
       const response = await fetch("/api/matches");
       const data = await response.json();
-      if (data.success) {
-        setMatches(data.data || []);
+      if (data.success && data.data?.matches) {
+        // API returns { data: { matches: [...], nextCursor } }
+        setMatches(data.data.matches || []);
+      } else if (data.success && Array.isArray(data.data)) {
+        // Fallback if data.data is directly an array
+        setMatches(data.data);
+      } else {
+        setMatches([]);
       }
     } catch (error) {
       console.error("Failed to fetch matches:", error);
+      setMatches([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const filteredMatches = matches.filter((match) =>
-    match.profile.firstName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredMatches = matches.filter((match) => {
+    const name = match.partner.profile?.firstName || match.partner.name || '';
+    return name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
-  const newMatches = filteredMatches.filter((m) => !m.lastMessage);
-  const conversations = filteredMatches.filter((m) => m.lastMessage);
+  const newMatches = filteredMatches.filter((m) => m.isNew || !m.lastMessage);
+  const conversations = filteredMatches.filter((m) => !m.isNew && m.lastMessage);
 
   if (isLoading) {
     return (
@@ -126,10 +141,10 @@ export default function MatchesPage() {
                   >
                     <div className="relative group">
                       <div className="w-20 h-20 rounded-full overflow-hidden ring-2 ring-pink-500 ring-offset-2 ring-offset-[#0f0d23]">
-                        {match.profile.profilePhoto || match.profile.photos?.[0] ? (
+                        {match.partner.profile?.profilePhoto || match.partner.profile?.photos?.[0] || match.partner.image ? (
                           <Image
-                            src={match.profile.profilePhoto || match.profile.photos[0]}
-                            alt={match.profile.firstName}
+                            src={match.partner.profile?.profilePhoto || match.partner.profile?.photos?.[0] || match.partner.image || ''}
+                            alt={match.partner.profile?.firstName || match.partner.name || 'Match'}
                             width={80}
                             height={80}
                             className="object-cover w-full h-full"
@@ -145,7 +160,7 @@ export default function MatchesPage() {
                       </div>
                     </div>
                     <p className="text-sm text-white text-center mt-2 truncate w-20">
-                      {match.profile.firstName}
+                      {match.partner.profile?.firstName || match.partner.name?.split(' ')[0] || 'Match'}
                     </p>
                   </Link>
                 ))}
@@ -166,10 +181,10 @@ export default function MatchesPage() {
                   >
                     <div className="relative">
                       <div className="w-14 h-14 rounded-full overflow-hidden">
-                        {match.profile.profilePhoto || match.profile.photos?.[0] ? (
+                        {match.partner.profile?.profilePhoto || match.partner.profile?.photos?.[0] || match.partner.image ? (
                           <Image
-                            src={match.profile.profilePhoto || match.profile.photos[0]}
-                            alt={match.profile.firstName}
+                            src={match.partner.profile?.profilePhoto || match.partner.profile?.photos?.[0] || match.partner.image || ''}
+                            alt={match.partner.profile?.firstName || match.partner.name || 'Match'}
                             width={56}
                             height={56}
                             className="object-cover w-full h-full"
@@ -192,7 +207,7 @@ export default function MatchesPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <h3 className="font-semibold text-white">
-                          {match.profile.firstName}
+                          {match.partner.profile?.firstName || match.partner.name?.split(' ')[0] || 'Match'}
                         </h3>
                         <span className="text-xs text-gray-500">
                           {formatTime(match.lastMessage?.createdAt)}
