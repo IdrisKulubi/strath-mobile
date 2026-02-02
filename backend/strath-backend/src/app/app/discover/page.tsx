@@ -79,7 +79,7 @@ export default function DiscoverPage() {
     setSwipeDirection(direction);
 
     try {
-      const response = await fetch("/api/discover/swipe", {
+      const response = await fetch("/api/swipe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -90,11 +90,11 @@ export default function DiscoverPage() {
 
       const data = await response.json();
       
-      if (data.success && data.data?.matched) {
+      if (data.success && data.data?.isMatch) {
         // Show match modal and toast
         toast.match(currentProfile.firstName);
         setMatchedProfile({
-          matchId: data.data.matchId,
+          matchId: data.data.match?.id,
           profile: currentProfile,
         });
       }
