@@ -3,11 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +29,19 @@ interface PartnerProfile {
   photos?: string[];
   course?: string;
   age?: number;
+  bio?: string;
+  university?: string;
+  yearOfStudy?: number;
+  interests?: string[];
+  lookingFor?: string;
+  height?: string;
+  zodiacSign?: string;
+  smoking?: string;
+  workoutFrequency?: string;
+  instagram?: string;
+  spotify?: string;
+  qualities?: string[];
+  prompts?: { promptId: string; response: string }[];
 }
 
 interface Partner {
@@ -43,54 +54,31 @@ interface Partner {
 interface MatchData {
   id: string;
   partner?: Partner;
-  // Legacy support for old structure
-  profile?: {
-    userId: string;
-    firstName: string;
-    lastName?: string;
-    profilePhoto?: string;
-    photos: string[];
-    course?: string;
-    age: number;
-  };
+  profile?: PartnerProfile & { userId: string };
   messages?: Message[];
   lastMessage?: Message | null;
   createdAt?: string;
 }
 
-// Icons
-const ArrowLeftIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>
-  </svg>
-);
-
-const MoreVerticalIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>
-  </svg>
-);
-
-const SendIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
-  </svg>
-);
-
 export default function ChatPage() {
   const params = useParams();
   const router = useRouter();
   const matchId = params.matchId as string;
-  
+
   const [matchData, setMatchData] = useState<MatchData | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>("");
-  
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [showMobileProfile, setShowMobileProfile] = useState(false);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const fetchCurrentUser = useCallback(async () => {
     try {
@@ -109,7 +97,6 @@ export default function ChatPage() {
       const response = await fetch(`/api/matches/${matchId}`);
       const data = await response.json();
       if (data.success) {
-        // Handle both API response structures: data.data.match or data.data directly
         const matchInfo = data.data?.match || data.data;
         setMatchData(matchInfo);
         setMessages(matchInfo?.messages || []);
@@ -136,17 +123,12 @@ export default function ChatPage() {
   useEffect(() => {
     fetchMatchData();
     fetchCurrentUser();
-    
-    // Poll for new messages every 3 seconds
     const interval = setInterval(fetchMessages, 3000);
     return () => clearInterval(interval);
   }, [matchId, fetchMatchData, fetchCurrentUser, fetchMessages]);
 
   useEffect(() => {
-    // Scroll to bottom when messages change
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    scrollToBottom();
   }, [messages]);
 
   const sendMessage = async (e: React.FormEvent) => {
@@ -154,43 +136,26 @@ export default function ChatPage() {
     if (!newMessage.trim() || isSending) return;
 
     setIsSending(true);
-    const messageContent = newMessage.trim();
-    setNewMessage("");
-
-    // Optimistic update
-    const tempMessage: Message = {
-      id: `temp-${Date.now()}`,
-      content: messageContent,
-      senderId: currentUserId,
-      createdAt: new Date().toISOString(),
-      read: false,
-    };
-    setMessages((prev) => [...prev, tempMessage]);
-
     try {
       const response = await fetch(`/api/messages/${matchId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: messageContent }),
+        body: JSON.stringify({ content: newMessage.trim() }),
       });
-
       const data = await response.json();
-      if (!data.success) {
-        // Remove optimistic message on error
-        console.error("Send message failed:", data);
-        setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
+      if (data.success) {
+        setMessages((prev) => [...prev, data.data]);
+        setNewMessage("");
       }
     } catch (error) {
       console.error("Failed to send message:", error);
-      setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
     } finally {
       setIsSending(false);
     }
   };
 
   const handleUnmatch = async () => {
-    if (!confirm("Are you sure you want to unmatch? This cannot be undone.")) return;
-
+    if (!confirm("Are you sure you want to unmatch?")) return;
     try {
       await fetch(`/api/matches/${matchId}/unmatch`, { method: "POST" });
       router.push("/app/matches");
@@ -199,39 +164,21 @@ export default function ChatPage() {
     }
   };
 
-  const handleBlock = async () => {
-    if (!confirm("Are you sure you want to block this user? They won't be able to see your profile.")) return;
-
-    // Get partner ID from either structure
-    const blockUserId = matchData?.partner?.id || matchData?.profile?.userId;
-    if (!blockUserId) {
-      console.error("No user ID found to block");
-      return;
-    }
-
-    try {
-      await fetch("/api/block", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blockedUserId: blockUserId }),
-      });
-      router.push("/app/matches");
-    } catch (error) {
-      console.error("Failed to block:", error);
-    }
-  };
-
   if (isLoading) {
     return (
-      <div className="flex flex-col h-screen">
-        <div className="flex items-center gap-4 p-4 border-b border-white/10">
-          <Skeleton className="w-12 h-12 rounded-full bg-white/5" />
-          <Skeleton className="h-6 w-32 bg-white/5" />
-        </div>
-        <div className="flex-1 p-4 space-y-4">
-          {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className={`h-12 ${i % 2 ? "w-1/2 ml-auto" : "w-2/3"} rounded-2xl bg-white/5`} />
-          ))}
+      <div className="flex h-screen bg-[#0f0d23]">
+        <div className="flex-1 flex flex-col">
+          <div className="p-4 border-b border-white/10">
+            <Skeleton className="h-10 w-48 bg-white/10" />
+          </div>
+          <div className="flex-1 p-4 space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton
+                key={i}
+                className={`h-16 ${i % 2 === 0 ? "w-2/3" : "w-1/2 ml-auto"} bg-white/10 rounded-2xl`}
+              />
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -239,96 +186,149 @@ export default function ChatPage() {
 
   if (!matchData) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex h-screen bg-[#0f0d23] items-center justify-center">
         <div className="text-center">
-          <h2 className="text-xl font-semibold text-white mb-2">Match not found</h2>
-          <Link href="/app/matches" className="text-pink-400 hover:text-pink-300">
-            Go back to matches
-          </Link>
+          <p className="text-white text-lg mb-4">Match not found</p>
+          <Button
+            onClick={() => router.push("/app/matches")}
+            className="bg-pink-500 hover:bg-pink-600"
+          >
+            Back to Matches
+          </Button>
         </div>
       </div>
     );
   }
 
-  // Get partner info - handle both API structures (new: partner.profile, legacy: profile directly)
-  const partner = matchData.partner;
-  const partnerProfile = partner?.profile || matchData.profile;
-  const partnerId = partner?.id || matchData.profile?.userId;
-  const partnerName = partnerProfile?.firstName || partner?.name?.split(' ')[0] || 'User';
-  const profilePhoto = partnerProfile?.profilePhoto || partnerProfile?.photos?.[0] || partner?.image;
+  const partnerProfile = matchData.partner?.profile || matchData.profile;
+  const partnerName = partnerProfile?.firstName || matchData.partner?.name || "Match";
+  const partnerFullName = `${partnerProfile?.firstName || ""} ${partnerProfile?.lastName || ""}`.trim() || partnerName;
+  const profilePhoto = partnerProfile?.profilePhoto || matchData.partner?.image;
+  const partnerAge = partnerProfile?.age;
+  const partnerBio = partnerProfile?.bio;
   const partnerCourse = partnerProfile?.course;
+  const partnerUniversity = partnerProfile?.university;
+  const partnerYearOfStudy = partnerProfile?.yearOfStudy;
+  const partnerInterests = partnerProfile?.interests || [];
+  const partnerLookingFor = partnerProfile?.lookingFor;
+  const partnerHeight = partnerProfile?.height;
+  const partnerZodiac = partnerProfile?.zodiacSign;
+  const partnerSmoking = partnerProfile?.smoking;
+  const partnerWorkout = partnerProfile?.workoutFrequency;
+  const partnerInstagram = partnerProfile?.instagram;
+  const partnerSpotify = partnerProfile?.spotify;
+  const partnerQualities = partnerProfile?.qualities || [];
+  const partnerPrompts = partnerProfile?.prompts || [];
+  const allPhotos = partnerProfile?.photos || (profilePhoto ? [profilePhoto] : []);
+  const matchDate = matchData.createdAt
+    ? new Date(matchData.createdAt).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    : "";
+
+  const nextPhoto = () => {
+    if (allPhotos.length > 0) {
+      setCurrentPhotoIndex((prev) => (prev + 1) % allPhotos.length);
+    }
+  };
+
+  const prevPhoto = () => {
+    if (allPhotos.length > 0) {
+      setCurrentPhotoIndex((prev) => (prev - 1 + allPhotos.length) % allPhotos.length);
+    }
+  };
 
   return (
-    <div className="flex flex-col h-screen">
-      {/* Header */}
-      <header className="flex items-center justify-between p-3 md:p-4 border-b border-white/10 bg-[#1a1a2e]/80 backdrop-blur-lg safe-area-top">
-        <div className="flex items-center gap-2 md:gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-gray-400 hover:text-white active:bg-white/10 w-10 h-10"
-            onClick={() => router.push("/app/matches")}
-          >
-            <ArrowLeftIcon />
-          </Button>
-          
-          <Link href={`/app/profile/${partnerId}`} className="flex items-center gap-2 md:gap-3 active:opacity-70 transition-opacity">
-            <div className="w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden ring-2 ring-pink-500/30">
-              {profilePhoto ? (
-                <Image
-                  src={profilePhoto}
-                  alt={partnerName}
-                  width={40}
-                  height={40}
-                  className="object-cover w-full h-full"
-                />
-              ) : (
-                <div className="w-full h-full bg-linear-to-br from-pink-500 to-purple-500 flex items-center justify-center">
-                  <span className="text-base md:text-lg">👤</span>
-                </div>
-              )}
-            </div>
-            <div className="min-w-0">
-              <h2 className="font-semibold text-white text-sm md:text-base truncate">
-                {partnerName}
-              </h2>
-              <p className="text-[10px] md:text-xs text-gray-400 truncate">
-                {partnerCourse || "Strathmore University"}
-              </p>
-            </div>
-          </Link>
-        </div>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white active:bg-white/10 w-10 h-10">
-              <MoreVerticalIcon />
+    <div className="flex h-screen bg-[#0f0d23] overflow-hidden">
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header - Fixed */}
+        <header className="shrink-0 flex items-center justify-between p-3 md:p-4 border-b border-white/10 bg-[#1a1a2e]/80 backdrop-blur-lg">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-gray-400 hover:text-white w-10 h-10"
+              onClick={() => router.push("/app/matches")}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="m12 19-7-7 7-7" />
+                <path d="M19 12H5" />
+              </svg>
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-[#1a1a2e] border-white/10">
-            <DropdownMenuItem 
-              className="text-gray-300 focus:text-white focus:bg-white/10 active:bg-white/10"
-              onClick={handleUnmatch}
-            >
-              Unmatch
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-white/10" />
-            <DropdownMenuItem 
-              className="text-red-400 focus:text-red-300 focus:bg-red-500/10 active:bg-red-500/10"
-              onClick={handleBlock}
-            >
-              Block & Report
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </header>
 
-      {/* Messages */}
-      <ScrollArea ref={scrollRef} className="flex-1 p-3 md:p-4">
-        <div className="space-y-3 md:space-y-4 max-w-2xl mx-auto">
-          {/* Match notification */}
-          <div className="text-center py-6 md:py-8">
-            <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden mx-auto mb-3 md:mb-4 ring-2 ring-pink-500 ring-offset-2 ring-offset-[#0f0d23]">
+            <button
+              onClick={() => setShowMobileProfile(true)}
+              className="flex items-center gap-3"
+            >
+              <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-pink-500/30">
+                {profilePhoto ? (
+                  <Image
+                    src={profilePhoto}
+                    alt={partnerName}
+                    width={40}
+                    height={40}
+                    className="object-cover w-full h-full"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center">
+                    <span className="text-lg"></span>
+                  </div>
+                )}
+              </div>
+              <div className="text-left">
+                <h2 className="font-semibold text-white text-sm md:text-base">{partnerName}</h2>
+                <p className="text-xs text-gray-400">
+                  {matchDate ? `Matched ${matchDate}` : partnerCourse || ""}
+                </p>
+              </div>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden text-gray-400 hover:text-white w-10 h-10"
+              onClick={() => setShowMobileProfile(true)}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white w-10 h-10">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="1" />
+                    <circle cx="12" cy="5" r="1" />
+                    <circle cx="12" cy="19" r="1" />
+                  </svg>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-[#1a1a2e] border-white/10">
+                <DropdownMenuItem
+                  className="text-gray-300 focus:text-white focus:bg-white/10"
+                  onClick={handleUnmatch}
+                >
+                  Unmatch
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-white/10" />
+                <DropdownMenuItem className="text-red-400 focus:text-red-300 focus:bg-white/10">
+                  Report
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+
+        {/* Messages - Scrolls */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex flex-col items-center py-8">
+            <div className="w-20 h-20 rounded-full overflow-hidden ring-4 ring-pink-500/30 mb-4">
               {profilePhoto ? (
                 <Image
                   src={profilePhoto}
@@ -338,74 +338,416 @@ export default function ChatPage() {
                   className="object-cover w-full h-full"
                 />
               ) : (
-                <div className="w-full h-full bg-linear-to-br from-pink-500 to-purple-500 flex items-center justify-center">
-                  <span className="text-2xl md:text-3xl">👤</span>
+                <div className="w-full h-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center">
+                  <span className="text-3xl"></span>
                 </div>
               )}
             </div>
-            <h3 className="text-base md:text-lg font-semibold text-white mb-1">
+            <h3 className="text-lg font-semibold text-white mb-1">
               You matched with {partnerName}!
             </h3>
-            <p className="text-xs md:text-sm text-gray-400">
-              Start the conversation 💬
-            </p>
+            <p className="text-sm text-gray-400">{matchDate || "Start the conversation"}</p>
           </div>
 
-          {/* Message bubbles */}
-          {messages.map((message) => {
+          {messages.map((message, idx) => {
             const isOwn = message.senderId === currentUserId;
+            const showDate =
+              idx === 0 ||
+              new Date(message.createdAt).toDateString() !==
+                new Date(messages[idx - 1].createdAt).toDateString();
+
             return (
-              <div
-                key={message.id}
-                className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[80%] md:max-w-[70%] px-3 md:px-4 py-2 md:py-3 rounded-2xl ${
-                    isOwn
-                      ? "bg-linear-to-r from-pink-500 to-rose-500 text-white rounded-br-md"
-                      : "bg-white/10 text-white rounded-bl-md"
-                  }`}
-                >
-                  <p className="text-sm">{message.content}</p>
-                  <p className={`text-[10px] md:text-xs mt-1 ${isOwn ? "text-pink-100" : "text-gray-500"}`}>
-                    {formatTime(message.createdAt)}
-                  </p>
+              <div key={message.id}>
+                {showDate && (
+                  <div className="text-center my-4">
+                    <span className="text-xs text-gray-500 bg-white/5 px-3 py-1 rounded-full">
+                      {formatDate(message.createdAt)}
+                    </span>
+                  </div>
+                )}
+                <div className={`flex ${isOwn ? "justify-end" : "justify-start"} items-end gap-2`}>
+                  {!isOwn && (
+                    <div className="w-7 h-7 rounded-full overflow-hidden shrink-0">
+                      {profilePhoto ? (
+                        <Image
+                          src={profilePhoto}
+                          alt={partnerName}
+                          width={28}
+                          height={28}
+                          className="object-cover w-full h-full"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center text-xs">
+                          
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div
+                    className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
+                      isOwn
+                        ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-br-md"
+                        : "bg-white/10 text-white rounded-bl-md"
+                    }`}
+                  >
+                    <p className="text-sm leading-relaxed">{message.content}</p>
+                    <p className={`text-[10px] mt-1 ${isOwn ? "text-pink-100 text-right" : "text-gray-500"}`}>
+                      {formatTime(message.createdAt)}
+                    </p>
+                  </div>
                 </div>
               </div>
             );
           })}
+          <div ref={messagesEndRef} />
         </div>
-      </ScrollArea>
 
-      {/* Message Input */}
-      <div className="p-3 md:p-4 border-t border-white/10 bg-[#1a1a2e]/80 backdrop-blur-lg safe-area-bottom">
-        <form onSubmit={sendMessage} className="flex items-center gap-2 md:gap-3 max-w-2xl mx-auto">
-          <Input
-            ref={inputRef}
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type a message..."
-            className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-gray-500 h-11 md:h-12 rounded-full px-4 md:px-5 text-sm md:text-base"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            disabled={!newMessage.trim() || isSending}
-            className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-linear-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 active:scale-95 disabled:opacity-50 transition-transform"
-          >
-            <SendIcon />
-          </Button>
-        </form>
+        {/* Input - Fixed */}
+        <div className="shrink-0 p-3 md:p-4 border-t border-white/10 bg-[#1a1a2e]/80 backdrop-blur-lg">
+          <form onSubmit={sendMessage} className="flex items-center gap-3">
+            <Input
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="Type a message..."
+              className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-gray-500 h-11 rounded-full px-5"
+            />
+            <Button
+              type="submit"
+              disabled={!newMessage.trim() || isSending}
+              className="h-11 px-6 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 disabled:opacity-50 font-semibold"
+            >
+              Send
+            </Button>
+          </form>
+        </div>
       </div>
+      {/* Desktop Sidebar - Scrolls independently */}
+      <aside className="hidden lg:flex flex-col w-[380px] xl:w-[420px] h-screen border-l border-white/10 bg-[#0f0d23]">
+        <div className="shrink-0 p-4 border-b border-white/10">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-white">{partnerFullName}</h2>
+            {partnerAge && <span className="text-xl text-white">{partnerAge}</span>}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          <div className="relative aspect-[3/4] bg-black">
+            {allPhotos.length > 0 ? (
+              <>
+                <Image
+                  src={allPhotos[currentPhotoIndex] || profilePhoto || ""}
+                  alt={partnerName}
+                  fill
+                  className="object-cover"
+                />
+                {allPhotos.length > 1 && (
+                  <>
+                    <div className="absolute top-3 left-0 right-0 flex justify-center gap-1 px-4">
+                      {allPhotos.map((_, idx) => (
+                        <div
+                          key={idx}
+                          className={`h-1 flex-1 max-w-12 rounded-full transition-all ${
+                            idx === currentPhotoIndex ? "bg-white" : "bg-white/40"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <button onClick={prevPhoto} className="absolute left-0 top-0 bottom-0 w-1/3 flex items-center pl-2">
+                      <div className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                          <path d="m15 18-6-6 6-6" />
+                        </svg>
+                      </div>
+                    </button>
+                    <button onClick={nextPhoto} className="absolute right-0 top-0 bottom-0 w-1/3 flex items-center justify-end pr-2">
+                      <div className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
+                      </div>
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center">
+                <span className="text-6xl"></span>
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 space-y-6 pb-8">
+            {partnerLookingFor && (
+              <div className="space-y-2">
+                <p className="text-gray-400 text-sm">Looking for</p>
+                <div className="flex items-center gap-2 bg-white/5 rounded-xl p-3">
+                  <span className="text-xl"></span>
+                  <span className="text-white font-medium">{partnerLookingFor}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <p className="text-gray-400 text-sm">Essentials</p>
+              <div className="flex flex-wrap gap-2">
+                {partnerUniversity && (
+                  <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white"> {partnerUniversity}</span>
+                )}
+                {partnerCourse && (
+                  <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white"> {partnerCourse}</span>
+                )}
+                {partnerYearOfStudy && (
+                  <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white"> Year {partnerYearOfStudy}</span>
+                )}
+                {partnerHeight && (
+                  <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white"> {partnerHeight}</span>
+                )}
+                {partnerZodiac && (
+                  <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white"> {partnerZodiac}</span>
+                )}
+              </div>
+            </div>
+
+            {(partnerSmoking || partnerWorkout) && (
+              <div className="space-y-3">
+                <p className="text-gray-400 text-sm">Lifestyle</p>
+                <div className="flex flex-wrap gap-2">
+                  {partnerSmoking && (
+                    <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white">
+                       {partnerSmoking === "no" ? "Non-smoker" : partnerSmoking === "yes" ? "Smoker" : "Social smoker"}
+                    </span>
+                  )}
+                  {partnerWorkout && (
+                    <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white"> {partnerWorkout}</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {partnerBio && (
+              <div className="space-y-2">
+                <p className="text-gray-400 text-sm">About</p>
+                <p className="text-white text-sm leading-relaxed">{partnerBio}</p>
+              </div>
+            )}
+
+            {partnerQualities.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-gray-400 text-sm">My qualities</p>
+                <div className="flex flex-wrap gap-2">
+                  {partnerQualities.map((quality, idx) => (
+                    <span key={idx} className="px-3 py-1.5 bg-pink-500/20 border border-pink-500/30 rounded-full text-sm text-pink-300">
+                      {quality}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {partnerInterests.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-gray-400 text-sm">Interests</p>
+                <div className="flex flex-wrap gap-2">
+                  {partnerInterests.map((interest, idx) => (
+                    <span key={idx} className="px-3 py-1.5 bg-purple-500/20 border border-purple-500/30 rounded-full text-sm text-purple-300">
+                      {interest}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {partnerPrompts.length > 0 && (
+              <div className="space-y-4">
+                {partnerPrompts.map((prompt, idx) => (
+                  <div key={idx} className="bg-white/5 rounded-xl p-4">
+                    <p className="text-gray-400 text-sm mb-2">{prompt.promptId}</p>
+                    <p className="text-white">{prompt.response}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(partnerInstagram || partnerSpotify) && (
+              <div className="space-y-3">
+                <p className="text-gray-400 text-sm">Socials</p>
+                <div className="flex gap-3">
+                  {partnerInstagram && (
+                    <a href={`https://instagram.com/${partnerInstagram}`} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl text-white text-sm hover:opacity-90 transition-opacity">
+                       Instagram
+                    </a>
+                  )}
+                  {partnerSpotify && (
+                    <a href={partnerSpotify} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-4 py-2 bg-[#1DB954] rounded-xl text-white text-sm hover:opacity-90 transition-opacity">
+                       Spotify
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+      {/* Mobile Profile Overlay */}
+      {showMobileProfile && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowMobileProfile(false)} />
+          <div className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-[#0f0d23] flex flex-col">
+            <div className="shrink-0 p-4 border-b border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-bold text-white">{partnerFullName}</h2>
+                {partnerAge && <span className="text-xl text-white">{partnerAge}</span>}
+              </div>
+              <button onClick={() => setShowMobileProfile(false)} className="p-2 hover:bg-white/10 rounded-full">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              <div className="relative aspect-[3/4] bg-black">
+                {allPhotos.length > 0 ? (
+                  <>
+                    <Image src={allPhotos[currentPhotoIndex] || profilePhoto || ""} alt={partnerName} fill className="object-cover" />
+                    {allPhotos.length > 1 && (
+                      <>
+                        <div className="absolute top-3 left-0 right-0 flex justify-center gap-1 px-4">
+                          {allPhotos.map((_, idx) => (
+                            <div key={idx} className={`h-1 flex-1 max-w-12 rounded-full transition-all ${idx === currentPhotoIndex ? "bg-white" : "bg-white/40"}`} />
+                          ))}
+                        </div>
+                        <button onClick={prevPhoto} className="absolute left-0 top-0 bottom-0 w-1/3 flex items-center pl-2">
+                          <div className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="m15 18-6-6 6-6" /></svg>
+                          </div>
+                        </button>
+                        <button onClick={nextPhoto} className="absolute right-0 top-0 bottom-0 w-1/3 flex items-center justify-end pr-2">
+                          <div className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="m9 18 6-6-6-6" /></svg>
+                          </div>
+                        </button>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center">
+                    <span className="text-6xl"></span>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 space-y-6 pb-8">
+                {partnerLookingFor && (
+                  <div className="space-y-2">
+                    <p className="text-gray-400 text-sm">Looking for</p>
+                    <div className="flex items-center gap-2 bg-white/5 rounded-xl p-3">
+                      <span className="text-xl"></span>
+                      <span className="text-white font-medium">{partnerLookingFor}</span>
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-3">
+                  <p className="text-gray-400 text-sm">Essentials</p>
+                  <div className="flex flex-wrap gap-2">
+                    {partnerUniversity && <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white"> {partnerUniversity}</span>}
+                    {partnerCourse && <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white"> {partnerCourse}</span>}
+                    {partnerYearOfStudy && <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white"> Year {partnerYearOfStudy}</span>}
+                    {partnerHeight && <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white"> {partnerHeight}</span>}
+                    {partnerZodiac && <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white"> {partnerZodiac}</span>}
+                  </div>
+                </div>
+                {(partnerSmoking || partnerWorkout) && (
+                  <div className="space-y-3">
+                    <p className="text-gray-400 text-sm">Lifestyle</p>
+                    <div className="flex flex-wrap gap-2">
+                      {partnerSmoking && <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white"> {partnerSmoking === "no" ? "Non-smoker" : partnerSmoking === "yes" ? "Smoker" : "Social smoker"}</span>}
+                      {partnerWorkout && <span className="px-3 py-1.5 bg-white/5 rounded-full text-sm text-white"> {partnerWorkout}</span>}
+                    </div>
+                  </div>
+                )}
+                {partnerBio && (
+                  <div className="space-y-2">
+                    <p className="text-gray-400 text-sm">About</p>
+                    <p className="text-white text-sm leading-relaxed">{partnerBio}</p>
+                  </div>
+                )}
+                {partnerQualities.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-gray-400 text-sm">My qualities</p>
+                    <div className="flex flex-wrap gap-2">
+                      {partnerQualities.map((quality, idx) => (
+                        <span key={idx} className="px-3 py-1.5 bg-pink-500/20 border border-pink-500/30 rounded-full text-sm text-pink-300">{quality}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {partnerInterests.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-gray-400 text-sm">Interests</p>
+                    <div className="flex flex-wrap gap-2">
+                      {partnerInterests.map((interest, idx) => (
+                        <span key={idx} className="px-3 py-1.5 bg-purple-500/20 border border-purple-500/30 rounded-full text-sm text-purple-300">{interest}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {partnerPrompts.length > 0 && (
+                  <div className="space-y-4">
+                    {partnerPrompts.map((prompt, idx) => (
+                      <div key={idx} className="bg-white/5 rounded-xl p-4">
+                        <p className="text-gray-400 text-sm mb-2">{prompt.promptId}</p>
+                        <p className="text-white">{prompt.response}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {(partnerInstagram || partnerSpotify) && (
+                  <div className="space-y-3">
+                    <p className="text-gray-400 text-sm">Socials</p>
+                    <div className="flex gap-3">
+                      {partnerInstagram && (
+                        <a href={`https://instagram.com/${partnerInstagram}`} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl text-white text-sm hover:opacity-90 transition-opacity">
+                           Instagram
+                        </a>
+                      )}
+                      {partnerSpotify && (
+                        <a href={partnerSpotify} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-4 py-2 bg-[#1DB954] rounded-xl text-white text-sm hover:opacity-90 transition-opacity">
+                           Spotify
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function formatTime(dateString: string) {
-  const date = new Date(dateString);
-  return date.toLocaleTimeString("en-US", { 
-    hour: "numeric", 
+  return new Date(dateString).toLocaleTimeString("en-US", {
+    hour: "numeric",
     minute: "2-digit",
-    hour12: true 
+    hour12: true,
   });
+}
+
+function formatDate(dateString: string) {
+  const date = new Date(dateString);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
