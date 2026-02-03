@@ -798,9 +798,9 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
         <div className="h-20 md:h-24" />
       </div>
 
-      {/* Floating Save Button - positioned relative to form container */}
-      <div className="sticky bottom-0 left-0 right-0 p-3 md:p-4 bg-gradient-to-t from-[#0f0d23] via-[#0f0d23] to-transparent z-50 -mx-4 md:-mx-6 px-4 md:px-6 safe-area-bottom">
-        <div className="flex gap-3 md:gap-4">
+      {/* Floating Save Button - fixed above bottom nav on mobile */}
+      <div className="fixed md:sticky bottom-20 md:bottom-0 left-0 right-0 p-3 md:p-4 bg-gradient-to-t from-[#0f0d23] via-[#0f0d23] to-transparent z-50 px-4 md:px-6 safe-area-bottom">
+        <div className="flex gap-3 md:gap-4 max-w-4xl mx-auto">
           <Link href="/app/profile" className="flex-1">
             <Button variant="outline" className="w-full h-11 md:h-12 border-white/10 text-gray-300 hover:bg-white/5 active:bg-white/10 bg-[#1a1a2e] text-sm md:text-base">
               Cancel
