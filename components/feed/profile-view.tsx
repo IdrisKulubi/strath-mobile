@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, Dimensions, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { FeedProfile } from '@/hooks/use-feed';
 import { useTheme } from '@/hooks/use-theme';
+import { CachedImage } from '@/components/ui/cached-image';
 
 const { width, height } = Dimensions.get('window');
 const HEADER_HEIGHT = height * 0.75;
@@ -18,9 +19,9 @@ export function ProfileView({ profile, onLike, onPass }: ProfileViewProps) {
     const { colors } = useTheme();
 
     // Fallback image if no photos
-    const mainPhoto = profile.photos && profile.photos.length > 0
-        ? { uri: profile.photos[0] }
-        : require('@/assets/images/react-logo.png');
+    const mainPhotoUri = profile.photos && profile.photos.length > 0
+        ? profile.photos[0]
+        : null;
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -31,7 +32,7 @@ export function ProfileView({ profile, onLike, onPass }: ProfileViewProps) {
             >
                 {/* Main Header Image */}
                 <View style={styles.imageContainer}>
-                    <Image source={mainPhoto} style={styles.image} resizeMode="cover" />
+                    <CachedImage uri={mainPhotoUri} style={styles.image} fallbackType="avatar" contentFit="cover" />
 
                     {/* Gradient Overlay for Name/Age */}
                     <LinearGradient
@@ -93,7 +94,7 @@ export function ProfileView({ profile, onLike, onPass }: ProfileViewProps) {
                     {profile.photos && profile.photos.length > 1 && (
                         <View style={styles.section}>
                             {profile.photos.slice(1).map((photo, index) => (
-                                <Image key={index} source={{ uri: photo }} style={styles.secondaryPhoto} />
+                                <CachedImage key={index} uri={photo} style={styles.secondaryPhoto} fallbackType="avatar" />
                             ))}
                         </View>
                     )}

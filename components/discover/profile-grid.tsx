@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, StyleSheet, Pressable, Image, Dimensions } from 'react-native';
+import { View, StyleSheet, Pressable, Dimensions } from 'react-native';
 import { Text } from '@/components/ui/text';
+import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { DiscoverProfile } from '@/hooks/use-discover';
 import { Heart } from 'phosphor-react-native';
@@ -45,7 +46,7 @@ export function ProfileGrid({ profiles, onProfilePress, currentUserInterests = [
                         ]}
                     >
                         {photo ? (
-                            <Image source={{ uri: photo }} style={styles.photo} />
+                            <CachedImage uri={photo} style={styles.photo} fallbackType="avatar" />
                         ) : (
                             <View style={[styles.photo, styles.placeholder, { backgroundColor: colors.muted }]}>
                                 <Heart size={32} color={colors.mutedForeground} />

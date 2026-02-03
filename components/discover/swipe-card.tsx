@@ -3,10 +3,10 @@ import {
     View,
     StyleSheet,
     Dimensions,
-    Image,
     Pressable,
     ScrollView,
 } from 'react-native';
+import { CachedImage } from '@/components/ui/cached-image';
 import Animated, {
     SharedValue,
     useAnimatedStyle,
@@ -147,10 +147,11 @@ export function SwipeCard({
             >
                 {/* Hero Photo Section - Just the image and gradient/stamps */}
                 <View style={styles.heroContainer}>
-                    <Image
-                        source={{ uri: allPhotos[0] }}
+                    <CachedImage
+                        uri={allPhotos[0]}
                         style={styles.heroPhoto}
-                        resizeMode="cover"
+                        fallbackType="avatar"
+                        contentFit="cover"
                     />
 
                     {/* Bottom Gradient - Sits below the profile info layer */}
@@ -190,7 +191,7 @@ export function SwipeCard({
                 {/* Second Photo */}
                 {allPhotos.length > 1 && (
                     <View style={styles.photoContainer}>
-                        <Image source={{ uri: allPhotos[1] }} style={styles.photo} resizeMode="cover" />
+                        <CachedImage uri={allPhotos[1]} style={styles.photo} fallbackType="avatar" contentFit="cover" />
                     </View>
                 )}
 
@@ -220,7 +221,7 @@ export function SwipeCard({
                 {/* Third Photo */}
                 {allPhotos.length > 2 && (
                     <View style={styles.photoContainer}>
-                        <Image source={{ uri: allPhotos[2] }} style={styles.photo} resizeMode="cover" />
+                        <CachedImage uri={allPhotos[2]} style={styles.photo} fallbackType="avatar" contentFit="cover" />
                     </View>
                 )}
 

@@ -4,9 +4,9 @@ import {
     StyleSheet,
     ScrollView,
     Pressable,
-    Image,
     Dimensions
 } from 'react-native';
+import { CachedImage } from '@/components/ui/cached-image';
 import Animated, {
     useAnimatedStyle,
     useSharedValue,
@@ -82,7 +82,7 @@ export function DiscoverSectionView({
                 ]}
             >
                 {photo ? (
-                    <Image source={{ uri: photo }} style={styles.cardImage} resizeMode="cover" />
+                    <CachedImage uri={photo} style={styles.cardImage} fallbackType="avatar" contentFit="cover" />
                 ) : (
                     <View style={[styles.cardImage, styles.placeholder, { backgroundColor: colors.muted }]}>
                         <Heart size={size === 'large' ? 48 : 24} color={colors.mutedForeground} />

@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Pressable, StyleSheet, Image } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/text';
+import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { useRouter } from 'expo-router';
 import { CaretLeft, DotsThreeVertical } from 'phosphor-react-native';
@@ -38,7 +39,7 @@ export function ChatHeader({ partnerName, partnerImage, isOnline = false, onMore
             {/* Avatar */}
             <View style={styles.avatarContainer}>
                 {partnerImage ? (
-                    <Image source={{ uri: partnerImage }} style={styles.avatar} />
+                    <CachedImage uri={partnerImage} style={styles.avatar} fallbackType="avatar" />
                 ) : (
                     <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
                         <Text className="text-white text-lg font-bold">{initial}</Text>

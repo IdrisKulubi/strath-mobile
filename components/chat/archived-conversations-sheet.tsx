@@ -6,9 +6,9 @@ import {
     Pressable,
     Dimensions,
     FlatList,
-    Image,
 } from 'react-native';
 import { Text } from '@/components/ui/text';
+import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { Match, getRelativeTime } from '@/hooks/use-matches';
 import { Ionicons } from '@expo/vector-icons';
@@ -117,7 +117,7 @@ export function ArchivedConversationsSheet({
                     {/* Avatar */}
                     <View style={styles.avatarContainer}>
                         {avatarUri ? (
-                            <Image source={{ uri: avatarUri }} style={styles.avatar} />
+                            <CachedImage uri={avatarUri} style={styles.avatar} fallbackType="avatar" />
                         ) : (
                             <LinearGradient
                                 colors={['#ec4899', '#f43f5e']}

@@ -3,11 +3,11 @@ import {
     View,
     StyleSheet,
     Modal,
-    Image,
     Pressable,
     Dimensions,
 } from 'react-native';
 import { Text } from '@/components/ui/text';
+import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { DiscoverProfile } from '@/hooks/use-discover';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -122,7 +122,7 @@ export function MatchModal({
                 <View style={styles.content}>
                     {/* Title */}
                     <Animated.View style={[styles.titleContainer, titleStyle]}>
-                        <Text style={styles.matchText}>You're Connected! 🎉</Text>
+                        <Text style={styles.matchText}>You&apos;re Connected! 🎉</Text>
                         <Text style={styles.subText}>
                             You and {displayName} want to connect
                         </Text>
@@ -132,7 +132,7 @@ export function MatchModal({
                     <View style={styles.photosContainer}>
                         <Animated.View style={[styles.photoWrapper, photo1Style]}>
                             {currentUserImage ? (
-                                <Image source={{ uri: currentUserImage }} style={styles.photo} />
+                                <CachedImage uri={currentUserImage} style={styles.photo} fallbackType="avatar" />
                             ) : (
                                 <View style={[styles.photo, styles.photoPlaceholder, { backgroundColor: colors.primary }]}>
                                     <Text style={styles.placeholderText}>You</Text>
@@ -142,7 +142,7 @@ export function MatchModal({
 
                         <Animated.View style={[styles.photoWrapper, photo2Style]}>
                             {profilePhoto ? (
-                                <Image source={{ uri: profilePhoto }} style={styles.photo} />
+                                <CachedImage uri={profilePhoto} style={styles.photo} fallbackType="avatar" />
                             ) : (
                                 <View style={[styles.photo, styles.photoPlaceholder, { backgroundColor: colors.primary }]}>
                                     <Text style={styles.placeholderText}>{displayName[0]}</Text>

@@ -4,13 +4,13 @@ import {
     StyleSheet,
     ScrollView,
     Pressable,
-    Image,
     Dimensions,
     Share,
     Linking,
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
+import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { useEvent, useRsvpEvent, useEventAttendees } from '@/hooks/use-events';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -92,7 +92,7 @@ export function EventDetailSheet({ eventId, visible, onClose }: EventDetailSheet
                 {/* Header with Cover Image */}
                 <View style={styles.headerContainer}>
                     {event?.coverImage ? (
-                        <Image source={{ uri: event.coverImage }} style={styles.coverImage} />
+                        <CachedImage uri={event.coverImage} style={styles.coverImage} fallbackType="cover" />
                     ) : (
                         <LinearGradient
                             colors={categoryInfo ? [categoryInfo.color, categoryInfo.color + '80'] : ['#ec4899', '#f43f5e']}
@@ -265,9 +265,10 @@ export function EventDetailSheet({ eventId, visible, onClose }: EventDetailSheet
                                                 ]}
                                             >
                                                 {attendee.image ? (
-                                                    <Image 
-                                                        source={{ uri: attendee.image }} 
+                                                    <CachedImage 
+                                                        uri={attendee.image} 
                                                         style={styles.attendeeImage}
+                                                        fallbackType="avatar"
                                                     />
                                                 ) : (
                                                     <View style={[styles.attendeePlaceholder, { backgroundColor: colors.primary }]}>

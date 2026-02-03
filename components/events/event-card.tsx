@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, StyleSheet, Pressable, Image } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import Animated, { FadeInRight } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
+import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MapPin, Users, CalendarBlank, Clock } from 'phosphor-react-native';
@@ -48,7 +49,7 @@ export function EventCard({
                     {/* Cover Image or Category Color */}
                     <View style={[styles.compactImage, { backgroundColor: categoryInfo.color + '20' }]}>
                         {event.coverImage ? (
-                            <Image source={{ uri: event.coverImage }} style={styles.compactImageContent} />
+                            <CachedImage uri={event.coverImage} style={styles.compactImageContent} fallbackType="cover" />
                         ) : (
                             <Text style={styles.compactEmoji}>{categoryInfo.icon}</Text>
                         )}
@@ -98,7 +99,7 @@ export function EventCard({
                 {/* Cover Image */}
                 <View style={styles.imageContainer}>
                     {event.coverImage ? (
-                        <Image source={{ uri: event.coverImage }} style={styles.image} />
+                        <CachedImage uri={event.coverImage} style={styles.image} fallbackType="cover" />
                     ) : (
                         <LinearGradient
                             colors={[categoryInfo.color, categoryInfo.color + '80']}

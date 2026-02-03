@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Pressable, StyleSheet, Image, Alert } from 'react-native';
+import { View, Pressable, StyleSheet, Alert } from 'react-native';
 import { Text } from '@/components/ui/text';
+import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { Match, getRelativeTime, getLastActiveStatus } from '@/hooks/use-matches';
 import * as Haptics from 'expo-haptics';
@@ -126,7 +127,7 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
             <View style={styles.avatarSection}>
                 <View style={styles.avatarWrapper}>
                     {avatarUri ? (
-                        <Image source={{ uri: avatarUri }} style={styles.avatar} />
+                        <CachedImage uri={avatarUri} style={styles.avatar} fallbackType="avatar" />
                     ) : (
                         <LinearGradient
                             colors={['#ec4899', '#f43f5e']}

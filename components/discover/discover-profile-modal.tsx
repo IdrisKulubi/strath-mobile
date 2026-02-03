@@ -4,7 +4,6 @@ import {
     StyleSheet,
     Modal,
     ScrollView,
-    Image,
     Pressable,
     Dimensions,
     StatusBar,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
+import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { DiscoverProfile } from '@/types/discover';
 import { X, Heart, GraduationCap, Sparkle, DotsThreeVertical, Shield, Flag } from 'phosphor-react-native';
@@ -168,7 +168,7 @@ export function DiscoverProfileModal({
                     {/* Main Photo */}
                     <View style={styles.photoContainer}>
                         {photo ? (
-                            <Image source={{ uri: photo }} style={styles.mainPhoto} />
+                            <CachedImage uri={photo} style={styles.mainPhoto} fallbackType="avatar" />
                         ) : (
                             <View style={[styles.mainPhoto, styles.placeholder, { backgroundColor: colors.muted }]}>
                                 <Heart size={64} color={colors.mutedForeground} />
@@ -249,7 +249,7 @@ export function DiscoverProfileModal({
                     {allPhotos.length > 1 && (
                         <View style={styles.photosGrid}>
                             {allPhotos.slice(1, 5).map((p, i) => (
-                                <Image key={i} source={{ uri: p }} style={styles.gridPhoto} />
+                                <CachedImage key={i} uri={p} style={styles.gridPhoto} fallbackType="avatar" />
                             ))}
                         </View>
                     )}
