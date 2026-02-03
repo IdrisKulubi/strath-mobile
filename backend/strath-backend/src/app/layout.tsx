@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { CustomToaster } from "@/components/ui/custom-toast";
 import { Providers } from "@/components/providers";
+import { Analytics } from "@vercel/analytics/next"
+import { constructMetadata } from "@/lib/metadata";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,10 +16,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Strathspace",
-  description: "Strathspace Mobile",
-};
+export const metadata: Metadata = constructMetadata();
 
 export default function RootLayout({
   children,
@@ -31,6 +30,8 @@ export default function RootLayout({
       >
         <Providers>
           {children}
+                  <Analytics />
+
         </Providers>
         <CustomToaster />
       </body>
