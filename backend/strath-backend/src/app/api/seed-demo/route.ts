@@ -357,6 +357,7 @@ export async function POST(request: NextRequest) {
                 university: eventData.university,
                 location: eventData.location,
                 isVirtual: eventData.isVirtual,
+                virtualLink: null, // Explicitly set to null for non-virtual events
                 organizerName: eventData.organizerName,
                 maxAttendees: eventData.maxAttendees,
                 startTime: startTime,
