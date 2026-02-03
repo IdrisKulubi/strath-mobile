@@ -184,7 +184,7 @@ export default function DiscoverPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-5rem)] md:min-h-[calc(100vh-4rem)] px-3 pt-2 md:p-6 md:justify-center">
+    <div className="flex flex-col h-[calc(100vh-5rem)] md:h-auto md:min-h-[calc(100vh-4rem)] px-3 pt-2 md:p-6 md:items-center md:justify-center">
       {/* Logo Header - visible on mobile, Tinder-style */}
       <div className="w-full max-w-[400px] mx-auto mb-2 md:hidden">
         <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-rose-500">
@@ -192,8 +192,8 @@ export default function DiscoverPage() {
         </h1>
       </div>
 
-      {/* Card Stack - takes remaining space */}
-      <div className="relative w-full max-w-[400px] mx-auto flex-1 min-h-0 md:flex-none md:h-[calc(100vh-200px)] md:min-h-[500px] md:max-h-[700px]">
+      {/* Card Stack - takes remaining space on mobile, fixed height on desktop */}
+      <div className="relative w-full max-w-[400px] mx-auto flex-1 min-h-0 md:flex-none md:h-[550px]">
         {/* Next card (behind) */}
         {nextProfile && (
           <div className="absolute inset-0 scale-[0.96] opacity-60 -translate-y-2">
