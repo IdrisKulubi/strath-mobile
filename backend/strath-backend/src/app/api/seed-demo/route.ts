@@ -46,7 +46,6 @@ const DEMO_MATCHES = [
 // Demo events for Apple reviewers to see app functionality
 const DEMO_EVENTS = [
     {
-        id: "demo-event-1",
         title: "Tech Talk: AI & Machine Learning",
         description: "Join us for an exciting evening exploring the latest trends in AI and Machine Learning. Guest speakers from leading tech companies will share insights on career opportunities and emerging technologies. Free pizza and networking afterwards! 🍕",
         category: "academic" as const,
@@ -59,7 +58,6 @@ const DEMO_EVENTS = [
         hoursFromNow: 48, // Event in 2 days
     },
     {
-        id: "demo-event-2",
         title: "Campus Music Night 🎵",
         description: "An evening of live performances by talented student musicians! Come support your fellow students as they showcase their musical talents. Open mic session at the end - bring your instrument!",
         category: "arts" as const,
@@ -72,7 +70,6 @@ const DEMO_EVENTS = [
         hoursFromNow: 72, // Event in 3 days
     },
     {
-        id: "demo-event-3",
         title: "Career Fair 2026",
         description: "Connect with top employers looking to hire Strathmore graduates! Over 50 companies will be present including Google, Microsoft, Safaricom, and more. Bring your CV and dress professionally. 💼",
         category: "career" as const,
@@ -85,7 +82,6 @@ const DEMO_EVENTS = [
         hoursFromNow: 120, // Event in 5 days
     },
     {
-        id: "demo-event-4",
         title: "Basketball Tournament Finals 🏀",
         description: "The moment we've all been waiting for! Watch the championship game between Business School and Engineering. Come cheer for your faculty! Refreshments will be provided.",
         category: "sports" as const,
@@ -98,7 +94,6 @@ const DEMO_EVENTS = [
         hoursFromNow: 24, // Event tomorrow
     },
     {
-        id: "demo-event-5",
         title: "Game Night: Board Games & Chill",
         description: "Take a break from studying! Join us for a relaxing evening of board games, card games, and video games. We have Monopoly, Uno, FIFA, and more. Bring your friends! 🎮",
         category: "social" as const,
@@ -205,12 +200,22 @@ export async function POST(request: NextRequest) {
                 )
             );
 
-            // 7.5. Event RSVPs (delete before events)
-            const demoEventIds = DEMO_EVENTS.map(e => e.id);
-            await db.delete(eventRsvps).where(inArray(eventRsvps.eventId, demoEventIds));
+            // 7.5. Delete events created by demo users and their RSVPs
+            // First get all event IDs created by demo users
+            const demoCreatedEvents = await db.select({ id: campusEvents.id })
+                .from(campusEvents)
+                .where(inArray(campusEvents.creatorId, allDemoUserIds));
             
-            // 7.6. Campus Events created by demo users
-            await db.delete(campusEvents).where(inArray(campusEvents.id, demoEventIds));
+            if (demoCreatedEvents.length > 0) {
+                const demoEventIds = demoCreatedEvents.map(e => e.id);
+                // Delete RSVPs first (foreign key constraint)
+                await db.delete(eventRsvps).where(inArray(eventRsvps.eventId, demoEventIds));
+                // Then delete the events
+                await db.delete(campusEvents).where(inArray(campusEvents.id, demoEventIds));
+            }
+            
+            // Also delete any RSVPs by demo users on other events
+            await db.delete(eventRsvps).where(inArray(eventRsvps.userId, allDemoUserIds));
 
             // 8. Sessions (has cascade but delete explicitly to be safe)
             await db.delete(session).where(inArray(session.userId, allDemoUserIds));
@@ -347,9 +352,10 @@ export async function POST(request: NextRequest) {
         for (const eventData of DEMO_EVENTS) {
             const startTime = new Date(Date.now() + eventData.hoursFromNow * 3600000);
             const endTime = new Date(startTime.getTime() + 2 * 3600000); // 2 hours duration
+            const eventId = randomUUID(); // Generate proper UUID for event
             
             await db.insert(campusEvents).values({
-                id: eventData.id,
+                id: eventId,
                 title: eventData.title,
                 description: eventData.description,
                 category: eventData.category,
@@ -372,7 +378,7 @@ export async function POST(request: NextRequest) {
             const rsvpCount = Math.floor(Math.random() * 3) + 1; // 1-3 RSVPs
             for (let i = 0; i < rsvpCount && i < DEMO_MATCHES.length; i++) {
                 await db.insert(eventRsvps).values({
-                    eventId: eventData.id,
+                    eventId: eventId,
                     userId: DEMO_MATCHES[i].id,
                     status: Math.random() > 0.3 ? "going" : "interested",
                     createdAt: new Date(Date.now() - Math.random() * 86400000), // Random in last day
