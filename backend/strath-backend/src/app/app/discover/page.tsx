@@ -184,9 +184,16 @@ export default function DiscoverPage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-4 md:p-6">
-      {/* Card Stack - taller on mobile for better feel */}
-      <div className="relative w-full max-w-[400px] h-[calc(100vh-200px)] min-h-[500px] max-h-[700px]">
+    <div className="flex flex-col h-[calc(100vh-5rem)] md:min-h-[calc(100vh-4rem)] px-3 pt-2 md:p-6 md:justify-center">
+      {/* Logo Header - visible on mobile, Tinder-style */}
+      <div className="w-full max-w-[400px] mx-auto mb-2 md:hidden">
+        <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-rose-500">
+          strathspace
+        </h1>
+      </div>
+
+      {/* Card Stack - takes remaining space */}
+      <div className="relative w-full max-w-[400px] mx-auto flex-1 min-h-0 md:flex-none md:h-[calc(100vh-200px)] md:min-h-[500px] md:max-h-[700px]">
         {/* Next card (behind) */}
         {nextProfile && (
           <div className="absolute inset-0 scale-[0.96] opacity-60 -translate-y-2">
@@ -205,13 +212,13 @@ export default function DiscoverPage() {
         </AnimatePresence>
       </div>
 
-      {/* Action Buttons - Tinder-style centered buttons */}
-      <div className="flex items-center justify-center gap-5 mt-6">
+      {/* Action Buttons */}
+      <div className="flex items-center justify-center gap-4 md:gap-5 py-3 md:mt-6">
         {/* Pass Button */}
         <Button
           variant="outline"
           size="icon"
-          className="w-16 h-16 rounded-full border-2 border-red-500/60 bg-white/5 hover:bg-red-500/10 active:bg-red-500/20 text-red-500 transition-all active:scale-90 shadow-lg hover:shadow-red-500/20"
+          className="w-14 h-14 md:w-16 md:h-16 rounded-full border-2 border-red-500/60 bg-white/5 hover:bg-red-500/10 active:bg-red-500/20 text-red-500 transition-all active:scale-90 shadow-lg hover:shadow-red-500/20"
           onClick={() => handleSwipe("left")}
         >
           <XIcon />
@@ -221,7 +228,7 @@ export default function DiscoverPage() {
         <Button
           variant="outline"
           size="icon"
-          className="w-12 h-12 rounded-full border-2 border-amber-500/60 bg-white/5 hover:bg-amber-500/10 active:bg-amber-500/20 text-amber-500 transition-all active:scale-90 shadow-lg disabled:opacity-30"
+          className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-amber-500/60 bg-white/5 hover:bg-amber-500/10 active:bg-amber-500/20 text-amber-500 transition-all active:scale-90 shadow-lg disabled:opacity-30"
           onClick={() => {
             if (currentIndex > 0) {
               setCurrentIndex((prev) => prev - 1);
@@ -236,7 +243,7 @@ export default function DiscoverPage() {
         <Button
           variant="outline"
           size="icon"
-          className="w-16 h-16 rounded-full border-2 border-green-500/60 bg-white/5 hover:bg-green-500/10 active:bg-green-500/20 text-green-500 transition-all active:scale-90 shadow-lg hover:shadow-green-500/20"
+          className="w-14 h-14 md:w-16 md:h-16 rounded-full border-2 border-green-500/60 bg-white/5 hover:bg-green-500/10 active:bg-green-500/20 text-green-500 transition-all active:scale-90 shadow-lg hover:shadow-green-500/20"
           onClick={() => handleSwipe("right")}
         >
           <HeartIcon />
@@ -244,7 +251,7 @@ export default function DiscoverPage() {
       </div>
 
       {/* Keyboard hints - hidden on mobile */}
-      <p className="hidden md:block text-gray-500 text-sm mt-4">
+      <p className="hidden md:block text-gray-500 text-sm mt-4 text-center">
         Use <kbd className="px-2 py-1 bg-white/10 rounded text-xs">←</kbd> and{" "}
         <kbd className="px-2 py-1 bg-white/10 rounded text-xs">→</kbd> keys to swipe
       </p>

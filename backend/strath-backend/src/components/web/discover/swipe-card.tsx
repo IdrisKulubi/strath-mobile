@@ -256,82 +256,67 @@ export function SwipeCard({ profile, onSwipe, swipeDirection }: SwipeCardProps) 
           <span className="text-3xl font-black text-red-500">NOPE</span>
         </motion.div>
 
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
+        {/* Gradient overlay - Tinder-style subtle gradient */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 via-30% to-transparent pointer-events-none" />
 
-        {/* Profile info - compact view */}
+        {/* Profile info - Tinder-style overlay */}
         <AnimatePresence>
           {!showFullProfile && (
             <motion.div 
-              className="absolute bottom-0 left-0 right-0 p-6 text-white z-10"
+              className="absolute bottom-0 left-0 right-0 p-5 md:p-6 text-white z-10"
               initial={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
             >
-              <div className="flex items-end justify-between">
-                <div className="flex-1">
-                  <h2 className="text-3xl font-bold">
-                    {profile.firstName}
-                    {profile.lastName ? ` ${profile.lastName.charAt(0)}.` : ""},{" "}
-                    <span className="font-normal">{profile.age}</span>
-                  </h2>
-                  
-                  {profile.course && (
-                    <p className="text-gray-300 mt-1">
-                      📚 {profile.course}
-                      {profile.yearOfStudy && ` • Year ${profile.yearOfStudy}`}
-                    </p>
-                  )}
+              {/* Recently Active indicator - small and subtle like Tinder */}
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-sm text-green-400 font-medium">Recently active</span>
+              </div>
 
-                  {profile.university && (
-                    <p className="text-gray-400 text-sm mt-1">🏫 {profile.university}</p>
+              {/* Name and Age - large and bold like Tinder */}
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-3xl md:text-4xl font-bold">
+                      {profile.firstName}
+                    </h2>
+                    <span className="text-3xl md:text-4xl font-light text-white/90">{profile.age}</span>
+                    {/* Verified badge like Tinder */}
+                    <svg className="w-6 h-6 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                  </div>
+                  
+                  {/* Location/Course - subtle like Tinder's distance */}
+                  {profile.course && (
+                    <p className="text-white/80 text-base mt-1 flex items-center gap-1">
+                      <span>📚</span> {profile.course} {profile.yearOfStudy && `• Year ${profile.yearOfStudy}`}
+                    </p>
                   )}
                 </div>
 
-                {/* Info button */}
+                {/* Info button - positioned like Tinder's arrow */}
                 <button
                   aria-label="View full profile"
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowFullProfile(true);
                   }}
-                  className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/20 hover:scale-110 transition-all ml-4 shrink-0"
+                  className="w-10 h-10 rounded-full border-2 border-white/40 flex items-center justify-center text-white hover:bg-white/10 hover:border-white/60 transition-all ml-3 shrink-0"
                 >
-                  <InfoIcon />
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m18 15-6-6-6 6"/>
+                  </svg>
                 </button>
               </div>
 
-              {/* Bio preview */}
-              {profile.bio && (
-                <p className="text-gray-300 mt-3 line-clamp-2">{profile.bio}</p>
-              )}
-
-              {/* Interests preview */}
-              {profile.interests?.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {profile.interests.slice(0, 4).map((interest) => (
-                    <Badge
-                      key={interest}
-                      variant="secondary"
-                      className="bg-white/10 text-white border-0 backdrop-blur-sm"
-                    >
-                      {interest}
-                    </Badge>
-                  ))}
-                  {profile.interests.length > 4 && (
-                    <Badge variant="secondary" className="bg-white/10 text-white border-0 backdrop-blur-sm">
-                      +{profile.interests.length - 4}
-                    </Badge>
-                  )}
-                </div>
-              )}
-
-              {/* Tap to see more hint */}
+              {/* Tap for more - subtle hint */}
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowFullProfile(true);
                 }}
-                className="flex items-center gap-1 text-white/50 text-xs mt-4 hover:text-white/80 transition-colors mx-auto"
+                className="flex items-center gap-1 text-white/40 text-sm mt-4 hover:text-white/70 transition-colors mx-auto"
               >
                 <span>Tap for more</span>
                 <ChevronDownIcon />
