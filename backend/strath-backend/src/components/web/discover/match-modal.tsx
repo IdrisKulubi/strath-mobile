@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent ,DialogTitle} from "@/components/ui/dialog";
 import { toast } from "@/components/ui/custom-toast";
 
 interface Profile {
@@ -131,6 +131,7 @@ export function MatchModal({ match, currentUserPhoto, onClose }: MatchModalProps
 
   return (
     <Dialog open={!!match} onOpenChange={(open) => !open && onClose()}>
+      <DialogTitle></DialogTitle>
       <DialogContent className="bg-transparent border-0 shadow-none p-0 max-w-[95vw] md:max-w-lg overflow-visible">
         <motion.div
           initial={{ scale: 0.5, opacity: 0, y: 50 }}

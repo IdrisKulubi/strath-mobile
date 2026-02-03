@@ -129,6 +129,8 @@ export function useChat(matchId: string) {
             markMessagesAsRead(matchId).then(() => {
                 // Invalidate matches cache to update unread counts in the list
                 queryClient.invalidateQueries({ queryKey: ['matches'] });
+                // Also invalidate notification counts to clear the badge
+                queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
             });
         }
     }, [matchId, queryClient]);

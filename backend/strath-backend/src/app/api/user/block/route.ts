@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { blocks, matches, session as sessionTable } from "@/db/schema";
-import { and, eq, or, desc } from "drizzle-orm";
+import { blocks, matches, messages, session as sessionTable } from "@/db/schema";
+import { and, eq, or, desc, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { successResponse, errorResponse } from "@/lib/api-response";
 
@@ -66,9 +66,9 @@ export async function POST(request: NextRequest) {
             })
             .returning();
 
-        // Also delete any existing match between these users
-        await db.delete(matches).where(
-            or(
+        // Find matches between these users
+        const matchesToDelete = await db.query.matches.findMany({
+            where: or(
                 and(
                     eq(matches.user1Id, session.user.id),
                     eq(matches.user2Id, blockedUserId)
@@ -77,8 +77,17 @@ export async function POST(request: NextRequest) {
                     eq(matches.user1Id, blockedUserId),
                     eq(matches.user2Id, session.user.id)
                 )
-            )
-        );
+            ),
+        });
+
+        // Delete messages first (foreign key constraint)
+        if (matchesToDelete.length > 0) {
+            const matchIds = matchesToDelete.map(m => m.id);
+            await db.delete(messages).where(inArray(messages.matchId, matchIds));
+            
+            // Now delete the matches
+            await db.delete(matches).where(inArray(matches.id, matchIds));
+        }
 
         return successResponse({ 
             message: "User blocked successfully",

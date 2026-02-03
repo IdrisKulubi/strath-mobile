@@ -18,6 +18,7 @@ async function fetchNotificationCounts(): Promise<NotificationCounts> {
     const token = await getAuthToken();
 
     if (!token) {
+        console.log('[NotificationCounts] No token, returning zeros');
         return { unopenedMatches: 0, unreadMessages: 0, total: 0 };
     }
 
@@ -34,24 +35,36 @@ async function fetchNotificationCounts(): Promise<NotificationCounts> {
     }
 
     const result = await response.json();
-    return result.data || { unopenedMatches: 0, unreadMessages: 0, total: 0 };
+    const data = result.data || { unopenedMatches: 0, unreadMessages: 0, total: 0 };
+    console.log('[NotificationCounts] Fetched:', data);
+    return data;
 }
 
 /**
  * Mark a match as opened
  */
 async function markMatchAsOpened(matchId: string): Promise<void> {
+    console.log('[NotificationCounts] Marking match as opened:', matchId);
     const token = await getAuthToken();
 
-    if (!token) return;
+    if (!token) {
+        console.log('[NotificationCounts] No token, cannot mark as opened');
+        return;
+    }
 
-    await fetch(`${API_URL}/api/matches/${matchId}/opened`, {
+    const response = await fetch(`${API_URL}/api/matches/${matchId}/opened`, {
         method: 'PATCH',
         headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
         },
     });
+
+    console.log('[NotificationCounts] Mark as opened response:', response.status);
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        console.error('[NotificationCounts] Mark as opened failed:', error);
+    }
 }
 
 /**
@@ -86,8 +99,12 @@ export function useNotificationCounts() {
     const markMatchOpenedMutation = useMutation({
         mutationFn: markMatchAsOpened,
         onSuccess: () => {
+            console.log('[NotificationCounts] Match marked as opened, invalidating counts');
             // Refresh counts after marking as opened
             queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+        },
+        onError: (error) => {
+            console.error('[NotificationCounts] Error marking match as opened:', error);
         },
     });
 

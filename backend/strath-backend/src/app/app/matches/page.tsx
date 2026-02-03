@@ -77,8 +77,8 @@ export default function MatchesPage() {
     return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
+  // Only show new matches (no messages yet)
   const newMatches = filteredMatches.filter((m) => m.isNew || !m.lastMessage);
-  const conversations = filteredMatches.filter((m) => !m.isNew && m.lastMessage);
 
   if (isLoading) {
     return (
@@ -116,113 +116,50 @@ export default function MatchesPage() {
         />
       </div>
 
-      {matches.length === 0 ? (
+      {newMatches.length === 0 ? (
         <div className="text-center py-12 md:py-16">
           <div className="w-20 h-20 md:w-24 md:h-24 bg-pink-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-4xl md:text-5xl">💝</span>
           </div>
-          <h2 className="text-lg md:text-xl font-semibold text-white mb-2">No matches yet</h2>
+          <h2 className="text-lg md:text-xl font-semibold text-white mb-2">No new matches</h2>
           <p className="text-gray-400 max-w-sm mx-auto text-sm md:text-base">
             Keep swiping! When you and someone else both like each other, you&apos;ll see them here.
           </p>
         </div>
       ) : (
-        <>
-          {/* New Matches - horizontal scroll */}
-          {newMatches.length > 0 && (
-            <section className="mb-6 md:mb-8">
-              <h2 className="text-base md:text-lg font-semibold text-white mb-3 md:mb-4">New Matches</h2>
-              <div className="flex gap-3 md:gap-4 overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
-                {newMatches.map((match) => (
-                  <Link
-                    key={match.id}
-                    href={`/app/chat/${match.id}`}
-                    className="shrink-0 active:scale-95 transition-transform"
-                  >
-                    <div className="relative group">
-                      <div className="w-[72px] h-[72px] md:w-20 md:h-20 rounded-full overflow-hidden ring-2 ring-pink-500 ring-offset-2 ring-offset-[#0f0d23]">
-                        {match.partner.profile?.profilePhoto || match.partner.profile?.photos?.[0] || match.partner.image ? (
-                          <Image
-                            src={match.partner.profile?.profilePhoto || match.partner.profile?.photos?.[0] || match.partner.image || ''}
-                            alt={match.partner.profile?.firstName || match.partner.name || 'Match'}
-                            width={80}
-                            height={80}
-                            className="object-cover w-full h-full"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-linear-to-br from-pink-500 to-purple-500 flex items-center justify-center">
-                            <span className="text-2xl">👤</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center text-xs">
-                        ✨
-                      </div>
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+          {newMatches.map((match) => (
+            <Link
+              key={match.id}
+              href={`/app/chat/${match.id}`}
+              className="flex flex-col items-center active:scale-95 transition-transform"
+            >
+              <div className="relative group">
+                <div className="w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden ring-2 ring-pink-500 ring-offset-2 ring-offset-[#0f0d23]">
+                  {match.partner.profile?.profilePhoto || match.partner.profile?.photos?.[0] || match.partner.image ? (
+                    <Image
+                      src={match.partner.profile?.profilePhoto || match.partner.profile?.photos?.[0] || match.partner.image || ''}
+                      alt={match.partner.profile?.firstName || match.partner.name || 'Match'}
+                      width={96}
+                      height={96}
+                      className="object-cover w-full h-full"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center">
+                      <span className="text-2xl">👤</span>
                     </div>
-                    <p className="text-xs md:text-sm text-white text-center mt-2 truncate w-[72px] md:w-20">
-                      {match.partner.profile?.firstName || match.partner.name?.split(' ')[0] || 'Match'}
-                    </p>
-                  </Link>
-                ))}
+                  )}
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center text-sm">
+                  ✨
+                </div>
               </div>
-            </section>
-          )}
-
-          {/* Conversations */}
-          {conversations.length > 0 && (
-            <section>
-              <h2 className="text-base md:text-lg font-semibold text-white mb-3 md:mb-4">Messages</h2>
-              <div className="space-y-2">
-                {conversations.map((match) => (
-                  <Link
-                    key={match.id}
-                    href={`/app/chat/${match.id}`}
-                    className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white/5 hover:bg-white/10 active:bg-white/15 rounded-xl transition-colors"
-                  >
-                    <div className="relative">
-                      <div className="w-12 h-12 md:w-14 md:h-14 rounded-full overflow-hidden">
-                        {match.partner.profile?.profilePhoto || match.partner.profile?.photos?.[0] || match.partner.image ? (
-                          <Image
-                            src={match.partner.profile?.profilePhoto || match.partner.profile?.photos?.[0] || match.partner.image || ''}
-                            alt={match.partner.profile?.firstName || match.partner.name || 'Match'}
-                            width={56}
-                            height={56}
-                            className="object-cover w-full h-full"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-linear-to-br from-pink-500 to-purple-500 flex items-center justify-center">
-                            <span className="text-xl">👤</span>
-                          </div>
-                        )}
-                      </div>
-                      {match.unreadCount > 0 && (
-                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center">
-                          <span className="text-xs font-bold text-white">
-                            {match.unreadCount > 9 ? "9+" : match.unreadCount}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold text-white text-sm md:text-base">
-                          {match.partner.profile?.firstName || match.partner.name?.split(' ')[0] || 'Match'}
-                        </h3>
-                        <span className="text-xs text-gray-500">
-                          {formatTime(match.lastMessage?.createdAt)}
-                        </span>
-                      </div>
-                      <p className={`text-sm truncate ${match.unreadCount > 0 ? "text-white font-medium" : "text-gray-400"}`}>
-                        {match.lastMessage?.content || "Say hello! 👋"}
-                      </p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          )}
-        </>
+              <p className="text-sm text-white text-center mt-2 truncate w-20 md:w-24">
+                {match.partner.profile?.firstName || match.partner.name?.split(' ')[0] || 'Match'}
+              </p>
+            </Link>
+          ))}
+        </div>
       )}
     </div>
   );

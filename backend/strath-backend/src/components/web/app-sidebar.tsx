@@ -25,6 +25,8 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/ui/custom-toast";
+import { useNotificationCounts, formatBadgeCount } from "@/hooks/use-notification-counts";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Icons (using simple SVGs since phosphor-icons may need different import)
 const CompassIcon = () => (
@@ -88,15 +90,23 @@ interface AppSidebarProps {
 }
 
 const navItems = [
-  { href: "/app/discover", label: "Discover", icon: CompassIcon },
-  { href: "/app/matches", label: "Matches", icon: HeartIcon },
-  { href: "/app/messages", label: "Messages", icon: ChatIcon },
-  { href: "/app/profile", label: "Profile", icon: UserIcon },
+  { href: "/app/discover", label: "Discover", icon: CompassIcon, badge: null as "matches" | "messages" | "both" | null },
+  { href: "/app/matches", label: "Matches", icon: HeartIcon, badge: "matches" as const },
+  { href: "/app/messages", label: "Messages", icon: ChatIcon, badge: "messages" as const },
+  { href: "/app/profile", label: "Profile", icon: UserIcon, badge: null },
 ];
 
 export function AppSidebar({ user, profile }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { unopenedMatches, unreadMessages } = useNotificationCounts({ pollingInterval: 10000 });
+
+  const getBadgeCount = (badge: "matches" | "messages" | "both" | null) => {
+    if (badge === "matches") return unopenedMatches;
+    if (badge === "messages") return unreadMessages;
+    if (badge === "both") return unopenedMatches + unreadMessages;
+    return 0;
+  };
 
   const handleSignOut = async () => {
     toast.info("Signing out...", "See you soon! 👋");
@@ -128,6 +138,9 @@ export function AppSidebar({ user, profile }: AppSidebarProps) {
             <SidebarMenu>
               {navItems.map((item) => {
                 const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                const badgeCount = getBadgeCount(item.badge);
+                const badgeText = formatBadgeCount(badgeCount);
+                
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
@@ -139,8 +152,24 @@ export function AppSidebar({ user, profile }: AppSidebarProps) {
                           : "!text-white hover:!text-white hover:!bg-white/10"
                       }`}
                     >
-                      <Link href={item.href}>
-                        <item.icon />
+                      <Link href={item.href} className="relative">
+                        <div className="relative">
+                          <item.icon />
+                          {/* Notification Badge */}
+                          <AnimatePresence>
+                            {badgeText && (
+                              <motion.div
+                                initial={{ scale: 0, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0, opacity: 0 }}
+                                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-gradient-to-r from-pink-500 to-rose-500 text-white text-[10px] font-bold rounded-full shadow-lg"
+                              >
+                                {badgeText}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                         <span>{item.label}</span>
                       </Link>
                     </SidebarMenuButton>

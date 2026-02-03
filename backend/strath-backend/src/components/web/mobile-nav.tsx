@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { useNotificationCounts, formatBadgeCount } from "@/hooks/use-notification-counts";
 
 // Icons
 const CompassIcon = ({ active }: { active?: boolean }) => (
@@ -32,19 +33,26 @@ const UserIcon = ({ active }: { active?: boolean }) => (
 );
 
 const navItems = [
-  { href: "/app/discover", label: "Discover", Icon: CompassIcon },
-  { href: "/app/matches", label: "Matches", Icon: HeartIcon },
-  { href: "/app/messages", label: "Messages", Icon: ChatIcon },
-  { href: "/app/profile", label: "Profile", Icon: UserIcon },
+  { href: "/app/discover", label: "Discover", Icon: CompassIcon, badge: null as "matches" | "messages" | null },
+  { href: "/app/matches", label: "Matches", Icon: HeartIcon, badge: "matches" as const },
+  { href: "/app/messages", label: "Messages", Icon: ChatIcon, badge: "messages" as const },
+  { href: "/app/profile", label: "Profile", Icon: UserIcon, badge: null },
 ];
 
 export function MobileNav() {
   const pathname = usePathname();
+  const { unopenedMatches, unreadMessages } = useNotificationCounts({ pollingInterval: 10000 });
 
   // Don't show nav on chat pages (full screen experience)
   if (pathname.includes("/app/chat/")) {
     return null;
   }
+
+  const getBadgeCount = (badge: "matches" | "messages" | null) => {
+    if (badge === "matches") return unopenedMatches;
+    if (badge === "messages") return unreadMessages;
+    return 0;
+  };
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
@@ -56,6 +64,9 @@ export function MobileNav() {
         <div className="flex items-center justify-around pb-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+            const badgeCount = getBadgeCount(item.badge);
+            const badgeText = formatBadgeCount(badgeCount);
+            
             return (
               <Link
                 key={item.href}
@@ -71,9 +82,26 @@ export function MobileNav() {
                   />
                 )}
                 
-                {/* Icon */}
-                <div className={`transition-colors ${isActive ? "text-pink-500" : "text-gray-400"}`}>
-                  <item.Icon active={isActive} />
+                {/* Icon with Badge */}
+                <div className="relative">
+                  <div className={`transition-colors ${isActive ? "text-pink-500" : "text-gray-400"}`}>
+                    <item.Icon active={isActive} />
+                  </div>
+                  
+                  {/* Notification Badge */}
+                  <AnimatePresence>
+                    {badgeText && (
+                      <motion.div
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                        className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-gradient-to-r from-pink-500 to-rose-500 text-white text-[10px] font-bold rounded-full shadow-lg"
+                      >
+                        {badgeText}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
                 
                 {/* Label */}

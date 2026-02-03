@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useNotificationCounts } from "@/hooks/use-notification-counts";
 
 // Report reasons
 const REPORT_REASONS = [
@@ -145,6 +146,33 @@ export default function ChatPage() {
     }
   }, [matchId]);
 
+  // Get the invalidate function from notification counts hook
+  const { invalidate: invalidateNotificationCounts } = useNotificationCounts();
+
+  // Track if we've already marked as read (to prevent infinite loops)
+  const hasMarkedAsRead = useRef(false);
+
+  // Mark messages as read and match as opened when chat loads (only once)
+  useEffect(() => {
+    if (hasMarkedAsRead.current) return;
+    hasMarkedAsRead.current = true;
+
+    const markAsReadAndOpened = async () => {
+      try {
+        // Mark messages as read
+        await fetch(`/api/messages/${matchId}/read`, { method: "PATCH" });
+        // Mark match as opened
+        await fetch(`/api/matches/${matchId}/opened`, { method: "PATCH" });
+        // Invalidate notification counts to update badges
+        invalidateNotificationCounts();
+      } catch (error) {
+        console.error("Failed to mark as read/opened:", error);
+      }
+    };
+
+    markAsReadAndOpened();
+  }, [matchId, invalidateNotificationCounts]);
+
   useEffect(() => {
     fetchMatchData();
     fetchCurrentUser();
@@ -182,7 +210,7 @@ export default function ChatPage() {
   const handleUnmatch = async () => {
     setIsUnmatching(true);
     try {
-      const response = await fetch(`/api/matches/${matchId}/unmatch`, { method: "POST" });
+      const response = await fetch(`/api/matches/${matchId}`, { method: "DELETE" });
       const data = await response.json();
       if (data.success) {
         setSuccessMessage("Successfully unmatched");
