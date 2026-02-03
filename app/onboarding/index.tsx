@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, SafeAreaView, StatusBar, Alert } from 'react-native';
+import { View, StyleSheet, SafeAreaView, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { OnboardingData } from '../../components/digital-dna/types';
 import {
@@ -119,6 +119,16 @@ export default function OnboardingScreen() {
             };
 
             // Prepare data for API - convert string fields to proper types
+            console.log('[Onboarding] formData BEFORE creating payload:', {
+                loveLanguage: formData.loveLanguage,
+                communicationStyle: formData.communicationStyle,
+                sleepingHabits: formData.sleepingHabits,
+                workoutFrequency: formData.workoutFrequency,
+                socialMediaUsage: formData.socialMediaUsage,
+                drinkingPreference: formData.drinkingPreference,
+                personalityType: formData.personalityType,
+            });
+            
             const payload = {
                 ...formData,
                 photos: uploadedPhotos,
@@ -130,6 +140,20 @@ export default function OnboardingScreen() {
             };
 
             console.log('[Onboarding] Payload keys:', Object.keys(payload));
+            console.log('[Onboarding] Vibe check fields in payload:', {
+                loveLanguage: payload.loveLanguage,
+                communicationStyle: payload.communicationStyle,
+                sleepingHabits: payload.sleepingHabits,
+                workoutFrequency: payload.workoutFrequency,
+                socialMediaUsage: payload.socialMediaUsage,
+                drinkingPreference: payload.drinkingPreference,
+                personalityType: payload.personalityType,
+                qualities: payload.qualities,
+                prompts: payload.prompts,
+                height: payload.height,
+                smoking: payload.smoking,
+                religion: payload.religion,
+            });
             console.log('[Onboarding] API URL:', `${process.env.EXPO_PUBLIC_API_URL}/api/user/me`);
 
             const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/user/me`, {
@@ -149,7 +173,7 @@ export default function OnboardingScreen() {
             let responseData: any = {};
             try {
                 responseData = JSON.parse(responseText);
-            } catch (e) {
+            } catch {
                 console.error('[Onboarding] Failed to parse response as JSON');
             }
             

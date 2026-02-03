@@ -18,7 +18,12 @@ interface Stage3Props {
 const COURSES = [
   "Computer Science",
   "Business Administration",
-  "Information Technology",
+  "BBIT",
+    "International Relations",
+
+  "Engineering",
+  "Medicine",
+  "Nursing",
   "Commerce",
   "Law",
   "Tourism & Hospitality",
@@ -28,7 +33,6 @@ const COURSES = [
   "Economics",
   "Data Science",
   "Telecommunications",
-  "International Studies",
   "Communications",
   "Journalism",
   "Other"
@@ -42,9 +46,79 @@ const YEAR_OPTIONS = [
   { value: 5, label: 'Postgrad', emoji: '🎯' },
 ] as const;
 
+const UNIVERSITIES = [
+  // Strathmore first as requested
+  "Strathmore University",
+  // Other Nairobi Universities
+  "University of Nairobi",
+  "Kenyatta University",
+  "JKUAT - Jomo Kenyatta University",
+  "USIU - Africa",
+  "Catholic University of Eastern Africa",
+  "Daystar University",
+  "KCA University",
+  "Multimedia University of Kenya",
+  "Technical University of Kenya",
+  "Zetech University",
+  "Africa Nazarene University",
+  "Pan Africa Christian University",
+  "Riara University",
+  "Mount Kenya University - Nairobi",
+  "Kenya Methodist University - Nairobi",
+  // Other Major Kenyan Universities
+  "Moi University",
+  "Egerton University",
+  "Maseno University",
+  "Dedan Kimathi University",
+  "Machakos University",
+  "Karatina University",
+  "Laikipia University",
+  "Masinde Muliro University",
+  "Chuka University",
+  "Kirinyaga University",
+  "Murang'a University",
+  "Pwani University",
+  "Kisii University",
+  "Jaramogi Oginga Odinga University",
+  "Rongo University",
+  "University of Eldoret",
+  "University of Kabianga",
+  "South Eastern Kenya University",
+  "Taita Taveta University",
+  "Turkana University College",
+  "Garissa University",
+  "Tharaka University",
+  "Cooperative University of Kenya",
+  "Other"
+] as const;
+
 export function Stage3Academic({ data, onUpdate }: Stage3Props) {
   return (
     <div className="space-y-6">
+      {/* University Selection */}
+      <div className="space-y-2">
+        <Label className="text-gray-300">Which university do you attend?</Label>
+        <Select 
+          value={data.university || ""} 
+          onValueChange={(v) => onUpdate('university', v)}
+        >
+          <SelectTrigger className="bg-white/5 border-white/10 text-white h-12">
+            <SelectValue placeholder="Select your university" />
+          </SelectTrigger>
+          <SelectContent className="bg-[#1a1a2e] border-white/10 max-h-[300px]">
+            {UNIVERSITIES.map((uni) => (
+              <SelectItem 
+                key={uni} 
+                value={uni} 
+                className="text-white hover:bg-white/10"
+              >
+                {uni}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Course Selection */}
       <div className="space-y-2">
         <Label className="text-gray-300">What&apos;s your course?</Label>
@@ -88,17 +162,6 @@ export function Stage3Academic({ data, onUpdate }: Stage3Props) {
               <span className="text-xs font-medium">{option.label}</span>
             </button>
           ))}
-        </div>
-      </div>
-
-      {/* University - Auto-filled */}
-      <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">🏛️</span>
-          <div>
-            <p className="text-white font-medium">Strathmore University</p>
-            <p className="text-gray-400 text-sm">Nairobi, Kenya</p>
-          </div>
         </div>
       </div>
     </div>

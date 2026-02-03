@@ -19,9 +19,11 @@ import { Stage1BasicInfo } from "./stages/stage-1-basic-info";
 import { Stage2LookingFor } from "./stages/stage-2-looking-for";
 import { Stage3Academic } from "./stages/stage-3-academic";
 import { Stage4Photos } from "./stages/stage-4-photos";
-import { Stage5Lifestyle } from "./stages/stage-5-lifestyle";
-import { Stage6Interests } from "./stages/stage-6-interests";
-import { Stage7Bio } from "./stages/stage-7-bio";
+import { Stage5Personality } from "./stages/stage-5-personality";
+import { Stage6Lifestyle } from "./stages/stage-6-lifestyle";
+import { Stage7Interests } from "./stages/stage-7-interests";
+import { Stage8Prompts } from "./stages/stage-8-prompts";
+import { Stage9Socials } from "./stages/stage-9-socials";
 
 interface User {
   id: string;
@@ -38,16 +40,25 @@ interface ExistingProfile {
   gender?: string | null;
   interestedIn?: string[] | null;
   lookingFor?: string | null;
+  university?: string | null;
   course?: string | null;
   yearOfStudy?: number | null;
+  loveLanguage?: string | null;
+  communicationStyle?: string | null;
+  sleepingHabits?: string | null;
+  socialMediaUsage?: string | null;
+  workoutFrequency?: string | null;
   height?: string | null;
   drinkingPreference?: string | null;
   smoking?: string | null;
   religion?: string | null;
   interests?: string[] | null;
+  prompts?: { promptId: string; response: string }[] | null;
   bio?: string | null;
   instagram?: string | null;
   spotify?: string | null;
+  snapchat?: string | null;
+  phoneNumber?: string | null;
   photos?: string[] | null;
 }
 
@@ -92,16 +103,25 @@ export function OnboardingFlow({ user, existingProfile }: OnboardingFlowProps) {
     gender: (existingProfile?.gender as OnboardingData['gender']) || "",
     interestedIn: existingProfile?.interestedIn || [],
     lookingFor: existingProfile?.lookingFor || "",
+    university: existingProfile?.university || "",
     course: existingProfile?.course || "",
     yearOfStudy: existingProfile?.yearOfStudy || null,
+    loveLanguage: existingProfile?.loveLanguage || "",
+    communicationStyle: existingProfile?.communicationStyle || "",
+    sleepingHabits: existingProfile?.sleepingHabits || "",
+    socialMediaUsage: existingProfile?.socialMediaUsage || "",
+    workoutFrequency: existingProfile?.workoutFrequency || "",
     height: existingProfile?.height || "",
     drinkingPreference: existingProfile?.drinkingPreference || "",
     smoking: existingProfile?.smoking || "",
     religion: existingProfile?.religion || "",
     interests: existingProfile?.interests || [],
+    prompts: existingProfile?.prompts || [],
     bio: existingProfile?.bio || "",
     instagram: existingProfile?.instagram || "",
     spotify: existingProfile?.spotify || "",
+    snapchat: existingProfile?.snapchat || "",
+    phoneNumber: existingProfile?.phoneNumber || "",
   }));
 
   // Photo states
@@ -213,15 +233,27 @@ export function OnboardingFlow({ user, existingProfile }: OnboardingFlowProps) {
       case 2:
         return !!(formData.interestedIn.length > 0 && formData.lookingFor);
       case 3:
-        return !!(formData.course && formData.yearOfStudy);
+        return !!(formData.university && formData.course && formData.yearOfStudy);
       case 4:
         return photoStates.length >= 1;
       case 5:
-        return true; // All optional
+        // Personality - requires at least 3 answers
+        const personalityAnswers = [
+          formData.loveLanguage,
+          formData.communicationStyle,
+          formData.sleepingHabits,
+          formData.socialMediaUsage,
+          formData.workoutFrequency,
+        ].filter(Boolean);
+        return personalityAnswers.length >= 3;
       case 6:
-        return formData.interests.length >= 3;
+        return true; // Lifestyle is optional
       case 7:
-        return true; // Bio is optional
+        return formData.interests.length >= 3;
+      case 8:
+        return true; // Prompts are optional
+      case 9:
+        return true; // Socials/Bio are optional
       default:
         return false;
     }
@@ -258,7 +290,6 @@ export function OnboardingFlow({ user, existingProfile }: OnboardingFlowProps) {
           photos: uploadedPhotos,
           profileCompleted: true,
           profilePhoto: uploadedPhotos[0],
-          university: "Strathmore University",
         }),
       });
 
@@ -310,11 +341,20 @@ export function OnboardingFlow({ user, existingProfile }: OnboardingFlowProps) {
           />
         );
       case 5:
-        return <Stage5Lifestyle data={formData} onUpdate={updateField} />;
+        return <Stage5Personality data={formData} onUpdate={updateField} />;
       case 6:
-        return <Stage6Interests data={formData} onToggleInterest={toggleInterest} />;
+        return <Stage6Lifestyle data={formData} onUpdate={updateField} />;
       case 7:
-        return <Stage7Bio data={formData} onUpdate={updateField} />;
+        return <Stage7Interests data={formData} onToggleInterest={toggleInterest} />;
+      case 8:
+        return (
+          <Stage8Prompts 
+            data={formData} 
+            onUpdatePrompts={(prompts) => setFormData(prev => ({ ...prev, prompts }))} 
+          />
+        );
+      case 9:
+        return <Stage9Socials data={formData} onUpdate={updateField} />;
       default:
         return null;
     }
@@ -331,7 +371,8 @@ export function OnboardingFlow({ user, existingProfile }: OnboardingFlowProps) {
           <span className="text-lg font-bold text-white">Strathspace</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-sm">Stage {currentStage}/{TOTAL_STAGES}</span>
+          <span className="text-2xl">{stageInfo.emoji}</span>
+          <span className="text-gray-400 text-sm">{currentStage}/{TOTAL_STAGES}</span>
         </div>
       </header>
 
@@ -354,6 +395,14 @@ export function OnboardingFlow({ user, existingProfile }: OnboardingFlowProps) {
             <Card className="bg-[#1a1a2e]/90 border-white/10 p-6">
               {/* Stage Header */}
               <div className="text-center mb-6">
+                <motion.span 
+                  key={stageInfo.emoji}
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  className="text-4xl block mb-2"
+                >
+                  {stageInfo.emoji}
+                </motion.span>
                 <h2 className="text-2xl font-bold text-white">{stageInfo.title}</h2>
                 <p className="text-gray-400 mt-1">{stageInfo.subtitle}</p>
               </div>

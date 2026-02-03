@@ -68,6 +68,56 @@ const RELIGION_OPTIONS = [
   "Prefer not to say",
 ];
 
+// New lifestyle options
+const LOVE_LANGUAGE_OPTIONS = [
+  "Words of Affirmation",
+  "Quality Time",
+  "Physical Touch",
+  "Acts of Service",
+  "Receiving Gifts",
+];
+
+const COMMUNICATION_STYLE_OPTIONS = [
+  "Call me anytime 📞",
+  "Texter all day 💬",
+  "Memes only 😂",
+  "Voice notes > everything 🎙️",
+  "Face-to-face is best 👀",
+];
+
+const SLEEPING_HABITS_OPTIONS = [
+  "Early bird 🌅",
+  "Night owl 🦉",
+  "Chaotic sleeper 😵‍💫",
+  "8hrs or I'm cranky 😴",
+];
+
+const WORKOUT_FREQUENCY_OPTIONS = [
+  "Daily grind 💪",
+  "Few times a week",
+  "Occasionally",
+  "Gym? Never heard of her 🛋️",
+];
+
+const SOCIAL_MEDIA_USAGE_OPTIONS = [
+  "Always online 📱",
+  "Casual scroller",
+  "Ghost mode 👻",
+  "What's social media?",
+];
+
+const ZODIAC_OPTIONS = [
+  "Aries ♈", "Taurus ♉", "Gemini ♊", "Cancer ♋",
+  "Leo ♌", "Virgo ♍", "Libra ♎", "Scorpio ♏",
+  "Sagittarius ♐", "Capricorn ♑", "Aquarius ♒", "Pisces ♓",
+];
+
+const QUALITIES_OPTIONS = [
+  "Humor", "Kindness", "Ambition", "Loyalty", "Honesty",
+  "Confidence", "Intelligence", "Creativity", "Empathy", "Adventurous",
+  "Optimism", "Patience", "Spontaneity", "Sarcasm", "Deep Conversations",
+];
+
 const INTERESTS_DATA = [
   "Music", "Movies", "Travel", "Food", "Fitness", "Gaming",
   "Photography", "Art", "Reading", "Sports", "Fashion", "Technology",
@@ -146,6 +196,16 @@ interface Profile {
   interestedIn?: string[] | null;
   instagram?: string | null;
   spotify?: string | null;
+  snapchat?: string | null;
+  // New personality/lifestyle fields
+  loveLanguage?: string | null;
+  communicationStyle?: string | null;
+  sleepingHabits?: string | null;
+  workoutFrequency?: string | null;
+  socialMediaUsage?: string | null;
+  personalityType?: string | null;
+  qualities?: string[] | null;
+  prompts?: { promptId: string; response: string }[] | null;
 }
 
 interface PhotoState {
@@ -184,6 +244,15 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
     interests: profile.interests || [],
     instagram: profile.instagram || "",
     spotify: profile.spotify || "",
+    snapchat: profile.snapchat || "",
+    zodiacSign: profile.zodiacSign || "",
+    loveLanguage: profile.loveLanguage || "",
+    communicationStyle: profile.communicationStyle || "",
+    sleepingHabits: profile.sleepingHabits || "",
+    workoutFrequency: profile.workoutFrequency || "",
+    socialMediaUsage: profile.socialMediaUsage || "",
+    qualities: profile.qualities || [],
+    prompts: profile.prompts || [],
   });
 
   const initialPhotos = useRef<string[]>(
@@ -207,6 +276,15 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
     interests: profile.interests || [],
     instagram: profile.instagram || "",
     spotify: profile.spotify || "",
+    snapchat: profile.snapchat || "",
+    zodiacSign: profile.zodiacSign || "",
+    loveLanguage: profile.loveLanguage || "",
+    communicationStyle: profile.communicationStyle || "",
+    sleepingHabits: profile.sleepingHabits || "",
+    workoutFrequency: profile.workoutFrequency || "",
+    socialMediaUsage: profile.socialMediaUsage || "",
+    qualities: profile.qualities || [],
+    prompts: profile.prompts || [],
   });
 
   // Photo states
@@ -239,10 +317,19 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
     if (formData.gender !== initial.gender) return true;
     if (formData.instagram !== initial.instagram) return true;
     if (formData.spotify !== initial.spotify) return true;
+    if (formData.snapchat !== initial.snapchat) return true;
+    if (formData.zodiacSign !== initial.zodiacSign) return true;
+    if (formData.loveLanguage !== initial.loveLanguage) return true;
+    if (formData.communicationStyle !== initial.communicationStyle) return true;
+    if (formData.sleepingHabits !== initial.sleepingHabits) return true;
+    if (formData.workoutFrequency !== initial.workoutFrequency) return true;
+    if (formData.socialMediaUsage !== initial.socialMediaUsage) return true;
     
     // Check arrays
     if (JSON.stringify(formData.interestedIn.sort()) !== JSON.stringify([...initial.interestedIn].sort())) return true;
     if (JSON.stringify(formData.interests.sort()) !== JSON.stringify([...initial.interests].sort())) return true;
+    if (JSON.stringify([...formData.qualities].sort()) !== JSON.stringify([...initial.qualities].sort())) return true;
+    if (JSON.stringify(formData.prompts) !== JSON.stringify(initial.prompts)) return true;
     
     // Check photos
     const currentPhotos = photoStates.filter(p => p.finalUrl && !p.uploadFailed).map(p => p.finalUrl);
@@ -253,7 +340,7 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
   })();
 
   // Handlers
-  const updateField = (field: string, value: string | number | string[] | null) => {
+  const updateField = (field: string, value: string | number | string[] | { promptId: string; response: string }[] | null) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -264,6 +351,16 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
         ? current.filter(i => i !== interest)
         : current.length < 10 ? [...current, interest] : current;
       return { ...prev, interests: updated };
+    });
+  };
+
+  const toggleQuality = (quality: string) => {
+    setFormData(prev => {
+      const current = prev.qualities || [];
+      const updated = current.includes(quality)
+        ? current.filter(q => q !== quality)
+        : current.length < 5 ? [...current, quality] : current;
+      return { ...prev, qualities: updated };
     });
   };
 
@@ -762,6 +859,151 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
           </CardContent>
         </Card>
 
+        {/* Qualities */}
+        <Card className="bg-[#1a1a2e] border-white/10">
+          <CardHeader className="px-4 md:px-6 pb-2 md:pb-4">
+            <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
+              <span className="text-xl md:text-2xl">💎</span> What I Value
+            </CardTitle>
+            <p className="text-xs md:text-sm text-gray-400">Select up to 5 qualities</p>
+          </CardHeader>
+          <CardContent className="px-4 md:px-6">
+            <div className="flex flex-wrap gap-1.5 md:gap-2">
+              {QUALITIES_OPTIONS.map((quality) => (
+                <button
+                  key={quality}
+                  type="button"
+                  onClick={() => toggleQuality(quality)}
+                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs md:text-sm font-medium transition-all active:scale-95 ${
+                    formData.qualities.includes(quality)
+                      ? "bg-amber-500 text-white"
+                      : "bg-white/5 text-gray-300 hover:bg-white/10"
+                  }`}
+                >
+                  {quality}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-3">{formData.qualities.length}/5 selected</p>
+          </CardContent>
+        </Card>
+
+        {/* Personality & Vibe */}
+        <Card className="bg-[#1a1a2e] border-white/10">
+          <CardHeader className="px-4 md:px-6 pb-2 md:pb-4">
+            <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
+              <span className="text-xl md:text-2xl">✨</span> My Vibe
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 px-4 md:px-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+              <div>
+                <Label className="text-gray-300 text-sm">Love Language 💕</Label>
+                <select
+                  value={formData.loveLanguage}
+                  onChange={(e) => updateField("loveLanguage", e.target.value)}
+                  className="w-full mt-1 p-2.5 md:p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm appearance-none"
+                >
+                  <option value="" className="bg-[#1a1a2e]">Select</option>
+                  {LOVE_LANGUAGE_OPTIONS.map((option) => (
+                    <option key={option} value={option} className="bg-[#1a1a2e]">
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label className="text-gray-300 text-sm">Communication Style 💬</Label>
+                <select
+                  value={formData.communicationStyle}
+                  onChange={(e) => updateField("communicationStyle", e.target.value)}
+                  className="w-full mt-1 p-2.5 md:p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm appearance-none"
+                >
+                  <option value="" className="bg-[#1a1a2e]">Select</option>
+                  {COMMUNICATION_STYLE_OPTIONS.map((option) => (
+                    <option key={option} value={option} className="bg-[#1a1a2e]">
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-gray-300 text-sm">Zodiac Sign ⭐</Label>
+              <select
+                value={formData.zodiacSign}
+                onChange={(e) => updateField("zodiacSign", e.target.value)}
+                className="w-full mt-1 p-2.5 md:p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm appearance-none"
+              >
+                <option value="" className="bg-[#1a1a2e]">Select</option>
+                {ZODIAC_OPTIONS.map((option) => (
+                  <option key={option} value={option} className="bg-[#1a1a2e]">
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Lifestyle */}
+        <Card className="bg-[#1a1a2e] border-white/10">
+          <CardHeader className="px-4 md:px-6 pb-2 md:pb-4">
+            <CardTitle className="text-white flex items-center gap-2 text-base md:text-lg">
+              <span className="text-xl md:text-2xl">🌟</span> Lifestyle
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 px-4 md:px-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+              <div>
+                <Label className="text-gray-300 text-sm">Sleep Schedule 🌙</Label>
+                <select
+                  value={formData.sleepingHabits}
+                  onChange={(e) => updateField("sleepingHabits", e.target.value)}
+                  className="w-full mt-1 p-2.5 md:p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm appearance-none"
+                >
+                  <option value="" className="bg-[#1a1a2e]">Select</option>
+                  {SLEEPING_HABITS_OPTIONS.map((option) => (
+                    <option key={option} value={option} className="bg-[#1a1a2e]">
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label className="text-gray-300 text-sm">Workout Frequency 💪</Label>
+                <select
+                  value={formData.workoutFrequency}
+                  onChange={(e) => updateField("workoutFrequency", e.target.value)}
+                  className="w-full mt-1 p-2.5 md:p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm appearance-none"
+                >
+                  <option value="" className="bg-[#1a1a2e]">Select</option>
+                  {WORKOUT_FREQUENCY_OPTIONS.map((option) => (
+                    <option key={option} value={option} className="bg-[#1a1a2e]">
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-gray-300 text-sm">Social Media Usage 📱</Label>
+              <select
+                value={formData.socialMediaUsage}
+                onChange={(e) => updateField("socialMediaUsage", e.target.value)}
+                className="w-full mt-1 p-2.5 md:p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm appearance-none"
+              >
+                <option value="" className="bg-[#1a1a2e]">Select</option>
+                {SOCIAL_MEDIA_USAGE_OPTIONS.map((option) => (
+                  <option key={option} value={option} className="bg-[#1a1a2e]">
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Social Links */}
         <Card className="bg-[#1a1a2e] border-white/10">
           <CardHeader className="px-4 md:px-6 pb-2 md:pb-4">
@@ -783,7 +1025,16 @@ export function EditProfileForm({ profile }: EditProfileFormProps) {
               </div>
             </div>
             <div>
-              <Label className="text-gray-300 text-sm">Spotify</Label>
+              <Label className="text-gray-300 text-sm">Snapchat 👻</Label>
+              <Input
+                value={formData.snapchat}
+                onChange={(e) => updateField("snapchat", e.target.value)}
+                className="bg-white/5 border-white/10 text-white mt-1 h-11 text-sm"
+                placeholder="Your Snapchat username"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-300 text-sm">Spotify 🎵</Label>
               <Input
                 value={formData.spotify}
                 onChange={(e) => updateField("spotify", e.target.value)}

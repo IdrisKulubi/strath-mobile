@@ -102,13 +102,28 @@ export async function PATCH(req: NextRequest) {
 
         const body = await req.json();
         console.log('[PATCH /api/user/me] Request body keys:', Object.keys(body));
+        console.log('[PATCH /api/user/me] Vibe check fields:', {
+            loveLanguage: body.loveLanguage,
+            communicationStyle: body.communicationStyle,
+            sleepingHabits: body.sleepingHabits,
+            workoutFrequency: body.workoutFrequency,
+            socialMediaUsage: body.socialMediaUsage,
+            drinkingPreference: body.drinkingPreference,
+            personalityType: body.personalityType,
+            qualities: body.qualities,
+            prompts: body.prompts,
+            height: body.height,
+            smoking: body.smoking,
+            religion: body.religion,
+        });
         
         const validatedData = updateProfileSchema.parse(body);
 
-        // Filter out null values (keep undefined to not overwrite DB values)
+        // Filter out null and undefined values (keep empty strings as valid values)
         const filteredData = Object.fromEntries(
             Object.entries(validatedData).filter(([_, value]) => value !== null && value !== undefined)
         );
+        console.log('[PATCH /api/user/me] Filtered data keys:', Object.keys(filteredData));
 
         // Check if profile exists
         const existingProfile = await db.query.profiles.findFirst({

@@ -105,7 +105,7 @@ export default function LoginPage() {
 
           {/* Info text */}
           <p className="text-center text-gray-400 text-xs leading-relaxed">
-            Sign in with your <span className="text-pink-400">@strathmore.edu</span> Google account to access Strathspace
+            Sign in with your <span className="text-pink-400">@school.edu</span> Google account to access Strathspace
           </p>
         </div>
 

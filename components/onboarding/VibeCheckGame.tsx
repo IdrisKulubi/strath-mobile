@@ -230,10 +230,13 @@ export function VibeCheckGame({ onComplete }: VibeCheckGameProps) {
             ? currentQuestion.optionA.value 
             : currentQuestion.optionB.value;
         
-        setAnswers((prev) => ({
-            ...prev,
+        // Create the new answers object with the current selection
+        const newAnswers = {
+            ...answers,
             [currentQuestion.category]: value,
-        }));
+        };
+        
+        setAnswers(newAnswers);
 
         // Transition to next question
         setTimeout(() => {
@@ -241,18 +244,17 @@ export function VibeCheckGame({ onComplete }: VibeCheckGameProps) {
             
             setTimeout(() => {
                 if (isLastQuestion) {
-                    // Complete the game
+                    // Complete the game - use newAnswers (not stale answers state)
                     const results: VibeResults = {
-                        personalityType: answers.personalityType || 'ENFP',
-                        communicationStyle: answers.communicationStyle || 'Texter',
-                        sleepingHabits: answers.sleepingHabits || 'Night Owl',
-                        workoutFrequency: answers.workoutFrequency || 'Sometimes',
-                        socialMediaUsage: answers.socialMediaUsage || 'Moderate',
-                        drinkingPreference: answers.drinkingPreference || 'Socially',
-                        loveLanguage: answers.loveLanguage || 'Quality Time',
-                        ...answers,
-                        [currentQuestion.category]: value,
+                        personalityType: newAnswers.personalityType || 'ENFP',
+                        communicationStyle: newAnswers.communicationStyle || 'Texter',
+                        sleepingHabits: newAnswers.sleepingHabits || 'Night Owl',
+                        workoutFrequency: newAnswers.workoutFrequency || 'Sometimes',
+                        socialMediaUsage: newAnswers.socialMediaUsage || 'Moderate',
+                        drinkingPreference: newAnswers.drinkingPreference || 'Socially',
+                        loveLanguage: newAnswers.loveLanguage || 'Quality Time',
                     };
+                    console.log('[VibeCheckGame] Completing with results:', results);
                     onComplete(results);
                 } else {
                     setCurrentIndex((prev) => prev + 1);

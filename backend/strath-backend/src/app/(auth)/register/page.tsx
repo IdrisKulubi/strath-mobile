@@ -160,7 +160,7 @@ export default function RegisterPage() {
 
           {/* Info text */}
           <p className="text-center text-gray-500 text-xs mt-4">
-            Use your <span className="text-pink-400">@strathmore.edu</span> email
+            Use your <span className="text-pink-400">@school.edu</span> email
           </p>
         </div>
 
