@@ -184,12 +184,12 @@ export default function DiscoverPage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-6">
-      {/* Card Stack - responsive height */}
-      <div className="relative w-full max-w-md h-[65vh] md:h-[600px]">
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-4 md:p-6">
+      {/* Card Stack - taller on mobile for better feel */}
+      <div className="relative w-full max-w-[400px] h-[calc(100vh-200px)] min-h-[500px] max-h-[700px]">
         {/* Next card (behind) */}
         {nextProfile && (
-          <div className="absolute inset-0 scale-95 opacity-50">
+          <div className="absolute inset-0 scale-[0.96] opacity-60 -translate-y-2">
             <SwipeCard profile={nextProfile} />
           </div>
         )}
@@ -205,21 +205,23 @@ export default function DiscoverPage() {
         </AnimatePresence>
       </div>
 
-      {/* Action Buttons - larger touch targets on mobile */}
-      <div className="flex items-center justify-center gap-4 md:gap-6 mt-6 md:mt-8">
+      {/* Action Buttons - Tinder-style centered buttons */}
+      <div className="flex items-center justify-center gap-5 mt-6">
+        {/* Pass Button */}
         <Button
           variant="outline"
           size="icon"
-          className="w-16 h-16 md:w-14 md:h-14 rounded-full border-2 border-red-500 bg-transparent hover:bg-red-500/10 active:bg-red-500/20 text-red-500 transition-all active:scale-95"
+          className="w-16 h-16 rounded-full border-2 border-red-500/60 bg-white/5 hover:bg-red-500/10 active:bg-red-500/20 text-red-500 transition-all active:scale-90 shadow-lg hover:shadow-red-500/20"
           onClick={() => handleSwipe("left")}
         >
           <XIcon />
         </Button>
 
+        {/* Undo Button */}
         <Button
           variant="outline"
           size="icon"
-          className="w-12 h-12 rounded-full border-2 border-yellow-500 bg-transparent hover:bg-yellow-500/10 active:bg-yellow-500/20 text-yellow-500 transition-all active:scale-95"
+          className="w-12 h-12 rounded-full border-2 border-amber-500/60 bg-white/5 hover:bg-amber-500/10 active:bg-amber-500/20 text-amber-500 transition-all active:scale-90 shadow-lg disabled:opacity-30"
           onClick={() => {
             if (currentIndex > 0) {
               setCurrentIndex((prev) => prev - 1);
@@ -230,10 +232,11 @@ export default function DiscoverPage() {
           <UndoIcon />
         </Button>
 
+        {/* Like Button */}
         <Button
           variant="outline"
           size="icon"
-          className="w-16 h-16 md:w-14 md:h-14 rounded-full border-2 border-green-500 bg-transparent hover:bg-green-500/10 active:bg-green-500/20 text-green-500 transition-all active:scale-95"
+          className="w-16 h-16 rounded-full border-2 border-green-500/60 bg-white/5 hover:bg-green-500/10 active:bg-green-500/20 text-green-500 transition-all active:scale-90 shadow-lg hover:shadow-green-500/20"
           onClick={() => handleSwipe("right")}
         >
           <HeartIcon />

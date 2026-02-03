@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'pub-fd999fa4db5f45aea35c41c909f365ca.r2.dev',
-        pathname: '/uploads/**',
+        pathname: '/**',
       },
       {
         protocol: 'https',
@@ -16,6 +16,11 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'api.dicebear.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'utfs.io',
         pathname: '/**',
       },
     ],

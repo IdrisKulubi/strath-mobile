@@ -205,7 +205,7 @@ export const swipes = pgTable(
 export const matches = pgTable(
     "matches",
     {
-        id: uuid("id").defaultRandom().primaryKey(),
+        id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
         user1Id: text("user1_id")
             .notNull()
             .references(() => user.id),
@@ -239,11 +239,11 @@ export const feedbacks = pgTable("feedbacks", {
 export const messages = pgTable(
     "messages",
     {
-        id: uuid("id")
+        id: text("id")
             .primaryKey()
-            .default(sql`gen_random_uuid()`),
+            .$defaultFn(() => crypto.randomUUID()),
         content: text("content").notNull(),
-        matchId: uuid("match_id")
+        matchId: text("match_id")
             .references(() => matches.id)
             .notNull(),
         senderId: text("sender_id")

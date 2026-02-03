@@ -148,13 +148,6 @@ interface Profile {
   spotify?: string | null;
 }
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  image?: string | null;
-}
-
 interface PhotoState {
   previewUrl: string;
   finalUrl: string | null;
@@ -163,7 +156,6 @@ interface PhotoState {
 }
 
 interface EditProfileFormProps {
-  user: User;
   profile: Profile;
 }
 
