@@ -244,8 +244,12 @@ export default function LoginScreen() {
                 router.replace('/(tabs)');
             }
         } catch (error: any) {
-            if (error.code === 'ERR_REQUEST_CANCELED') {
-                // User canceled the sign-in flow
+            if (error.code === 'ERR_REQUEST_CANCELED' || error.code === 'ERR_CANCELED') {
+                // User canceled the sign-in flow - show helpful message about alternatives
+                console.log("[Apple Auth] User canceled sign-in");
+                toast.show({ 
+                    message: 'Sign in canceled. You can try Google or Demo login below.'
+                });
                 return;
             }
             console.error("Apple auth error:", error);

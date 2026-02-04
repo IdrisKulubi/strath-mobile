@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, SafeAreaView, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { OnboardingData } from '../../components/digital-dna/types';
@@ -15,6 +15,7 @@ import {
 } from '../../components/onboarding';
 import { useImageUpload } from '@/hooks/use-image-upload';
 import { getAuthToken } from '@/lib/auth-helpers';
+import * as SecureStore from 'expo-secure-store';
 
 // Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=OpeningLine, 8=Celebration
 type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
@@ -69,6 +70,41 @@ export default function OnboardingScreen() {
         readReceiptsEnabled: true,
         showActiveStatus: true,
     });
+
+    // Pre-populate name from Apple Sign In or existing user data
+    // This addresses Apple Guideline 4.0 - use data already provided by Apple Sign In
+    useEffect(() => {
+        const loadUserData = async () => {
+            try {
+                // Check if we have session data from Apple Sign In
+                const sessionData = await SecureStore.getItemAsync('strathspace_session');
+                if (sessionData) {
+                    const parsed = JSON.parse(sessionData);
+                    const userName = parsed?.user?.name;
+                    
+                    if (userName) {
+                        console.log('[Onboarding] Pre-populating name from session:', userName);
+                        // Split "First Last" into parts
+                        const nameParts = userName.trim().split(' ');
+                        const firstName = nameParts[0] || '';
+                        const lastName = nameParts.slice(1).join(' ') || '';
+                        
+                        if (firstName) {
+                            setFormData(prev => ({
+                                ...prev,
+                                firstName,
+                                lastName,
+                            }));
+                        }
+                    }
+                }
+            } catch (error) {
+                console.log('[Onboarding] Could not load user data:', error);
+            }
+        };
+        
+        loadUserData();
+    }, []);
 
     const updateData = useCallback((updates: Partial<OnboardingData>) => {
         setFormData((prev) => ({ ...prev, ...updates }));
