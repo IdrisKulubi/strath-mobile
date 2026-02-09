@@ -88,22 +88,39 @@ async function agentSearchAPI(
     excludeIds: string[] = [],
 ): Promise<AgentSearchResponse> {
     const token = await getAuthToken();
+    const url = `${API_URL}/api/agent/search`;
+    console.log('[Agent] Searching:', query, 'url:', url, 'hasToken:', !!token);
 
-    const response = await fetch(`${API_URL}/api/agent/search`, {
-        method: "POST",
-        headers: {
-            Authorization: token ? `Bearer ${token}` : "",
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ query, limit, offset, excludeIds }),
-    });
+    let response: Response;
+    try {
+        response = await fetch(url, {
+            method: "POST",
+            headers: {
+                Authorization: token ? `Bearer ${token}` : "",
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ query, limit, offset, excludeIds }),
+        });
+    } catch (networkErr) {
+        console.error('[Agent] Network error:', networkErr);
+        throw new Error("Can't reach server — check your connection");
+    }
 
     if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || "Search failed");
+        let errMsg = `Search failed (${response.status})`;
+        try {
+            const text = await response.text();
+            if (text) {
+                const errData = JSON.parse(text);
+                errMsg = errData.error || errMsg;
+            }
+        } catch {}
+        console.error('[Agent] API error:', response.status, errMsg);
+        throw new Error(errMsg);
     }
 
     const result = await response.json();
+    console.log('[Agent] Got', (result.data || result).matches?.length, 'matches');
     return result.data || result;
 }
 
@@ -162,6 +179,11 @@ export function useAgent() {
             excludeIds?: string[];
         }) => agentSearchAPI(query, limit, offset, excludeIds),
 
+        onMutate: (variables) => {
+            // Set currentQuery immediately so UI shows loading state
+            setCurrentQuery(variables.query);
+        },
+
         onSuccess: (data, variables) => {
             if (variables.offset && variables.offset > 0) {
                 // Append to existing results ("show me more")
@@ -173,10 +195,13 @@ export function useAgent() {
             setCommentary(data.commentary);
             setMeta(data.meta);
             setIntent(data.intent);
-            setCurrentQuery(variables.query);
 
             // Invalidate wingman stats
             queryClient.invalidateQueries({ queryKey: ["wingman-stats"] });
+        },
+
+        onError: (error, variables) => {
+            console.error('[useAgent] Search failed:', error.message, 'query:', variables.query);
         },
     });
 

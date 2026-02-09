@@ -53,6 +53,14 @@ export function WingmanSearchBar({
     const isDark = colorScheme === 'dark';
     const [query, setQuery] = useState(initialQuery || '');
     const [isFocused, setIsFocused] = useState(false);
+
+    // Sync initialQuery prop (e.g. from voice transcript) into the text input
+    useEffect(() => {
+        if (initialQuery && initialQuery.length > 0) {
+            setQuery(initialQuery);
+            setShowSuggestions(false);
+        }
+    }, [initialQuery]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const inputRef = useRef<TextInput>(null);
 

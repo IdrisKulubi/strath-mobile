@@ -24,7 +24,7 @@ interface UseVoiceInputOptions {
 }
 
 export function useVoiceInput(options: UseVoiceInputOptions = {}) {
-    const { maxDuration = 10000, onTranscript, onError } = options;
+    const { maxDuration = 30000, onTranscript, onError } = options;
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [transcript, setTranscript] = useState<string | null>(null);
@@ -118,10 +118,21 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
                 return;
             }
 
-            // Convert to base64 using new File API
+            // Convert to base64
             setIsTranscribing(true);
-            const audioFile = new ExpoFile(uri);
-            const base64Audio = await audioFile.base64();
+            console.log('[VoiceInput] Recording URI:', uri);
+            let base64Audio: string;
+            try {
+                const audioFile = new ExpoFile(uri);
+                base64Audio = await audioFile.base64();
+                console.log('[VoiceInput] Base64 length:', base64Audio.length);
+            } catch (b64Err) {
+                console.error('[VoiceInput] Base64 conversion failed:', b64Err);
+                const msg = 'Failed to read audio file';
+                setError(msg);
+                onError?.(msg);
+                return;
+            }
 
             // Send to transcription API
             const token = await getAuthToken();

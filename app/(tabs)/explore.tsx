@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,6 +8,7 @@ import {
   FlatList,
   ActivityIndicator,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
@@ -43,19 +44,36 @@ export default function ExploreScreen() {
   const voice = useVoiceInput();
 
   const handleWingmanSearch = useCallback((query: string) => {
+    console.log('[Explore] Searching:', query);
     agent.search(query);
   }, [agent]);
 
   const handleVoicePress = useCallback(() => {
+    console.log('[Explore] Voice toggle, isRecording:', voice.isRecording);
     voice.toggleRecording();
   }, [voice]);
 
   // When voice transcript is ready, trigger search
-  React.useEffect(() => {
+  useEffect(() => {
     if (voice.transcript && voice.transcript.length > 0) {
+      console.log('[Explore] Voice transcript:', voice.transcript);
       handleWingmanSearch(voice.transcript);
     }
-  }, [voice.transcript]);
+  }, [voice.transcript, handleWingmanSearch]);
+
+  // Show voice errors to user
+  useEffect(() => {
+    if (voice.error) {
+      Alert.alert('Voice Input', voice.error);
+    }
+  }, [voice.error]);
+
+  // Show search errors to user
+  useEffect(() => {
+    if (agent.searchError) {
+      Alert.alert('Search Error', agent.searchError);
+    }
+  }, [agent.searchError]);
 
   const handleMatchPress = useCallback((match: AgentMatch) => {
     // TODO: Open profile detail sheet or navigate
