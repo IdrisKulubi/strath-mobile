@@ -8,7 +8,31 @@ import {
     uuid,
     json,
     index,
+    customType,
+    jsonb,
 } from "drizzle-orm/pg-core";
+
+// ============================================
+// CUSTOM TYPES
+// ============================================
+
+// pgvector type for embedding storage
+export const vector = customType<{
+    data: number[];
+    dpiData: string;
+    config: { dimension: number };
+}>({
+    dataType(config) {
+        return `vector(${config?.dimension ?? 3072})`;
+    },
+    fromDriver(value: string): number[] {
+        // pgvector returns '[1,2,3]' format
+        return JSON.parse(value as string);
+    },
+    toDriver(value: number[]): string {
+        return `[${value.join(",")}]`;
+    },
+});
 
 
 
@@ -166,6 +190,13 @@ export const profiles = pgTable("profiles", {
     religion: text("religion"), // Open text field
     languages: json("languages").$type<string[]>(), // ['English', 'Spanish', 'French', etc.]
     interestedIn: json("interested_in").$type<string[]>(), // ['male', 'female', 'other'] - genders the user wants to see
+
+    // ============================================
+    // AGENTIC AI FIELDS
+    // ============================================
+    personalitySummary: text("personality_summary"), // AI-generated natural language summary
+    embedding: vector("embedding", { dimension: 3072 }), // pgvector embedding for semantic search
+    embeddingUpdatedAt: timestamp("embedding_updated_at"), // Track when embedding was last generated
 }, (table) => ({
     userIdIdx: index("profile_user_id_idx").on(table.userId),
     isVisibleIdx: index("profile_is_visible_idx").on(table.isVisible),
@@ -724,3 +755,462 @@ export type NewCampusEvent = typeof campusEvents.$inferInsert;
 export type EventRsvp = typeof eventRsvps.$inferSelect;
 export type NewEventRsvp = typeof eventRsvps.$inferInsert;
 export type EventCategory = "social" | "academic" | "sports" | "career" | "arts" | "gaming" | "faith" | "clubs";
+
+
+// ============================================
+// AGENTIC AI TABLES
+// ============================================
+
+// Agent Context (Wingman Memory) — stores learned preferences per user
+export const agentContext = pgTable("agent_context", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" })
+        .unique(),
+
+    // Accumulated preferences learned over time
+    // e.g. { "prefers_introverts": 0.8, "dislikes_party": 0.9 }
+    learnedPreferences: jsonb("learned_preferences").$type<Record<string, number>>().default({}),
+
+    // History of queries (last 20)
+    queryHistory: jsonb("query_history").$type<{
+        query: string;
+        timestamp: string;
+        matchedIds: string[];
+        feedback?: string;
+    }[]>().default([]),
+
+    // Match feedback history
+    matchFeedback: jsonb("match_feedback").$type<{
+        matchedUserId: string;
+        outcome: "amazing" | "nice" | "meh" | "not_for_me";
+        date: string;
+    }[]>().default([]),
+
+    // Agent conversation state
+    lastAgentMessage: text("last_agent_message"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+}, (table) => ({
+    userIdx: index("agent_context_user_idx").on(table.userId),
+}));
+
+// Weekly Drops — pre-computed match batches delivered weekly
+export const weeklyDrops = pgTable("weekly_drops", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+
+    // The matches in this drop
+    matchedUserIds: jsonb("matched_user_ids").$type<string[]>().default([]).notNull(),
+    matchData: jsonb("match_data").$type<{
+        userId: string;
+        score: number;
+        reasons: string[];
+        starters: string[];
+    }[]>().default([]).notNull(),
+
+    // Drop metadata
+    dropNumber: integer("drop_number").notNull(),
+    deliveredAt: timestamp("delivered_at"),
+    openedAt: timestamp("opened_at"),
+    expiresAt: timestamp("expires_at").notNull(),
+
+    // Status
+    status: text("status").$type<"pending" | "delivered" | "opened" | "expired">().default("pending"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    userIdx: index("drops_user_idx").on(table.userId),
+    statusIdx: index("drops_status_idx").on(table.status),
+    expiresIdx: index("drops_expires_idx").on(table.expiresAt),
+}));
+
+// Match Missions — post-match IRL activities
+export const matchMissions = pgTable("match_missions", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    matchId: text("match_id")
+        .notNull()
+        .references(() => matches.id, { onDelete: "cascade" }),
+
+    // Mission details
+    missionType: text("mission_type").$type<
+        "coffee_meetup" | "song_exchange" | "photo_challenge" | "study_date" |
+        "campus_walk" | "food_adventure" | "sunset_spot" | "quiz_challenge"
+    >().notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    emoji: text("emoji").notNull(),
+
+    // Location/time suggestion
+    suggestedLocation: text("suggested_location"),
+    suggestedTime: text("suggested_time"),
+    deadline: timestamp("deadline").notNull(),
+
+    // Status tracking
+    user1Accepted: boolean("user1_accepted").default(false),
+    user2Accepted: boolean("user2_accepted").default(false),
+    user1Completed: boolean("user1_completed").default(false),
+    user2Completed: boolean("user2_completed").default(false),
+
+    status: text("status").$type<"proposed" | "accepted" | "completed" | "expired" | "skipped">().default("proposed"),
+
+    // Post-mission feedback
+    user1Rating: text("user1_rating").$type<"amazing" | "nice" | "meh" | "not_for_me">(),
+    user2Rating: text("user2_rating").$type<"amazing" | "nice" | "meh" | "not_for_me">(),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+}, (table) => ({
+    matchIdx: index("missions_match_idx").on(table.matchId),
+    statusIdx: index("missions_status_idx").on(table.status),
+    deadlineIdx: index("missions_deadline_idx").on(table.deadline),
+}));
+
+// Vibe Checks — 3-minute anonymous voice calls
+export const vibeChecks = pgTable("vibe_checks", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    matchId: text("match_id")
+        .notNull()
+        .references(() => matches.id, { onDelete: "cascade" }),
+
+    // Call details
+    roomName: text("room_name").notNull().unique(),
+    roomUrl: text("room_url"),
+
+    // Participants
+    user1Id: text("user1_id").notNull().references(() => user.id),
+    user2Id: text("user2_id").notNull().references(() => user.id),
+
+    // Scheduling
+    scheduledAt: timestamp("scheduled_at"),
+    startedAt: timestamp("started_at"),
+    endedAt: timestamp("ended_at"),
+    durationSeconds: integer("duration_seconds"),
+
+    // Post-call decisions
+    user1Decision: text("user1_decision").$type<"meet" | "pass">(),
+    user2Decision: text("user2_decision").$type<"meet" | "pass">(),
+    bothAgreedToMeet: boolean("both_agreed_to_meet").default(false),
+
+    // Conversation starter provided
+    suggestedTopic: text("suggested_topic"),
+
+    status: text("status").$type<"pending" | "scheduled" | "active" | "completed" | "expired" | "cancelled">().default("pending"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    matchIdx: index("vibe_checks_match_idx").on(table.matchId),
+    statusIdx: index("vibe_checks_status_idx").on(table.status),
+}));
+
+// Campus Pulse — anonymous social feed
+export const pulsePosts = pgTable("pulse_posts", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    authorId: text("author_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+
+    content: text("content").notNull(),
+    category: text("category").$type<
+        "missed_connection" | "campus_thought" | "dating_rant" | "hot_take" | "looking_for" | "general"
+    >().default("general"),
+
+    // Privacy
+    isAnonymous: boolean("is_anonymous").default(true),
+
+    // Engagement counters
+    fireCount: integer("fire_count").default(0),
+    skullCount: integer("skull_count").default(0),
+    heartCount: integer("heart_count").default(0),
+
+    // Reveal system — user IDs who want to reveal
+    revealRequests: jsonb("reveal_requests").$type<string[]>().default([]),
+
+    // Moderation
+    isFlagged: boolean("is_flagged").default(false),
+    isHidden: boolean("is_hidden").default(false),
+
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    createdIdx: index("pulse_posts_created_idx").on(table.createdAt),
+    categoryIdx: index("pulse_posts_category_idx").on(table.category),
+    authorIdx: index("pulse_posts_author_idx").on(table.authorId),
+}));
+
+// Pulse Reactions
+export const pulseReactions = pgTable("pulse_reactions", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    postId: uuid("post_id")
+        .notNull()
+        .references(() => pulsePosts.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+    reaction: text("reaction").$type<"fire" | "skull" | "heart">().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    postIdx: index("pulse_reactions_post_idx").on(table.postId),
+    uniqueReaction: index("pulse_reactions_unique_idx").on(table.postId, table.userId),
+}));
+
+// Study Date Mode — broadcast study availability
+export const studySessions = pgTable("study_sessions", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+
+    locationName: text("location_name").notNull(),
+    university: text("university").notNull(),
+
+    availableUntil: timestamp("available_until").notNull(),
+    isActive: boolean("is_active").default(true),
+
+    subject: text("subject"),
+    vibe: text("vibe").$type<"silent_focus" | "chill_chat" | "group_study">(),
+
+    openToAnyone: boolean("open_to_anyone").default(true),
+    preferredGender: text("preferred_gender"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    activeIdx: index("study_sessions_active_idx").on(table.isActive, table.university),
+    userIdx: index("study_sessions_user_idx").on(table.userId),
+    expiresIdx: index("study_sessions_expires_idx").on(table.availableUntil),
+}));
+
+// Hype Me — friend vouches on profiles
+export const hypeVouches = pgTable("hype_vouches", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    profileUserId: text("profile_user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+
+    // Author (may not be a user — external friends via link)
+    authorUserId: text("author_user_id").references(() => user.id, { onDelete: "set null" }),
+    authorName: text("author_name").notNull(),
+
+    content: text("content").notNull(), // Max 200 chars
+
+    isApproved: boolean("is_approved").default(true),
+    isFlagged: boolean("is_flagged").default(false),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    profileIdx: index("hype_vouches_profile_idx").on(table.profileUserId),
+}));
+
+// Hype Invite Links — for external vouchers
+export const hypeInviteLinks = pgTable("hype_invite_links", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    profileUserId: text("profile_user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+
+    token: text("token").notNull().unique(),
+    maxUses: integer("max_uses").default(5),
+    currentUses: integer("current_uses").default(0),
+    expiresAt: timestamp("expires_at").notNull(),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    tokenIdx: index("hype_links_token_idx").on(table.token),
+}));
+
+// Blind Dates — IRL meetups arranged by the app
+export const blindDates = pgTable("blind_dates", {
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    user1Id: text("user1_id").notNull().references(() => user.id),
+    user2Id: text("user2_id").notNull().references(() => user.id),
+    matchId: text("match_id").references(() => matches.id),
+
+    location: text("location").notNull(),
+    suggestedTime: timestamp("suggested_time").notNull(),
+    codeWord: text("code_word").notNull(),
+
+    user1OptedIn: boolean("user1_opted_in").default(false),
+    user2OptedIn: boolean("user2_opted_in").default(false),
+
+    status: text("status").$type<"proposed" | "confirmed" | "completed" | "cancelled" | "no_show">().default("proposed"),
+
+    user1Feedback: text("user1_feedback").$type<"amazing" | "nice" | "meh" | "not_for_me">(),
+    user2Feedback: text("user2_feedback").$type<"amazing" | "nice" | "meh" | "not_for_me">(),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    usersIdx: index("blind_dates_users_idx").on(table.user1Id, table.user2Id),
+    statusIdx: index("blind_dates_status_idx").on(table.status),
+}));
+
+// Agent Analytics — lightweight event tracking
+export const agentAnalytics = pgTable("agent_analytics", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+
+    eventType: text("event_type").$type<
+        "agent_search" | "agent_refine" | "drop_opened" | "drop_expired" |
+        "mission_accepted" | "mission_completed" | "vibe_check_started" |
+        "vibe_check_agreed" | "study_date_created" | "blind_date_confirmed" |
+        "pulse_posted" | "hype_written"
+    >().notNull(),
+
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    userIdx: index("analytics_user_idx").on(table.userId),
+    eventIdx: index("analytics_event_idx").on(table.eventType),
+    createdIdx: index("analytics_created_idx").on(table.createdAt),
+}));
+
+// ============================================
+// AGENTIC RELATIONS
+// ============================================
+
+export const agentContextRelations = relations(agentContext, ({ one }) => ({
+    user: one(user, {
+        fields: [agentContext.userId],
+        references: [user.id],
+    }),
+}));
+
+export const weeklyDropsRelations = relations(weeklyDrops, ({ one }) => ({
+    user: one(user, {
+        fields: [weeklyDrops.userId],
+        references: [user.id],
+    }),
+}));
+
+export const matchMissionsRelations = relations(matchMissions, ({ one }) => ({
+    match: one(matches, {
+        fields: [matchMissions.matchId],
+        references: [matches.id],
+    }),
+}));
+
+export const vibeChecksRelations = relations(vibeChecks, ({ one }) => ({
+    match: one(matches, {
+        fields: [vibeChecks.matchId],
+        references: [matches.id],
+    }),
+    user1: one(user, {
+        fields: [vibeChecks.user1Id],
+        references: [user.id],
+        relationName: "vibeCheckUser1",
+    }),
+    user2: one(user, {
+        fields: [vibeChecks.user2Id],
+        references: [user.id],
+        relationName: "vibeCheckUser2",
+    }),
+}));
+
+export const pulsePostsRelations = relations(pulsePosts, ({ one, many }) => ({
+    author: one(user, {
+        fields: [pulsePosts.authorId],
+        references: [user.id],
+    }),
+    reactions: many(pulseReactions),
+}));
+
+export const pulseReactionsRelations = relations(pulseReactions, ({ one }) => ({
+    post: one(pulsePosts, {
+        fields: [pulseReactions.postId],
+        references: [pulsePosts.id],
+    }),
+    user: one(user, {
+        fields: [pulseReactions.userId],
+        references: [user.id],
+    }),
+}));
+
+export const studySessionsRelations = relations(studySessions, ({ one }) => ({
+    user: one(user, {
+        fields: [studySessions.userId],
+        references: [user.id],
+    }),
+}));
+
+export const hypeVouchesRelations = relations(hypeVouches, ({ one }) => ({
+    profileUser: one(user, {
+        fields: [hypeVouches.profileUserId],
+        references: [user.id],
+        relationName: "hypeProfileUser",
+    }),
+    author: one(user, {
+        fields: [hypeVouches.authorUserId],
+        references: [user.id],
+        relationName: "hypeAuthor",
+    }),
+}));
+
+export const hypeInviteLinksRelations = relations(hypeInviteLinks, ({ one }) => ({
+    profileUser: one(user, {
+        fields: [hypeInviteLinks.profileUserId],
+        references: [user.id],
+    }),
+}));
+
+export const blindDatesRelations = relations(blindDates, ({ one }) => ({
+    user1: one(user, {
+        fields: [blindDates.user1Id],
+        references: [user.id],
+        relationName: "blindDateUser1",
+    }),
+    user2: one(user, {
+        fields: [blindDates.user2Id],
+        references: [user.id],
+        relationName: "blindDateUser2",
+    }),
+    match: one(matches, {
+        fields: [blindDates.matchId],
+        references: [matches.id],
+    }),
+}));
+
+export const agentAnalyticsRelations = relations(agentAnalytics, ({ one }) => ({
+    user: one(user, {
+        fields: [agentAnalytics.userId],
+        references: [user.id],
+    }),
+}));
+
+// ============================================
+// AGENTIC TYPES
+// ============================================
+export type AgentContext = typeof agentContext.$inferSelect;
+export type NewAgentContext = typeof agentContext.$inferInsert;
+export type WeeklyDrop = typeof weeklyDrops.$inferSelect;
+export type NewWeeklyDrop = typeof weeklyDrops.$inferInsert;
+export type MatchMission = typeof matchMissions.$inferSelect;
+export type NewMatchMission = typeof matchMissions.$inferInsert;
+export type VibeCheck = typeof vibeChecks.$inferSelect;
+export type NewVibeCheck = typeof vibeChecks.$inferInsert;
+export type PulsePost = typeof pulsePosts.$inferSelect;
+export type NewPulsePost = typeof pulsePosts.$inferInsert;
+export type PulseReaction = typeof pulseReactions.$inferSelect;
+export type StudySession = typeof studySessions.$inferSelect;
+export type NewStudySession = typeof studySessions.$inferInsert;
+export type HypeVouch = typeof hypeVouches.$inferSelect;
+export type NewHypeVouch = typeof hypeVouches.$inferInsert;
+export type HypeInviteLink = typeof hypeInviteLinks.$inferSelect;
+export type BlindDate = typeof blindDates.$inferSelect;
+export type NewBlindDate = typeof blindDates.$inferInsert;
+export type AgentAnalyticsEvent = typeof agentAnalytics.$inferSelect;
+
+// Mission type for templates
+export type MissionType = "coffee_meetup" | "song_exchange" | "photo_challenge" | "study_date" |
+    "campus_walk" | "food_adventure" | "sunset_spot" | "quiz_challenge";
+
+// Feedback rating type
+export type FeedbackRating = "amazing" | "nice" | "meh" | "not_for_me";
+
+// Pulse category type
+export type PulseCategory = "missed_connection" | "campus_thought" | "dating_rant" | "hot_take" | "looking_for" | "general";
