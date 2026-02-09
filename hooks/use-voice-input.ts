@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { Audio } from 'expo-av';
-import { Platform, Alert } from 'react-native';
+import { Alert } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { File as ExpoFile } from 'expo-file-system';
 import { getAuthToken } from '@/lib/auth-helpers';
@@ -125,22 +125,44 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
             // Send to transcription API
             const token = await getAuthToken();
-            const response = await fetch(`${API_URL}/api/agent/voice`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': token ? `Bearer ${token}` : '',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    audio: base64Audio,
-                    mimeType: Platform.OS === 'ios' ? 'audio/mp4' : 'audio/mp4',
-                }),
-            });
+            let response: Response;
+            try {
+                response = await fetch(`${API_URL}/api/agent/voice`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': token ? `Bearer ${token}` : '',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        audio: base64Audio,
+                        mimeType: 'audio/mp4',
+                    }),
+                });
+            } catch (networkErr) {
+                console.error('[VoiceInput] Network error:', networkErr);
+                const msg = 'Network error — check your connection';
+                setError(msg);
+                onError?.(msg);
+                return;
+            }
 
-            const result = await response.json();
+            // Safely parse JSON (server may return empty body on error)
+            let result: any = {};
+            try {
+                const text = await response.text();
+                if (text && text.length > 0) {
+                    result = JSON.parse(text);
+                }
+            } catch (parseErr) {
+                console.error('[VoiceInput] Failed to parse response:', parseErr);
+                const msg = 'Invalid response from server';
+                setError(msg);
+                onError?.(msg);
+                return;
+            }
 
             if (!response.ok) {
-                const msg = result.error || 'Transcription failed';
+                const msg = result.error || `Transcription failed (${response.status})`;
                 setError(msg);
                 onError?.(msg);
                 return;

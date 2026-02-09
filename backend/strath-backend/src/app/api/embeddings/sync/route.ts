@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
                     
                     return successResponse({
                         message: "Migration complete - embedding column is now vector(3072)",
-                        columnsAdded: cols.rows?.map((r: { column_name: string }) => r.column_name) ?? [],
+                        columnsAdded: cols.rows?.map((r) => (r as Record<string, string>).column_name) ?? [],
                     });
                 } catch (err) {
                     console.error("Migration failed:", err);
