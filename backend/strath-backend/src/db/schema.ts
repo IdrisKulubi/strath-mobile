@@ -25,7 +25,7 @@ export const vector = customType<{
     dataType(config) {
         return `vector(${config?.dimension ?? 3072})`;
     },
-    fromDriver(value: string): number[] {
+    fromDriver(value: unknown): number[] {
         // pgvector returns '[1,2,3]' format
         return JSON.parse(value as string);
     },
