@@ -7,6 +7,7 @@ import {
   Pressable,
   FlatList,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
@@ -16,21 +17,58 @@ import { useOpportunities, useToggleSaveOpportunity } from '@/hooks/use-opportun
 import { useEvents, useRsvpEvent } from '@/hooks/use-events';
 import { OpportunityCard, CategoryFilter, OpportunityDetailSheet, OpportunityListSkeleton } from '@/components/opportunities';
 import { EventCard, EventDetailSheet, CreateEventSheet } from '@/components/events';
-import { Question, ArrowClockwise, Briefcase, CalendarBlank, Plus } from 'phosphor-react-native';
+import { WingmanSearchBar, WingmanResults, VoiceRecordingOverlay } from '@/components/wingman';
+import { useAgent, AgentMatch } from '@/hooks/use-agent';
+import { useVoiceInput } from '@/hooks/use-voice-input';
+import { Question, ArrowClockwise, Briefcase, CalendarBlank, Plus, Sparkle } from 'phosphor-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { type Opportunity, type OpportunityCategory } from '@/types/opportunities';
 import { type CampusEvent, type EventCategory, EVENT_CATEGORIES } from '@/types/events';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 
-type ExploreTab = 'events' | 'opportunities';
+type ExploreTab = 'wingman' | 'events' | 'opportunities';
 
 export default function ExploreScreen() {
   const { colors, colorScheme } = useTheme();
+  const router = useRouter();
   useProfile(); // Pre-fetch profile for later use
 
-  // Tab state
-  const [activeTab, setActiveTab] = useState<ExploreTab>('events');
+  // Tab state — Wingman is the default tab
+  const [activeTab, setActiveTab] = useState<ExploreTab>('wingman');
+
+  // ===== Wingman (AI Agent) state =====
+  const agent = useAgent();
+  const voice = useVoiceInput();
+
+  const handleWingmanSearch = useCallback((query: string) => {
+    agent.search(query);
+  }, [agent]);
+
+  const handleVoicePress = useCallback(() => {
+    voice.toggleRecording();
+  }, [voice]);
+
+  // When voice transcript is ready, trigger search
+  React.useEffect(() => {
+    if (voice.transcript && voice.transcript.length > 0) {
+      handleWingmanSearch(voice.transcript);
+    }
+  }, [voice.transcript]);
+
+  const handleMatchPress = useCallback((match: AgentMatch) => {
+    // TODO: Open profile detail sheet or navigate
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, []);
+
+  const handleMatchLike = useCallback((match: AgentMatch) => {
+    agent.submitFeedback(match.profile.userId, 'amazing');
+  }, [agent]);
+
+  const handleRefineSearch = useCallback((query: string) => {
+    agent.search(query);
+  }, [agent]);
 
   // Events state
   const [selectedEventCategory, setSelectedEventCategory] = useState<EventCategory | null>(null);
@@ -193,6 +231,26 @@ export default function ExploreScreen() {
         <View style={styles.tabContainer}>
           <View style={[styles.tabBar, { backgroundColor: colors.muted }]}>
             <Pressable
+              onPress={() => handleTabChange('wingman')}
+              style={[
+                styles.tab,
+                activeTab === 'wingman' && [styles.tabActive, { backgroundColor: colors.background }],
+              ]}
+            >
+              <Sparkle 
+                size={18} 
+                weight={activeTab === 'wingman' ? 'fill' : 'regular'}
+                color={activeTab === 'wingman' ? colors.primary : colors.mutedForeground} 
+              />
+              <Text style={[
+                styles.tabText,
+                { color: activeTab === 'wingman' ? colors.primary : colors.mutedForeground },
+                activeTab === 'wingman' && styles.tabTextActive,
+              ]}>
+                Wingman
+              </Text>
+            </Pressable>
+            <Pressable
               onPress={() => handleTabChange('events')}
               style={[
                 styles.tab,
@@ -236,7 +294,46 @@ export default function ExploreScreen() {
         </View>
 
         {/* Content */}
-        {activeTab === 'events' ? (
+        {activeTab === 'wingman' ? (
+          // WINGMAN AI TAB
+          <View style={styles.wingmanContainer}>
+            <WingmanSearchBar
+              onSearch={handleWingmanSearch}
+              onVoicePress={handleVoicePress}
+              isSearching={agent.isSearching}
+              isRecording={voice.isRecording}
+              initialQuery={voice.transcript || undefined}
+            />
+            <ScrollView
+              style={styles.wingmanScroll}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.wingmanScrollContent}
+            >
+              <WingmanResults
+                matches={agent.matches}
+                commentary={agent.commentary}
+                intent={agent.intent}
+                meta={agent.meta}
+                isSearching={agent.isSearching}
+                searchError={agent.searchError}
+                currentQuery={agent.currentQuery}
+                onLoadMore={agent.loadMore}
+                onMatchPress={handleMatchPress}
+                onMatchLike={handleMatchLike}
+                onRefine={handleRefineSearch}
+              />
+            </ScrollView>
+
+            {/* Voice recording overlay */}
+            <VoiceRecordingOverlay
+              isRecording={voice.isRecording}
+              isTranscribing={voice.isTranscribing}
+              onStop={voice.toggleRecording}
+              onCancel={voice.cancelRecording}
+            />
+          </View>
+        ) : activeTab === 'events' ? (
           // EVENTS TAB
           <View style={styles.eventsContainer}>
             {/* Category Filter */}
@@ -519,5 +616,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 4,
     paddingBottom: 100,
+  },
+  wingmanContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  wingmanScroll: {
+    flex: 1,
+  },
+  wingmanScrollContent: {
+    flexGrow: 1,
   },
 });
