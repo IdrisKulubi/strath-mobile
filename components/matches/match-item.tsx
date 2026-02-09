@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Pressable, StyleSheet, Image } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/text';
+import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { Match, getRelativeTime } from '@/hooks/use-matches';
 import * as Haptics from 'expo-haptics';
@@ -72,9 +73,10 @@ export function MatchItem({ match, onPress }: MatchItemProps) {
             {/* Avatar */}
             <View style={styles.avatarContainer}>
                 {avatarUri ? (
-                    <Image
-                        source={{ uri: avatarUri }}
+                    <CachedImage
+                        uri={avatarUri}
                         style={styles.avatar}
+                        fallbackType="avatar"
                     />
                 ) : (
                     <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>

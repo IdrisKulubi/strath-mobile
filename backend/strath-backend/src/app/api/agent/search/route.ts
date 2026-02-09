@@ -50,12 +50,17 @@ async function getSessionWithFallback(req: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+    const startTime = Date.now();
+    let step = "init";
+
     try {
+        step = "auth";
         const session = await getSessionWithFallback(request);
         if (!session?.user?.id) {
             return errorResponse("Unauthorized", 401);
         }
 
+        step = "parse_body";
         const body = await request.json();
         const { query, limit = 20, offset = 0, excludeIds = [] } = body;
 
@@ -68,22 +73,52 @@ export async function POST(request: NextRequest) {
         }
 
         const userId = session.user.id;
-        const startTime = Date.now();
 
         // 1. Get wingman memory
-        const agentCtx = await getAgentContext(userId);
+        step = "agent_context";
+        let agentCtx: Awaited<ReturnType<typeof getAgentContext>>;
+        try {
+            agentCtx = await getAgentContext(userId);
+        } catch (ctxErr) {
+            console.error("[AgentSearch] agent_context failed:", ctxErr);
+            // Fallback: continue without context
+            agentCtx = { learnedPreferences: {}, queryHistory: [], matchFeedback: [], lastAgentMessage: null };
+        }
 
         // 2. Parse intent
-        const intent = await parseIntent(
-            query.trim(),
-            null, // TODO: reconstruct previous intent from queryHistory
-            agentCtx.learnedPreferences,
-        );
+        step = "parse_intent";
+        let intent: Awaited<ReturnType<typeof parseIntent>>;
+        try {
+            intent = await parseIntent(
+                query.trim(),
+                null,
+                agentCtx.learnedPreferences,
+            );
+        } catch (intentErr) {
+            console.error("[AgentSearch] parse_intent failed:", intentErr);
+            // Fallback: use a simple intent
+            intent = {
+                vibe: "any" as const,
+                filters: {},
+                preferences: { traits: [], interests: [], personality: [] },
+                semanticQuery: query.trim(),
+                confidence: 0.2,
+                isRefinement: false,
+            };
+        }
 
         // 3. Embed intent for vector search
-        const intentEmbedding = await embedIntent(intent);
+        step = "embed_intent";
+        let intentEmbedding: number[];
+        try {
+            intentEmbedding = await embedIntent(intent);
+        } catch (embErr) {
+            console.error("[AgentSearch] embed_intent failed:", embErr);
+            return errorResponse("AI embedding service unavailable — try again shortly", 503);
+        }
 
         // 4. Search
+        step = "agent_search";
         const searchResults = await agentSearch(
             userId,
             intent,
@@ -94,6 +129,7 @@ export async function POST(request: NextRequest) {
         );
 
         // 5. Rank
+        step = "rank";
         const ranked = rankCandidates(
             searchResults.candidates,
             intent,
@@ -101,9 +137,11 @@ export async function POST(request: NextRequest) {
         );
 
         // 6. Generate explanations
+        step = "explanations";
         const explanations = generateQuickExplanations(ranked, intent);
 
         // 7. Build response
+        step = "build_response";
         const matches = ranked.map((candidate, i) => ({
             profile: sanitizeProfile(candidate.profile),
             explanation: explanations[i],
@@ -116,11 +154,18 @@ export async function POST(request: NextRequest) {
         }));
 
         // 8. Generate commentary
-        const commentary = await generateResultCommentary(
-            matches.length,
-            intent,
-            ranked[0],
-        );
+        step = "commentary";
+        let commentary = "Here are your matches!";
+        try {
+            commentary = await generateResultCommentary(
+                matches.length,
+                intent,
+                ranked[0],
+            );
+        } catch (commentaryErr) {
+            console.error("[AgentSearch] commentary failed:", commentaryErr);
+            // Non-fatal — use fallback above
+        }
 
         // 9. Save to wingman memory (fire and forget)
         const matchedIds = ranked.map(r => r.profile.userId);
@@ -147,8 +192,10 @@ export async function POST(request: NextRequest) {
             },
         });
     } catch (error) {
-        console.error("[AgentSearch API] Error:", error);
-        return errorResponse("Search failed", 500);
+        const latency = Date.now() - startTime;
+        console.error(`[AgentSearch API] Error at step="${step}" (${latency}ms):`, error);
+        const message = error instanceof Error ? error.message : "Search failed";
+        return errorResponse(`Search failed at ${step}: ${message}`, 500);
     }
 }
 

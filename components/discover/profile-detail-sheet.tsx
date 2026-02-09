@@ -3,10 +3,10 @@ import {
     View,
     StyleSheet,
     ScrollView,
-    Image,
     Dimensions,
     Pressable,
 } from 'react-native';
+import { CachedImage } from '@/components/ui/cached-image';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { DiscoverProfile } from '@/hooks/use-discover';
@@ -18,10 +18,10 @@ import {
     User,
     X,
     Ruler,
-    Dumbbell,
+    Barbell,
     Cigarette,
     Heart,
-    Sparkles,
+    Sparkle,
     Globe,
     Church,
 } from 'phosphor-react-native';
@@ -100,11 +100,12 @@ export const ProfileDetailSheet = forwardRef<BottomSheetModal, ProfileDetailShee
                             style={styles.photosScroll}
                         >
                             {allPhotos.map((photo, index) => (
-                                <Image
+                                <CachedImage
                                     key={index}
-                                    source={{ uri: photo }}
+                                    uri={photo}
                                     style={styles.photo}
-                                    resizeMode="cover"
+                                    fallbackType="photo"
+                                    contentFit="cover"
                                 />
                             ))}
                         </ScrollView>
@@ -259,7 +260,7 @@ export const ProfileDetailSheet = forwardRef<BottomSheetModal, ProfileDetailShee
 
                             {(profile as any)?.workoutFrequency && (
                                 <ProfileInfoRow
-                                    icon={<Dumbbell size={20} color="#10b981" />}
+                                    icon={<Barbell size={20} color="#10b981" />}
                                     label="Exercise"
                                     value={(profile as any).workoutFrequency}
                                     isDark={isDark}
@@ -288,7 +289,7 @@ export const ProfileDetailSheet = forwardRef<BottomSheetModal, ProfileDetailShee
 
                             {(profile as any)?.politics && (
                                 <ProfileInfoRow
-                                    icon={<Sparkles size={20} color="#8b5cf6" />}
+                                    icon={<Sparkle size={20} color="#8b5cf6" />}
                                     label="Politics"
                                     value={(profile as any).politics}
                                     isDark={isDark}

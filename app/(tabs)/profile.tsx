@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Dimensions, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Pressable } from 'react-native';
+import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import { CompletionHalo } from '@/components/profile/completion-halo';
@@ -154,9 +155,10 @@ export default function ProfileScreen() {
                             />
                         )}
                         <CompletionHalo percentage={completion} radius={70} strokeWidth={6}>
-                            <Image
-                                source={{ uri: profile?.profilePhoto || profile?.user?.image || 'https://via.placeholder.com/150' }}
+                            <CachedImage
+                                uri={profile?.profilePhoto || profile?.user?.image}
                                 style={styles.profileImage}
+                                fallbackType="avatar"
                             />
                         </CompletionHalo>
                     </View>
@@ -224,7 +226,7 @@ export default function ProfileScreen() {
                         >
                             {profile.photos.map((photo: any, index: React.Key | null | undefined) => (
                                 <View key={index} style={styles.photoContainer}>
-                                    <Image source={{ uri: photo }} style={styles.extraPhoto} />
+                                    <CachedImage uri={photo} style={styles.extraPhoto} fallbackType="photo" />
                                     {isDark && <LinearGradient
                                         colors={['transparent', 'rgba(0,0,0,0.3)']}
                                         style={styles.photoOverlay}
