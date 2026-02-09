@@ -127,18 +127,25 @@ function scorePreferences(
     let score = 0;
     let maxScore = 0;
 
-    // Interest overlap
-    if (preferences.interests.length > 0) {
+    // Null-safe arrays (Gemini might return null instead of [])
+    const interests = preferences.interests || [];
+    const traits = preferences.traits || [];
+    const personality = preferences.personality || [];
+
+    // Interest overlap (strip emoji prefixes like "🎵 Music" → "music")
+    if (interests.length > 0) {
         maxScore += 1;
-        const profileInterests = (profile.interests || []).map(i => i.toLowerCase());
-        const matchCount = preferences.interests.filter(i =>
+        const profileInterests = (profile.interests || []).map(i =>
+            i.replace(/^[\p{Emoji}\p{Emoji_Presentation}\s]+/u, "").toLowerCase().trim()
+        );
+        const matchCount = interests.filter(i =>
             profileInterests.some(pi => pi.includes(i.toLowerCase()) || i.toLowerCase().includes(pi))
         ).length;
-        score += preferences.interests.length > 0 ? matchCount / preferences.interests.length : 0;
+        score += interests.length > 0 ? matchCount / interests.length : 0;
     }
 
     // Trait matching (against personalitySummary + aboutMe)
-    if (preferences.traits.length > 0) {
+    if (traits.length > 0) {
         maxScore += 1;
         const searchText = [
             profile.personalitySummary,
@@ -147,14 +154,14 @@ function scorePreferences(
             (profile.qualities || []).join(" "),
         ].filter(Boolean).join(" ").toLowerCase();
 
-        const traitMatches = preferences.traits.filter(trait =>
+        const traitMatches = traits.filter(trait =>
             searchText.includes(trait.toLowerCase())
         ).length;
-        score += preferences.traits.length > 0 ? traitMatches / preferences.traits.length : 0;
+        score += traits.length > 0 ? traitMatches / traits.length : 0;
     }
 
     // Personality type matching
-    if (preferences.personality.length > 0) {
+    if (personality.length > 0) {
         maxScore += 1;
         const searchText = [
             profile.personalityType,
@@ -162,10 +169,10 @@ function scorePreferences(
             profile.communicationStyle,
         ].filter(Boolean).join(" ").toLowerCase();
 
-        const personalityMatches = preferences.personality.filter(p =>
+        const personalityMatches = personality.filter(p =>
             searchText.includes(p.toLowerCase())
         ).length;
-        score += preferences.personality.length > 0 ? personalityMatches / preferences.personality.length : 0;
+        score += personality.length > 0 ? personalityMatches / personality.length : 0;
     }
 
     // Looking for alignment
@@ -301,10 +308,12 @@ function generateMatchReasons(
         reasons.push("Good fit for your vibe");
     }
 
-    // Interest overlap
-    const profileInterests = (profile.interests || []).map(i => i.toLowerCase());
-    const matchingInterests = intent.preferences.interests.filter(i =>
-        profileInterests.some(pi => pi.includes(i.toLowerCase()))
+    // Interest overlap (strip emoji prefixes)
+    const profileInterests = (profile.interests || []).map(i =>
+        i.replace(/^[\p{Emoji}\p{Emoji_Presentation}\s]+/u, "").toLowerCase().trim()
+    );
+    const matchingInterests = (intent.preferences.interests || []).filter(i =>
+        profileInterests.some(pi => pi.includes(i.toLowerCase()) || i.toLowerCase().includes(pi))
     );
     if (matchingInterests.length > 0) {
         reasons.push(`Shared interests: ${matchingInterests.slice(0, 3).join(", ")}`);
@@ -312,7 +321,7 @@ function generateMatchReasons(
 
     // Trait matches
     const searchText = [profile.personalitySummary, profile.aboutMe, profile.bio].filter(Boolean).join(" ").toLowerCase();
-    const matchingTraits = intent.preferences.traits.filter(t => searchText.includes(t.toLowerCase()));
+    const matchingTraits = (intent.preferences.traits || []).filter(t => searchText.includes(t.toLowerCase()));
     if (matchingTraits.length > 0) {
         reasons.push(`${matchingTraits[0]} personality`);
     }

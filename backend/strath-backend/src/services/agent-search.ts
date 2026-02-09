@@ -1,6 +1,6 @@
 import { db } from "../lib/db";
 import { profiles, swipes, blocks, matches } from "../db/schema";
-import { eq, and, notInArray, inArray, sql, gte, lte, like, isNotNull, or } from "drizzle-orm";
+import { eq, and, notInArray, inArray, sql, gte, lte, ilike, isNotNull, or } from "drizzle-orm";
 import type { ParsedIntent } from "./intent-parser";
 
 // ============================================
@@ -215,9 +215,9 @@ async function filterSearch(
             conditions.push(inArray(profiles.yearOfStudy, intent.filters.yearOfStudy));
         }
 
-        // Course (partial match)
+        // Course (case-insensitive partial match)
         if (intent.filters.course) {
-            conditions.push(like(profiles.course, `%${intent.filters.course}%`));
+            conditions.push(ilike(profiles.course, `%${intent.filters.course}%`));
         }
 
         // University

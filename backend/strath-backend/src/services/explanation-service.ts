@@ -182,7 +182,7 @@ function generateQuickStarters(candidate: RankedCandidate, intent: ParsedIntent)
     const profile = candidate.profile;
 
     // Interest-based starter
-    const sharedInterests = intent.preferences.interests.filter(i =>
+    const sharedInterests = (intent.preferences.interests || []).filter(i =>
         (profile.interests || []).some(pi => pi.toLowerCase().includes(i.toLowerCase()))
     );
     if (sharedInterests.length > 0) {
