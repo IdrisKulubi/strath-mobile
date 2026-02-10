@@ -20,11 +20,13 @@ import { useTheme } from '@/hooks/use-theme';
 import { Stop, X } from 'phosphor-react-native';
 import { BlurView } from 'expo-blur';
 
-// Screen dimensions available if needed
-
 interface VoiceRecordingOverlayProps {
     isRecording: boolean;
     isTranscribing: boolean;
+    /** Live partial transcript while user is speaking */
+    liveTranscript?: string;
+    /** Volume level from speech recognition (-2 to 10) */
+    volume?: number;
     onStop: () => void;
     onCancel: () => void;
 }
@@ -32,13 +34,15 @@ interface VoiceRecordingOverlayProps {
 export function VoiceRecordingOverlay({
     isRecording,
     isTranscribing,
+    liveTranscript = '',
+    volume = 0,
     onStop,
     onCancel,
 }: VoiceRecordingOverlayProps) {
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
 
-    // Pulsing ring animation
+    // Pulsing ring animation — scales react to volume
     const ring1Scale = useSharedValue(1);
     const ring2Scale = useSharedValue(1);
     const ring3Scale = useSharedValue(1);
@@ -46,8 +50,20 @@ export function VoiceRecordingOverlay({
     const ring2Opacity = useSharedValue(0.3);
     const ring3Opacity = useSharedValue(0.2);
 
+    // Volume-driven ring scaling
+    useEffect(() => {
+        if (isRecording && volume > 0) {
+            // Map volume (0–10) to extra scale (0–0.6)
+            const extra = Math.min(volume / 10, 1) * 0.6;
+            ring1Scale.value = withSpring(1.4 + extra, { damping: 12, stiffness: 180 });
+            ring2Scale.value = withSpring(1.7 + extra, { damping: 12, stiffness: 160 });
+            ring3Scale.value = withSpring(2.0 + extra, { damping: 12, stiffness: 140 });
+        }
+    }, [volume, isRecording, ring1Scale, ring2Scale, ring3Scale]);
+
     useEffect(() => {
         if (isRecording) {
+            // Base pulsing animation
             ring1Scale.value = withRepeat(
                 withTiming(1.8, { duration: 1500, easing: Easing.out(Easing.ease) }),
                 -1, true
@@ -131,54 +147,45 @@ export function VoiceRecordingOverlay({
                     {/* Center mic button */}
                     <Pressable
                         onPress={onStop}
-                        style={[styles.micButton, {
-                            backgroundColor: isTranscribing ? colors.muted : '#ef4444',
-                        }]}
+                        style={[styles.micButton, { backgroundColor: '#ef4444' }]}
                     >
-                        {isTranscribing ? (
-                            <Animated.View
-                                entering={FadeIn}
-                                style={styles.transcribingDots}
-                            >
-                                <Text style={[styles.transcribingText, { color: colors.foreground }]}>
-                                    ✨ Listening...
-                                </Text>
-                            </Animated.View>
-                        ) : (
-                            <Stop size={32} color="#fff" weight="fill" />
-                        )}
+                        <Stop size={32} color="#fff" weight="fill" />
                     </Pressable>
                 </View>
 
+                {/* Live transcript — shows what the user is saying in real-time */}
+                {liveTranscript.length > 0 && (
+                    <Animated.View entering={FadeIn.duration(150)} style={styles.liveTranscriptBox}>
+                        <Text style={[styles.liveTranscriptText, { color: colors.foreground }]}>
+                            &ldquo;{liveTranscript}&rdquo;
+                        </Text>
+                    </Animated.View>
+                )}
+
                 {/* Status text */}
                 <Text style={[styles.statusText, { color: colors.foreground }]}>
-                    {isTranscribing
-                        ? "Processing your voice..."
+                    {liveTranscript.length > 0
+                        ? "Listening..."
                         : "Speak now — describe who you're looking for"
                     }
                 </Text>
 
                 <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-                    {isTranscribing
-                        ? "Converting speech to text"
-                        : "Tap the stop button or wait 10 seconds"
-                    }
+                    Stops automatically when you pause speaking
                 </Text>
 
                 {/* Cancel button */}
-                {!isTranscribing && (
-                    <Pressable
-                        onPress={onCancel}
-                        style={[styles.cancelButton, {
-                            backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
-                        }]}
-                    >
-                        <X size={18} color={colors.mutedForeground} />
-                        <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>
-                            Cancel
-                        </Text>
-                    </Pressable>
-                )}
+                <Pressable
+                    onPress={onCancel}
+                    style={[styles.cancelButton, {
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+                    }]}
+                >
+                    <X size={18} color={colors.mutedForeground} />
+                    <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>
+                        Cancel
+                    </Text>
+                </Pressable>
             </View>
         </Animated.View>
     );
@@ -217,13 +224,18 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         zIndex: 10,
     },
-    transcribingDots: {
-        alignItems: 'center',
-        justifyContent: 'center',
+    liveTranscriptBox: {
+        maxWidth: '85%',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 16,
+        backgroundColor: 'rgba(255,255,255,0.08)',
     },
-    transcribingText: {
-        fontSize: 13,
+    liveTranscriptText: {
+        fontSize: 16,
         fontWeight: '600',
+        textAlign: 'center',
+        fontStyle: 'italic',
     },
     statusText: {
         fontSize: 18,

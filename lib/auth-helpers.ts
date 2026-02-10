@@ -106,3 +106,37 @@ export async function isAuthenticated(): Promise<boolean> {
     const token = await getAuthToken();
     return !!token;
 }
+
+/**
+ * Clear all session data from both Better Auth and SecureStore.
+ * Call this when handling 401 unauthorized errors.
+ */
+export async function clearSession(): Promise<void> {
+    try {
+        // Try to sign out from Better Auth (may fail if already invalid)
+        try {
+            await authClient.signOut();
+        } catch {
+            // Ignore - session may already be invalid
+        }
+        
+        // Clear SecureStore items (Apple Sign In session)
+        const keysToDelete = [
+            'strathspace_session',
+            'strathspace_session_token',
+            'strathspace_user_id',
+        ];
+        
+        for (const key of keysToDelete) {
+            try {
+                await SecureStore.deleteItemAsync(key);
+            } catch {
+                // Key might not exist, continue
+            }
+        }
+        
+        console.log('[Auth] Session cleared');
+    } catch (error) {
+        console.error('[Auth] Error clearing session:', error);
+    }
+}

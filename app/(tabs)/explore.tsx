@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -43,23 +43,40 @@ export default function ExploreScreen() {
   const agent = useAgent();
   const voice = useVoiceInput();
 
+  // Stable references — avoid depending on the whole `agent` / `voice` objects
+  const agentSearchRef = useRef(agent.search);
+  agentSearchRef.current = agent.search;
+  const agentFeedbackRef = useRef(agent.submitFeedback);
+  agentFeedbackRef.current = agent.submitFeedback;
+  const voiceToggleRef = useRef(voice.toggleRecording);
+  voiceToggleRef.current = voice.toggleRecording;
+
+  // Track which transcript we already consumed to avoid re-triggering
+  const lastConsumedTranscript = useRef<string | null>(null);
+
   const handleWingmanSearch = useCallback((query: string) => {
     console.log('[Explore] Searching:', query);
-    agent.search(query);
-  }, [agent]);
+    agentSearchRef.current(query);
+  }, []);
 
   const handleVoicePress = useCallback(() => {
-    console.log('[Explore] Voice toggle, isRecording:', voice.isRecording);
-    voice.toggleRecording();
-  }, [voice]);
+    voiceToggleRef.current();
+  }, []);
 
-  // When voice transcript is ready, trigger search
+  // When voice transcript is ready, trigger search ONCE then clear it
   useEffect(() => {
-    if (voice.transcript && voice.transcript.length > 0) {
+    if (
+      voice.transcript &&
+      voice.transcript.length > 0 &&
+      voice.transcript !== lastConsumedTranscript.current
+    ) {
       console.log('[Explore] Voice transcript:', voice.transcript);
+      lastConsumedTranscript.current = voice.transcript;
       handleWingmanSearch(voice.transcript);
+      // Clear transcript so it doesn't re-fire
+      voice.clearTranscript();
     }
-  }, [voice.transcript, handleWingmanSearch]);
+  }, [voice.transcript, voice.clearTranscript, handleWingmanSearch]);
 
   // Show voice errors to user
   useEffect(() => {
@@ -81,12 +98,12 @@ export default function ExploreScreen() {
   }, []);
 
   const handleMatchLike = useCallback((match: AgentMatch) => {
-    agent.submitFeedback(match.profile.userId, 'amazing');
-  }, [agent]);
+    agentFeedbackRef.current(match.profile.userId, 'amazing');
+  }, []);
 
   const handleRefineSearch = useCallback((query: string) => {
-    agent.search(query);
-  }, [agent]);
+    agentSearchRef.current(query);
+  }, []);
 
   // Events state
   const [selectedEventCategory, setSelectedEventCategory] = useState<EventCategory | null>(null);
@@ -347,6 +364,8 @@ export default function ExploreScreen() {
             <VoiceRecordingOverlay
               isRecording={voice.isRecording}
               isTranscribing={voice.isTranscribing}
+              liveTranscript={voice.liveTranscript}
+              volume={voice.volume}
               onStop={voice.toggleRecording}
               onCancel={voice.cancelRecording}
             />

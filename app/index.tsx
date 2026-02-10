@@ -3,7 +3,7 @@ import { View, ActivityIndicator } from 'react-native';
 import { useSession } from '../lib/auth-client';
 import { useEffect, useState, useCallback } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { getAuthToken } from '@/lib/auth-helpers';
+import { getAuthToken, clearSession } from '@/lib/auth-helpers';
 
 export default function Index() {
     const { data: session, isPending } = useSession();
@@ -60,9 +60,17 @@ export default function Index() {
                 } else {
                     router.replace('/onboarding' as any);
                 }
+            } else if (res.status === 401) {
+                // Session is invalid/expired - clear and go to login
+                console.log('[Index] Unauthorized - clearing session and redirecting to login');
+                await clearSession();
+                router.replace('/(auth)/login');
+            } else if (res.status === 404) {
+                // Profile not found - go to onboarding to create one
+                router.replace('/onboarding' as any);
             } else {
-                // If we can't fetch profile, assume incomplete or error. 
-                // For safety, let's go to onboarding so they can try to set it up.
+                // Other error - try onboarding as fallback
+                console.warn('[Index] Profile check failed with status:', res.status);
                 router.replace('/onboarding' as any);
             }
         } catch (e) {

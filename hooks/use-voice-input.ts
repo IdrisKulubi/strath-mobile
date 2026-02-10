@@ -1,248 +1,256 @@
-import { useState, useRef, useCallback } from 'react';
-import { Audio } from 'expo-av';
+import { useState, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
+import {
+    ExpoSpeechRecognitionModule,
+    useSpeechRecognitionEvent,
+} from 'expo-speech-recognition';
 import * as Haptics from 'expo-haptics';
-import { File as ExpoFile } from 'expo-file-system';
-import { getAuthToken } from '@/lib/auth-helpers';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 // ============================================
-// useVoiceInput — Records audio, sends to Gemini for transcription
+// useVoiceInput — Native on-device speech recognition
 // ============================================
-// Flow:
-// 1. Request mic permissions
-// 2. Record audio (up to 10 seconds)
-// 3. Convert to base64
-// 4. Send to /api/agent/voice for Gemini transcription
-// 5. Return transcript text
+// Architecture (v2):
+//   Uses expo-speech-recognition which wraps:
+//   - iOS: Apple SFSpeechRecognizer (Siri engine)
+//   - Android: Google SpeechRecognizer
+//
+// Benefits over old approach (expo-av → base64 → Gemini API):
+//   - No audio recording or file handling
+//   - No base64 conversion
+//   - No network round-trip to Gemini
+//   - Real-time partial transcripts as user speaks
+//   - Works offline (if on-device model available)
+//   - Much faster and more reliable
 
 interface UseVoiceInputOptions {
-    maxDuration?: number;        // Max recording duration in ms (default 10s)
+    /** Language for speech recognition (default: "en-US") */
+    lang?: string;
+    /** Called when a final transcript is ready */
     onTranscript?: (text: string) => void;
+    /** Called on recognition errors */
     onError?: (error: string) => void;
 }
 
-export function useVoiceInput(options: UseVoiceInputOptions = {}) {
-    const { maxDuration = 30000, onTranscript, onError } = options;
+interface UseVoiceInputReturn {
+    /** Whether speech recognition is actively listening */
+    isRecording: boolean;
+    /** Kept for backwards compat — always false now (no separate transcription step) */
+    isTranscribing: boolean;
+    /** Final transcript text (set once recognition produces a final result) */
+    transcript: string | null;
+    /** Live partial transcript while user is speaking */
+    liveTranscript: string;
+    /** Error message if something went wrong */
+    error: string | null;
+    /** Start speech recognition */
+    startRecording: () => Promise<void>;
+    /** Stop recognition and get final result */
+    stopRecording: () => void;
+    /** Toggle start/stop */
+    toggleRecording: () => Promise<void>;
+    /** Abort recognition without producing a result */
+    cancelRecording: () => void;
+    /** Clear the transcript so it can be re-consumed */
+    clearTranscript: () => void;
+    /** Volume level (-2 to 10) for visualizations */
+    volume: number;
+}
+
+export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInputReturn {
+    const { lang = 'en-US', onTranscript, onError } = options;
+
     const [isRecording, setIsRecording] = useState(false);
-    const [isTranscribing, setIsTranscribing] = useState(false);
     const [transcript, setTranscript] = useState<string | null>(null);
+    const [liveTranscript, setLiveTranscript] = useState('');
     const [error, setError] = useState<string | null>(null);
-    const recordingRef = useRef<Audio.Recording | null>(null);
-    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [volume, setVolume] = useState(0);
 
-    const stopRecordingRef = useRef<(() => Promise<void>) | undefined>(undefined);
+    // Refs to hold latest callbacks (avoids stale closures)
+    const onTranscriptRef = useRef(onTranscript);
+    onTranscriptRef.current = onTranscript;
+    const onErrorRef = useRef(onError);
+    onErrorRef.current = onError;
 
+    // Track whether we initiated the current session
+    const sessionActiveRef = useRef(false);
+
+    // ─── Event listeners ────────────────────────────────
+    useSpeechRecognitionEvent('start', () => {
+        sessionActiveRef.current = true;
+        setIsRecording(true);
+        setError(null);
+        setLiveTranscript('');
+    });
+
+    useSpeechRecognitionEvent('end', () => {
+        sessionActiveRef.current = false;
+        setIsRecording(false);
+        setLiveTranscript('');
+    });
+
+    useSpeechRecognitionEvent('result', (event) => {
+        const text = event.results[0]?.transcript ?? '';
+
+        if (event.isFinal) {
+            // Final result — this is the complete transcription
+            const trimmed = text.trim();
+            if (trimmed.length > 0) {
+                setTranscript(trimmed);
+                setLiveTranscript('');
+                onTranscriptRef.current?.(trimmed);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } else {
+                // Got an empty final result
+                const msg = "Couldn't understand — please try again";
+                setError(msg);
+                onErrorRef.current?.(msg);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            }
+        } else {
+            // Interim result — show live text to user
+            setLiveTranscript(text);
+        }
+    });
+
+    useSpeechRecognitionEvent('error', (event) => {
+        sessionActiveRef.current = false;
+        setIsRecording(false);
+
+        // "aborted" is expected when we call .abort() — don't show as error
+        if (event.error === 'aborted') return;
+
+        let msg: string;
+        switch (event.error) {
+            case 'not-allowed':
+                msg = 'Microphone permission is required for voice search';
+                break;
+            case 'no-speech':
+                msg = 'No speech detected — try speaking louder';
+                break;
+            case 'network':
+                msg = 'Network error — check your connection';
+                break;
+            case 'audio-capture':
+                msg = 'Microphone not available';
+                break;
+            case 'service-not-allowed':
+                msg = 'Speech recognition not available on this device';
+                break;
+            default:
+                msg = event.message || 'Voice recognition failed';
+        }
+
+        console.warn('[VoiceInput] Error:', event.error, event.message);
+        setError(msg);
+        onErrorRef.current?.(msg);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    });
+
+    useSpeechRecognitionEvent('volumechange', (event) => {
+        setVolume(event.value);
+    });
+
+    // ─── Actions ────────────────────────────────────────
     const startRecording = useCallback(async () => {
         try {
             setError(null);
             setTranscript(null);
+            setLiveTranscript('');
+
+            // Check if recognition is available
+            const available = ExpoSpeechRecognitionModule.isRecognitionAvailable();
+            if (!available) {
+                const msg = 'Speech recognition is not available on this device';
+                setError(msg);
+                onErrorRef.current?.(msg);
+                Alert.alert('Not Available', msg);
+                return;
+            }
 
             // Request permissions
-            const { granted } = await Audio.requestPermissionsAsync();
-            if (!granted) {
-                const msg = 'Microphone permission is required for voice search';
+            const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+            if (!result.granted) {
+                const msg = 'Microphone & speech recognition permissions are required';
                 setError(msg);
-                onError?.(msg);
+                onErrorRef.current?.(msg);
                 Alert.alert('Permission Required', msg);
                 return;
             }
 
-            // Configure audio session
-            await Audio.setAudioModeAsync({
-                allowsRecordingIOS: true,
-                playsInSilentModeIOS: true,
-            });
-
-            // Start recording
-            const { recording } = await Audio.Recording.createAsync(
-                {
-                    ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
-                    android: {
-                        ...Audio.RecordingOptionsPresets.HIGH_QUALITY.android,
-                        extension: '.m4a',
-                        outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-                        audioEncoder: Audio.AndroidAudioEncoder.AAC,
-                    },
-                    ios: {
-                        ...Audio.RecordingOptionsPresets.HIGH_QUALITY.ios,
-                        extension: '.m4a',
-                        outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-                    },
-                }
-            );
-
-            recordingRef.current = recording;
-            setIsRecording(true);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-            // Auto-stop after maxDuration
-            timeoutRef.current = setTimeout(() => {
-                stopRecordingRef.current?.();
-            }, maxDuration);
-
-        } catch (err) {
-            console.error('[VoiceInput] Failed to start recording:', err);
-            const msg = 'Failed to start recording';
-            setError(msg);
-            onError?.(msg);
-        }
-    }, [maxDuration, onError]);
-
-    const stopRecording = useCallback(async () => {
-        if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-            timeoutRef.current = null;
-        }
-
-        if (!recordingRef.current) return;
-
-        try {
-            setIsRecording(false);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-            await recordingRef.current.stopAndUnloadAsync();
-            const uri = recordingRef.current.getURI();
-            recordingRef.current = null;
-
-            // Reset audio mode
-            await Audio.setAudioModeAsync({
-                allowsRecordingIOS: false,
+            // Start native speech recognition
+            ExpoSpeechRecognitionModule.start({
+                lang,
+                interimResults: true,
+                // Non-continuous: stops automatically after user pauses speaking
+                continuous: false,
+                // Punctuation helps with readability
+                addsPunctuation: true,
+                // Optimize for search queries
+                iosTaskHint: 'search',
+                // Volume metering for animation
+                volumeChangeEventOptions: {
+                    enabled: true,
+                    intervalMillis: 200,
+                },
+                // Improve accuracy for dating app context
+                contextualStrings: [
+                    'Strathmore', 'campus', 'dating', 'match',
+                    'sporty', 'creative', 'funny', 'ambitious',
+                    'music', 'engineering', 'business', 'art',
+                ],
+                // Android: use web_search model for better short query recognition
+                androidIntentOptions: {
+                    EXTRA_LANGUAGE_MODEL: 'web_search',
+                },
             });
-
-            if (!uri) {
-                const msg = 'No audio recorded';
-                setError(msg);
-                onError?.(msg);
-                return;
-            }
-
-            // Convert to base64
-            setIsTranscribing(true);
-            console.log('[VoiceInput] Recording URI:', uri);
-            let base64Audio: string;
-            try {
-                const audioFile = new ExpoFile(uri);
-                base64Audio = await audioFile.base64();
-                console.log('[VoiceInput] Base64 length:', base64Audio.length);
-            } catch (b64Err) {
-                console.error('[VoiceInput] Base64 conversion failed:', b64Err);
-                const msg = 'Failed to read audio file';
-                setError(msg);
-                onError?.(msg);
-                return;
-            }
-
-            // Send to transcription API
-            const token = await getAuthToken();
-            let response: Response;
-            try {
-                response = await fetch(`${API_URL}/api/agent/voice`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': token ? `Bearer ${token}` : '',
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        audio: base64Audio,
-                        mimeType: 'audio/mp4',
-                    }),
-                });
-            } catch (networkErr) {
-                console.error('[VoiceInput] Network error:', networkErr);
-                const msg = 'Network error — check your connection';
-                setError(msg);
-                onError?.(msg);
-                return;
-            }
-
-            // Safely parse JSON (server may return empty body on error)
-            let result: any = {};
-            try {
-                const text = await response.text();
-                if (text && text.length > 0) {
-                    result = JSON.parse(text);
-                }
-            } catch (parseErr) {
-                console.error('[VoiceInput] Failed to parse response:', parseErr);
-                const msg = 'Invalid response from server';
-                setError(msg);
-                onError?.(msg);
-                return;
-            }
-
-            if (!response.ok) {
-                const msg = result.error || `Transcription failed (${response.status})`;
-                setError(msg);
-                onError?.(msg);
-                return;
-            }
-
-            const text = result.data?.transcript || result.transcript;
-            if (text) {
-                setTranscript(text);
-                onTranscript?.(text);
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            } else {
-                const msg = "Couldn't understand the audio";
-                setError(msg);
-                onError?.(msg);
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            }
-
-            // Clean up audio file
-            try { new ExpoFile(uri).delete(); } catch {}
-
         } catch (err) {
-            console.error('[VoiceInput] Failed to stop recording:', err);
-            const msg = 'Failed to process audio';
+            console.error('[VoiceInput] Failed to start:', err);
+            const msg = 'Failed to start voice recognition';
             setError(msg);
-            onError?.(msg);
-        } finally {
-            setIsTranscribing(false);
+            onErrorRef.current?.(msg);
         }
-    }, [onTranscript, onError]);
+    }, [lang]);
 
-    // Keep ref in sync for auto-stop timer
-    stopRecordingRef.current = stopRecording;
+    const stopRecording = useCallback(() => {
+        // stop() will attempt to return a final result
+        ExpoSpeechRecognitionModule.stop();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }, []);
+
+    const cancelRecording = useCallback(() => {
+        // abort() immediately cancels without final result
+        ExpoSpeechRecognitionModule.abort();
+        setIsRecording(false);
+        setLiveTranscript('');
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }, []);
 
     const toggleRecording = useCallback(async () => {
         if (isRecording) {
-            await stopRecording();
+            stopRecording();
         } else {
             await startRecording();
         }
     }, [isRecording, startRecording, stopRecording]);
 
-    const cancelRecording = useCallback(async () => {
-        if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-            timeoutRef.current = null;
-        }
-
-        if (recordingRef.current) {
-            try {
-                await recordingRef.current.stopAndUnloadAsync();
-                const uri = recordingRef.current.getURI();
-                recordingRef.current = null;
-                if (uri) try { new ExpoFile(uri).delete(); } catch {}
-            } catch {}
-        }
-
-        setIsRecording(false);
-        setIsTranscribing(false);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const clearTranscript = useCallback(() => {
+        setTranscript(null);
+        setLiveTranscript('');
     }, []);
 
     return {
         isRecording,
-        isTranscribing,
+        isTranscribing: false, // No separate transcription step with native STT
         transcript,
+        liveTranscript,
         error,
         startRecording,
         stopRecording,
         toggleRecording,
         cancelRecording,
+        clearTranscript,
+        volume,
     };
 }

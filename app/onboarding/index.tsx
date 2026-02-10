@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, SafeAreaView, StatusBar } from 'react-native';
+import { View, StyleSheet, SafeAreaView, StatusBar, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { OnboardingData } from '../../components/digital-dna/types';
 import {
@@ -14,7 +14,7 @@ import {
     LaunchCelebration,
 } from '../../components/onboarding';
 import { useImageUpload } from '@/hooks/use-image-upload';
-import { getAuthToken } from '@/lib/auth-helpers';
+import { getAuthToken, clearSession } from '@/lib/auth-helpers';
 import * as SecureStore from 'expo-secure-store';
 
 // Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=OpeningLine, 8=Celebration
@@ -215,6 +215,19 @@ export default function OnboardingScreen() {
             
             if (!response.ok) {
                 console.error('[Onboarding] Profile update failed:', response.status, responseData);
+                
+                // Handle 401 Unauthorized - session expired or invalid
+                if (response.status === 401) {
+                    console.log('[Onboarding] Session expired - redirecting to login');
+                    await clearSession();
+                    Alert.alert(
+                        'Session Expired',
+                        'Please log in again to continue.',
+                        [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
+                    );
+                    return;
+                }
+                
                 const errorMessage = responseData.error || responseData.message || `Server error: ${response.status}`;
                 throw new Error(errorMessage);
             }

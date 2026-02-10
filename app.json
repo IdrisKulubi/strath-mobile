@@ -12,13 +12,15 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.strathspace.mobile",
-      "buildNumber": "22",
+      "buildNumber": "24",
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Strathspace uses your camera to take profile photos. For example, you can capture a new selfie to add to your dating profile so other students can see what you look like.",
         "NSPhotoLibraryUsageDescription": "Strathspace accesses your photo library to let you choose existing photos for your profile. For example, you can select up to 6 photos to showcase your personality and interests to potential matches.",
-        "NSPhotoLibraryAddUsageDescription": "Strathspace saves photos to your library when you choose to download images from chat conversations. For example, you can save a photo that a match shared with you."
+        "NSPhotoLibraryAddUsageDescription": "Strathspace saves photos to your library when you choose to download images from chat conversations. For example, you can save a photo that a match shared with you.",
+        "NSSpeechRecognitionUsageDescription": "Strathspace uses speech recognition to convert your voice into search queries so you can find matches by speaking.",
+        "NSMicrophoneUsageDescription": "Strathspace needs microphone access so you can use voice search to find matches."
       }
     },
     "android": {
@@ -55,7 +57,17 @@
       "expo-web-browser",
       "@react-native-community/datetimepicker",
       "expo-font",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Strathspace needs microphone access so you can use voice search to find matches.",
+          "speechRecognitionPermission": "Strathspace uses speech recognition to convert your voice into search queries.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
