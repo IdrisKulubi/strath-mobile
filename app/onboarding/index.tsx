@@ -255,6 +255,10 @@ export default function OnboardingScreen() {
                 return (
                     <WelcomeSplash
                         onStart={() => setStep(1)}
+                        onBackToLogin={() => {
+                            clearSession();
+                            router.replace('/(auth)/login');
+                        }}
                     />
                 );
 

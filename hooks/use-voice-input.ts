@@ -1,9 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { Alert } from 'react-native';
-import {
-    ExpoSpeechRecognitionModule,
-    useSpeechRecognitionEvent,
-} from 'expo-speech-recognition';
+import { Alert, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 // ============================================
@@ -14,13 +10,22 @@ import * as Haptics from 'expo-haptics';
 //   - iOS: Apple SFSpeechRecognizer (Siri engine)
 //   - Android: Google SpeechRecognizer
 //
-// Benefits over old approach (expo-av → base64 → Gemini API):
-//   - No audio recording or file handling
-//   - No base64 conversion
-//   - No network round-trip to Gemini
-//   - Real-time partial transcripts as user speaks
-//   - Works offline (if on-device model available)
-//   - Much faster and more reliable
+// NOTE: expo-speech-recognition requires a dev build.
+// In Expo Go, voice input will show an error explaining this.
+
+// Dynamic import to avoid crash in Expo Go
+let ExpoSpeechRecognitionModule: typeof import('expo-speech-recognition').ExpoSpeechRecognitionModule | null = null;
+let useSpeechRecognitionEvent: typeof import('expo-speech-recognition').useSpeechRecognitionEvent | null = null;
+let nativeModuleAvailable = false;
+
+try {
+    const speech = require('expo-speech-recognition');
+    ExpoSpeechRecognitionModule = speech.ExpoSpeechRecognitionModule;
+    useSpeechRecognitionEvent = speech.useSpeechRecognitionEvent;
+    nativeModuleAvailable = true;
+} catch {
+    console.warn('[VoiceInput] expo-speech-recognition not available (requires dev build)');
+}
 
 interface UseVoiceInputOptions {
     /** Language for speech recognition (default: "en-US") */
@@ -56,6 +61,17 @@ interface UseVoiceInputReturn {
     volume: number;
 }
 
+// ─── No-op hook for when native module unavailable ───
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function useNoOpSpeechEvent(_event: string, _handler: (e: any) => void) {
+    // Do nothing - native module not available
+}
+
+// Use real hook if available, otherwise no-op
+const useSpeechEvent = nativeModuleAvailable && useSpeechRecognitionEvent
+    ? useSpeechRecognitionEvent
+    : useNoOpSpeechEvent;
+
 export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInputReturn {
     const { lang = 'en-US', onTranscript, onError } = options;
 
@@ -74,21 +90,21 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
     // Track whether we initiated the current session
     const sessionActiveRef = useRef(false);
 
-    // ─── Event listeners ────────────────────────────────
-    useSpeechRecognitionEvent('start', () => {
+    // ─── Event listeners (only if native module available) ───
+    useSpeechEvent('start', () => {
         sessionActiveRef.current = true;
         setIsRecording(true);
         setError(null);
         setLiveTranscript('');
     });
 
-    useSpeechRecognitionEvent('end', () => {
+    useSpeechEvent('end', () => {
         sessionActiveRef.current = false;
         setIsRecording(false);
         setLiveTranscript('');
     });
 
-    useSpeechRecognitionEvent('result', (event) => {
+    useSpeechEvent('result', (event: any) => {
         const text = event.results[0]?.transcript ?? '';
 
         if (event.isFinal) {
@@ -112,7 +128,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
         }
     });
 
-    useSpeechRecognitionEvent('error', (event) => {
+    useSpeechEvent('error', (event: any) => {
         sessionActiveRef.current = false;
         setIsRecording(false);
 
@@ -146,12 +162,29 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     });
 
-    useSpeechRecognitionEvent('volumechange', (event) => {
+    useSpeechEvent('volumechange', (event: any) => {
         setVolume(event.value);
     });
 
     // ─── Actions ────────────────────────────────────────
     const startRecording = useCallback(async () => {
+        // Check if native module is available (requires dev build, not Expo Go)
+        if (!nativeModuleAvailable || !ExpoSpeechRecognitionModule) {
+            const msg = Platform.select({
+                ios: 'Voice search requires a development build. Please use TestFlight or build locally.',
+                android: 'Voice search requires a development build. Please build the app locally.',
+                default: 'Voice search is not available in Expo Go.',
+            });
+            setError(msg);
+            onErrorRef.current?.(msg);
+            Alert.alert(
+                'Voice Search Unavailable',
+                msg + '\n\nVoice search uses native speech recognition which cannot run in Expo Go.',
+                [{ text: 'OK' }]
+            );
+            return;
+        }
+
         try {
             setError(null);
             setTranscript(null);
@@ -214,14 +247,17 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
     }, [lang]);
 
     const stopRecording = useCallback(() => {
+        if (!ExpoSpeechRecognitionModule) return;
         // stop() will attempt to return a final result
         ExpoSpeechRecognitionModule.stop();
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }, []);
 
     const cancelRecording = useCallback(() => {
-        // abort() immediately cancels without final result
-        ExpoSpeechRecognitionModule.abort();
+        if (ExpoSpeechRecognitionModule) {
+            // abort() immediately cancels without final result
+            ExpoSpeechRecognitionModule.abort();
+        }
         setIsRecording(false);
         setLiveTranscript('');
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

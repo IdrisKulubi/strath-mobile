@@ -16,6 +16,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface WelcomeSplashProps {
     onStart: () => void;
+    onBackToLogin?: () => void;
 }
 
 // Floating hearts animation
@@ -67,7 +68,7 @@ const FloatingHeart = ({ delay, startX }: { delay: number; startX: number }) => 
     );
 };
 
-export function WelcomeSplash({ onStart }: WelcomeSplashProps) {
+export function WelcomeSplash({ onStart, onBackToLogin }: WelcomeSplashProps) {
     const titleOpacity = useSharedValue(0);
     const titleTranslateY = useSharedValue(30);
     const subtitleOpacity = useSharedValue(0);
@@ -185,6 +186,15 @@ export function WelcomeSplash({ onStart }: WelcomeSplashProps) {
                 <Animated.Text style={[styles.timeEstimate, subtitleStyle]}>
                     ⏱️ Takes about 2-3 minutes
                 </Animated.Text>
+
+                {/* Back to Login */}
+                {onBackToLogin && (
+                    <Animated.View style={[{ marginTop: 24 }, subtitleStyle]}>
+                        <TouchableOpacity onPress={onBackToLogin} activeOpacity={0.7}>
+                            <Text style={styles.backToLoginText}>← Back to Login</Text>
+                        </TouchableOpacity>
+                    </Animated.View>
+                )}
             </View>
         </View>
     );
@@ -264,5 +274,10 @@ const styles = StyleSheet.create({
     timeEstimate: {
         fontSize: 14,
         color: '#64748b',
+    },
+    backToLoginText: {
+        fontSize: 15,
+        color: '#94a3b8',
+        textDecorationLine: 'underline',
     },
 });
