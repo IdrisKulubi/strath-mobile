@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     View,
     StyleSheet,
@@ -8,6 +8,15 @@ import {
     ActivityIndicator,
     Alert,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+    interpolate,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    withTiming,
+} from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
@@ -36,6 +45,8 @@ export function WingmanMatchDetail({
 }: WingmanMatchDetailProps) {
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+    const translateY = useSharedValue(0);
 
     const photos = useMemo(() => {
         if (!match) return [];
@@ -89,37 +100,98 @@ export function WingmanMatchDetail({
         }
     };
 
+    const handleOpenPhoto = useCallback((photoUri: string) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setSelectedPhoto(photoUri);
+    }, []);
+
+    const handleClosePhoto = useCallback(() => {
+        setSelectedPhoto(null);
+    }, []);
+
+    const closeModal = useCallback(() => {
+        onClose();
+    }, [onClose]);
+
+    const animateClose = useCallback(() => {
+        translateY.value = withTiming(900, { duration: 220 }, () => {
+            runOnJS(closeModal)();
+        });
+    }, [closeModal, translateY]);
+
+    useEffect(() => {
+        if (visible) {
+            translateY.value = 0;
+        }
+    }, [translateY, visible]);
+
+    const dragToCloseGesture = Gesture.Pan()
+        .activeOffsetY(8)
+        .failOffsetX([-20, 20])
+        .onUpdate((event) => {
+            if (event.translationY > 0) {
+                translateY.value = event.translationY;
+            }
+        })
+        .onEnd((event) => {
+            const shouldClose = event.translationY > 120 || event.velocityY > 900;
+            if (shouldClose) {
+                translateY.value = withTiming(900, { duration: 220 }, () => {
+                    runOnJS(closeModal)();
+                });
+                return;
+            }
+
+            translateY.value = withSpring(0, { damping: 18, stiffness: 220 });
+        });
+
+    const sheetAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ translateY: translateY.value }],
+    }));
+
+    const backdropAnimatedStyle = useAnimatedStyle(() => ({
+        opacity: interpolate(translateY.value, [0, 500], [1, 0.45]),
+    }));
+
     return (
         <Modal
             visible={visible}
             animationType="slide"
             transparent
-            onRequestClose={onClose}
+            onRequestClose={animateClose}
         >
-            <View style={styles.backdrop}>
-                <View style={[styles.container, {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                }]}
+            <Animated.View style={[styles.backdrop, backdropAnimatedStyle]}>
+                <Animated.View
+                    style={[styles.container, {
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                    }, sheetAnimatedStyle]}
                 >
-                    <View style={[styles.header, { borderBottomColor: colors.border }]}>
-                        <Text style={[styles.title, { color: colors.foreground }]}>Match Details</Text>
-                        <Pressable
-                            onPress={onClose}
-                            style={[styles.closeButton, {
-                                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                            }]}
-                        >
-                            <X size={18} color={colors.foreground} />
-                        </Pressable>
-                    </View>
+                    <GestureDetector gesture={dragToCloseGesture}>
+                        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+                            <View style={[styles.dragHandle, {
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)',
+                            }]} />
+                            <Text style={[styles.title, { color: colors.foreground }]}>Match Details</Text>
+                            <Pressable
+                                onPress={animateClose}
+                                style={[styles.closeButton, {
+                                    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                                }]}
+                            >
+                                <X size={18} color={colors.foreground} />
+                            </Pressable>
+                        </View>
+                    </GestureDetector>
 
                     {!match ? null : (
                         <>
                             <ScrollView contentContainerStyle={styles.content}>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photosRow}>
                                     {photos.length > 0 ? photos.map((photo, index) => (
-                                        <CachedImage key={`${photo}-${index}`} uri={photo} style={styles.photo} />
+                                        <Pressable key={`${photo}-${index}`} onPress={() => handleOpenPhoto(photo)}>
+                                            <CachedImage uri={photo} style={styles.photo} />
+                                        </Pressable>
                                     )) : (
                                         <View style={[styles.placeholderPhoto, {
                                             backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
@@ -221,8 +293,34 @@ export function WingmanMatchDetail({
                             </View>
                         </>
                     )}
+                </Animated.View>
+            </Animated.View>
+
+            <Modal
+                visible={!!selectedPhoto}
+                transparent
+                animationType="fade"
+                onRequestClose={handleClosePhoto}
+            >
+                <View style={styles.fullscreenBackdrop}>
+                    <Pressable style={StyleSheet.absoluteFill} onPress={handleClosePhoto} />
+
+                    <View style={styles.fullscreenHeader}>
+                        <Pressable
+                            onPress={handleClosePhoto}
+                            style={styles.fullscreenCloseButton}
+                        >
+                            <X size={20} color="#fff" />
+                        </Pressable>
+                    </View>
+
+                    {selectedPhoto ? (
+                        <View style={styles.fullscreenImageWrap}>
+                            <CachedImage uri={selectedPhoto} style={styles.fullscreenImage} contentFit="contain" />
+                        </View>
+                    ) : null}
                 </View>
-            </View>
+            </Modal>
         </Modal>
     );
 }
@@ -247,6 +345,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        position: 'relative',
+    },
+    dragHandle: {
+        position: 'absolute',
+        top: 6,
+        left: '50%',
+        marginLeft: -20,
+        width: 40,
+        height: 4,
+        borderRadius: 999,
     },
     title: {
         fontSize: 18,
@@ -357,6 +465,35 @@ const styles = StyleSheet.create({
     footer: {
         borderTopWidth: 1,
         padding: 14,
+    },
+    fullscreenBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.96)',
+    },
+    fullscreenHeader: {
+        position: 'absolute',
+        top: 56,
+        right: 16,
+        zIndex: 2,
+    },
+    fullscreenCloseButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    fullscreenImageWrap: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 20,
+    },
+    fullscreenImage: {
+        width: '100%',
+        height: '100%',
     },
     connectButton: {
         backgroundColor: '#ec4899',

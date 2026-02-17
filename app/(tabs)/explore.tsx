@@ -123,8 +123,8 @@ export default function ExploreScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTitleRow}>
-            <Sparkle size={24} weight="fill" color={colors.primary} />
-            <Text style={[styles.headerTitle, { color: colors.foreground }]}>Wingman</Text>
+            
+            <Text style={[styles.headerTitle, { color: colors.primary }]}>Strathspace</Text>
           </View>
           <Pressable style={styles.helpButton}>
             <Question size={24} color={colors.mutedForeground} />
@@ -211,6 +211,8 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
+    lineHeight: 34,
+    paddingTop: 1,
   },
   helpButton: {
     padding: 8,

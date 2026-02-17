@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     View,
     StyleSheet,
@@ -9,6 +9,7 @@ import Animated, {
     FadeIn,
     FadeOut,
     SlideInUp,
+    SlideInDown,
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
@@ -188,6 +189,25 @@ export function WingmanResults({
 }: WingmanResultsProps) {
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const [statusIndex, setStatusIndex] = useState(0);
+    const statusMessages = useMemo(
+        () => ['Tuning your vibe…', 'Searching campus…', 'Re-ranking better fits…'],
+        []
+    );
+
+    useEffect(() => {
+        const shouldAnimate = (isRefining || isSearching) && matches.length > 0;
+        if (!shouldAnimate) {
+            setStatusIndex(0);
+            return;
+        }
+
+        const timer = setInterval(() => {
+            setStatusIndex((prev) => (prev + 1) % statusMessages.length);
+        }, 900);
+
+        return () => clearInterval(timer);
+    }, [isRefining, isSearching, matches.length, statusMessages.length]);
 
     // No search yet
     if (!currentQuery && !isSearching) {
@@ -264,6 +284,20 @@ export function WingmanResults({
                     isLoading={isSearching || isRefining}
                     refinementHints={refinementHints}
                 />
+            )}
+
+            {(isRefining || isSearching) && matches.length > 0 && (
+                <Animated.View
+                    entering={SlideInDown.springify().damping(22)}
+                    exiting={FadeOut.duration(120)}
+                    style={[styles.updatingBanner, {
+                        backgroundColor: isDark ? 'rgba(233, 30, 140, 0.10)' : 'rgba(233, 30, 140, 0.08)',
+                        borderColor: isDark ? 'rgba(233, 30, 140, 0.18)' : 'rgba(233, 30, 140, 0.14)',
+                    }]}
+                >
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={[styles.updatingText, { color: colors.primary }]}>{statusMessages[statusIndex]}</Text>
+                </Animated.View>
             )}
 
             {/* Match cards */}
@@ -449,6 +483,8 @@ const styles = StyleSheet.create({
     commentaryLabel: {
         fontSize: 12,
         fontWeight: '700',
+        lineHeight: 16,
+        paddingTop: 1,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
@@ -496,6 +532,23 @@ const styles = StyleSheet.create({
     loadMoreText: {
         fontSize: 14,
         fontWeight: '600',
+    },
+
+    updatingBanner: {
+        marginHorizontal: 16,
+        marginTop: 8,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderRadius: 12,
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    updatingText: {
+        fontSize: 12,
+        fontWeight: '700',
     },
 
     // Refine

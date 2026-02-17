@@ -280,6 +280,8 @@ const styles = StyleSheet.create({
     label: {
         fontSize: 12,
         fontWeight: '700',
+        lineHeight: 16,
+        paddingTop: 1,
         letterSpacing: 0.5,
         textTransform: 'uppercase',
     },
