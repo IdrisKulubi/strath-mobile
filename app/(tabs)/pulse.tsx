@@ -1,12 +1,10 @@
 import React from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Pressable, StyleSheet, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function PulseTabScreen() {
-  const router = useRouter();
   const { colors, isDark } = useTheme();
 
   return (
@@ -22,12 +20,8 @@ export default function PulseTabScreen() {
       >
         <Text style={[styles.title, { color: colors.foreground }]}>Campus Pulse</Text>
         <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-          This tab is staged as preview now. Final feed UI opens below.
+          Campus Pulse is coming soon. This section will host anonymous campus posts and reactions.
         </Text>
-
-        <Pressable style={[styles.button, { backgroundColor: colors.primary }]} onPress={() => router.push({ pathname: '/ui-preview/[stage]', params: { stage: 'pulse' } })}>
-          <Text style={[styles.buttonText, { color: colors.primaryForeground }]}>Open Pulse Mock</Text>
-        </Pressable>
       </View>
     </SafeAreaView>
   );
@@ -43,11 +37,4 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 24, fontWeight: '800' },
   subtitle: { fontSize: 13, fontWeight: '600' },
-  button: {
-    marginTop: 6,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  buttonText: { fontSize: 13, fontWeight: '800' },
 });

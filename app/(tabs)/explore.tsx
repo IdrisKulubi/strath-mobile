@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   StatusBar,
-  Pressable,
   ScrollView,
   Alert,
 } from 'react-native';
@@ -16,7 +15,6 @@ import { WingmanSearchBar, WingmanResults, VoiceRecordingOverlay, WingmanMatchDe
 import { useAgent, AgentMatch } from '@/hooks/use-agent';
 import { useVoiceInput } from '@/hooks/use-voice-input';
 import { useWeeklyDrop, WeeklyDropMatch } from '@/hooks/use-weekly-drop';
-import { Question } from 'phosphor-react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 
@@ -128,8 +126,8 @@ export default function ExploreScreen() {
 
   const handleOpenDrop = useCallback(() => {
     setShowDropBanner(false);
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
-  }, []);
+    router.push('/(tabs)/drops');
+  }, [router]);
 
   const handleTalkToAgent = useCallback(() => {
     setShowDropBanner(false);
@@ -192,9 +190,6 @@ export default function ExploreScreen() {
             
             <Text style={[styles.headerTitle, { color: colors.primary }]}>Strathspace</Text>
           </View>
-          <Pressable style={styles.helpButton} onPress={() => router.push('/ui-preview')}>
-            <Question size={24} color={colors.mutedForeground} />
-          </Pressable>
         </View>
 
         {/* Wingman AI Search */}
@@ -309,9 +304,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 34,
     paddingTop: 1,
-  },
-  helpButton: {
-    padding: 8,
   },
   wingmanContainer: {
     flex: 1,
