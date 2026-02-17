@@ -51,10 +51,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="index"
+        name="drops"
         options={{
-          title: 'Discover',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "compass" : "compass-outline"} color={color} />,
+          title: 'Drops',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "gift" : "gift-outline"} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -73,10 +73,22 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="pulse"
+        options={{
+          title: 'Pulse',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "flame" : "flame-outline"} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="index"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
         name="chats"
         options={{
-          title: 'Chats',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "chatbubble" : "chatbubble-outline"} color={color} />,
+          href: null,
           tabBarBadge: formatBadgeCount(unreadMessages),
         }}
       />

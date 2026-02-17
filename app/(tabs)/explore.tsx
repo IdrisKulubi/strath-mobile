@@ -12,10 +12,11 @@ import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
-import { WingmanSearchBar, WingmanResults, VoiceRecordingOverlay, WingmanMatchDetail, ConnectionSentPopup } from '@/components/wingman';
+import { WingmanSearchBar, WingmanResults, VoiceRecordingOverlay, WingmanMatchDetail, ConnectionSentPopup, DropNotification, WeeklyDrop, WeeklyDropStrip } from '@/components/wingman';
 import { useAgent, AgentMatch } from '@/hooks/use-agent';
 import { useVoiceInput } from '@/hooks/use-voice-input';
-import { Question, Sparkle } from 'phosphor-react-native';
+import { useWeeklyDrop, WeeklyDropMatch } from '@/hooks/use-weekly-drop';
+import { Question } from 'phosphor-react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 
@@ -23,12 +24,16 @@ export default function ExploreScreen() {
   const router = useRouter();
   const { colors, colorScheme } = useTheme();
   useProfile(); // Pre-fetch profile for later use
+  const scrollRef = useRef<ScrollView>(null);
 
   // ===== Wingman (AI Agent) state =====
   const agent = useAgent();
+  const weeklyDrop = useWeeklyDrop();
   const voice = useVoiceInput();
+  const { transcript, clearTranscript, error: voiceError } = voice;
   const [selectedMatch, setSelectedMatch] = React.useState<AgentMatch | null>(null);
   const [connectionSentFor, setConnectionSentFor] = React.useState<string | null>(null);
+  const [showDropBanner, setShowDropBanner] = React.useState(false);
 
   // Stable references — avoid depending on the whole `agent` / `voice` objects
   const agentSearchRef = useRef(agent.search);
@@ -53,24 +58,24 @@ export default function ExploreScreen() {
   // When voice transcript is ready, trigger search ONCE then clear it
   useEffect(() => {
     if (
-      voice.transcript &&
-      voice.transcript.length > 0 &&
-      voice.transcript !== lastConsumedTranscript.current
+      transcript &&
+      transcript.length > 0 &&
+      transcript !== lastConsumedTranscript.current
     ) {
-      console.log('[Explore] Voice transcript:', voice.transcript);
-      lastConsumedTranscript.current = voice.transcript;
-      handleWingmanSearch(voice.transcript);
+      console.log('[Explore] Voice transcript:', transcript);
+      lastConsumedTranscript.current = transcript;
+      handleWingmanSearch(transcript);
       // Clear transcript so it doesn't re-fire
-      voice.clearTranscript();
+      clearTranscript();
     }
-  }, [voice.transcript, voice.clearTranscript, handleWingmanSearch]);
+  }, [transcript, clearTranscript, handleWingmanSearch]);
 
   // Show voice errors to user
   useEffect(() => {
-    if (voice.error) {
-      Alert.alert('Voice Input', voice.error);
+    if (voiceError) {
+      Alert.alert('Voice Input', voiceError);
     }
-  }, [voice.error]);
+  }, [voiceError]);
 
   // Show search errors to user
   useEffect(() => {
@@ -78,6 +83,12 @@ export default function ExploreScreen() {
       Alert.alert('Search Error', agent.searchError);
     }
   }, [agent.searchError]);
+
+  useEffect(() => {
+    if (weeklyDrop.currentDrop?.justOpened) {
+      setShowDropBanner(true);
+    }
+  }, [weeklyDrop.currentDrop?.id, weeklyDrop.currentDrop?.justOpened]);
 
   const handleMatchPress = useCallback((_match: AgentMatch) => {
     setSelectedMatch(_match);
@@ -115,6 +126,61 @@ export default function ExploreScreen() {
     setConnectionSentFor(null);
   }, []);
 
+  const handleOpenDrop = useCallback(() => {
+    setShowDropBanner(false);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, []);
+
+  const handleTalkToAgent = useCallback(() => {
+    setShowDropBanner(false);
+    agent.clear();
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, [agent]);
+
+  const handleDropMatchPress = useCallback((dropMatch: WeeklyDropMatch) => {
+    const mappedMatch: AgentMatch = {
+      profile: {
+        userId: dropMatch.userId,
+        firstName: dropMatch.profile?.firstName || null,
+        lastName: dropMatch.profile?.lastName || null,
+        bio: null,
+        age: dropMatch.profile?.age || null,
+        gender: null,
+        university: null,
+        course: dropMatch.profile?.course || null,
+        yearOfStudy: dropMatch.profile?.yearOfStudy || null,
+        interests: null,
+        photos: dropMatch.profile?.photos || null,
+        profilePhoto: dropMatch.profile?.profilePhoto || null,
+        qualities: null,
+        prompts: null,
+        aboutMe: null,
+        personalitySummary: null,
+        personalityType: null,
+        communicationStyle: null,
+        loveLanguage: null,
+        lookingFor: null,
+        religion: null,
+        lastActive: null,
+      },
+      explanation: {
+        tagline: 'Weekly drop pick',
+        summary: dropMatch.reasons.join(' • '),
+        conversationStarters: dropMatch.starters,
+        vibeEmoji: '🎯',
+        matchPercentage: dropMatch.score,
+      },
+      scores: {
+        total: dropMatch.score,
+        vector: dropMatch.score,
+        preference: dropMatch.score,
+        filterMatch: true,
+      },
+    };
+
+    setSelectedMatch(mappedMatch);
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -126,13 +192,26 @@ export default function ExploreScreen() {
             
             <Text style={[styles.headerTitle, { color: colors.primary }]}>Strathspace</Text>
           </View>
-          <Pressable style={styles.helpButton}>
+          <Pressable style={styles.helpButton} onPress={() => router.push('/ui-preview')}>
             <Question size={24} color={colors.mutedForeground} />
           </Pressable>
         </View>
 
         {/* Wingman AI Search */}
         <View style={styles.wingmanContainer}>
+          <DropNotification
+            visible={showDropBanner}
+            onOpen={handleOpenDrop}
+            onDismiss={() => setShowDropBanner(false)}
+          />
+
+          {!agent.currentQuery && weeklyDrop.currentDrop && (
+            <WeeklyDropStrip
+              drop={weeklyDrop.currentDrop}
+              onOpen={handleOpenDrop}
+            />
+          )}
+
           <WingmanSearchBar
             onSearch={handleWingmanSearch}
             onVoicePress={handleVoicePress}
@@ -141,11 +220,28 @@ export default function ExploreScreen() {
             initialQuery={voice.transcript || undefined}
           />
           <ScrollView
+            ref={scrollRef}
             style={styles.wingmanScroll}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.wingmanScrollContent}
           >
+            {!agent.currentQuery && (
+              <WeeklyDrop
+                currentDrop={weeklyDrop.currentDrop}
+                history={weeklyDrop.dropHistory}
+                isLoading={weeklyDrop.isCurrentLoading}
+                showCurrent={false}
+                onRefresh={() => {
+                  weeklyDrop.refetchCurrent();
+                  weeklyDrop.refetchHistory();
+                }}
+                onTalkToAgent={handleTalkToAgent}
+                onMatchPress={handleDropMatchPress}
+                onViewHistory={() => router.push('/weekly-drop-history')}
+              />
+            )}
+
             <WingmanResults
               matches={agent.matches}
               commentary={agent.commentary}

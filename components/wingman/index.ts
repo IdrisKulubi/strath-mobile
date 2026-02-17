@@ -5,3 +5,6 @@ export { WingmanRefinementBar } from './wingman-refinement-bar';
 export { VoiceRecordingOverlay } from './voice-recording-overlay';
 export { WingmanMatchDetail } from './wingman-match-detail';
 export { ConnectionSentPopup } from './connection-sent-popup';
+export { DropNotification } from './drop-notification';
+export { WeeklyDrop } from './weekly-drop';
+export { WeeklyDropStrip } from './weekly-drop-strip';
