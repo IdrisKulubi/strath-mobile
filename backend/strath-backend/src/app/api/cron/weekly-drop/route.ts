@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { and, eq, gte, isNull } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { user, weeklyDrops } from "@/db/schema";
 import { successResponse, errorResponse } from "@/lib/api-response";
@@ -77,6 +77,15 @@ export async function GET(request: NextRequest) {
         const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
         const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
         const dropNumber = getDropNumber(nairobiNow);
+
+        const expiredCleanup = await db
+            .update(weeklyDrops)
+            .set({ status: "expired" })
+            .where(and(
+                lt(weeklyDrops.expiresAt, now),
+                ne(weeklyDrops.status, "expired"),
+            ))
+            .returning({ id: weeklyDrops.id });
 
         const limitParam = Number(request.nextUrl.searchParams.get("limit") || "0");
         const runLimit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 1000) : undefined;
@@ -185,6 +194,7 @@ export async function GET(request: NextRequest) {
             failed,
             emptyResults,
             notificationsSent,
+            expiredMarked: expiredCleanup.length,
             expiresAt: expiresAt.toISOString(),
             timezone: "Africa/Nairobi",
             schedule: "Sunday 7:00 PM EAT (configure in Vercel cron)",

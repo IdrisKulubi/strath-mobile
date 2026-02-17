@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, ne } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { profiles, session as sessionTable, weeklyDrops } from "@/db/schema";
@@ -36,6 +36,15 @@ export async function GET(request: NextRequest) {
 
         const userId = session.user.id;
         const now = new Date();
+
+        await db
+            .update(weeklyDrops)
+            .set({ status: "expired" })
+            .where(and(
+                eq(weeklyDrops.userId, userId),
+                lt(weeklyDrops.expiresAt, now),
+                ne(weeklyDrops.status, "expired"),
+            ));
 
         const currentDrop = await db.query.weeklyDrops.findFirst({
             where: and(
