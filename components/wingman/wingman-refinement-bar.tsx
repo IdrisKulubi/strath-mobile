@@ -9,6 +9,7 @@ interface WingmanRefinementBarProps {
     currentQuery: string | null;
     onRefine: (refinement: string) => void;
     isLoading?: boolean;
+    refinementHints?: string[];
 }
 
 function getDefaultRefinements(currentQuery: string | null): string[] {
@@ -31,11 +32,17 @@ export function WingmanRefinementBar({
     currentQuery,
     onRefine,
     isLoading = false,
+    refinementHints,
 }: WingmanRefinementBarProps) {
     const { colors, isDark } = useTheme();
     const [customRefine, setCustomRefine] = useState('');
 
-    const quickRefinements = useMemo(() => getDefaultRefinements(currentQuery), [currentQuery]);
+    const quickRefinements = useMemo(() => {
+        if (refinementHints && refinementHints.length > 0) {
+            return refinementHints.slice(0, 4);
+        }
+        return getDefaultRefinements(currentQuery);
+    }, [currentQuery, refinementHints]);
 
     const handleQuickRefine = (value: string) => {
         if (isLoading) return;

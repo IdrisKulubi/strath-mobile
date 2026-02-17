@@ -13,6 +13,26 @@ import { getAgentContext, recordQuery, saveAgentMessage } from "@/services/agent
 export const dynamic = "force-dynamic";
 export const maxDuration = 30; // Vercel timeout
 
+function buildRefinementHints(query: string, vibe?: string): string[] {
+    const baseHints = [
+        "more introverted",
+        "closer to campus",
+        "older by 1-2 years",
+        "more ambitious",
+        "more chill",
+        "more into fitness",
+    ];
+
+    const lowered = query.toLowerCase();
+    const hints = baseHints.filter((hint) => !lowered.includes(hint.split(" ")[1] || hint));
+
+    if (vibe && vibe !== "any") {
+        hints.unshift(`keep ${vibe} vibe, but more expressive`);
+    }
+
+    return [...new Set(hints)].slice(0, 4);
+}
+
 // ============================================
 // AGENT SEARCH API — POST /api/agent/search
 // ============================================
@@ -173,10 +193,12 @@ export async function POST(request: NextRequest) {
         saveAgentMessage(userId, commentary).catch(console.error);
 
         const latency = Date.now() - startTime;
+        const refinementHints = buildRefinementHints(query.trim(), intent.vibe);
 
         return successResponse({
             commentary,
             matches,
+            refinement_hints: refinementHints,
             intent: {
                 vibe: intent.vibe,
                 confidence: intent.confidence,

@@ -56,6 +56,8 @@ export interface AgentMatch {
 export interface AgentSearchResponse {
     commentary: string;
     matches: AgentMatch[];
+    refinement_hints?: string[];
+    refinementHints?: string[];
     intent: {
         vibe: string;
         confidence: number;
@@ -247,6 +249,7 @@ export function useAgent() {
     const [currentQuery, setCurrentQuery] = useState<string | null>(null);
     const [allMatches, setAllMatches] = useState<AgentMatch[]>([]);
     const [commentary, setCommentary] = useState<string | null>(null);
+    const [refinementHints, setRefinementHints] = useState<string[]>([]);
     const [meta, setMeta] = useState<AgentSearchResponse["meta"] | null>(null);
     const [intent, setIntent] = useState<AgentSearchResponse["intent"] | null>(null);
 
@@ -278,6 +281,7 @@ export function useAgent() {
                 setAllMatches(data.matches);
             }
             setCommentary(data.commentary);
+            setRefinementHints(data.refinement_hints || data.refinementHints || []);
             setMeta(data.meta);
             setIntent(data.intent);
 
@@ -332,6 +336,7 @@ export function useAgent() {
         onSuccess: (data, variables) => {
             setAllMatches(data.matches);
             setCommentary(data.commentary);
+            setRefinementHints(data.refinement_hints || data.refinementHints || []);
             setMeta(data.meta);
             setIntent(data.intent);
             setCurrentQuery(`${variables.originalQuery}, but ${variables.refinement}`);
@@ -396,6 +401,7 @@ export function useAgent() {
     const clear = useCallback(() => {
         setAllMatches([]);
         setCommentary(null);
+        setRefinementHints([]);
         setMeta(null);
         setIntent(null);
         setCurrentQuery(null);
@@ -412,14 +418,19 @@ export function useAgent() {
 
         // State
         matches: allMatches,
+        results: allMatches,
         commentary,
+        agentMessage: commentary,
+        refinementHints,
         intent,
         meta,
         currentQuery,
 
         // Loading states
         isSearching: searchMutation.isPending,
+        isThinking: searchMutation.isPending || refineMutation.isPending,
         searchError: searchMutation.error?.message || refineMutation.error?.message || null,
+        error: searchMutation.error?.message || refineMutation.error?.message || null,
         isFeedbackPending: feedbackMutation.isPending,
         isConnecting: connectMutation.isPending,
         isRefining: refineMutation.isPending,

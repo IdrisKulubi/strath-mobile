@@ -39,6 +39,7 @@ interface WingmanResultsProps {
     onMatchLike?: (match: AgentMatch) => void;
     onRefine?: (query: string) => void;
     isRefining?: boolean;
+    refinementHints?: string[];
 }
 
 // ===== Empty state when no search has been done =====
@@ -183,6 +184,7 @@ export function WingmanResults({
     onMatchLike,
     onRefine,
     isRefining = false,
+    refinementHints,
 }: WingmanResultsProps) {
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -254,6 +256,16 @@ export function WingmanResults({
                 )}
             </View>
 
+            {/* Refinement bar */}
+            {matches.length > 0 && onRefine && (
+                <WingmanRefinementBar
+                    currentQuery={currentQuery}
+                    onRefine={onRefine}
+                    isLoading={isSearching || isRefining}
+                    refinementHints={refinementHints}
+                />
+            )}
+
             {/* Match cards */}
             {matches.map((match, index) => (
                 <WingmanMatchCard
@@ -290,15 +302,6 @@ export function WingmanResults({
                         </>
                     )}
                 </Pressable>
-            )}
-
-            {/* Refinement bar */}
-            {matches.length > 0 && onRefine && (
-                <WingmanRefinementBar
-                    currentQuery={currentQuery}
-                    onRefine={onRefine}
-                    isLoading={isSearching || isRefining}
-                />
             )}
 
             {/* Bottom spacer */}

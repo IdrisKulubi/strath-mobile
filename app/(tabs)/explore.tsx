@@ -149,6 +149,7 @@ export default function ExploreScreen() {
             <WingmanResults
               matches={agent.matches}
               commentary={agent.commentary}
+              refinementHints={agent.refinementHints}
               intent={agent.intent}
               meta={agent.meta}
               isSearching={agent.isSearching}

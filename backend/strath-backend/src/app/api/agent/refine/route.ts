@@ -12,24 +12,57 @@ import { getAgentContext, recordQuery, saveAgentMessage } from "@/services/agent
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-async function getSessionWithFallback(req: NextRequest) {
-    let session = await auth.api.getSession({ headers: req.headers });
+type MinimalSession = {
+    user: {
+        id: string;
+        name?: string | null;
+    };
+};
 
-    if (!session) {
-        const authHeader = req.headers.get("authorization");
-        if (authHeader && authHeader.startsWith("Bearer ")) {
-            const token = authHeader.split(" ")[1];
-            const { session: sessionTable } = await import("@/db/schema");
-            const dbSession = await db.query.session.findFirst({
-                where: eq(sessionTable.token, token),
-                with: { user: true },
-            });
-            if (dbSession && dbSession.expiresAt > new Date()) {
-                session = { session: dbSession, user: dbSession.user } as any;
-            }
+function buildRefinementHints(query: string): string[] {
+    const baseHints = [
+        "more outgoing",
+        "same course",
+        "different personality type",
+        "more academically focused",
+        "more spontaneous",
+    ];
+
+    const lowered = query.toLowerCase();
+    return baseHints.filter((hint) => !lowered.includes(hint.split(" ")[1] || hint)).slice(0, 4);
+}
+
+async function getSessionWithFallback(req: NextRequest): Promise<MinimalSession | null> {
+    const session = await auth.api.getSession({ headers: req.headers });
+
+    if (session?.user?.id) {
+        return {
+            user: {
+                id: session.user.id,
+                name: session.user.name,
+            },
+        };
+    }
+
+    const authHeader = req.headers.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.split(" ")[1];
+        const { session: sessionTable } = await import("@/db/schema");
+        const dbSession = await db.query.session.findFirst({
+            where: eq(sessionTable.token, token),
+            with: { user: true },
+        });
+        if (dbSession && dbSession.expiresAt > new Date()) {
+            return {
+                user: {
+                    id: dbSession.user.id,
+                    name: dbSession.user.name,
+                },
+            };
         }
     }
-    return session;
+
+    return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -114,10 +147,12 @@ export async function POST(request: NextRequest) {
         saveAgentMessage(userId, commentary).catch(console.error);
 
         const latency = Date.now() - startTime;
+        const refinementHints = buildRefinementHints(effectiveQuery);
 
         return successResponse({
             commentary,
             matches,
+            refinement_hints: refinementHints,
             intent: {
                 vibe: intent.vibe,
                 confidence: intent.confidence,
@@ -142,6 +177,10 @@ export async function POST(request: NextRequest) {
 }
 
 function sanitizeProfile(profile: Record<string, unknown>) {
-    const { embedding, embeddingUpdatedAt, isVisible, profileCompleted, ...clean } = profile as any;
+    const clean = { ...profile };
+    delete clean.embedding;
+    delete clean.embeddingUpdatedAt;
+    delete clean.isVisible;
+    delete clean.profileCompleted;
     return clean;
 }
