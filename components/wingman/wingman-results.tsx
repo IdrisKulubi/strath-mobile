@@ -365,6 +365,8 @@ const styles = StyleSheet.create({
     emptyTitle: {
         fontSize: 24,
         fontWeight: '800',
+        lineHeight: 30,
+        paddingTop: 1,
     },
     emptySubtitle: {
         fontSize: 15,

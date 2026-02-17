@@ -13,7 +13,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      initialRouteName="index"
+      initialRouteName="explore"
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: '#8E8E93',
@@ -51,17 +51,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="index"
         options={{
-          title: 'Explore',
+          title: 'Discover',
           tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "compass" : "compass-outline"} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="index"
+        name="explore"
         options={{
-          title: 'Connect',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "people" : "people-outline"} color={color} />,
+          title: 'Find',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "sparkles" : "sparkles-outline"} color={color} />,
         }}
       />
       <Tabs.Screen

@@ -56,7 +56,7 @@ export default function Index() {
                 const isComplete = responseData.data?.isComplete || responseData.data?.profileCompleted;
 
                 if (isComplete) {
-                    router.replace('/(tabs)');
+                    router.replace('/(tabs)/explore');
                 } else {
                     router.replace('/onboarding' as any);
                 }
@@ -75,7 +75,7 @@ export default function Index() {
             }
         } catch (e) {
             console.error("Profile check failed:", e);
-            router.replace('/(tabs)'); // Fallback to tabs if completely failed
+            router.replace('/(tabs)/explore'); // Fallback to Find tab if profile check fails
         } finally {
             setIsCheckingProfile(false);
         }
