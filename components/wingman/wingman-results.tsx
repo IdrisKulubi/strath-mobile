@@ -13,6 +13,7 @@ import Animated, {
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { WingmanMatchCard } from './wingman-match-card';
+import { WingmanRefinementBar } from './wingman-refinement-bar';
 import { AgentMatch, AgentSearchResponse } from '@/hooks/use-agent';
 
 import {
@@ -37,6 +38,7 @@ interface WingmanResultsProps {
     onMatchPress: (match: AgentMatch) => void;
     onMatchLike?: (match: AgentMatch) => void;
     onRefine?: (query: string) => void;
+    isRefining?: boolean;
 }
 
 // ===== Empty state when no search has been done =====
@@ -180,6 +182,7 @@ export function WingmanResults({
     onMatchPress,
     onMatchLike,
     onRefine,
+    isRefining = false,
 }: WingmanResultsProps) {
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -289,61 +292,19 @@ export function WingmanResults({
                 </Pressable>
             )}
 
-            {/* Refine suggestions */}
-            {!meta?.hasMore && matches.length > 0 && (
-                <View style={styles.refineSection}>
-                    <Text style={[styles.refineLabel, { color: colors.mutedForeground }]}>
-                        Try refining your search
-                    </Text>
-                    <View style={styles.refineSuggestions}>
-                        {getRefineQueries(currentQuery || '', intent?.vibe).map((q, i) => (
-                            <Pressable
-                                key={i}
-                                onPress={() => {
-                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                    onRefine?.(q);
-                                }}
-                                style={[styles.refineChip, {
-                                    backgroundColor: isDark
-                                        ? 'rgba(255,255,255,0.06)'
-                                        : 'rgba(0,0,0,0.04)',
-                                    borderColor: isDark
-                                        ? 'rgba(255,255,255,0.1)'
-                                        : 'rgba(0,0,0,0.06)',
-                                }]}
-                            >
-                                <Text style={[styles.refineChipText, { color: colors.foreground }]}>
-                                    {q}
-                                </Text>
-                            </Pressable>
-                        ))}
-                    </View>
-                </View>
+            {/* Refinement bar */}
+            {matches.length > 0 && onRefine && (
+                <WingmanRefinementBar
+                    currentQuery={currentQuery}
+                    onRefine={onRefine}
+                    isLoading={isSearching || isRefining}
+                />
             )}
 
             {/* Bottom spacer */}
             <View style={{ height: 100 }} />
         </Animated.View>
     );
-}
-
-// Generate 2-3 refine queries based on current search
-function getRefineQueries(currentQuery: string, vibe?: string): string[] {
-    const refinements = [
-        'more outgoing and social',
-        'more introverted and chill',
-        'into sports and fitness',
-        'creative and artsy types',
-        'tech and coding enthusiasts',
-        'same year of study',
-    ];
-
-    // Pick 2-3 that don't overlap too much with current query
-    const filtered = refinements.filter(
-        r => !currentQuery.toLowerCase().includes(r.split(' ')[1])
-    );
-
-    return filtered.slice(0, 3);
 }
 
 const styles = StyleSheet.create({

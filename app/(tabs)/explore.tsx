@@ -89,8 +89,8 @@ export default function ExploreScreen() {
   }, []);
 
   const handleRefineSearch = useCallback((query: string) => {
-    agentSearchRef.current(query);
-  }, []);
+    agent.refine(query);
+  }, [agent]);
 
   const handleCloseDetail = useCallback(() => {
     setSelectedMatch(null);
@@ -158,6 +158,7 @@ export default function ExploreScreen() {
               onMatchPress={handleMatchPress}
               onMatchLike={handleMatchLike}
               onRefine={handleRefineSearch}
+              isRefining={agent.isRefining}
             />
           </ScrollView>
 

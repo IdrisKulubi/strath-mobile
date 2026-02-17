@@ -124,6 +124,41 @@ async function agentSearchAPI(
     return result.data || result;
 }
 
+async function agentRefineAPI(
+    originalQuery: string,
+    refinement: string,
+    previousMatchIds: string[] = [],
+): Promise<AgentSearchResponse> {
+    const token = await getAuthToken();
+    const response = await fetch(`${API_URL}/api/agent/refine`, {
+        method: "POST",
+        headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            original_query: originalQuery,
+            refinement,
+            previous_match_ids: previousMatchIds,
+            limit: 20,
+            offset: 0,
+        }),
+    });
+
+    if (!response.ok) {
+        const text = await response.text();
+        try {
+            const parsed = JSON.parse(text);
+            throw new Error(parsed.error || `Refinement failed (${response.status})`);
+        } catch {
+            throw new Error(`Refinement failed (${response.status})`);
+        }
+    }
+
+    const result = await response.json();
+    return result.data || result;
+}
+
 async function agentFeedbackAPI(
     matchedUserId: string,
     outcome: "amazing" | "nice" | "meh" | "not_for_me",
@@ -284,6 +319,26 @@ export function useAgent() {
         },
     });
 
+    const refineMutation = useMutation({
+        mutationFn: ({
+            originalQuery,
+            refinement,
+            previousMatchIds,
+        }: {
+            originalQuery: string;
+            refinement: string;
+            previousMatchIds: string[];
+        }) => agentRefineAPI(originalQuery, refinement, previousMatchIds),
+        onSuccess: (data, variables) => {
+            setAllMatches(data.matches);
+            setCommentary(data.commentary);
+            setMeta(data.meta);
+            setIntent(data.intent);
+            setCurrentQuery(`${variables.originalQuery}, but ${variables.refinement}`);
+            queryClient.invalidateQueries({ queryKey: ["wingman-stats"] });
+        },
+    });
+
     // Wingman stats query
     const wingmanStats = useQuery({
         queryKey: ["wingman-stats"],
@@ -325,6 +380,18 @@ export function useAgent() {
         [connectMutation],
     );
 
+    const refine = useCallback(
+        (refinement: string) => {
+            if (!currentQuery || !refinement.trim()) return;
+            refineMutation.mutate({
+                originalQuery: currentQuery,
+                refinement: refinement.trim(),
+                previousMatchIds: allMatches.map(m => m.profile.userId),
+            });
+        },
+        [currentQuery, allMatches, refineMutation],
+    );
+
     // Clear results
     const clear = useCallback(() => {
         setAllMatches([]);
@@ -337,6 +404,7 @@ export function useAgent() {
     return {
         // Actions
         search,
+        refine,
         loadMore,
         submitFeedback,
         connectWithIntro,
@@ -351,9 +419,10 @@ export function useAgent() {
 
         // Loading states
         isSearching: searchMutation.isPending,
-        searchError: searchMutation.error?.message || null,
+        searchError: searchMutation.error?.message || refineMutation.error?.message || null,
         isFeedbackPending: feedbackMutation.isPending,
         isConnecting: connectMutation.isPending,
+        isRefining: refineMutation.isPending,
         connectError: connectMutation.error?.message || null,
 
         // Wingman stats
