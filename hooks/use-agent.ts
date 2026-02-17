@@ -155,6 +155,56 @@ async function getWingmanStatusAPI(): Promise<WingmanStats> {
     return (result.data || result).wingmanMemory;
 }
 
+interface ConnectResult {
+    matched: boolean;
+    matchId: string | null;
+}
+
+async function connectWithIntroAPI(
+    targetUserId: string,
+    introMessage?: string,
+): Promise<ConnectResult> {
+    const token = await getAuthToken();
+
+    const swipeResponse = await fetch(`${API_URL}/api/swipe`, {
+        method: 'POST',
+        headers: {
+            Authorization: token ? `Bearer ${token}` : '',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ targetUserId, action: 'like' }),
+    });
+
+    if (!swipeResponse.ok) {
+        throw new Error('Failed to connect');
+    }
+
+    const swipeResult = await swipeResponse.json();
+    const swipeData = swipeResult.data || swipeResult;
+    const isMatch = Boolean(swipeData.isMatch);
+    const matchId = swipeData.match?.id ?? null;
+
+    if (isMatch && matchId && introMessage?.trim()) {
+        const messageResponse = await fetch(`${API_URL}/api/messages/${matchId}`, {
+            method: 'POST',
+            headers: {
+                Authorization: token ? `Bearer ${token}` : '',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ content: introMessage.trim() }),
+        });
+
+        if (!messageResponse.ok) {
+            throw new Error('Match created but failed to send intro message');
+        }
+    }
+
+    return {
+        matched: isMatch,
+        matchId,
+    };
+}
+
 // ===== Hook =====
 
 export function useAgent() {
@@ -219,6 +269,21 @@ export function useAgent() {
         },
     });
 
+    const connectMutation = useMutation({
+        mutationFn: ({
+            targetUserId,
+            introMessage,
+        }: {
+            targetUserId: string;
+            introMessage?: string;
+        }) => connectWithIntroAPI(targetUserId, introMessage),
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ['matches'] });
+            queryClient.invalidateQueries({ queryKey: ['discover-profiles'] });
+            queryClient.invalidateQueries({ queryKey: ['wingman-stats'] });
+        },
+    });
+
     // Wingman stats query
     const wingmanStats = useQuery({
         queryKey: ["wingman-stats"],
@@ -253,6 +318,13 @@ export function useAgent() {
         [feedbackMutation],
     );
 
+    const connectWithIntro = useCallback(
+        async (targetUserId: string, introMessage?: string) => {
+            return await connectMutation.mutateAsync({ targetUserId, introMessage });
+        },
+        [connectMutation],
+    );
+
     // Clear results
     const clear = useCallback(() => {
         setAllMatches([]);
@@ -267,6 +339,7 @@ export function useAgent() {
         search,
         loadMore,
         submitFeedback,
+        connectWithIntro,
         clear,
 
         // State
@@ -280,6 +353,8 @@ export function useAgent() {
         isSearching: searchMutation.isPending,
         searchError: searchMutation.error?.message || null,
         isFeedbackPending: feedbackMutation.isPending,
+        isConnecting: connectMutation.isPending,
+        connectError: connectMutation.error?.message || null,
 
         // Wingman stats
         wingmanStats: wingmanStats.data || null,

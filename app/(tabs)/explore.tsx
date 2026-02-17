@@ -8,10 +8,11 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
-import { WingmanSearchBar, WingmanResults, VoiceRecordingOverlay } from '@/components/wingman';
+import { WingmanSearchBar, WingmanResults, VoiceRecordingOverlay, WingmanMatchDetail, ConnectionSentPopup } from '@/components/wingman';
 import { useAgent, AgentMatch } from '@/hooks/use-agent';
 import { useVoiceInput } from '@/hooks/use-voice-input';
 import { Question, Sparkle } from 'phosphor-react-native';
@@ -19,12 +20,15 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 
 export default function ExploreScreen() {
+  const router = useRouter();
   const { colors, colorScheme } = useTheme();
   useProfile(); // Pre-fetch profile for later use
 
   // ===== Wingman (AI Agent) state =====
   const agent = useAgent();
   const voice = useVoiceInput();
+  const [selectedMatch, setSelectedMatch] = React.useState<AgentMatch | null>(null);
+  const [connectionSentFor, setConnectionSentFor] = React.useState<string | null>(null);
 
   // Stable references — avoid depending on the whole `agent` / `voice` objects
   const agentSearchRef = useRef(agent.search);
@@ -76,7 +80,7 @@ export default function ExploreScreen() {
   }, [agent.searchError]);
 
   const handleMatchPress = useCallback((_match: AgentMatch) => {
-    // TODO: Open profile detail sheet or navigate
+    setSelectedMatch(_match);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, []);
 
@@ -86,6 +90,29 @@ export default function ExploreScreen() {
 
   const handleRefineSearch = useCallback((query: string) => {
     agentSearchRef.current(query);
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedMatch(null);
+  }, []);
+
+  const handleConnectFromDetail = useCallback(async (match: AgentMatch, introMessage: string) => {
+    const result = await agent.connectWithIntro(match.profile.userId, introMessage);
+
+    if (result.matched && result.matchId) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSelectedMatch(null);
+      router.push({ pathname: '/chat/[matchId]', params: { matchId: result.matchId } });
+      return;
+    }
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedMatch(null);
+    setConnectionSentFor(match.profile.firstName || 'They');
+  }, [agent, router]);
+
+  const handleCloseConnectionPopup = useCallback(() => {
+    setConnectionSentFor(null);
   }, []);
 
   return (
@@ -142,6 +169,20 @@ export default function ExploreScreen() {
             volume={voice.volume}
             onStop={voice.toggleRecording}
             onCancel={voice.cancelRecording}
+          />
+
+          <WingmanMatchDetail
+            visible={!!selectedMatch}
+            match={selectedMatch}
+            isConnecting={agent.isConnecting}
+            onClose={handleCloseDetail}
+            onConnect={handleConnectFromDetail}
+          />
+
+          <ConnectionSentPopup
+            visible={!!connectionSentFor}
+            firstName={connectionSentFor}
+            onClose={handleCloseConnectionPopup}
           />
         </View>
       </SafeAreaView>
