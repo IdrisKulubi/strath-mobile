@@ -11,7 +11,9 @@ import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 import { Match } from '@/hooks/use-matches';
+import { type Mission } from '@/hooks/use-missions';
 import { SwipeableMatchCard } from './swipeable-match-card';
+import { ActiveMissionsStrip } from './active-missions-strip';
 import { Heart, Sparkle, MagnifyingGlass } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, Layout } from 'react-native-reanimated';
@@ -28,6 +30,8 @@ interface MatchesListV2Props {
     onEndReached?: () => void;
     hasNextPage?: boolean;
     isFetchingNextPage?: boolean;
+    /** Map of matchId → Mission for badge display & missions strip */
+    missionsByMatchId?: Record<string, Mission>;
 }
 
 // Enhanced loading skeleton
@@ -124,6 +128,7 @@ export function MatchesListV2({
     onEndReached,
     hasNextPage,
     isFetchingNextPage,
+    missionsByMatchId,
 }: MatchesListV2Props) {
     const { colors, isDark } = useTheme();
 
@@ -137,9 +142,10 @@ export function MatchesListV2({
                 onPress={onMatchPress}
                 onArchive={onArchive}
                 onUnmatch={onUnmatch}
+                mission={missionsByMatchId?.[item.id]}
             />
         </Animated.View>
-    ), [onMatchPress, onArchive, onUnmatch]);
+    ), [onMatchPress, onArchive, onUnmatch, missionsByMatchId]);
 
     const keyExtractor = useCallback((item: Match) => item.id, []);
 
@@ -158,13 +164,20 @@ export function MatchesListV2({
     const renderHeader = useCallback(() => {
         if (matches.length === 0) return null;
         return (
-            <View style={styles.listHeader}>
-                <Text style={[styles.hintText, { color: isDark ? '#64748b' : '#9ca3af' }]}>
-                    ← Swipe left on a card for options
-                </Text>
+            <View>
+                {/* Active Missions horizontal strip */}
+                <ActiveMissionsStrip
+                    byMatchId={missionsByMatchId}
+                    matches={matches}
+                />
+                <View style={styles.listHeader}>
+                    <Text style={[styles.hintText, { color: isDark ? '#64748b' : '#9ca3af' }]}>
+                        ← Swipe left on a card for options
+                    </Text>
+                </View>
             </View>
         );
-    }, [matches.length, isDark]);
+    }, [matches, isDark, missionsByMatchId]);
 
     // Loading state
     if (isLoading && !isRefreshing) {

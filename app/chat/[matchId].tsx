@@ -8,6 +8,7 @@ import {
     Platform,
     Dimensions,
     Alert,
+    Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -205,6 +206,25 @@ export default function ChatScreen() {
 
     const keyExtractor = useCallback((item: Message) => item.id, []);
 
+    // Sticky mission banner collapse state
+    const [missionExpanded, setMissionExpanded] = useState(false);
+    const missionHeight = useSharedValue(0);
+    const missionOpacity = useSharedValue(0);
+
+    const toggleMission = useCallback(() => {
+        const next = !missionExpanded;
+        setMissionExpanded(next);
+        missionHeight.value = withSpring(next ? 1 : 0, { damping: 22, stiffness: 260 });
+        missionOpacity.value = withSpring(next ? 1 : 0, { damping: 22, stiffness: 260 });
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }, [missionExpanded, missionHeight, missionOpacity]);
+
+    const missionBodyStyle = useAnimatedStyle(() => ({
+        maxHeight: interpolate(missionHeight.value, [0, 1], [0, 300], Extrapolation.CLAMP),
+        opacity: missionOpacity.value,
+        overflow: 'hidden',
+    }));
+
     // Header component for the list (Matched date)
     const renderListHeader = useCallback(() => {
         if (!currentMatch) return null;
@@ -218,10 +238,9 @@ export default function ChatScreen() {
                         YOU CONNECTED WITH {partner?.profile?.firstName?.toUpperCase() || 'THEM'} ON {dateString}
                     </Text>
                 </View>
-                {!!matchId && <MissionCard matchId={matchId} />}
             </View>
         );
-    }, [currentMatch, partner, matchId]);
+    }, [currentMatch, partner]);
 
     // Loading state - only show skeletons on the VERY FIRST load when no messages exist
     if (isInitialLoading && messages.length === 0) {
@@ -278,6 +297,30 @@ export default function ChatScreen() {
                             partnerImage={partner?.image}
                             onMorePress={() => setIsSafetyModalVisible(true)}
                         />
+
+                        {/* ── Sticky Mission Banner ── */}
+                        {!!matchId && (
+                            <View
+                                style={[styles.missionBanner, { backgroundColor: colors.card, borderColor: colors.border }]}
+                            >
+                                <Pressable
+                                    onPress={toggleMission}
+                                    style={styles.missionPill}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={missionExpanded ? 'Collapse mission' : 'Expand mission'}
+                                >
+                                    <Text style={[styles.missionPillText, { color: colors.primary }]}>
+                                        🎯 Mission
+                                    </Text>
+                                    <Text style={[styles.missionChevron, { color: colors.mutedForeground }]}>
+                                        {missionExpanded ? '▲' : '▼'}
+                                    </Text>
+                                </Pressable>
+                                <Animated.View style={missionBodyStyle}>
+                                    <MissionCard matchId={matchId} compact />
+                                </Animated.View>
+                            </View>
+                        )}
 
                         <KeyboardAvoidingView
                             style={styles.keyboardView}
@@ -393,5 +436,27 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         textAlign: 'center',
         letterSpacing: 0.5,
+    },
+    missionBanner: {
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 4,
+        paddingTop: 2,
+        paddingBottom: 4,
+    },
+    missionPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+    },
+    missionPillText: {
+        fontSize: 13,
+        fontWeight: '700',
+        letterSpacing: 0.2,
+    },
+    missionChevron: {
+        fontSize: 10,
+        fontWeight: '600',
     },
 });

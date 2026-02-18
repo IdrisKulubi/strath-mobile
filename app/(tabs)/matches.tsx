@@ -6,6 +6,7 @@ import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useMatches, Match } from '@/hooks/use-matches';
+import { useAllMissions } from '@/hooks/use-missions';
 import { useNotificationCounts } from '@/hooks/use-notification-counts';
 import { MatchesListV2 } from '@/components/matches/matches-list-v2';
 import { ArchivedChatsSheet } from '@/components/matches/archived-chats-sheet';
@@ -41,6 +42,7 @@ export default function MatchesScreen() {
     const queryClient = useQueryClient();
 
     const { data, isLoading, refetch } = useMatches();
+    const { byMatchId: missionsByMatchId } = useAllMissions();
     const { markMatchAsOpened } = useNotificationCounts();
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showArchivedSheet, setShowArchivedSheet] = useState(false);
@@ -216,6 +218,7 @@ export default function MatchesScreen() {
                     onArchive={handleArchive}
                     onUnmatch={handleUnmatch}
                     onExplore={handleExplore}
+                    missionsByMatchId={missionsByMatchId}
                 />
             </View>
 

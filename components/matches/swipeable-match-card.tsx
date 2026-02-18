@@ -4,6 +4,7 @@ import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { Match, getRelativeTime, getLastActiveStatus } from '@/hooks/use-matches';
+import { type Mission } from '@/hooks/use-missions';
 import * as Haptics from 'expo-haptics';
 import Animated, {
     useAnimatedStyle,
@@ -28,11 +29,12 @@ interface SwipeableMatchCardProps {
     onPress: (match: Match) => void;
     onArchive?: (match: Match) => void;
     onUnmatch?: (match: Match) => void;
+    mission?: Mission | null;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export function SwipeableMatchCard({ match, onPress, onArchive, onUnmatch }: SwipeableMatchCardProps) {
+export function SwipeableMatchCard({ match, onPress, onArchive, onUnmatch, mission }: SwipeableMatchCardProps) {
     const { isDark } = useTheme();
     const translateX = useSharedValue(0);
     const scale = useSharedValue(1);
@@ -324,7 +326,7 @@ export function SwipeableMatchCard({ match, onPress, onArchive, onUnmatch }: Swi
                             </View>
                         )}
 
-                        {/* Spark score + interests */}
+                        {/* Spark score + interests + mission badge */}
                         <View style={styles.bottomRow}>
                             <LinearGradient
                                 colors={['#ec4899', '#f43f5e']}
@@ -336,7 +338,20 @@ export function SwipeableMatchCard({ match, onPress, onArchive, onUnmatch }: Swi
                                 <Text style={styles.sparkText}>{sparkScore}%</Text>
                             </LinearGradient>
 
-                            {interests.length > 0 && (
+                            {/* Mission badge */}
+                            {mission && mission.status !== 'completed' && mission.status !== 'expired' && mission.status !== 'skipped' && (
+                                <View style={[
+                                    styles.missionBadge,
+                                    { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(139, 92, 246, 0.12)' }
+                                ]}>
+                                    <Text style={styles.missionBadgeText}>
+                                        {mission.emoji}{' '}
+                                        {mission.status === 'accepted' ? 'In progress' : 'Mission'}
+                                    </Text>
+                                </View>
+                            )}
+
+                            {interests.length > 0 && !mission && (
                                 <View style={styles.interestsContainer}>
                                     {interests.map((interest, idx) => (
                                         <View
@@ -588,6 +603,18 @@ const styles = StyleSheet.create({
     interestText: {
         fontSize: 10,
         fontWeight: '500',
+    },
+    missionBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 8,
+    },
+    missionBadgeText: {
+        color: '#8b5cf6',
+        fontSize: 11,
+        fontWeight: '700',
     },
     chevron: {
         marginLeft: 4,

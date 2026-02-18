@@ -49,6 +49,7 @@ function RootLayoutNav() {
         <Stack.Screen name="settings" />
         <Stack.Screen name="edit-profile" />
         <Stack.Screen name="legal" />
+        <Stack.Screen name="ui-preview" />
       </Stack>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
     </NavThemeProvider>

@@ -139,8 +139,14 @@ export async function POST(req: NextRequest) {
                         console.log(`[SWIPE] NEW MATCH CREATED! ID: ${newMatch.id}`);
 
                         // Auto-assign a mission for this match (non-blocking)
+                        let missionTitle: string | null = null;
+                        let missionEmoji: string | null = null;
                         try {
-                            await ensureMissionForMatch(newMatch.id);
+                            const mission = await ensureMissionForMatch(newMatch.id);
+                            if (mission) {
+                                missionTitle = mission.title;
+                                missionEmoji = mission.emoji;
+                            }
                         } catch (missionError) {
                             console.error(`[SWIPE] Failed to create mission for match ${newMatch.id}:`, missionError);
                         }
@@ -155,19 +161,25 @@ export async function POST(req: NextRequest) {
 
                         // Notify user 2 (target)
                         if (user2?.pushToken) {
+                            const body = missionTitle
+                                ? `New Match! ${missionEmoji} First mission: ${missionTitle} 🎯`
+                                : "New Match! 🎉";
                             await sendPushNotification(
                                 user2.pushToken,
-                                "New Match! 🎉",
-                                { matchId: newMatch.id, partnerId: session.user.id }
+                                body,
+                                { matchId: newMatch.id, partnerId: session.user.id, type: 'match_with_mission' }
                             );
                         }
 
                         // Notify user 1 (current) - optional, usually UI handles this immediately
                         if (user1?.pushToken) {
+                            const body = missionTitle
+                                ? `It's a Match! ${missionEmoji} Your first mission: ${missionTitle} 🎯`
+                                : "It's a Match! 🎉";
                             await sendPushNotification(
                                 user1.pushToken,
-                                "It's a Match! 🎉",
-                                { matchId: newMatch.id, partnerId: targetUserId }
+                                body,
+                                { matchId: newMatch.id, partnerId: targetUserId, type: 'match_with_mission' }
                             );
                         }
 

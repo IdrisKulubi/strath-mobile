@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { getAuthToken } from "@/lib/auth-helpers";
@@ -79,6 +80,55 @@ async function fetchMission(matchId: string): Promise<Mission | null> {
     }
 
     return parsed.data.mission;
+}
+
+const GetAllMissionsResponseSchema = z.object({
+    missions: z.array(MissionSchema),
+});
+
+async function fetchAllMissions(): Promise<Mission[]> {
+    const token = await getAuthToken();
+    if (!token) throw new Error("Not authenticated");
+
+    const response = await fetch(`${API_URL}/api/missions`, {
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+        const message = payload?.error || "Failed to fetch missions";
+        throw new Error(message);
+    }
+
+    const data = payload?.data ?? payload;
+    const parsed = GetAllMissionsResponseSchema.safeParse(data);
+    if (!parsed.success) {
+        return data?.missions ?? [];
+    }
+    return parsed.data.missions;
+}
+
+/** Returns all active missions keyed by matchId — one fetch for all cards. */
+export function useAllMissions() {
+    const { data, ...rest } = useQuery({
+        queryKey: ["missions", "all"],
+        queryFn: fetchAllMissions,
+        staleTime: 30 * 1000,
+        gcTime: 5 * 60 * 1000,
+    });
+
+    const byMatchId = useMemo(() => {
+        const map: Record<string, Mission> = {};
+        for (const m of data ?? []) {
+            map[m.matchId] = m;
+        }
+        return map;
+    }, [data]);
+
+    return { missions: data ?? [], byMatchId, ...rest };
 }
 
 export function useMission(matchId: string) {

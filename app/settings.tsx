@@ -340,6 +340,15 @@ export default function SettingsScreen() {
                     <SettingItem label="Licenses" type="link" onPress={() => router.push('/legal?section=licenses')} />
                 </SettingCard>
 
+                {/* Dev tools */}
+                <TouchableOpacity
+                    style={[styles.devButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => router.push('/ui-preview' as any)}
+                >
+                    <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '700' }}>🧪 UI Preview</Text>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>Component sandbox</Text>
+                </TouchableOpacity>
+
                 {/* Actions */}
                 <View style={styles.actionsContainer}>
                     <TouchableOpacity 
@@ -462,6 +471,14 @@ const styles = StyleSheet.create({
     actionsContainer: {
         marginTop: 16,
         gap: 16,
+        alignItems: 'center',
+    },
+    devButton: {
+        marginHorizontal: 20,
+        marginTop: 16,
+        padding: 14,
+        borderRadius: 14,
+        borderWidth: StyleSheet.hairlineWidth,
         alignItems: 'center',
     },
     actionButton: {
