@@ -345,7 +345,7 @@ export async function setMissionState(params: {
             ? "completed"
             : (updated.user1Accepted && updated.user2Accepted)
                 ? "accepted"
-                : updated.status;
+                : (updated.status ?? "proposed");
 
     if (nextStatus !== updated.status) {
         const [final] = await db
