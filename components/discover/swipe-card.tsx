@@ -19,6 +19,7 @@ import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { DiscoverProfile } from '@/hooks/use-discover';
 import { LinearGradient } from 'expo-linear-gradient';
+import { HypeSection } from '@/components/profile/hype-section';
 import {
     GraduationCap,
     MapPin,
@@ -187,6 +188,9 @@ export function SwipeCard({
                         <Text style={[styles.bioText, { color: colors.foreground }]}>{profile.bio}</Text>
                     )}
                 </View>
+
+                {/* Hype Me (Friend Vouches) */}
+                <HypeSection userId={profile.userId} />
 
                 {/* Second Photo */}
                 {allPhotos.length > 1 && (

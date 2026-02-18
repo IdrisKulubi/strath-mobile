@@ -4,12 +4,12 @@ import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import { CompletionHalo } from '@/components/profile/completion-halo';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Skeleton } from '@/components/ui/skeleton';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
 import { QualityBadge } from '@/components/ui/quality-badge';
 import { PromptCard } from '@/components/ui/prompt-card';
 import {
@@ -260,6 +260,45 @@ export default function ProfileScreen() {
                     <Text style={[styles.bioText, { color: colors.foreground }]}>
                         {profile?.bio || "No bio yet. Tap edit to add one!"}
                     </Text>
+                </Animated.View>
+
+                {/* Hype Me - Social proof */}
+                <Animated.View
+                    entering={FadeInDown.delay(450).springify()}
+                    style={[
+                        styles.card,
+                        {
+                            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                            borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                        },
+                        !isDark && styles.cardLightShadow,
+                    ]}
+                >
+                    <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => handlePress('/hype-request')}
+                        style={{ gap: 10 }}
+                    >
+                        <View style={styles.cardHeader}>
+                            <View style={[styles.cardIcon, { backgroundColor: isDark ? 'rgba(233, 30, 140, 0.2)' : 'rgba(233, 30, 140, 0.1)' }]}>
+                                <Ionicons name="flame" size={16} color={colors.primary} />
+                            </View>
+                            <Text style={[styles.cardTitle, { color: isDark ? 'rgba(255,255,255,0.6)' : colors.muted }]}>
+                                HYPE ME
+                            </Text>
+                        </View>
+
+                        <Text style={[styles.bioText, { color: colors.foreground }]}>
+                            Get friends to write quick vouches for your profile. They don’t need the app.
+                        </Text>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={{ color: colors.primary, fontWeight: '600' }}>
+                                Open Hype Me
+                            </Text>
+                            <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+                        </View>
+                    </TouchableOpacity>
                 </Animated.View>
 
                 {/* Vibe Section */}

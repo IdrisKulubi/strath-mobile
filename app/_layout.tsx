@@ -48,6 +48,7 @@ function RootLayoutNav() {
         <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Modal' }} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="edit-profile" />
+        <Stack.Screen name="hype-request" />
         <Stack.Screen name="legal" />
         <Stack.Screen name="ui-preview" />
       </Stack>

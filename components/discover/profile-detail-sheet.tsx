@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef, useCallback, useMemo } from 'react';
 import {
     View,
     StyleSheet,
@@ -26,10 +26,10 @@ import {
     Church,
 } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { forwardRef, useCallback, useMemo } from 'react';
 import { QualityBadge } from '@/components/ui/quality-badge';
 import { PromptCard } from '@/components/ui/prompt-card';
 import { ProfileInfoRow } from '@/components/ui/profile-info-row';
+import { HypeSection } from '@/components/profile/hype-section';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PHOTO_SIZE = SCREEN_WIDTH - 40;
@@ -227,6 +227,11 @@ export const ProfileDetailSheet = forwardRef<BottomSheetModal, ProfileDetailShee
                         </View>
                     )}
 
+                    {/* Hype Me (Friend Vouches) */}
+                    <View style={styles.section}>
+                        <HypeSection userId={profile.userId} />
+                    </View>
+
                     {/* Know More About Me - Info Rows */}
                     {((profile as any)?.height ||
                         (profile as any)?.education ||
@@ -320,6 +325,8 @@ export const ProfileDetailSheet = forwardRef<BottomSheetModal, ProfileDetailShee
         );
     }
 );
+
+ProfileDetailSheet.displayName = "ProfileDetailSheet";
 
 const styles = StyleSheet.create({
     header: {

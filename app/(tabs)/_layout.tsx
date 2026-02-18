@@ -82,8 +82,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="study-date"
         options={{
-          title: 'Study',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "book" : "book-outline"} color={color} />,
+          href: null,
         }}
       />
       <Tabs.Screen
