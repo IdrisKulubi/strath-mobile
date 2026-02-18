@@ -76,7 +76,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
     <View style={states.container}>
       <Text style={states.emoji}>😬</Text>
-      <Text style={[states.title, { color: colors.foreground }]}>Couldn't load</Text>
+      <Text style={[states.title, { color: colors.foreground }]}>Couldn&apos;t load</Text>
       <TouchableOpacity onPress={onRetry} style={[states.retryBtn, { borderColor: colors.border }]}>
         <Text style={[states.retryText, { color: colors.foreground }]}>Try again</Text>
       </TouchableOpacity>
@@ -86,7 +86,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
 
 const states = StyleSheet.create({
   container: { alignItems: 'center', paddingTop: 60, gap: 10 },
-  emoji: { fontSize: 48 },
+  emoji: { fontSize: 48, lineHeight: 56 },
   title: { fontSize: 18, fontWeight: '700' },
   sub: { fontSize: 13, textAlign: 'center', lineHeight: 20, paddingHorizontal: 32 },
   retryBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20, borderWidth: 1 },
@@ -298,10 +298,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 26,
+    lineHeight: 32,
     fontWeight: '800',
   },
   headerSub: {
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '500',
   },
   filterScroll: {

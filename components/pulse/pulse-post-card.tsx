@@ -203,9 +203,7 @@ export function PulsePostCard({ post, onRevealPress }: PulsePostCardProps) {
                     {/* Meta */}
                     <View style={styles.meta}>
                         <Text style={[styles.authorLabel, { color: colors.mutedForeground }]}>
-                            {post.isAnonymous && !post.isOwner
-                                ? "Anonymous"
-                                : post.author?.name ?? "You"}
+                            {post.isAnonymous ? "Anonymous" : post.author?.name ?? "Unknown"}
                             {post.isOwner && (
                                 <Text style={{ color: colors.primary }}> · You</Text>
                             )}

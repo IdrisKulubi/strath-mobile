@@ -259,8 +259,9 @@ export function formatPost(
         content: post.content,
         category: post.category ?? "general",
         isAnonymous,
-        // Only expose author info if viewer is the owner, or post is not anonymous
-        author: isOwner || !isAnonymous
+        // Never expose author identity for anonymous posts — not even to the owner.
+        // The owner already knows it's their post via isOwner:true.
+        author: !isAnonymous
             ? {
                 id: post.authorId,
                 name: post.author?.name ?? null,
