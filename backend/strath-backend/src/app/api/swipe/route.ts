@@ -9,6 +9,7 @@ import { eq, and, or } from "drizzle-orm";
 export const dynamic = "force-dynamic";
 import { sendPushNotification } from "@/lib/notifications";
 import { redis } from "@/lib/redis";
+import { ensureMissionForMatch } from "@/lib/services/mission-service";
 
 async function logPulseEvent(type: string, message: string, data?: any) {
     try {
@@ -136,6 +137,13 @@ export async function POST(req: NextRequest) {
 
                         matchData = newMatch;
                         console.log(`[SWIPE] NEW MATCH CREATED! ID: ${newMatch.id}`);
+
+                        // Auto-assign a mission for this match (non-blocking)
+                        try {
+                            await ensureMissionForMatch(newMatch.id);
+                        } catch (missionError) {
+                            console.error(`[SWIPE] Failed to create mission for match ${newMatch.id}:`, missionError);
+                        }
 
                         // Fetch users to get push tokens
                         const user1 = await db.query.user.findFirst({

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useRef, useEffect, useState } from 'react';
 import {
     View,
     FlatList,
@@ -20,6 +20,7 @@ import { useUnmatch } from '@/hooks/use-unmatch';
 import { MessageBubble, ChatInput, ChatHeader } from '@/components/chat';
 import { SafetyToolkitModal } from '@/components/chat/safety-toolkit-modal';
 import { BlockReportModal } from '@/components/discover/block-report-modal';
+import { MissionCard } from '@/components/matches/mission-card';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
     useAnimatedStyle,
@@ -36,7 +37,7 @@ const SWIPE_THRESHOLD = 100;
 
 export default function ChatScreen() {
     const { matchId } = useLocalSearchParams<{ matchId: string }>();
-    const { colors, colorScheme, isDark } = useTheme();
+    const { colors, colorScheme } = useTheme();
     const router = useRouter();
     const flatListRef = useRef<FlatList>(null);
 
@@ -49,7 +50,7 @@ export default function ChatScreen() {
     const translateX = useSharedValue(0);
 
     // Hooks
-    const { mutate: unmatch, isPending: isUnmatching } = useUnmatch();
+    const { mutate: unmatch } = useUnmatch();
 
     const {
         messages,
@@ -212,12 +213,15 @@ export default function ChatScreen() {
 
         return (
             <View style={styles.listHeader}>
-                <Text style={styles.matchedText}>
-                    YOU CONNECTED WITH {partner?.profile?.firstName?.toUpperCase() || 'THEM'} ON {dateString}
-                </Text>
+                <View style={styles.matchedTextContainer}>
+                    <Text style={styles.matchedText}>
+                        YOU CONNECTED WITH {partner?.profile?.firstName?.toUpperCase() || 'THEM'} ON {dateString}
+                    </Text>
+                </View>
+                {!!matchId && <MissionCard matchId={matchId} />}
             </View>
         );
-    }, [currentMatch, partner]);
+    }, [currentMatch, partner, matchId]);
 
     // Loading state - only show skeletons on the VERY FIRST load when no messages exist
     if (isInitialLoading && messages.length === 0) {
@@ -246,7 +250,6 @@ export default function ChatScreen() {
     // Empty state
     const renderEmptyState = () => (
         <View style={styles.emptyContainer}>
-            {renderListHeader()}
             <Text className="text-muted-foreground text-center text-base mt-8">
                 No messages yet.{'\n'}Say hi to {partner?.name || 'your connection'}! 👋
             </Text>
@@ -290,7 +293,7 @@ export default function ChatScreen() {
                                     styles.messageList,
                                     messages.length === 0 && styles.emptyList,
                                 ]}
-                                ListHeaderComponent={messages.length > 0 ? renderListHeader : undefined}
+                                ListHeaderComponent={renderListHeader}
                                 ListEmptyComponent={renderEmptyState}
                                 showsVerticalScrollIndicator={false}
                                 onContentSizeChange={() => {
@@ -375,9 +378,14 @@ const styles = StyleSheet.create({
     },
     listHeader: {
         paddingVertical: 24,
-        alignItems: 'center',
+        alignItems: 'stretch',
         justifyContent: 'center',
         paddingHorizontal: 32,
+    },
+    matchedTextContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingBottom: 4,
     },
     matchedText: {
         color: '#636366',

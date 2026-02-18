@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Dimensions, Image, Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Text } from "@/components/ui/text";
 import { useTheme } from "@/hooks/use-theme";
@@ -22,29 +22,57 @@ function WeeklyDropMatchSheet({
     onClose,
     onConnect,
     onConnected,
+    connectDisabled,
 }: {
     match: WeeklyDropMatch | null;
     onClose: () => void;
     onConnect?: (match: WeeklyDropMatch) => Promise<{ matched: boolean; matchId: string | null }>;
     onConnected?: (result: { matched: boolean; matchId: string | null }, match: WeeklyDropMatch) => void;
+    connectDisabled?: boolean;
 }) {
     const { colors } = useTheme();
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [connectState, setConnectState] = useState<"idle" | "connecting" | "sent">("idle");
     const translateY = useSharedValue(SCREEN_HEIGHT);
     const dragStartY = useSharedValue(0);
+    const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isClosingRef = useRef(false);
 
     useEffect(() => {
         if (!match) return;
+        isClosingRef.current = false;
+        if (closeTimerRef.current) {
+            clearTimeout(closeTimerRef.current);
+            closeTimerRef.current = null;
+        }
         setConnectState("idle");
         setActiveImageIndex(0);
         translateY.value = SCREEN_HEIGHT;
         translateY.value = withSpring(0, { damping: 26, stiffness: 320, mass: 0.8 });
     }, [match?.userId, match, translateY]);
 
+    useEffect(() => {
+        return () => {
+            if (closeTimerRef.current) {
+                clearTimeout(closeTimerRef.current);
+                closeTimerRef.current = null;
+            }
+        };
+    }, []);
+
     const closeSheet = () => {
-        translateY.value = withTiming(SCREEN_HEIGHT, { duration: 180 }, (finished) => {
-            if (finished) runOnJS(onClose)();
+        if (isClosingRef.current) return;
+        isClosingRef.current = true;
+
+        // Always schedule a JS-side fallback close so the transparent backdrop
+        // never gets stuck intercepting touches if the animation is interrupted.
+        if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = setTimeout(() => {
+            onClose();
+        }, 240);
+
+        translateY.value = withTiming(SCREEN_HEIGHT, { duration: 180 }, () => {
+            runOnJS(onClose)();
         });
     };
 
@@ -87,9 +115,10 @@ function WeeklyDropMatchSheet({
     ].filter(Boolean);
 
     const canConnect = Boolean(onConnect);
+    const isAlreadySent = Boolean(connectDisabled);
 
     const handleConnect = async () => {
-        if (!onConnect || connectState !== "idle") return;
+        if (!onConnect || connectState !== "idle" || isAlreadySent) return;
 
         try {
             setConnectState("connecting");
@@ -220,13 +249,18 @@ function WeeklyDropMatchSheet({
                         {canConnect && (
                             <Pressable
                                 onPress={handleConnect}
-                                disabled={connectState !== "idle"}
+                                disabled={connectState !== "idle" || isAlreadySent}
                                 style={[
                                     styles.connectButton,
-                                    { backgroundColor: colors.primary, opacity: connectState === "connecting" ? 0.85 : 1 },
+                                    {
+                                        backgroundColor: colors.primary,
+                                        opacity: connectState === "connecting" || isAlreadySent ? 0.75 : 1,
+                                    },
                                 ]}
                             >
-                                {connectState === "connecting" ? (
+                                {isAlreadySent ? (
+                                    <Text style={[styles.connectText, { color: colors.primaryForeground }]}>Connection sent</Text>
+                                ) : connectState === "connecting" ? (
                                     <ActivityIndicator color={colors.primaryForeground} />
                                 ) : connectState === "sent" ? (
                                     <Text style={[styles.connectText, { color: colors.primaryForeground }]}>Sent</Text>
@@ -234,6 +268,10 @@ function WeeklyDropMatchSheet({
                                     <Text style={[styles.connectText, { color: colors.primaryForeground }]}>Connect</Text>
                                 )}
                             </Pressable>
+                        )}
+
+                        {canConnect && isAlreadySent && (
+                            <Text style={[styles.sentHint, { color: colors.mutedForeground }]}>You already sent a connection to this person.</Text>
                         )}
                     </Animated.View>
                 </GestureDetector>
@@ -252,6 +290,7 @@ interface WeeklyDropProps {
     onMatchPress?: (match: WeeklyDropMatch) => void;
     onConnect?: (match: WeeklyDropMatch) => Promise<{ matched: boolean; matchId: string | null }>;
     onConnected?: (result: { matched: boolean; matchId: string | null }, match: WeeklyDropMatch) => void;
+    disabledConnectUserIds?: string[];
     onViewHistory?: () => void;
 }
 
@@ -276,6 +315,7 @@ export function WeeklyDrop({
     onMatchPress,
     onConnect,
     onConnected,
+    disabledConnectUserIds,
     onViewHistory,
 }: WeeklyDropProps) {
     const { colors, isDark } = useTheme();
@@ -469,6 +509,7 @@ export function WeeklyDrop({
                     onClose={() => setSheetMatch(null)}
                     onConnect={onConnect}
                     onConnected={onConnected}
+                    connectDisabled={Boolean(sheetMatch?.userId && disabledConnectUserIds?.includes(sheetMatch.userId))}
                 />
             )}
 
@@ -614,6 +655,12 @@ const styles = StyleSheet.create({
     connectText: {
         fontSize: 14,
         fontWeight: "900",
+    },
+    sentHint: {
+        marginTop: -6,
+        fontSize: 12,
+        fontWeight: "600",
+        textAlign: "center",
     },
     container: {
         marginHorizontal: 16,

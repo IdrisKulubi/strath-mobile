@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView, StyleSheet, View, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -15,13 +15,45 @@ export default function DropsTabScreen() {
   const weeklyDrop = useWeeklyDrop();
   const agent = useAgent();
   const [connectionSentFor, setConnectionSentFor] = React.useState<string | null>(null);
+  const [sentConnectionsByUserId, setSentConnectionsByUserId] = React.useState<Record<string, true>>({});
+  const autoDismissRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLoading = weeklyDrop.isCurrentLoading || weeklyDrop.isHistoryLoading;
   const hasDropData = Boolean(weeklyDrop.currentDrop) || weeklyDrop.dropHistory.length > 0;
 
+  useEffect(() => {
+    if (!connectionSentFor) return;
+
+    if (autoDismissRef.current) {
+      clearTimeout(autoDismissRef.current);
+      autoDismissRef.current = null;
+    }
+
+    // Modal blocks all touches; auto-dismiss keeps Drops usable.
+    autoDismissRef.current = setTimeout(() => {
+      setConnectionSentFor(null);
+      autoDismissRef.current = null;
+    }, 1800);
+
+    return () => {
+      if (autoDismissRef.current) {
+        clearTimeout(autoDismissRef.current);
+        autoDismissRef.current = null;
+      }
+    };
+  }, [connectionSentFor]);
+
   const handleConnectFromDrop = useCallback(async (dropMatch: WeeklyDropMatch) => {
+    if (sentConnectionsByUserId[dropMatch.userId]) {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Alert.alert('Already sent', 'You already sent a connection to this person.');
+      return { matched: false, matchId: null };
+    }
+
     try {
       const introMessage = dropMatch.starters?.[0];
       const result = await agent.connectWithIntro(dropMatch.userId, introMessage);
+
+      setSentConnectionsByUserId((prev) => ({ ...prev, [dropMatch.userId]: true }));
 
       if (result.matched && result.matchId) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -38,7 +70,7 @@ export default function DropsTabScreen() {
       Alert.alert('Connect', message);
       return { matched: false, matchId: null };
     }
-  }, [agent, router]);
+  }, [agent, router, sentConnectionsByUserId]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -73,6 +105,7 @@ export default function DropsTabScreen() {
             onTalkToAgent={() => router.push('/(tabs)/explore')}
             onViewHistory={() => router.push('/weekly-drop-history')}
             onConnect={handleConnectFromDrop}
+            disabledConnectUserIds={Object.keys(sentConnectionsByUserId)}
           />
         )}
       </ScrollView>
