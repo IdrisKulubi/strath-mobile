@@ -18,16 +18,19 @@ import {
     formatPost,
     getPostExpiresAt,
     type PulseCategory,
+    type ReactionType,
 } from "@/lib/services/pulse-service";
 
 export const dynamic = "force-dynamic";
+
+type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
 
 const PAGE_SIZE = 20;
 
 // ─── Session helper ───────────────────────────────────────────────────────────
 
 async function getSession(req: NextRequest) {
-    let session = await auth.api.getSession({ headers: req.headers });
+    let session: AuthSession = await auth.api.getSession({ headers: req.headers });
     if (!session) {
         const authHeader = req.headers.get("authorization");
         if (authHeader?.startsWith("Bearer ")) {
@@ -37,7 +40,7 @@ async function getSession(req: NextRequest) {
                 with: { user: true },
             });
             if (dbSession && dbSession.expiresAt > new Date()) {
-                session = { session: dbSession, user: dbSession.user } as any;
+                session = { session: dbSession, user: dbSession.user } as unknown as AuthSession;
             }
         }
     }
@@ -96,14 +99,12 @@ export async function GET(req: NextRequest) {
                   })
                 : [];
 
-        const reactionMap = new Map<string, string>();
+        const reactionMap = new Map<string, ReactionType>();
         for (const r of viewerReactions) {
-            reactionMap.set(r.postId, r.reaction);
+            reactionMap.set(r.postId, r.reaction as ReactionType);
         }
 
-        const formatted = posts.map((post) =>
-            formatPost(post, viewerId, (reactionMap.get(post.id) as any) ?? null)
-        );
+        const formatted = posts.map((post) => formatPost(post, viewerId, reactionMap.get(post.id) ?? null));
 
         return successResponse({
             posts: formatted,
@@ -146,8 +147,9 @@ export async function POST(req: NextRequest) {
         // Validate content + category
         try {
             validatePost(content, category);
-        } catch (e: any) {
-            return errorResponse(e.message, 400);
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : "Invalid post";
+            return errorResponse(message, 400);
         }
 
         const isFlagged = shouldFlagContent(content);

@@ -19,10 +19,12 @@ import { toggleReaction } from "@/lib/services/pulse-service";
 
 export const dynamic = "force-dynamic";
 
+type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
+
 // ─── Session helper ───────────────────────────────────────────────────────────
 
 async function getSession(req: NextRequest) {
-    let session = await auth.api.getSession({ headers: req.headers });
+    let session: AuthSession = await auth.api.getSession({ headers: req.headers });
     if (!session) {
         const authHeader = req.headers.get("authorization");
         if (authHeader?.startsWith("Bearer ")) {
@@ -32,7 +34,7 @@ async function getSession(req: NextRequest) {
                 with: { user: true },
             });
             if (dbSession && dbSession.expiresAt > new Date()) {
-                session = { session: dbSession, user: dbSession.user } as any;
+                session = { session: dbSession, user: dbSession.user } as unknown as AuthSession;
             }
         }
     }
@@ -49,14 +51,14 @@ const reactSchema = z.object({
 
 export async function POST(
     req: NextRequest,
-    { params }: { params: { postId: string } }
+    { params }: { params: Promise<{ postId: string }> }
 ) {
     try {
         const session = await getSession(req);
         if (!session?.user?.id) return errorResponse("Unauthorized", 401);
         const userId = session.user.id;
 
-        const { postId } = params;
+        const { postId } = await params;
 
         // Verify post exists and is not hidden/expired
         const post = await db.query.pulsePosts.findFirst({

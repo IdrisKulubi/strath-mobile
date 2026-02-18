@@ -233,8 +233,8 @@ export interface RawPulsePost {
     id: string;
     authorId: string;
     content: string;
-    category: PulseCategory;
-    isAnonymous: boolean;
+    category: PulseCategory | null;
+    isAnonymous: boolean | null;
     fireCount: number | null;
     skullCount: number | null;
     heartCount: number | null;
@@ -252,14 +252,15 @@ export function formatPost(
 ) {
     const isOwner = post.authorId === viewerId;
     const revealRequests: string[] = post.revealRequests ?? [];
+    const isAnonymous = post.isAnonymous ?? true;
 
     return {
         id: post.id,
         content: post.content,
-        category: post.category,
-        isAnonymous: post.isAnonymous,
+        category: post.category ?? "general",
+        isAnonymous,
         // Only expose author info if viewer is the owner, or post is not anonymous
-        author: isOwner || !post.isAnonymous
+        author: isOwner || !isAnonymous
             ? {
                 id: post.authorId,
                 name: post.author?.name ?? null,

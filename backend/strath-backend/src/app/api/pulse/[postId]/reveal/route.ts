@@ -22,10 +22,12 @@ import { sendPushNotification } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
+type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
+
 // ─── Session helper ───────────────────────────────────────────────────────────
 
 async function getSession(req: NextRequest) {
-    let session = await auth.api.getSession({ headers: req.headers });
+    let session: AuthSession = await auth.api.getSession({ headers: req.headers });
     if (!session) {
         const authHeader = req.headers.get("authorization");
         if (authHeader?.startsWith("Bearer ")) {
@@ -35,7 +37,7 @@ async function getSession(req: NextRequest) {
                 with: { user: true },
             });
             if (dbSession && dbSession.expiresAt > new Date()) {
-                session = { session: dbSession, user: dbSession.user } as any;
+                session = { session: dbSession, user: dbSession.user } as unknown as AuthSession;
             }
         }
     }
@@ -46,15 +48,17 @@ async function getSession(req: NextRequest) {
 
 export async function GET(
     req: NextRequest,
-    { params }: { params: { postId: string } }
+    { params }: { params: Promise<{ postId: string }> }
 ) {
     try {
         const session = await getSession(req);
         if (!session?.user?.id) return errorResponse("Unauthorized", 401);
         const viewerId = session.user.id;
 
+        const { postId } = await params;
+
         const post = await db.query.pulsePosts.findFirst({
-            where: eq(pulsePosts.id, params.postId),
+            where: eq(pulsePosts.id, postId),
             columns: { revealRequests: true, isAnonymous: true, authorId: true },
         });
 
@@ -81,15 +85,17 @@ export async function GET(
 
 export async function POST(
     req: NextRequest,
-    { params }: { params: { postId: string } }
+    { params }: { params: Promise<{ postId: string }> }
 ) {
     try {
         const session = await getSession(req);
         if (!session?.user?.id) return errorResponse("Unauthorized", 401);
         const requesterId = session.user.id;
 
+        const { postId } = await params;
+
         const post = await db.query.pulsePosts.findFirst({
-            where: eq(pulsePosts.id, params.postId),
+            where: eq(pulsePosts.id, postId),
             columns: { isHidden: true, expiresAt: true, isAnonymous: true },
         });
 
@@ -99,7 +105,7 @@ export async function POST(
             return errorResponse("Post has expired", 410);
         }
 
-        const result = await requestReveal(params.postId, requesterId);
+        const result = await requestReveal(postId, requesterId);
 
         // Notify the post author (non-blocking)
         if (!result.mutual) {
@@ -112,7 +118,7 @@ export async function POST(
                 sendPushNotification(
                     author.pushToken,
                     "Someone saw your Pulse post and wants to reveal. Tap to respond.",
-                    { screen: "pulse", postId: params.postId }
+                    { screen: "pulse", postId }
                 ).catch(() => {});
             }
         }
@@ -133,9 +139,9 @@ export async function POST(
             requesterProfile,
             authorProfile,
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("POST /api/pulse/[postId]/reveal error:", error);
-        if (error?.message) return errorResponse(error.message, 400);
+        if (error instanceof Error && error.message) return errorResponse(error.message, 400);
         return errorResponse("Failed to request reveal", 500);
     }
 }
