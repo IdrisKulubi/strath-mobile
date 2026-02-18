@@ -25,7 +25,7 @@ import { StudyToggle, NearbyStudents } from "@/components/study-date";
 export default function StudyDateScreen() {
     const { colors } = useTheme();
 
-    const { data, isLoading, isError, refetch, isRefetching } = useStudyDateFeed();
+    const { data, isLoading, isError, error, refetch, isRefetching } = useStudyDateFeed();
 
     const handleRetry = useCallback(() => {
         refetch();
@@ -59,7 +59,7 @@ export default function StudyDateScreen() {
                 {isError && !data && (
                     <View style={styles.errorBox}>
                         <Text style={[styles.errorText, { color: colors.mutedForeground }]}>
-                            {"Couldn't load sessions."}
+                            {error instanceof Error ? error.message : "Couldn't load sessions."}
                         </Text>
                         <TouchableOpacity onPress={handleRetry} style={styles.retryBtn}>
                             <Text style={[styles.retryText, { color: colors.primary }]}>

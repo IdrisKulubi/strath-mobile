@@ -46,16 +46,30 @@ export async function GET(req: NextRequest) {
         if (!session?.user?.id) return errorResponse("Unauthorized", 401);
         const userId = session.user.id;
 
-        // Get user's university
+        // Get user's university (gracefully degrade to empty feed if not set yet)
         const profile = await db.query.profiles.findFirst({
             where: eq(profiles.userId, userId),
             columns: { university: true },
         });
 
         const university = profile?.university;
-        if (!university) return errorResponse("Complete your profile first", 400);
 
         const now = new Date();
+
+        // If university not set, we can't filter – return empty feed + own session
+        if (!university) {
+            const mySession = await db.query.studySessions.findFirst({
+                where: and(
+                    eq(studySessions.userId, userId),
+                    eq(studySessions.isActive, true),
+                    gt(studySessions.availableUntil, now),
+                ),
+            });
+            return successResponse({
+                sessions: [],
+                mySession: mySession ? formatMySession(mySession) : null,
+            });
+        }
 
         const sessions = await db.query.studySessions.findMany({
             where: and(
@@ -113,8 +127,8 @@ export async function POST(req: NextRequest) {
             columns: { university: true },
         });
 
-        const university = profile?.university;
-        if (!university) return errorResponse("Complete your profile first", 400);
+        // Default to Strathmore University if profile not fully set up yet
+        const university = profile?.university ?? "Strathmore University";
 
         const body = await req.json();
         const parsed = createSessionSchema.safeParse(body);
