@@ -1,85 +1,203 @@
+/**
+ * Campus Pulse API
+ *
+ * GET  /api/pulse          → paginated feed (newest first, not expired)
+ * POST /api/pulse          → create a new anonymous post
+ */
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
-import { redis } from "@/lib/redis";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import { z } from "zod";
+
 import { db } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { pulsePosts, pulseReactions, session as sessionTable } from "@/db/schema";
+import { successResponse, errorResponse } from "@/lib/api-response";
+import {
+    validatePost,
+    shouldFlagContent,
+    formatPost,
+    getPostExpiresAt,
+    type PulseCategory,
+} from "@/lib/services/pulse-service";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
-    let session = await auth.api.getSession({ headers: req.headers });
+const PAGE_SIZE = 20;
 
-    // Fallback: Manual token check for Bearer token auth (mobile clients)
+// ─── Session helper ───────────────────────────────────────────────────────────
+
+async function getSession(req: NextRequest) {
+    let session = await auth.api.getSession({ headers: req.headers });
     if (!session) {
-        const authHeader = req.headers.get('authorization');
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            const token = authHeader.split(' ')[1];
-            const { session: sessionTable } = await import("@/db/schema");
+        const authHeader = req.headers.get("authorization");
+        if (authHeader?.startsWith("Bearer ")) {
+            const token = authHeader.split(" ")[1];
             const dbSession = await db.query.session.findFirst({
                 where: eq(sessionTable.token, token),
-                with: { user: true }
+                with: { user: true },
             });
-
             if (dbSession && dbSession.expiresAt > new Date()) {
                 session = { session: dbSession, user: dbSession.user } as any;
             }
         }
     }
+    return session;
+}
 
-    if (!session) {
-        return new Response("Unauthorized", { status: 401 });
+// ─── GET /api/pulse ───────────────────────────────────────────────────────────
+
+/**
+ * Query params:
+ *   category  - filter by category
+ *   page      - 0-based page number (default 0)
+ */
+export async function GET(req: NextRequest) {
+    try {
+        const session = await getSession(req);
+        if (!session?.user?.id) return errorResponse("Unauthorized", 401);
+        const viewerId = session.user.id;
+
+        const { searchParams } = req.nextUrl;
+        const category = searchParams.get("category") ?? null;
+        const page = Math.max(0, parseInt(searchParams.get("page") ?? "0", 10));
+
+        const now = new Date();
+
+        // Build WHERE clause
+        const conditions = [
+            eq(pulsePosts.isHidden, false),
+            or(isNull(pulsePosts.expiresAt), gt(pulsePosts.expiresAt, now)),
+        ];
+        if (category) {
+            conditions.push(eq(pulsePosts.category, category as PulseCategory));
+        }
+
+        const posts = await db.query.pulsePosts.findMany({
+            where: and(...conditions),
+            orderBy: [desc(pulsePosts.createdAt)],
+            limit: PAGE_SIZE,
+            offset: page * PAGE_SIZE,
+            with: {
+                author: {
+                    columns: { id: true, name: true, image: true, profilePhoto: true },
+                },
+            },
+        });
+
+        // Batch-fetch viewer reactions for all visible posts
+        const postIds = posts.map((p) => p.id);
+        const viewerReactions =
+            postIds.length > 0
+                ? await db.query.pulseReactions.findMany({
+                      where: and(
+                          eq(pulseReactions.userId, viewerId),
+                          inArray(pulseReactions.postId, postIds)
+                      ),
+                  })
+                : [];
+
+        const reactionMap = new Map<string, string>();
+        for (const r of viewerReactions) {
+            reactionMap.set(r.postId, r.reaction);
+        }
+
+        const formatted = posts.map((post) =>
+            formatPost(post, viewerId, (reactionMap.get(post.id) as any) ?? null)
+        );
+
+        return successResponse({
+            posts: formatted,
+            hasMore: formatted.length === PAGE_SIZE,
+            page,
+        });
+    } catch (error) {
+        console.error("GET /api/pulse error:", error);
+        return errorResponse("Failed to fetch pulse feed", 500);
     }
+}
 
-    const encoder = new TextEncoder();
+// ─── POST /api/pulse ──────────────────────────────────────────────────────────
 
-    const stream = new ReadableStream({
-        async start(controller) {
-            // Keep-alive interval
-            const keepAlive = setInterval(() => {
-                controller.enqueue(encoder.encode(": keep-alive\n\n"));
-            }, 30000);
+const createPostSchema = z.object({
+    content: z.string().min(1).max(280),
+    category: z.enum([
+        "missed_connection",
+        "campus_thought",
+        "dating_rant",
+        "hot_take",
+        "looking_for",
+        "general",
+    ]),
+    isAnonymous: z.boolean().optional().default(true),
+});
 
-            // Function to send events
-            const sendEvent = (data: any) => {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-            };
+export async function POST(req: NextRequest) {
+    try {
+        const session = await getSession(req);
+        if (!session?.user?.id) return errorResponse("Unauthorized", 401);
+        const authorId = session.user.id;
 
-            // Initial events from Redis (latest 10 pulses)
-            try {
-                const recentPulses = await redis.lrange('pulse_events', 0, 9);
-                recentPulses.reverse().forEach(pulse => {
-                    sendEvent(pulse);
-                });
-            } catch (err) {
-                console.error("Pulse SSE: Error fetching initial events", err);
-            }
+        const body = await req.json();
+        const parsed = createPostSchema.safeParse(body);
+        if (!parsed.success) return errorResponse(parsed.error, 400);
 
-            // Simple polling for new events in serverless
-            let lastChecked = Date.now();
-            const pollInterval = setInterval(async () => {
-                try {
-                    const latest: any = await redis.lindex('pulse_events', 0);
-                    if (latest && latest.timestamp > lastChecked) {
-                        sendEvent(latest);
-                        lastChecked = latest.timestamp;
-                    }
-                } catch (err) {
-                    // Fail silently or close
-                }
-            }, 5000);
+        const { content, category, isAnonymous } = parsed.data;
 
-            req.signal.addEventListener("abort", () => {
-                clearInterval(keepAlive);
-                clearInterval(pollInterval);
-            });
-        },
-    });
+        // Validate content + category
+        try {
+            validatePost(content, category);
+        } catch (e: any) {
+            return errorResponse(e.message, 400);
+        }
 
-    return new Response(stream, {
-        headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        },
-    });
+        const isFlagged = shouldFlagContent(content);
+
+        const [post] = await db
+            .insert(pulsePosts)
+            .values({
+                authorId,
+                content: content.trim(),
+                category,
+                isAnonymous,
+                isFlagged,
+                expiresAt: getPostExpiresAt(),
+            })
+            .returning();
+
+        return successResponse({ post: formatPost({ ...post, author: null }, authorId, null) }, 201);
+    } catch (error) {
+        console.error("POST /api/pulse error:", error);
+        return errorResponse("Failed to create post", 500);
+    }
+}
+
+// ─── DELETE /api/pulse?postId=<id> ────────────────────────────────────────────
+
+export async function DELETE(req: NextRequest) {
+    try {
+        const session = await getSession(req);
+        if (!session?.user?.id) return errorResponse("Unauthorized", 401);
+        const userId = session.user.id;
+
+        const postId = req.nextUrl.searchParams.get("postId");
+        if (!postId) return errorResponse("postId required", 400);
+
+        const post = await db.query.pulsePosts.findFirst({
+            where: eq(pulsePosts.id, postId),
+            columns: { authorId: true },
+        });
+
+        if (!post) return errorResponse("Post not found", 404);
+        if (post.authorId !== userId) return errorResponse("Forbidden", 403);
+
+        // Soft-hide to preserve reaction history; cron can hard-delete later
+        await db
+            .update(pulsePosts)
+            .set({ isHidden: true })
+            .where(eq(pulsePosts.id, postId));
+        return successResponse({ deleted: true });
+    } catch (error) {
+        console.error("DELETE /api/pulse error:", error);
+        return errorResponse("Failed to delete post", 500);
+    }
 }

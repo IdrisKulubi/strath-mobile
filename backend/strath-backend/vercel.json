@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/weekly-drop",
       "schedule": "0 16 * * 0"
+    },
+    {
+      "path": "/api/cron/pulse-cleanup",
+      "schedule": "0 */6 * * *"
     }
   ]
 }
