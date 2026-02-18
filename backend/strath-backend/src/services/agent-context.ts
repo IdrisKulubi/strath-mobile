@@ -229,3 +229,105 @@ export function getPreviousQuery(ctx: AgentContextData): string | null {
     if (ctx.queryHistory.length === 0) return null;
     return ctx.queryHistory[0].query;
 }
+
+/**
+ * Generate a proactive / contextual greeting message for the user.
+ * Returns null if no meaningful context exists yet.
+ */
+export function generateProactiveMessage(ctx: AgentContextData): string | null {
+    const { queryHistory, matchFeedback, learnedPreferences } = ctx;
+
+    // Absolutely new user
+    if (queryHistory.length === 0 && matchFeedback.length === 0) {
+        return null; // UI will show generic onboarding prompt
+    }
+
+    // Re-engagement — hasn't searched in 7+ days
+    if (queryHistory.length > 0) {
+        const lastSearchTime = new Date(queryHistory[0].timestamp).getTime();
+        const daysSinceLastSearch = (Date.now() - lastSearchTime) / (1000 * 60 * 60 * 24);
+        if (daysSinceLastSearch >= 7) {
+            return `You haven't searched in a while ✨ Want me to find someone new?`;
+        }
+    }
+
+    // Has feedback — personalised based on outcomes
+    if (matchFeedback.length >= 3) {
+        const amazingCount = matchFeedback.filter(f => f.outcome === "amazing").length;
+        const notForMeCount = matchFeedback.filter(f => f.outcome === "not_for_me").length;
+
+        if (amazingCount >= 2) {
+            return `You've been vibing with some people 🔥 Want me to find more like them?`;
+        }
+        if (notForMeCount > amazingCount) {
+            return `Let's dial it in — tell me more specifically who you're looking for 🎯`;
+        }
+    }
+
+    // Learned dominant preference traits
+    const topTraits = Object.entries(learnedPreferences)
+        .filter(([, v]) => v > 0.3)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 2)
+        .map(([k]) =>
+            k.replace(/^(personality_|interest_|communication_|love_language_)/, "")
+             .replace(/_/g, " ")
+        );
+
+    if (topTraits.length >= 2) {
+        return `Based on your history, you seem to like ${topTraits[0]} and ${topTraits[1]} types. Still your vibe? 👀`;
+    }
+
+    if (topTraits.length === 1) {
+        return `You've been gravitating towards ${topTraits[0]} people. Want more of that? ✨`;
+    }
+
+    // Recent query repeat suggestion
+    if (queryHistory.length >= 2) {
+        const lastQuery = queryHistory[0].query;
+        return `Last time you looked for "${lastQuery}". Same vibe, or changed?`;
+    }
+
+    return null;
+}
+
+/**
+ * Reset (wipe) all wingman memory for a user — fresh start.
+ */
+export async function resetAgentContext(userId: string): Promise<void> {
+    await db.update(agentContext)
+        .set({
+            learnedPreferences: {},
+            queryHistory: [],
+            matchFeedback: [],
+            lastAgentMessage: null,
+            updatedAt: new Date(),
+        })
+        .where(eq(agentContext.userId, userId));
+}
+
+/**
+ * Get a condensed summary of the wingman stats for the client.
+ */
+export function getWingmanStats(ctx: AgentContextData) {
+    return {
+        totalQueries: ctx.queryHistory.length,
+        totalFeedback: ctx.matchFeedback.length,
+        learnedTraits: Object.keys(ctx.learnedPreferences).length,
+        lastQuery: ctx.queryHistory[0]?.query || null,
+        lastQueryTimestamp: ctx.queryHistory[0]?.timestamp || null,
+        lastMessage: ctx.lastAgentMessage,
+        proactiveMessage: generateProactiveMessage(ctx),
+        recentQueries: ctx.queryHistory.slice(0, 10).map(q => ({
+            query: q.query,
+            timestamp: q.timestamp,
+            resultCount: q.matchedIds.length,
+        })),
+        feedbackBreakdown: {
+            amazing: ctx.matchFeedback.filter(f => f.outcome === "amazing").length,
+            nice: ctx.matchFeedback.filter(f => f.outcome === "nice").length,
+            meh: ctx.matchFeedback.filter(f => f.outcome === "meh").length,
+            not_for_me: ctx.matchFeedback.filter(f => f.outcome === "not_for_me").length,
+        },
+    };
+}

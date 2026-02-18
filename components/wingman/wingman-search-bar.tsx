@@ -18,7 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
-import { MagnifyingGlass, Microphone, PaperPlaneTilt, X, Sparkle } from 'phosphor-react-native';
+import { MagnifyingGlass, Microphone, PaperPlaneTilt, X, Sparkle, ClockCounterClockwise } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -30,6 +30,8 @@ interface WingmanSearchBarProps {
     isRecording: boolean;
     placeholder?: string;
     initialQuery?: string;
+    greeting?: string | null;
+    onHistoryPress?: () => void;
 }
 
 const SUGGESTIONS = [
@@ -48,6 +50,8 @@ export function WingmanSearchBar({
     isRecording,
     placeholder = "Ask your wingman...",
     initialQuery,
+    greeting,
+    onHistoryPress,
 }: WingmanSearchBarProps) {
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -136,13 +140,36 @@ export function WingmanSearchBar({
 
     return (
         <View style={styles.wrapper}>
-            {/* Wingman label */}
+            {/* Wingman label row */}
             <View style={styles.labelRow}>
-                <Sparkle size={14} color={colors.primary} weight="fill" />
-                <Text style={[styles.label, { color: colors.primary }]}>
-                    AI Wingman
-                </Text>
+                <View style={styles.labelLeft}>
+                    <Sparkle size={14} color={colors.primary} weight="fill" />
+                    <Text style={[styles.label, { color: colors.primary }]}>
+                        AI Wingman
+                    </Text>
+                </View>
+                {onHistoryPress && (
+                    <Pressable onPress={onHistoryPress} hitSlop={8} style={styles.historyButton}>
+                        <ClockCounterClockwise size={16} color={colors.mutedForeground} />
+                    </Pressable>
+                )}
             </View>
+
+            {/* Proactive / personalised greeting */}
+            {greeting ? (
+                <Animated.View
+                    entering={FadeIn.duration(400)}
+                    exiting={FadeOut.duration(200)}
+                    style={[styles.greetingBubble, {
+                        backgroundColor: isDark ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.06)',
+                        borderColor: isDark ? 'rgba(139,92,246,0.25)' : 'rgba(139,92,246,0.15)',
+                    }]}
+                >
+                    <Text style={[styles.greetingText, { color: colors.foreground }]}>
+                        {greeting}
+                    </Text>
+                </Animated.View>
+            ) : null}
 
             {/* Search bar */}
             <Animated.View style={[
@@ -273,9 +300,14 @@ const styles = StyleSheet.create({
     labelRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        justifyContent: 'space-between',
         marginBottom: 8,
         paddingLeft: 4,
+    },
+    labelLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
     },
     label: {
         fontSize: 12,
@@ -284,6 +316,21 @@ const styles = StyleSheet.create({
         paddingTop: 1,
         letterSpacing: 0.5,
         textTransform: 'uppercase',
+    },
+    historyButton: {
+        padding: 4,
+    },
+    greetingBubble: {
+        borderWidth: 1,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        marginBottom: 10,
+    },
+    greetingText: {
+        fontSize: 13,
+        fontWeight: '500',
+        lineHeight: 18,
     },
     container: {
         flexDirection: 'row',

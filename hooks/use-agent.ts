@@ -81,6 +81,28 @@ export interface WingmanStats {
     lastMessage: string | null;
 }
 
+export interface WingmanContext {
+    totalQueries: number;
+    totalFeedback: number;
+    learnedTraits: number;
+    lastQuery: string | null;
+    lastQueryTimestamp: string | null;
+    lastMessage: string | null;
+    proactiveMessage: string | null;
+    hasMemory: boolean;
+    recentQueries: {
+        query: string;
+        timestamp: string;
+        resultCount: number;
+    }[];
+    feedbackBreakdown: {
+        amazing: number;
+        nice: number;
+        meh: number;
+        not_for_me: number;
+    };
+}
+
 // ===== API functions =====
 
 async function agentSearchAPI(
@@ -190,6 +212,34 @@ async function getWingmanStatusAPI(): Promise<WingmanStats> {
 
     const result = await response.json();
     return (result.data || result).wingmanMemory;
+}
+
+async function getWingmanContextAPI(): Promise<WingmanContext> {
+    const token = await getAuthToken();
+
+    const response = await fetch(`${API_URL}/api/agent/context`, {
+        headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+        },
+    });
+
+    if (!response.ok) throw new Error("Failed to get wingman context");
+
+    const result = await response.json();
+    return result.data || result;
+}
+
+async function resetWingmanMemoryAPI(): Promise<void> {
+    const token = await getAuthToken();
+
+    const response = await fetch(`${API_URL}/api/agent/context`, {
+        method: "DELETE",
+        headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+        },
+    });
+
+    if (!response.ok) throw new Error("Failed to reset wingman memory");
 }
 
 interface ConnectResult {
@@ -344,13 +394,34 @@ export function useAgent() {
         },
     });
 
-    // Wingman stats query
+    // Wingman stats query (lightweight)
     const wingmanStats = useQuery({
         queryKey: ["wingman-stats"],
         queryFn: getWingmanStatusAPI,
         staleTime: 5 * 60 * 1000, // 5 min
         retry: 1,
     });
+
+    // Wingman context query (full context, incl. proactive message + history)
+    const wingmanContextQuery = useQuery({
+        queryKey: ["wingman-context"],
+        queryFn: getWingmanContextAPI,
+        staleTime: 5 * 60 * 1000, // 5 min
+        retry: 1,
+    });
+
+    // Reset memory mutation
+    const resetMemoryMutation = useMutation({
+        mutationFn: resetWingmanMemoryAPI,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["wingman-stats"] });
+            queryClient.invalidateQueries({ queryKey: ["wingman-context"] });
+        },
+    });
+
+    const resetMemory = useCallback(() => {
+        resetMemoryMutation.mutate();
+    }, [resetMemoryMutation]);
 
     // Primary search function
     const search = useCallback(
@@ -415,6 +486,7 @@ export function useAgent() {
         submitFeedback,
         connectWithIntro,
         clear,
+        resetMemory,
 
         // State
         matches: allMatches,
@@ -435,9 +507,15 @@ export function useAgent() {
         isConnecting: connectMutation.isPending,
         isRefining: refineMutation.isPending,
         connectError: connectMutation.error?.message || null,
+        isResettingMemory: resetMemoryMutation.isPending,
 
-        // Wingman stats
+        // Wingman stats (lightweight)
         wingmanStats: wingmanStats.data || null,
         isWingmanLoading: wingmanStats.isLoading,
+
+        // Wingman context (full — includes proactive message, history)
+        wingmanContext: wingmanContextQuery.data || null,
+        isWingmanContextLoading: wingmanContextQuery.isLoading,
+        proactiveMessage: wingmanContextQuery.data?.proactiveMessage || null,
     };
 }

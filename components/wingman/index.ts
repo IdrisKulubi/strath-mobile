@@ -8,3 +8,4 @@ export { ConnectionSentPopup } from './connection-sent-popup';
 export { DropNotification } from './drop-notification';
 export { WeeklyDrop } from './weekly-drop';
 export { WeeklyDropStrip } from './weekly-drop-strip';
+export { SearchHistory } from './search-history';

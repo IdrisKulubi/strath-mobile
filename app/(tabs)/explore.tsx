@@ -1,22 +1,25 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
   StatusBar,
   ScrollView,
   Alert,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
-import { WingmanSearchBar, WingmanResults, VoiceRecordingOverlay, WingmanMatchDetail, ConnectionSentPopup, DropNotification, WeeklyDrop, WeeklyDropStrip } from '@/components/wingman';
+import { WingmanSearchBar, WingmanResults, VoiceRecordingOverlay, WingmanMatchDetail, ConnectionSentPopup, DropNotification, WeeklyDrop, WeeklyDropStrip, SearchHistory } from '@/components/wingman';
 import { useAgent, AgentMatch } from '@/hooks/use-agent';
 import { useVoiceInput } from '@/hooks/use-voice-input';
 import { useWeeklyDrop, WeeklyDropMatch } from '@/hooks/use-weekly-drop';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
+import { X } from 'phosphor-react-native';
 
 export default function ExploreScreen() {
   const router = useRouter();
@@ -32,6 +35,7 @@ export default function ExploreScreen() {
   const [selectedMatch, setSelectedMatch] = React.useState<AgentMatch | null>(null);
   const [connectionSentFor, setConnectionSentFor] = React.useState<string | null>(null);
   const [showDropBanner, setShowDropBanner] = React.useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Stable references — avoid depending on the whole `agent` / `voice` objects
   const agentSearchRef = useRef(agent.search);
@@ -135,6 +139,21 @@ export default function ExploreScreen() {
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   }, [agent]);
 
+  const handleOpenHistory = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowHistory(true);
+  }, []);
+
+  const handleCloseHistory = useCallback(() => {
+    setShowHistory(false);
+  }, []);
+
+  const handleRepeatQueryFromHistory = useCallback((query: string) => {
+    setShowHistory(false);
+    agent.search(query);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, [agent]);
+
   const handleDropMatchPress = useCallback((dropMatch: WeeklyDropMatch) => {
     const mappedMatch: AgentMatch = {
       profile: {
@@ -213,6 +232,8 @@ export default function ExploreScreen() {
             isSearching={agent.isSearching}
             isRecording={voice.isRecording}
             initialQuery={voice.transcript || undefined}
+            greeting={!agent.currentQuery ? agent.proactiveMessage : null}
+            onHistoryPress={handleOpenHistory}
           />
           <ScrollView
             ref={scrollRef}
@@ -277,6 +298,30 @@ export default function ExploreScreen() {
             firstName={connectionSentFor}
             onClose={handleCloseConnectionPopup}
           />
+
+          {/* Wingman History Modal */}
+          <Modal
+            visible={showHistory}
+            animationType="slide"
+            presentationStyle="pageSheet"
+            onRequestClose={handleCloseHistory}
+          >
+            <SafeAreaView style={[styles.historyModal, { backgroundColor: colors.background }]}>
+              {/* Modal header */}
+              <View style={[styles.historyHeader, { borderBottomColor: colorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
+                <Text style={[styles.historyTitle, { color: colors.foreground }]}>
+                  Wingman Memory
+                </Text>
+                <Pressable onPress={handleCloseHistory} hitSlop={10}>
+                  <X size={22} color={colors.mutedForeground} />
+                </Pressable>
+              </View>
+              <SearchHistory
+                onRepeatQuery={handleRepeatQueryFromHistory}
+                onClose={handleCloseHistory}
+              />
+            </SafeAreaView>
+          </Modal>
         </View>
       </SafeAreaView>
     </GestureHandlerRootView>
@@ -314,5 +359,20 @@ const styles = StyleSheet.create({
   },
   wingmanScrollContent: {
     flexGrow: 1,
+  },
+  historyModal: {
+    flex: 1,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  historyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
   },
 });
