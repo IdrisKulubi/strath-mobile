@@ -16,6 +16,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { WingmanMatchCard } from './wingman-match-card';
 import { WingmanRefinementBar } from './wingman-refinement-bar';
 import { AgentMatch, AgentSearchResponse } from '@/hooks/use-agent';
+import { WINGMAN_EXPANDED_RESULTS, WINGMAN_INITIAL_RESULTS } from '@/constants/wingman';
 
 import {
     Sparkle,
@@ -207,6 +208,7 @@ export function WingmanResults({
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const [statusIndex, setStatusIndex] = useState(0);
+    const [isExpanded, setIsExpanded] = useState(false);
     const statusMessages = useMemo(
         () => ['Tuning your vibe…', 'Searching campus…', 'Re-ranking better fits…'],
         []
@@ -225,6 +227,19 @@ export function WingmanResults({
 
         return () => clearInterval(timer);
     }, [isRefining, isSearching, matches.length, statusMessages.length]);
+
+    // Reset expansion when a new query runs
+    useEffect(() => {
+        setIsExpanded(false);
+    }, [currentQuery]);
+
+    const sortedMatches = useMemo(() => {
+        // Sort by "match %" so the first view is the best picks.
+        return [...matches].sort((a, b) => (b.explanation?.matchPercentage ?? 0) - (a.explanation?.matchPercentage ?? 0));
+    }, [matches]);
+
+    const visibleLimit = isExpanded ? WINGMAN_EXPANDED_RESULTS : WINGMAN_INITIAL_RESULTS;
+    const visibleMatches = useMemo(() => sortedMatches.slice(0, visibleLimit), [sortedMatches, visibleLimit]);
 
     // No search yet
     if (!currentQuery && !isSearching) {
@@ -284,7 +299,7 @@ export function WingmanResults({
             {/* Results header */}
             <View style={styles.resultsHeader}>
                 <Text style={[styles.resultsCount, { color: colors.mutedForeground }]}>
-                    {meta?.totalFound || matches.length} match{(meta?.totalFound || matches.length) !== 1 ? 'es' : ''} found
+                    Showing {visibleMatches.length} of {meta?.totalFound || matches.length} match{(meta?.totalFound || matches.length) !== 1 ? 'es' : ''}
                 </Text>
                 {intent && (
                     <View style={[styles.vibeBadge, {
@@ -323,7 +338,7 @@ export function WingmanResults({
             )}
 
             {/* Match cards */}
-            {matches.map((match, index) => (
+            {visibleMatches.map((match, index) => (
                 <WingmanMatchCard
                     key={match.profile.userId}
                     match={match}
@@ -334,7 +349,26 @@ export function WingmanResults({
             ))}
 
             {/* Load more button */}
-            {meta?.hasMore && (
+            {!isExpanded && (sortedMatches.length > WINGMAN_INITIAL_RESULTS || (meta?.totalFound ?? 0) > WINGMAN_INITIAL_RESULTS) && (
+                <Pressable
+                    onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setIsExpanded(true);
+                    }}
+                    style={[styles.loadMoreButton, {
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                        borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+                    }]}
+                >
+                    <ArrowDown size={16} color={colors.primary} />
+                    <Text style={[styles.loadMoreText, { color: colors.primary }]}>
+                        Show more matches
+                    </Text>
+                </Pressable>
+            )}
+
+            {/* Optional: allow pagination only after expanding (kept minimal) */}
+            {isExpanded && meta?.hasMore && sortedMatches.length < WINGMAN_EXPANDED_RESULTS && (
                 <Pressable
                     onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

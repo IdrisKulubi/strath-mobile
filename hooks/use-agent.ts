@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback } from "react";
 import { getAuthToken } from "@/lib/auth-helpers";
+import {
+    WINGMAN_MAX_REQUEST_PAGE_SIZE,
+    WINGMAN_REQUEST_PAGE_SIZE,
+} from "@/constants/wingman";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -119,7 +123,7 @@ export interface WingmanContext {
 
 async function agentSearchAPI(
     query: string,
-    limit: number = 20,
+    limit: number = WINGMAN_REQUEST_PAGE_SIZE,
     offset: number = 0,
     excludeIds: string[] = [],
 ): Promise<AgentSearchResponse> {
@@ -172,6 +176,7 @@ async function agentRefineAPI(
     originalQuery: string,
     refinement: string,
     previousMatchIds: string[] = [],
+    limit: number = WINGMAN_REQUEST_PAGE_SIZE,
 ): Promise<AgentSearchResponse> {
     const token = await getAuthToken();
     const controller = new AbortController();
@@ -189,7 +194,7 @@ async function agentRefineAPI(
                 original_query: originalQuery,
                 refinement,
                 previous_match_ids: previousMatchIds,
-                limit: 20,
+                limit,
                 offset: 0,
             }),
             signal: controller.signal,
@@ -336,6 +341,7 @@ export function useAgent() {
     const [refinementHints, setRefinementHints] = useState<string[]>([]);
     const [meta, setMeta] = useState<AgentSearchResponse["meta"] | null>(null);
     const [intent, setIntent] = useState<AgentSearchResponse["intent"] | null>(null);
+    const [pageSize, setPageSize] = useState<number>(WINGMAN_REQUEST_PAGE_SIZE);
 
     // Search mutation
     const searchMutation = useMutation({
@@ -412,11 +418,13 @@ export function useAgent() {
             originalQuery,
             refinement,
             previousMatchIds,
+            limit,
         }: {
             originalQuery: string;
             refinement: string;
             previousMatchIds: string[];
-        }) => agentRefineAPI(originalQuery, refinement, previousMatchIds),
+            limit: number;
+        }) => agentRefineAPI(originalQuery, refinement, previousMatchIds, limit),
         onSuccess: (data, variables) => {
             setAllMatches(data.matches);
             setCommentary(data.commentary);
@@ -460,9 +468,17 @@ export function useAgent() {
     // Primary search function
     const search = useCallback(
         (query: string, limit?: number) => {
-            searchMutation.mutate({ query, limit, offset: 0 });
+            const effectiveLimit = Math.max(
+                5,
+                Math.min(
+                    Number(limit ?? pageSize) || WINGMAN_REQUEST_PAGE_SIZE,
+                    WINGMAN_MAX_REQUEST_PAGE_SIZE,
+                ),
+            );
+            setPageSize(effectiveLimit);
+            searchMutation.mutate({ query, limit: effectiveLimit, offset: 0 });
         },
-        [searchMutation],
+        [pageSize, searchMutation],
     );
 
     // Load more results
@@ -470,10 +486,11 @@ export function useAgent() {
         if (!currentQuery || !meta?.hasMore) return;
         searchMutation.mutate({
             query: currentQuery,
+            limit: pageSize,
             offset: meta.nextOffset,
             excludeIds: allMatches.map(m => m.profile.userId),
         });
-    }, [currentQuery, meta, allMatches, searchMutation]);
+    }, [currentQuery, meta, allMatches, pageSize, searchMutation]);
 
     // Submit feedback on a match
     const submitFeedback = useCallback(
@@ -497,9 +514,10 @@ export function useAgent() {
                 originalQuery: currentQuery,
                 refinement: refinement.trim(),
                 previousMatchIds: allMatches.map(m => m.profile.userId),
+                limit: pageSize,
             });
         },
-        [currentQuery, allMatches, refineMutation],
+        [currentQuery, allMatches, pageSize, refineMutation],
     );
 
     // Clear results
