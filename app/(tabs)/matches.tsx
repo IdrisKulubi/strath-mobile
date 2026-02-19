@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, StatusBar, Pressable, Alert, Image, ActivityIndicator, Modal, FlatList, Dimensions } from 'react-native';
+import { View, StyleSheet, StatusBar, Pressable, Alert, Image, ActivityIndicator, Modal, FlatList, LayoutAnimation, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
@@ -14,7 +14,7 @@ import { MatchesListV2 } from '@/components/matches/matches-list-v2';
 import { ArchivedChatsSheet } from '@/components/matches/archived-chats-sheet';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Heart, Archive } from 'phosphor-react-native';
+import { Heart, Archive, CaretDown } from 'phosphor-react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { getAuthToken } from '@/lib/auth-helpers';
 
@@ -52,9 +52,30 @@ export default function MatchesScreen() {
     const { markMatchAsOpened } = useNotificationCounts();
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showArchivedSheet, setShowArchivedSheet] = useState(false);
-    const [isSentModalOpen, setIsSentModalOpen] = useState(false);
-    const [sentModalStartIndex, setSentModalStartIndex] = useState(0);
+    const [sentDetails, setSentDetails] = useState<SentConnection | null>(null);
+    const [isSentExpanded, setIsSentExpanded] = useState(true);
+    const [activeSentIndex, setActiveSentIndex] = useState(0);
     const lastSentScrollHapticAt = useRef(0);
+    const { width: screenWidth } = useWindowDimensions();
+    // Pager geometry: card fills screen minus side padding + peek
+    const SENT_CARD_SPACING = 14;
+    const SENT_CARD_WIDTH = screenWidth - 48; // 24px side peek on each side
+    const SENT_SNAP_INTERVAL = SENT_CARD_WIDTH + SENT_CARD_SPACING;
+
+    const toggleSentExpanded = useCallback(() => {
+        if (Platform.OS === 'android') {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        } else {
+            LayoutAnimation.configureNext({
+                duration: 280,
+                create: { type: 'easeInEaseOut', property: 'opacity' },
+                update: { type: 'spring', springDamping: 0.9 },
+                delete: { type: 'easeInEaseOut', property: 'opacity' },
+            });
+        }
+        setIsSentExpanded(prev => !prev);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }, []);
 
     // For now, archived matches are stored locally
     // In production, this would come from the API
@@ -68,15 +89,13 @@ export default function MatchesScreen() {
 
     const visibleRequests = useMemo(() => requests.slice(0, 20), [requests]);
 
-    const openSentModal = useCallback((startIndex: number) => {
-        const safeIndex = Number.isFinite(startIndex) ? Math.max(0, Math.min(startIndex, Math.max(0, sent.length - 1))) : 0;
-        setSentModalStartIndex(safeIndex);
-        setIsSentModalOpen(true);
+    const openSentDetails = useCallback((s: SentConnection) => {
+        setSentDetails(s);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }, [sent.length]);
+    }, []);
 
-    const closeSentModal = useCallback(() => {
-        setIsSentModalOpen(false);
+    const closeSentDetails = useCallback(() => {
+        setSentDetails(null);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }, []);
 
@@ -129,7 +148,7 @@ export default function MatchesScreen() {
 
     const handleExplore = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.push('/(tabs)');
+        router.push('/(tabs)/explore');
     }, [router]);
 
     const handleAcceptRequest = useCallback(async (req: ConnectionRequest) => {
@@ -315,56 +334,122 @@ export default function MatchesScreen() {
                 {/* Sent (outgoing) */}
                 {(isSentLoading || sent.length > 0) && (
                     <View style={styles.sentContainer}>
-                        <View style={styles.requestsHeader}>
+                        {/* Collapsible header row */}
+                        <Pressable
+                            onPress={toggleSentExpanded}
+                            style={({ pressed }) => ([styles.sentCollapseHeader, { opacity: pressed ? 0.8 : 1 }])}
+                        >
                             <View style={styles.requestsTitleRow}>
                                 <Text style={[styles.requestsEmoji, { color: colors.primary }]}>📨</Text>
                                 <Text style={[styles.requestsTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
                                     Sent
                                 </Text>
                             </View>
-                            {isSentLoading ? (
-                                <ActivityIndicator size="small" color={colors.primary} />
-                            ) : (
-                                <LinearGradient
-                                    colors={['#ec4899', '#f43f5e']}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
-                                    style={styles.sentCountPill}
-                                >
-                                    <Text style={styles.sentCountPillText}>
-                                        {sent.length > 99 ? '99+' : sent.length}
-                                    </Text>
-                                </LinearGradient>
-                            )}
-                        </View>
 
-                        <Pressable
-                            onPress={() => openSentModal(0)}
-                            disabled={isSentLoading || sent.length === 0}
-                            style={({ pressed }) => ([
-                                styles.sentSummaryCard,
-                                {
-                                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#ffffff',
-                                    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                                    opacity: pressed ? 0.92 : 1,
-                                },
-                            ])}
-                        >
-                            <View style={{ flex: 1 }}>
-                                <Text style={[styles.sentSummaryTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                                    {isSentLoading ? 'Loading…' : `${sent.length} pending`}
-                                </Text>
-                                <Text style={[styles.sentSummarySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                                    Tap to swipe through them →
-                                </Text>
-                            </View>
-
-                            <View style={[styles.sentStatusPill, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(236,72,153,0.14)' : 'rgba(236,72,153,0.10)' }]}>
-                                <Text style={[styles.sentStatusText, { color: colors.primary }]}>
-                                    View
-                                </Text>
+                            <View style={styles.sentCollapseRight}>
+                                {isSentLoading ? (
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                ) : (
+                                    <LinearGradient
+                                        colors={['#ec4899', '#f43f5e']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 0 }}
+                                        style={styles.sentCountPill}
+                                    >
+                                        <Text style={styles.sentCountPillText}>
+                                            {sent.length > 99 ? '99+' : sent.length}
+                                        </Text>
+                                    </LinearGradient>
+                                )}
+                                <CaretDown
+                                    size={16}
+                                    color={isDark ? '#94a3b8' : '#6b7280'}
+                                    weight="bold"
+                                    style={{
+                                        transform: [{ rotate: isSentExpanded ? '0deg' : '-90deg' }],
+                                    }}
+                                />
                             </View>
                         </Pressable>
+
+                        {/* Expandable content */}
+                        {isSentExpanded && (
+                            isSentLoading ? (
+                                <View style={styles.sentStripLoading}>
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                    <Text style={[styles.sentStripLoadingText, { color: colors.mutedForeground }]}>Loading sent…</Text>
+                                </View>
+                            ) : (
+                                // Pull strip edge-to-edge so peek works
+                                <View style={styles.sentStripOuter}>
+                                    <FlatList
+                                        data={sent}
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        keyExtractor={(item) => item.swipeId}
+                                        snapToInterval={SENT_SNAP_INTERVAL}
+                                        decelerationRate="fast"
+                                        contentContainerStyle={{ paddingHorizontal: 16 }}
+                                        ItemSeparatorComponent={() => <View style={{ width: SENT_CARD_SPACING }} />}
+                                        onMomentumScrollEnd={(e) => {
+                                            const now = Date.now();
+                                            if (now - lastSentScrollHapticAt.current > 300) {
+                                                lastSentScrollHapticAt.current = now;
+                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                            }
+                                            const idx = Math.round(e.nativeEvent.contentOffset.x / SENT_SNAP_INTERVAL);
+                                            setActiveSentIndex(Math.max(0, Math.min(idx, sent.length - 1)));
+                                        }}
+                                        renderItem={({ item, index }) => {
+                                            const isActive = index === activeSentIndex;
+                                            const avatarUri = item.toUser.profilePhoto || item.toUser.image || item.toUser.profile?.photos?.[0] || null;
+                                            return (
+                                                <Pressable
+                                                    onPress={() => openSentDetails(item)}
+                                                    style={({ pressed }) => ([
+                                                        styles.sentStripCard,
+                                                        {
+                                                            width: SENT_CARD_WIDTH,
+                                                            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#ffffff',
+                                                            borderColor: isActive
+                                                                ? (isDark ? 'rgba(236,72,153,0.45)' : 'rgba(236,72,153,0.30)')
+                                                                : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+                                                            opacity: pressed ? 0.9 : (isActive ? 1 : 0.45),
+                                                            transform: [{ scale: isActive ? 1 : 0.96 }],
+                                                        },
+                                                    ])}
+                                                >
+                                                    <View style={styles.sentStripImageFrame}>
+                                                        {avatarUri ? (
+                                                            <Image
+                                                                source={{ uri: avatarUri }}
+                                                                style={styles.sentStripImage}
+                                                                resizeMode="cover"
+                                                            />
+                                                        ) : (
+                                                            <View style={[styles.sentStripImageFallback, styles.requestAvatarFallback, { borderColor: colors.border }]}>
+                                                                <Text style={[styles.requestAvatarInitial, { fontSize: 22, color: colors.mutedForeground }]}>
+                                                                    {(item.toUser.name || '?').trim().charAt(0).toUpperCase()}
+                                                                </Text>
+                                                            </View>
+                                                        )}
+                                                    </View>
+
+                                                    <View style={styles.sentStripCardBody}>
+                                                        <Text style={[styles.sentStripName, { color: isDark ? '#fff' : '#1a1a2e' }]} numberOfLines={1}>
+                                                            {item.toUser.name}
+                                                        </Text>
+                                                        <Text style={[styles.sentStripMeta, { color: isDark ? '#94a3b8' : '#6b7280' }]} numberOfLines={1}>
+                                                            {getSentMeta(item) || 'Pending reply'}
+                                                        </Text>
+                                                    </View>
+                                                </Pressable>
+                                            );
+                                        }}
+                                    />
+                                </View>
+                            )
+                        )}
                     </View>
                 )}
 
@@ -499,19 +584,19 @@ export default function MatchesScreen() {
                 />
             </View>
 
-            {/* Sent modal (horizontal carousel) */}
+            {/* Sent details sheet */}
             <Modal
-                visible={isSentModalOpen}
+                visible={Boolean(sentDetails)}
                 transparent
-                animationType="slide"
-                onRequestClose={closeSentModal}
+                animationType="fade"
+                onRequestClose={closeSentDetails}
             >
                 <View style={styles.modalRoot}>
-                    <Pressable style={styles.modalBackdrop} onPress={closeSentModal} />
+                    <Pressable style={styles.modalBackdrop} onPress={closeSentDetails} />
 
                     <SafeAreaView
                         style={[
-                            styles.sentModalSheet,
+                            styles.sentDetailsSheet,
                             {
                                 backgroundColor: isDark ? 'rgba(15, 13, 35, 0.98)' : '#ffffff',
                                 borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)',
@@ -519,136 +604,69 @@ export default function MatchesScreen() {
                         ]}
                         edges={['bottom']}
                     >
-                        <View style={styles.sentModalHeader}>
-                            <View style={styles.sentModalTitleRow}>
-                                <Text style={[styles.sentModalTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                                    Sent
-                                </Text>
-                                {!isSentLoading && (
-                                    <View style={[styles.sentPill, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)' }]}>
-                                        <Text style={[styles.sentPillText, { color: colors.mutedForeground }]}>
-                                            {sent.length} pending
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
-
+                        <View style={styles.sentDetailsHeader}>
+                            <Text style={[styles.sentDetailsTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+                                {sentDetails?.toUser.name ?? 'Sent'}
+                            </Text>
                             <Pressable
-                                onPress={closeSentModal}
+                                onPress={closeSentDetails}
                                 style={({ pressed }) => ([
-                                    styles.sentModalCloseBtn,
+                                    styles.sentDetailsCloseBtn,
                                     {
                                         backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
                                         opacity: pressed ? 0.85 : 1,
                                     },
                                 ])}
                             >
-                                <Text style={[styles.sentModalCloseText, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+                                <Text style={[styles.sentDetailsCloseText, { color: isDark ? '#fff' : '#1a1a2e' }]}>
                                     Close
                                 </Text>
                             </Pressable>
                         </View>
 
-                        {isSentLoading ? (
-                            <View style={styles.sentModalLoading}>
-                                <ActivityIndicator size="small" color={colors.primary} />
-                                <Text style={[styles.sentModalLoadingText, { color: colors.mutedForeground }]}>Loading…</Text>
+                        {sentDetails && (
+                            <View style={styles.sentDetailsBody}>
+                                {(() => {
+                                    const avatarUri = sentDetails.toUser.profilePhoto || sentDetails.toUser.image || sentDetails.toUser.profile?.photos?.[0] || null;
+                                    if (avatarUri) {
+                                        return <Image source={{ uri: avatarUri }} style={styles.sentDetailsAvatar} />;
+                                    }
+                                    return (
+                                        <View style={[styles.sentDetailsAvatar, styles.requestAvatarFallback, { borderColor: colors.border }]}>
+                                            <Text style={[styles.requestAvatarInitial, { color: colors.mutedForeground }]}>
+                                                {(sentDetails.toUser.name || '?').trim().charAt(0).toUpperCase()}
+                                            </Text>
+                                        </View>
+                                    );
+                                })()}
+
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.sentDetailsMeta, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
+                                        {getSentMeta(sentDetails)}
+                                    </Text>
+                                    <View style={[styles.sentStatusPill, { alignSelf: 'flex-start', marginTop: 10, borderColor: colors.border, backgroundColor: isDark ? 'rgba(236,72,153,0.14)' : 'rgba(236,72,153,0.10)' }]}>
+                                        <Text style={[styles.sentStatusText, { color: colors.primary }]}>
+                                            Pending
+                                        </Text>
+                                    </View>
+                                </View>
                             </View>
-                        ) : sent.length === 0 ? (
-                            <View style={styles.sentModalEmpty}>
-                                <Text style={[styles.sentModalEmptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                                    No pending requests
-                                </Text>
-                                <Text style={[styles.sentModalEmptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                                    When you send a connection, it’ll show up here until they respond.
-                                </Text>
-                            </View>
-                        ) : (
-                            (() => {
-                                const windowWidth = Dimensions.get('window').width;
-                                const itemWidth = Math.min(320, Math.max(240, windowWidth - 64));
-                                const itemSpacing = 14;
-                                const snap = itemWidth + itemSpacing;
-
-                                return (
-                                    <FlatList
-                                        data={sent}
-                                        horizontal
-                                        showsHorizontalScrollIndicator={false}
-                                        keyExtractor={(item) => item.swipeId}
-                                        initialScrollIndex={Math.min(sentModalStartIndex, Math.max(0, sent.length - 1))}
-                                        getItemLayout={(_, index) => ({ length: snap, offset: snap * index, index })}
-                                        snapToInterval={snap}
-                                        decelerationRate="fast"
-                                        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 18 }}
-                                        ItemSeparatorComponent={() => <View style={{ width: itemSpacing }} />}
-                                        onMomentumScrollEnd={() => {
-                                            const now = Date.now();
-                                            if (now - lastSentScrollHapticAt.current > 350) {
-                                                lastSentScrollHapticAt.current = now;
-                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                            }
-                                        }}
-                                        renderItem={({ item, index }) => {
-                                            const avatarUri = item.toUser.profilePhoto || item.toUser.image || item.toUser.profile?.photos?.[0] || null;
-                                            return (
-                                                <Pressable
-                                                    onPress={() => {
-                                                        setSentModalStartIndex(index);
-                                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                                    }}
-                                                    style={({ pressed }) => ([
-                                                        styles.sentModalCard,
-                                                        {
-                                                            width: itemWidth,
-                                                            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#ffffff',
-                                                            borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)',
-                                                            opacity: pressed ? 0.92 : 1,
-                                                        },
-                                                    ])}
-                                                >
-                                                    <View style={styles.sentModalCardTop}>
-                                                        {avatarUri ? (
-                                                            <Image source={{ uri: avatarUri }} style={styles.sentModalAvatar} />
-                                                        ) : (
-                                                            <View style={[styles.sentModalAvatar, styles.requestAvatarFallback, { borderColor: colors.border }]}>
-                                                                <Text style={[styles.requestAvatarInitial, { color: colors.mutedForeground }]}>
-                                                                    {(item.toUser.name || '?').trim().charAt(0).toUpperCase()}
-                                                                </Text>
-                                                            </View>
-                                                        )}
-
-                                                        <View style={{ flex: 1 }}>
-                                                            <Text style={[styles.sentModalName, { color: isDark ? '#fff' : '#1a1a2e' }]} numberOfLines={1}>
-                                                                {item.toUser.name}
-                                                            </Text>
-                                                            <Text style={[styles.sentModalMeta, { color: isDark ? '#94a3b8' : '#6b7280' }]} numberOfLines={2}>
-                                                                {getSentMeta(item)}
-                                                            </Text>
-                                                        </View>
-                                                    </View>
-
-                                                    <Pressable
-                                                        onPress={() => confirmCancelSent(item)}
-                                                        disabled={cancelSentMutation.isPending}
-                                                        style={({ pressed }) => ([
-                                                            styles.sentModalCancelBtn,
-                                                            {
-                                                                borderColor: colors.border,
-                                                                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
-                                                                opacity: cancelSentMutation.isPending ? 0.6 : (pressed ? 0.88 : 1),
-                                                            },
-                                                        ])}
-                                                    >
-                                                        <Text style={[styles.sentModalCancelText, { color: colors.primary }]}>Cancel request</Text>
-                                                    </Pressable>
-                                                </Pressable>
-                                            );
-                                        }}
-                                    />
-                                );
-                            })()
                         )}
+
+                        <Pressable
+                            onPress={() => sentDetails && confirmCancelSent(sentDetails)}
+                            disabled={!sentDetails || cancelSentMutation.isPending}
+                            style={({ pressed }) => ([
+                                styles.sentDetailsCancelBtn,
+                                {
+                                    borderColor: colors.border,
+                                    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+                                    opacity: cancelSentMutation.isPending ? 0.6 : (pressed ? 0.88 : 1),
+                                },
+                            ])}
+                        >
+                            <Text style={[styles.sentDetailsCancelText, { color: colors.primary }]}>Cancel request</Text>
+                        </Pressable>
                     </SafeAreaView>
                 </View>
             </Modal>
@@ -746,7 +764,75 @@ const styles = StyleSheet.create({
     sentContainer: {
         paddingHorizontal: 16,
         paddingBottom: 10,
+        gap: 8,
+    },
+    sentCollapseHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 4,
+        paddingVertical: 4,
+    },
+    sentCollapseRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    sentStripOuter: {
+        // negative margin to pull the strip edge-to-edge
+        marginHorizontal: -16,
+    },
+    sentStripLoading: {
+        flexDirection: 'row',
+        alignItems: 'center',
         gap: 10,
+        paddingHorizontal: 4,
+        paddingTop: 2,
+    },
+    sentStripLoadingText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    sentStripCard: {
+        height: 260,
+        borderRadius: 24,
+        borderWidth: 1,
+        padding: 10,
+        gap: 10,
+    },
+    sentStripImageFrame: {
+        width: '100%',
+        height: 176,
+        borderRadius: 18,
+        overflow: 'hidden',
+        backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    sentStripImage: {
+        width: '100%',
+        height: '100%',
+    },
+    sentStripImageFallback: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'transparent',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderRadius: 18,
+    },
+    sentStripCardBody: {
+        flex: 1,
+        paddingHorizontal: 2,
+        justifyContent: 'center',
+        gap: 6,
+    },
+    sentStripName: {
+        fontSize: 15,
+        fontWeight: '800',
+    },
+    sentStripMeta: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     sentCountPill: {
         minWidth: 30,
@@ -773,24 +859,6 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '700',
     },
-    sentSummaryCard: {
-        borderRadius: 18,
-        borderWidth: 1,
-        padding: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 12,
-    },
-    sentSummaryTitle: {
-        fontSize: 14,
-        fontWeight: '800',
-    },
-    sentSummarySubtitle: {
-        fontSize: 12,
-        fontWeight: '500',
-        marginTop: 4,
-    },
     sentStatusPill: {
         borderWidth: 1,
         paddingHorizontal: 10,
@@ -804,7 +872,7 @@ const styles = StyleSheet.create({
         fontWeight: '800',
     },
 
-    // Sent modal
+    // Modals
     modalRoot: {
         flex: 1,
         justifyContent: 'flex-end',
@@ -813,101 +881,61 @@ const styles = StyleSheet.create({
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(0,0,0,0.55)',
     },
-    sentModalSheet: {
+    sentDetailsSheet: {
         borderTopLeftRadius: 22,
         borderTopRightRadius: 22,
         borderWidth: 1,
         paddingTop: 14,
-    },
-    sentModalHeader: {
         paddingHorizontal: 18,
-        paddingBottom: 12,
+        paddingBottom: 16,
+        gap: 14,
+    },
+    sentDetailsHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 12,
     },
-    sentModalTitleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        flex: 1,
-    },
-    sentModalTitle: {
+    sentDetailsTitle: {
         fontSize: 18,
         fontWeight: '800',
+        flex: 1,
     },
-    sentModalCloseBtn: {
+    sentDetailsCloseBtn: {
         paddingHorizontal: 12,
         height: 36,
         borderRadius: 999,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    sentModalCloseText: {
+    sentDetailsCloseText: {
         fontSize: 12,
         fontWeight: '800',
     },
-    sentModalLoading: {
-        paddingHorizontal: 18,
-        paddingVertical: 18,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    sentModalLoadingText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    sentModalEmpty: {
-        paddingHorizontal: 18,
-        paddingVertical: 18,
-        gap: 6,
-    },
-    sentModalEmptyTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-    },
-    sentModalEmptySubtitle: {
-        fontSize: 13,
-        fontWeight: '500',
-        lineHeight: 18,
-    },
-    sentModalCard: {
-        borderRadius: 20,
-        borderWidth: 1,
-        padding: 14,
-        gap: 12,
-    },
-    sentModalCardTop: {
+    sentDetailsBody: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
     },
-    sentModalAvatar: {
-        width: 56,
-        height: 56,
+    sentDetailsAvatar: {
+        width: 58,
+        height: 58,
         borderRadius: 18,
         backgroundColor: 'rgba(255,255,255,0.08)',
     },
-    sentModalName: {
-        fontSize: 16,
-        fontWeight: '800',
-    },
-    sentModalMeta: {
-        fontSize: 12,
+    sentDetailsMeta: {
+        fontSize: 13,
         fontWeight: '600',
-        marginTop: 3,
-        lineHeight: 16,
+        lineHeight: 18,
     },
-    sentModalCancelBtn: {
+    sentDetailsCancelBtn: {
         borderWidth: 1,
         borderRadius: 999,
-        paddingVertical: 10,
+        paddingVertical: 12,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    sentModalCancelText: {
+    sentDetailsCancelText: {
         fontSize: 12,
         fontWeight: '800',
     },

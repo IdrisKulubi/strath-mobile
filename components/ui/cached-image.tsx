@@ -4,8 +4,7 @@ import { Image as ExpoImage, ImageContentFit } from 'expo-image';
 import { useTheme } from '@/hooks/use-theme';
 import { User } from 'phosphor-react-native';
 
-// Default fallback for profile/avatar images
-const DEFAULT_AVATAR = 'https://api.dicebear.com/7.x/avataaars/png?seed=fallback';
+// Default fallback for cover images
 const DEFAULT_COVER = 'https://images.unsplash.com/photo-1557683316-973673baf926?w=800&h=400&fit=crop';
 
 // ---- Module-level URL validation cache ----
@@ -39,8 +38,10 @@ function prefetchUrl(url: string): Promise<boolean> {
     return promise;
 }
 
-function getFallbackUri(type: 'avatar' | 'cover' | 'photo'): string {
-    return type === 'cover' ? DEFAULT_COVER : DEFAULT_AVATAR;
+function getFallbackUri(type: 'avatar' | 'cover' | 'photo'): string | null {
+    if (type === 'cover') return DEFAULT_COVER;
+    // Avoid remote avatar generators (e.g. dicebear) as fallbacks.
+    return null;
 }
 
 interface CachedImageProps {
@@ -125,8 +126,46 @@ export function CachedImage({
         );
     }
 
-    // Choose source: validated URI or fallback
-    const source = imgState === 'error' ? getFallbackUri(fallbackType) : uri!;
+    // If avatar failed (or no fallback URI), render an in-app placeholder instead of a remote default image.
+    if (imgState === 'error') {
+        const fallbackUri = getFallbackUri(fallbackType);
+
+        if (!fallbackUri) {
+            return (
+                <View style={[style, styles.placeholder, { backgroundColor: colors.muted }]}>
+                    {fallbackType === 'avatar' && (
+                        <User size={24} color={colors.mutedForeground} weight="fill" />
+                    )}
+                </View>
+            );
+        }
+
+        if (useExpoImage) {
+            return (
+                <ExpoImage
+                    source={{ uri: fallbackUri }}
+                    style={style}
+                    contentFit={contentFit}
+                    placeholder={placeholder}
+                    onError={handleError}
+                    transition={200}
+                    cachePolicy="memory-disk"
+                />
+            );
+        }
+
+        return (
+            <Image
+                source={{ uri: fallbackUri }}
+                style={style}
+                resizeMode={contentFit as any}
+                onError={handleError}
+            />
+        );
+    }
+
+    // Choose source: validated URI
+    const source = uri!;
 
     if (useExpoImage) {
         return (

@@ -21,6 +21,7 @@ import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { AgentMatch } from '@/hooks/use-agent';
+import { BlockReportModal } from '@/components/discover/block-report-modal';
 import { X, ChatCircle, GraduationCap, Sparkle, UserCircle } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -36,6 +37,19 @@ function toPercent(value: number) {
     return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function isPlaceholderAvatarUrl(uri: string | null | undefined): boolean {
+    if (!uri) return true;
+    const u = uri.toLowerCase();
+    return (
+        u.includes('dicebear.com') ||
+        u.includes('ui-avatars.com') ||
+        u.includes('robohash.org') ||
+        u.includes('pravatar.cc') ||
+        u.includes('multiavatar.com') ||
+        u.includes('boringavatars.com')
+    );
+}
+
 export function WingmanMatchDetail({
     visible,
     match,
@@ -46,11 +60,14 @@ export function WingmanMatchDetail({
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+    const [blockReportMode, setBlockReportMode] = useState<'block' | 'report' | null>(null);
     const translateY = useSharedValue(0);
 
     const photos = useMemo(() => {
         if (!match) return [];
-        const all = [match.profile.profilePhoto, ...(match.profile.photos || [])].filter(Boolean) as string[];
+        const all = [match.profile.profilePhoto, ...(match.profile.photos || [])]
+            .filter(Boolean)
+            .filter((p) => !isPlaceholderAvatarUrl(p as string)) as string[];
         return [...new Set(all)];
     }, [match]);
 
@@ -122,6 +139,8 @@ export function WingmanMatchDetail({
     useEffect(() => {
         if (visible) {
             translateY.value = 0;
+        } else {
+            setBlockReportMode(null);
         }
     }, [translateY, visible]);
 
@@ -275,6 +294,45 @@ export function WingmanMatchDetail({
                                     )) : (
                                         <Text style={[styles.sectionText, { color: colors.mutedForeground }]}>No starters yet.</Text>
                                     )}
+
+                                    {/* Safety actions */}
+                                    <View style={styles.safetyRow}>
+                                        <Pressable
+                                            onPress={() => {
+                                                if (!match) return;
+                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                                setBlockReportMode('block');
+                                            }}
+                                            style={({ pressed }) => ([
+                                                styles.safetyBtn,
+                                                {
+                                                    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+                                                    borderColor: colors.border,
+                                                    opacity: pressed ? 0.85 : 1,
+                                                },
+                                            ])}
+                                        >
+                                            <Text style={[styles.safetyBtnText, { color: colors.foreground }]}>Block</Text>
+                                        </Pressable>
+
+                                        <Pressable
+                                            onPress={() => {
+                                                if (!match) return;
+                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                                setBlockReportMode('report');
+                                            }}
+                                            style={({ pressed }) => ([
+                                                styles.safetyBtn,
+                                                {
+                                                    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+                                                    borderColor: colors.border,
+                                                    opacity: pressed ? 0.85 : 1,
+                                                },
+                                            ])}
+                                        >
+                                            <Text style={[styles.safetyBtnText, { color: '#FF3B30' }]}>Report</Text>
+                                        </Pressable>
+                                    </View>
                                 </View>
                             </ScrollView>
 
@@ -295,6 +353,21 @@ export function WingmanMatchDetail({
                     )}
                 </Animated.View>
             </Animated.View>
+
+            {/* Reuse the existing Block/Report sheet */}
+            {blockReportMode && match && (
+                <BlockReportModal
+                    visible={!!blockReportMode}
+                    mode={blockReportMode}
+                    userId={match.profile.userId}
+                    userName={match.profile.firstName || 'User'}
+                    onClose={() => setBlockReportMode(null)}
+                    onSuccess={() => {
+                        setBlockReportMode(null);
+                    }}
+                    onSwitchMode={() => setBlockReportMode(blockReportMode === 'block' ? 'report' : 'block')}
+                />
+            )}
 
             <Modal
                 visible={!!selectedPhoto}
@@ -461,6 +534,23 @@ const styles = StyleSheet.create({
     starterText: {
         fontSize: 13,
         lineHeight: 18,
+    },
+    safetyRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 8,
+    },
+    safetyBtn: {
+        flex: 1,
+        borderRadius: 999,
+        borderWidth: 1,
+        paddingVertical: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    safetyBtnText: {
+        fontSize: 12,
+        fontWeight: '700',
     },
     footer: {
         borderTopWidth: 1,

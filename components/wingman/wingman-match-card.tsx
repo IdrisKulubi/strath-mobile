@@ -33,6 +33,20 @@ interface WingmanMatchCardProps {
     onLike?: (match: AgentMatch) => void;
 }
 
+function isPlaceholderAvatarUrl(uri: string | null | undefined): boolean {
+    if (!uri) return true;
+    const u = uri.toLowerCase();
+    // Common avatar-generator / placeholder domains we don't want to show as "real" photos.
+    return (
+        u.includes('dicebear.com') ||
+        u.includes('ui-avatars.com') ||
+        u.includes('robohash.org') ||
+        u.includes('pravatar.cc') ||
+        u.includes('multiavatar.com') ||
+        u.includes('boringavatars.com')
+    );
+}
+
 function WingmanMatchCardInner({ match, index, onPress, onLike }: WingmanMatchCardProps) {
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -44,7 +58,8 @@ function WingmanMatchCardInner({ match, index, onPress, onLike }: WingmanMatchCa
     const age = profile.age;
     const course = profile.course;
     const yearOfStudy = profile.yearOfStudy;
-    const photo = profile.profilePhoto || (profile.photos && profile.photos[0]);
+    const photoCandidate = profile.profilePhoto || (profile.photos && profile.photos[0]) || null;
+    const photo = isPlaceholderAvatarUrl(photoCandidate) ? null : photoCandidate;
     const matchPct = Math.round(explanation.matchPercentage);
 
     const animatedScale = useAnimatedStyle(() => ({
