@@ -7,6 +7,15 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const AGENT_REQUEST_TIMEOUT_MS = 15_000;
 const AGENT_TIMEOUT_MESSAGE = "Took longer than expected, try again?";
 
+function isAbortError(err: unknown): boolean {
+    return (
+        typeof err === "object" &&
+        err !== null &&
+        "name" in err &&
+        (err as { name?: unknown }).name === "AbortError"
+    );
+}
+
 // ============================================
 // useAgent — Mobile hook for AI Wingman
 // ============================================
@@ -132,7 +141,7 @@ async function agentSearchAPI(
             signal: controller.signal,
         });
     } catch (networkErr) {
-        if (networkErr?.name === "AbortError") {
+        if (isAbortError(networkErr)) {
             throw new Error(AGENT_TIMEOUT_MESSAGE);
         }
         console.error('[Agent] Network error:', networkErr);
@@ -185,8 +194,8 @@ async function agentRefineAPI(
             }),
             signal: controller.signal,
         });
-    } catch (networkErr: any) {
-        if (networkErr?.name === "AbortError") {
+    } catch (networkErr) {
+        if (isAbortError(networkErr)) {
             throw new Error(AGENT_TIMEOUT_MESSAGE);
         }
         throw networkErr;

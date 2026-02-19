@@ -1,11 +1,12 @@
-import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, StatusBar, Pressable, Alert } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, StyleSheet, StatusBar, Pressable, Alert, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useMatches, Match } from '@/hooks/use-matches';
+import { useConnectionRequests, useRespondToConnectionRequest, type ConnectionRequest } from '@/hooks/use-connection-requests';
 import { useAllMissions } from '@/hooks/use-missions';
 import { useNotificationCounts } from '@/hooks/use-notification-counts';
 import { MatchesListV2 } from '@/components/matches/matches-list-v2';
@@ -42,6 +43,8 @@ export default function MatchesScreen() {
     const queryClient = useQueryClient();
 
     const { data, isLoading, refetch } = useMatches();
+    const { data: requests = [], isLoading: isRequestsLoading } = useConnectionRequests();
+    const respondMutation = useRespondToConnectionRequest();
     const { byMatchId: missionsByMatchId } = useAllMissions();
     const { markMatchAsOpened } = useNotificationCounts();
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -56,6 +59,8 @@ export default function MatchesScreen() {
     // Filter out archived matches from main list
     const matches = allMatches.filter(m => !archivedMatchIds.has(m.id));
     const archivedMatches = allMatches.filter(m => archivedMatchIds.has(m.id));
+
+    const visibleRequests = useMemo(() => requests.slice(0, 20), [requests]);
 
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true);
@@ -75,6 +80,29 @@ export default function MatchesScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         router.push('/(tabs)');
     }, [router]);
+
+    const handleAcceptRequest = useCallback(async (req: ConnectionRequest) => {
+        try {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            const res = await respondMutation.mutateAsync({ targetUserId: req.fromUser.id, action: 'like' });
+            const isMatch = Boolean(res?.isMatch);
+            const matchId = res?.match?.id ?? null;
+            if (isMatch && matchId) {
+                router.push({ pathname: '/chat/[matchId]', params: { matchId } } as any);
+            }
+        } catch (e: any) {
+            Alert.alert('Error', e?.message || 'Failed to accept request');
+        }
+    }, [respondMutation, router]);
+
+    const handleDeclineRequest = useCallback(async (req: ConnectionRequest) => {
+        try {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            await respondMutation.mutateAsync({ targetUserId: req.fromUser.id, action: 'pass' });
+        } catch (e: any) {
+            Alert.alert('Error', e?.message || 'Failed to decline request');
+        }
+    }, [respondMutation]);
 
     const handleArchive = useCallback((match: Match) => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -209,6 +237,104 @@ export default function MatchesScreen() {
 
             {/* Matches List */}
             <View style={styles.listContainer}>
+                {/* Connection Requests */}
+                {(isRequestsLoading || visibleRequests.length > 0) && (
+                    <View style={styles.requestsContainer}>
+                        <View style={styles.requestsHeader}>
+                            <Text style={[styles.requestsTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+                                Requests
+                            </Text>
+                            {isRequestsLoading ? (
+                                <ActivityIndicator size="small" color={colors.primary} />
+                            ) : (
+                                <Text style={[styles.requestsCount, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
+                                    {visibleRequests.length}
+                                </Text>
+                            )}
+                        </View>
+
+                        {visibleRequests.map((r) => (
+                            <View
+                                key={r.requestId}
+                                style={[
+                                    styles.requestCard,
+                                    {
+                                        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#ffffff',
+                                        borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+                                    }
+                                ]}
+                            >
+                                <View style={styles.requestLeft}>
+                                    {(() => {
+                                        const avatarUri = r.fromUser.profilePhoto || r.fromUser.image || r.fromUser.profile?.photos?.[0] || null;
+                                        if (avatarUri) {
+                                            return (
+                                                <Image
+                                                    source={{ uri: avatarUri }}
+                                                    style={styles.requestAvatar}
+                                                />
+                                            );
+                                        }
+
+                                        const initial = (r.fromUser.name || "?").trim().charAt(0).toUpperCase();
+                                        return (
+                                            <View style={[styles.requestAvatar, styles.requestAvatarFallback, { borderColor: colors.border }]}>
+                                                <Text style={[styles.requestAvatarInitial, { color: colors.mutedForeground }]}>
+                                                    {initial}
+                                                </Text>
+                                            </View>
+                                        );
+                                    })()}
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.requestName, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+                                            {r.fromUser.name}
+                                        </Text>
+                                        <Text style={[styles.requestMeta, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
+                                            {r.fromUser.profile?.course || 'Wants to connect'}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <View style={styles.requestActions}>
+                                    <Pressable
+                                        onPress={() => handleDeclineRequest(r)}
+                                        disabled={respondMutation.isPending}
+                                        style={[
+                                            styles.requestBtn,
+                                            {
+                                                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                                                borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+                                                opacity: respondMutation.isPending ? 0.6 : 1,
+                                            },
+                                        ]}
+                                    >
+                                        <Text style={[styles.requestBtnText, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+                                            Decline
+                                        </Text>
+                                    </Pressable>
+
+                                    <Pressable
+                                        onPress={() => handleAcceptRequest(r)}
+                                        disabled={respondMutation.isPending}
+                                        style={{ opacity: respondMutation.isPending ? 0.6 : 1 }}
+                                    >
+                                        <LinearGradient
+                                            colors={['#ec4899', '#f43f5e']}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 0 }}
+                                            style={styles.requestBtnPrimary}
+                                        >
+                                            <Text style={styles.requestBtnPrimaryText}>
+                                                Accept
+                                            </Text>
+                                        </LinearGradient>
+                                    </Pressable>
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
                 <MatchesListV2
                     matches={matches}
                     isLoading={isLoading}
@@ -302,5 +428,94 @@ const styles = StyleSheet.create({
     },
     listContainer: {
         flex: 1,
+    },
+
+    // Requests
+    requestsContainer: {
+        paddingHorizontal: 16,
+        paddingBottom: 8,
+        gap: 10,
+    },
+    requestsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 4,
+        marginTop: 6,
+    },
+    requestsTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    requestsCount: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    requestCard: {
+        borderRadius: 18,
+        borderWidth: 1,
+        padding: 12,
+        gap: 10,
+    },
+    requestLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    requestAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    requestAvatarFallback: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        backgroundColor: 'transparent',
+    },
+    requestAvatarInitial: {
+        fontSize: 16,
+        fontWeight: '800',
+    },
+    requestName: {
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    requestMeta: {
+        fontSize: 12,
+        fontWeight: '500',
+        marginTop: 2,
+    },
+    requestActions: {
+        flexDirection: 'row',
+        gap: 10,
+        justifyContent: 'flex-end',
+    },
+    requestBtn: {
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        borderRadius: 999,
+        borderWidth: 1,
+        minWidth: 88,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    requestBtnText: {
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    requestBtnPrimary: {
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        borderRadius: 999,
+        minWidth: 88,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    requestBtnPrimaryText: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#fff',
     },
 });

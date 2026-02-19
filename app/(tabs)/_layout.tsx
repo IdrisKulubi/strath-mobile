@@ -9,7 +9,8 @@ import { useNotificationCounts, formatBadgeCount } from '@/hooks/use-notificatio
 
 export default function TabLayout() {
   const { colors } = useTheme();
-  const { unopenedMatches, unreadMessages } = useNotificationCounts();
+  const { unopenedMatches, unreadMessages, incomingRequests } = useNotificationCounts();
+  const connectionBadge = unopenedMatches + (incomingRequests ?? 0);
 
   return (
     <Tabs
@@ -69,7 +70,7 @@ export default function TabLayout() {
         options={{
           title: 'Connections',
           tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "hand-right" : "hand-right-outline"} color={color} />,
-          tabBarBadge: formatBadgeCount(unopenedMatches),
+          tabBarBadge: formatBadgeCount(connectionBadge),
         }}
       />
       <Tabs.Screen

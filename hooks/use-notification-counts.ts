@@ -8,6 +8,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 interface NotificationCounts {
     unopenedMatches: number;
     unreadMessages: number;
+    incomingRequests?: number;
     total: number;
 }
 
@@ -35,7 +36,7 @@ async function fetchNotificationCounts(): Promise<NotificationCounts> {
     }
 
     const result = await response.json();
-    const data = result.data || { unopenedMatches: 0, unreadMessages: 0, total: 0 };
+    const data = result.data || { unopenedMatches: 0, unreadMessages: 0, incomingRequests: 0, total: 0 };
     console.log('[NotificationCounts] Fetched:', data);
     return data;
 }
@@ -111,6 +112,7 @@ export function useNotificationCounts() {
     return {
         unopenedMatches: data?.unopenedMatches ?? 0,
         unreadMessages: data?.unreadMessages ?? 0,
+        incomingRequests: data?.incomingRequests ?? 0,
         totalNotifications: data?.total ?? 0,
         isLoading,
         refetch,
