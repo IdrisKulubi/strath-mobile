@@ -75,7 +75,11 @@ export default function ExploreScreen() {
   // Show voice errors to user
   useEffect(() => {
     if (voiceError) {
-      Alert.alert('Voice Input', voiceError);
+      console.warn('[Explore] Voice error:', voiceError);
+      const friendly = voiceError.toLowerCase().includes('permission')
+        ? voiceError
+        : "Voice isn't working, type instead";
+      Alert.alert('Voice Input', friendly);
     }
   }, [voiceError]);
 

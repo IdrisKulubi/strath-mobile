@@ -4,6 +4,9 @@ import { getAuthToken } from "@/lib/auth-helpers";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
+const AGENT_REQUEST_TIMEOUT_MS = 15_000;
+const AGENT_TIMEOUT_MESSAGE = "Took longer than expected, try again?";
+
 // ============================================
 // useAgent — Mobile hook for AI Wingman
 // ============================================
@@ -116,6 +119,8 @@ async function agentSearchAPI(
     console.log('[Agent] Searching:', query, 'url:', url, 'hasToken:', !!token);
 
     let response: Response;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), AGENT_REQUEST_TIMEOUT_MS);
     try {
         response = await fetch(url, {
             method: "POST",
@@ -124,10 +129,16 @@ async function agentSearchAPI(
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({ query, limit, offset, excludeIds }),
+            signal: controller.signal,
         });
     } catch (networkErr) {
+        if (networkErr?.name === "AbortError") {
+            throw new Error(AGENT_TIMEOUT_MESSAGE);
+        }
         console.error('[Agent] Network error:', networkErr);
         throw new Error("Can't reach server — check your connection");
+    } finally {
+        clearTimeout(timeoutId);
     }
 
     if (!response.ok) {
@@ -154,20 +165,34 @@ async function agentRefineAPI(
     previousMatchIds: string[] = [],
 ): Promise<AgentSearchResponse> {
     const token = await getAuthToken();
-    const response = await fetch(`${API_URL}/api/agent/refine`, {
-        method: "POST",
-        headers: {
-            Authorization: token ? `Bearer ${token}` : "",
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            original_query: originalQuery,
-            refinement,
-            previous_match_ids: previousMatchIds,
-            limit: 20,
-            offset: 0,
-        }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), AGENT_REQUEST_TIMEOUT_MS);
+
+    let response: Response;
+    try {
+        response = await fetch(`${API_URL}/api/agent/refine`, {
+            method: "POST",
+            headers: {
+                Authorization: token ? `Bearer ${token}` : "",
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                original_query: originalQuery,
+                refinement,
+                previous_match_ids: previousMatchIds,
+                limit: 20,
+                offset: 0,
+            }),
+            signal: controller.signal,
+        });
+    } catch (networkErr: any) {
+        if (networkErr?.name === "AbortError") {
+            throw new Error(AGENT_TIMEOUT_MESSAGE);
+        }
+        throw networkErr;
+    } finally {
+        clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
         const text = await response.text();

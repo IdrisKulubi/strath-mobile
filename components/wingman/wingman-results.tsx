@@ -171,6 +171,23 @@ function SearchError({ error, onRetry }: { error: string; onRetry: () => void })
     );
 }
 
+// ===== Empty results state (search completed but nothing returned) =====
+function NoResults() {
+    const { colors } = useTheme();
+
+    return (
+        <Animated.View entering={FadeIn} style={styles.errorContainer}>
+            <Text style={{ fontSize: 32 }}>🫣</Text>
+            <Text style={[styles.errorText, { color: colors.foreground }]}>
+                No one matched exactly.
+            </Text>
+            <Text style={[styles.errorDetail, { color: colors.mutedForeground }]}>
+                Here's who came close.
+            </Text>
+        </Animated.View>
+    );
+}
+
 // ===== Main component =====
 export function WingmanResults({
     matches,
@@ -227,6 +244,11 @@ export function WingmanResults({
                 onRetry={() => onRefine?.(currentQuery || '')}
             />
         );
+    }
+
+    // Empty results (no error)
+    if (currentQuery && !isSearching && matches.length === 0) {
+        return <NoResults />;
     }
 
     // Results

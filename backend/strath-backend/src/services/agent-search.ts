@@ -51,7 +51,7 @@ export interface SearchResult {
 export async function agentSearch(
     userId: string,
     intent: ParsedIntent,
-    intentEmbedding: number[],
+    intentEmbedding: number[] | null,
     limit: number = 30,
     offset: number = 0,
     excludeUserIds: string[] = [],
@@ -65,8 +65,12 @@ export async function agentSearch(
     });
 
     // 3. Run dual search strategy
+    const vectorPromise = intentEmbedding && intentEmbedding.length > 0
+        ? vectorSearch(intentEmbedding, excludedIds, limit + 10, userProfile)
+        : Promise.resolve([] as SearchCandidate[]);
+
     const [vectorResults, filterResults] = await Promise.all([
-        vectorSearch(intentEmbedding, excludedIds, limit + 10, userProfile),
+        vectorPromise,
         filterSearch(intent, excludedIds, limit + 10, userProfile),
     ]);
 
@@ -76,9 +80,11 @@ export async function agentSearch(
     return {
         candidates,
         totalFound: candidates.length,
-        searchMethod: vectorResults.length > 0 && filterResults.length > 0 
-            ? "hybrid" 
-            : vectorResults.length > 0 ? "vector_only" : "filter_only",
+        searchMethod: vectorResults.length > 0 && filterResults.length > 0
+            ? "hybrid"
+            : vectorResults.length > 0
+                ? "vector_only"
+                : "filter_only",
         debugInfo: {
             excludedCount: excludedIds.length,
             filterPassCount: filterResults.length,

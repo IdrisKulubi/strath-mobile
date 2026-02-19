@@ -108,6 +108,7 @@ export async function POST(request: NextRequest) {
         // 2. Parse intent
         step = "parse_intent";
         let intent: Awaited<ReturnType<typeof parseIntent>>;
+        let intentParseFailed = false;
         try {
             intent = await parseIntent(
                 query.trim(),
@@ -117,6 +118,7 @@ export async function POST(request: NextRequest) {
         } catch (intentErr) {
             console.error("[AgentSearch] parse_intent failed:", intentErr);
             // Fallback: use a simple intent
+            intentParseFailed = true;
             intent = {
                 vibe: "any" as const,
                 filters: {},
@@ -129,17 +131,26 @@ export async function POST(request: NextRequest) {
 
         // 3. Embed intent for vector search
         step = "embed_intent";
-        let intentEmbedding: number[];
+        let intentEmbedding: number[] | null;
+        let embeddingFailed = false;
         try {
-            intentEmbedding = await embedIntent(intent);
+            // If the LLM failed to parse intent, follow the spec: fallback to structured-only (no semantic)
+            // rather than attempting semantic embeddings.
+            if (intentParseFailed) {
+                intentEmbedding = null;
+            } else {
+                intentEmbedding = await embedIntent(intent);
+            }
         } catch (embErr) {
             console.error("[AgentSearch] embed_intent failed:", embErr);
-            return errorResponse("AI embedding service unavailable — try again shortly", 503);
+            // Fallback to structured-only search instead of failing hard.
+            embeddingFailed = true;
+            intentEmbedding = null;
         }
 
         // 4. Search
         step = "agent_search";
-        const searchResults = await agentSearch(
+        let searchResults = await agentSearch(
             userId,
             intent,
             intentEmbedding,
@@ -150,15 +161,46 @@ export async function POST(request: NextRequest) {
 
         // 5. Rank
         step = "rank";
-        const ranked = rankCandidates(
+        let intentForResults = intent;
+
+        let ranked = rankCandidates(
             searchResults.candidates,
             intent,
             agentCtx.learnedPreferences,
         );
 
+        // Empty results boundary: broaden once and return "close" matches.
+        if (ranked.length === 0) {
+            step = "empty_results_fallback";
+            const broadenedIntent = {
+                ...intent,
+                filters: {},
+                confidence: Math.min(intent.confidence ?? 0.2, 0.2),
+            };
+            intentForResults = broadenedIntent;
+
+            searchResults = await agentSearch(
+                userId,
+                broadenedIntent,
+                intentEmbedding,
+                Math.min(limit, 50),
+                offset,
+                excludeIds,
+            );
+
+            ranked = rankCandidates(
+                searchResults.candidates,
+                intentForResults,
+                agentCtx.learnedPreferences,
+            );
+
+            // Use the exact UX string requested.
+            // Note: We still return results if available; if not, the client will show the empty message.
+        }
+
         // 6. Generate explanations
         step = "explanations";
-        const explanations = generateQuickExplanations(ranked, intent);
+        const explanations = generateQuickExplanations(ranked, intentForResults);
 
         // 7. Build response
         step = "build_response";
@@ -176,15 +218,23 @@ export async function POST(request: NextRequest) {
         // 8. Generate commentary
         step = "commentary";
         let commentary = "Here are your matches!";
-        try {
-            commentary = await generateResultCommentary(
-                matches.length,
-                intent,
-                ranked[0],
-            );
-        } catch (commentaryErr) {
-            console.error("[AgentSearch] commentary failed:", commentaryErr);
-            // Non-fatal — use fallback above
+
+        if (matches.length === 0) {
+            commentary = "No one matched exactly. Here's who came close.";
+        } else if (intentParseFailed || embeddingFailed) {
+            // Keep copy simple and safe; client UI can still show results.
+            commentary = "No worries — I found some close matches.";
+        } else {
+            try {
+                commentary = await generateResultCommentary(
+                    matches.length,
+                    intentForResults,
+                    ranked[0],
+                );
+            } catch (commentaryErr) {
+                console.error("[AgentSearch] commentary failed:", commentaryErr);
+                // Non-fatal — use fallback above
+            }
         }
 
         // 9. Save to wingman memory (fire and forget)

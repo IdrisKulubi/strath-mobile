@@ -108,10 +108,18 @@ export async function POST(request: NextRequest) {
         const intent = await parseIntent(effectiveQuery, null, agentCtx.learnedPreferences);
 
         step = "embed_intent";
-        const intentEmbedding = await embedIntent(intent);
+        let intentEmbedding: number[] | null;
+        let embeddingFailed = false;
+        try {
+            intentEmbedding = await embedIntent(intent);
+        } catch (embErr) {
+            console.error("[AgentRefine] embed_intent failed:", embErr);
+            embeddingFailed = true;
+            intentEmbedding = null;
+        }
 
         step = "agent_search";
-        const searchResults = await agentSearch(
+        let searchResults = await agentSearch(
             userId,
             intent,
             intentEmbedding,
@@ -121,10 +129,29 @@ export async function POST(request: NextRequest) {
         );
 
         step = "rank";
-        const ranked = rankCandidates(searchResults.candidates, intent, agentCtx.learnedPreferences);
+        let intentForResults = intent;
+        let ranked = rankCandidates(searchResults.candidates, intentForResults, agentCtx.learnedPreferences);
+
+        if (ranked.length === 0) {
+            step = "empty_results_fallback";
+            intentForResults = {
+                ...intent,
+                filters: {},
+                confidence: Math.min(intent.confidence ?? 0.2, 0.2),
+            };
+            searchResults = await agentSearch(
+                userId,
+                intentForResults,
+                intentEmbedding,
+                Math.min(limit, 50),
+                offset,
+                previous_match_ids,
+            );
+            ranked = rankCandidates(searchResults.candidates, intentForResults, agentCtx.learnedPreferences);
+        }
 
         step = "explanations";
-        const explanations = generateQuickExplanations(ranked, intent);
+        const explanations = generateQuickExplanations(ranked, intentForResults);
 
         const matches = ranked.map((candidate, i) => ({
             profile: sanitizeProfile(candidate.profile),
@@ -138,9 +165,15 @@ export async function POST(request: NextRequest) {
         }));
 
         let commentary = "Refined your results.";
-        try {
-            commentary = await generateResultCommentary(matches.length, intent, ranked[0]);
-        } catch {}
+        if (matches.length === 0) {
+            commentary = "No one matched exactly. Here's who came close.";
+        } else if (embeddingFailed) {
+            commentary = "No worries — I found some close matches.";
+        } else {
+            try {
+                commentary = await generateResultCommentary(matches.length, intentForResults, ranked[0]);
+            } catch {}
+        }
 
         const matchedIds = ranked.map(r => r.profile.userId);
         recordQuery(userId, effectiveQuery, matchedIds).catch(console.error);
