@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getAuthToken } from "@/lib/auth-helpers";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -18,6 +18,25 @@ export interface SentConnection {
             photos: string[] | null;
         } | null;
     };
+}
+
+async function cancelSentConnection(swipeId: string): Promise<void> {
+    const token = await getAuthToken();
+
+    const response = await fetch(`${API_URL}/api/swipe/sent/${encodeURIComponent(swipeId)}`,
+        {
+            method: "DELETE",
+            headers: {
+                Authorization: token ? `Bearer ${token}` : "",
+                "Content-Type": "application/json",
+            },
+        }
+    );
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(text || "Failed to cancel request");
+    }
 }
 
 async function fetchSentConnections(): Promise<SentConnection[]> {
@@ -45,5 +64,17 @@ export function useSentConnections() {
         queryKey: ["sent-connections"],
         queryFn: fetchSentConnections,
         staleTime: 15 * 1000,
+    });
+}
+
+export function useCancelSentConnection() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (swipeId: string) => cancelSentConnection(swipeId),
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ["sent-connections"] });
+            await queryClient.invalidateQueries({ queryKey: ["notificationCounts"] });
+        },
     });
 }
