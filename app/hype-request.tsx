@@ -1,5 +1,6 @@
 import React from "react";
 import { View, StyleSheet, TouchableOpacity } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
 import { useTheme } from "@/hooks/use-theme";
@@ -11,7 +12,7 @@ export default function HypeRequestScreen() {
     const { colors } = useTheme();
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["top"]}>
             <View
                 style={[
                     styles.header,
@@ -35,7 +36,7 @@ export default function HypeRequestScreen() {
             </View>
 
             <HypeRequest />
-        </View>
+        </SafeAreaView>
     );
 }
 
