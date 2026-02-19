@@ -68,8 +68,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="matches"
         options={{
-          title: 'Connections',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "hand-right" : "hand-right-outline"} color={color} />,
+          title: 'Matches',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "heart" : "heart-outline"} color={color} />,
           tabBarBadge: formatBadgeCount(connectionBadge),
         }}
       />

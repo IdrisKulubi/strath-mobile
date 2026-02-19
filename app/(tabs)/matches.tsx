@@ -7,6 +7,7 @@ import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useMatches, Match } from '@/hooks/use-matches';
 import { useConnectionRequests, useRespondToConnectionRequest, type ConnectionRequest } from '@/hooks/use-connection-requests';
+import { useSentConnections, type SentConnection } from '@/hooks/use-sent-connections';
 import { useAllMissions } from '@/hooks/use-missions';
 import { useNotificationCounts } from '@/hooks/use-notification-counts';
 import { MatchesListV2 } from '@/components/matches/matches-list-v2';
@@ -44,6 +45,7 @@ export default function MatchesScreen() {
 
     const { data, isLoading, refetch } = useMatches();
     const { data: requests = [], isLoading: isRequestsLoading } = useConnectionRequests();
+    const { data: sent = [], isLoading: isSentLoading } = useSentConnections();
     const respondMutation = useRespondToConnectionRequest();
     const { byMatchId: missionsByMatchId } = useAllMissions();
     const { markMatchAsOpened } = useNotificationCounts();
@@ -61,6 +63,7 @@ export default function MatchesScreen() {
     const archivedMatches = allMatches.filter(m => archivedMatchIds.has(m.id));
 
     const visibleRequests = useMemo(() => requests.slice(0, 20), [requests]);
+    const visibleSent = useMemo(() => sent.slice(0, 12), [sent]);
 
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true);
@@ -185,6 +188,30 @@ export default function MatchesScreen() {
         setShowArchivedSheet(true);
     };
 
+    const getTimeAgo = useCallback((iso: string) => {
+        const created = new Date(iso);
+        const diffMs = Date.now() - created.getTime();
+        if (!Number.isFinite(diffMs) || diffMs < 0) return '';
+        const mins = Math.floor(diffMs / 60000);
+        if (mins < 1) return 'now';
+        if (mins < 60) return `${mins}m`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours}h`;
+        const days = Math.floor(hours / 24);
+        return `${days}d`;
+    }, []);
+
+    const getRequestMeta = useCallback((r: ConnectionRequest) => {
+        const parts: string[] = [];
+        const course = r.fromUser.profile?.course;
+        const year = r.fromUser.profile?.yearOfStudy;
+        const university = r.fromUser.profile?.university;
+        if (course) parts.push(course);
+        if (year) parts.push(`Year ${year}`);
+        if (university) parts.push(university);
+        return parts.length > 0 ? parts.join(' • ') : 'Wants to connect';
+    }, []);
+
     return (
         <SafeAreaView
             style={[styles.container, { backgroundColor: colors.background }]}
@@ -203,7 +230,7 @@ export default function MatchesScreen() {
                             <Heart size={18} color="#fff" weight="fill" />
                         </LinearGradient>
                         <Text style={[styles.headerTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                            Connections
+                            Matches
                         </Text>
                     </View>
 
@@ -237,24 +264,109 @@ export default function MatchesScreen() {
 
             {/* Matches List */}
             <View style={styles.listContainer}>
+                {/* Sent (outgoing) */}
+                {(isSentLoading || visibleSent.length > 0) && (
+                    <View style={styles.sentContainer}>
+                        <View style={styles.requestsHeader}>
+                            <View style={styles.requestsTitleRow}>
+                                <Text style={[styles.requestsEmoji, { color: colors.primary }]}>📨</Text>
+                                <Text style={[styles.requestsTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+                                    Sent
+                                </Text>
+                            </View>
+                            {isSentLoading ? (
+                                <ActivityIndicator size="small" color={colors.primary} />
+                            ) : (
+                                <View style={[styles.sentPill, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)' }]}>
+                                    <Text style={[styles.sentPillText, { color: colors.mutedForeground }]}>
+                                        pending
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {visibleSent.map((s) => (
+                            <Animated.View
+                                entering={FadeIn.duration(220)}
+                                key={s.swipeId}
+                                style={[
+                                    styles.sentCard,
+                                    {
+                                        backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#ffffff',
+                                        borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                                    }
+                                ]}
+                            >
+                                <View style={styles.sentLeft}>
+                                    {(() => {
+                                        const avatarUri = s.toUser.profilePhoto || s.toUser.image || s.toUser.profile?.photos?.[0] || null;
+                                        if (avatarUri) {
+                                            return (
+                                                <Image
+                                                    source={{ uri: avatarUri }}
+                                                    style={styles.sentAvatar}
+                                                />
+                                            );
+                                        }
+                                        const initial = (s.toUser.name || "?").trim().charAt(0).toUpperCase();
+                                        return (
+                                            <View style={[styles.sentAvatar, styles.requestAvatarFallback, { borderColor: colors.border }]}>
+                                                <Text style={[styles.requestAvatarInitial, { color: colors.mutedForeground }]}>
+                                                    {initial}
+                                                </Text>
+                                            </View>
+                                        );
+                                    })()}
+
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.sentName, { color: isDark ? '#fff' : '#1a1a2e' }]} numberOfLines={1}>
+                                            {s.toUser.name}
+                                        </Text>
+                                        <Text style={[styles.sentMeta, { color: isDark ? '#94a3b8' : '#6b7280' }]} numberOfLines={1}>
+                                            {s.toUser.profile?.course || 'Waiting for reply'}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <View style={[styles.sentStatusPill, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(236,72,153,0.14)' : 'rgba(236,72,153,0.10)' }]}>
+                                    <Text style={[styles.sentStatusText, { color: colors.primary }]}>
+                                        Pending
+                                    </Text>
+                                </View>
+                            </Animated.View>
+                        ))}
+                    </View>
+                )}
+
                 {/* Connection Requests */}
                 {(isRequestsLoading || visibleRequests.length > 0) && (
                     <View style={styles.requestsContainer}>
                         <View style={styles.requestsHeader}>
-                            <Text style={[styles.requestsTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                                Requests
-                            </Text>
+                            <View style={styles.requestsTitleRow}>
+                                <Text style={[styles.requestsEmoji, { color: colors.primary }]}>💌</Text>
+                                <Text style={[styles.requestsTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+                                    Requests
+                                </Text>
+                            </View>
                             {isRequestsLoading ? (
                                 <ActivityIndicator size="small" color={colors.primary} />
                             ) : (
-                                <Text style={[styles.requestsCount, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                                    {visibleRequests.length}
-                                </Text>
+                                <LinearGradient
+                                    colors={['#ec4899', '#f43f5e']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={styles.requestsCountPill}
+                                >
+                                    <Text style={styles.requestsCountPillText}>
+                                        {visibleRequests.length}
+                                    </Text>
+                                </LinearGradient>
                             )}
                         </View>
 
                         {visibleRequests.map((r) => (
-                            <View
+                            <Animated.View
+                                entering={FadeIn.duration(220)}
                                 key={r.requestId}
                                 style={[
                                     styles.requestCard,
@@ -264,33 +376,42 @@ export default function MatchesScreen() {
                                     }
                                 ]}
                             >
-                                <View style={styles.requestLeft}>
-                                    {(() => {
-                                        const avatarUri = r.fromUser.profilePhoto || r.fromUser.image || r.fromUser.profile?.photos?.[0] || null;
-                                        if (avatarUri) {
-                                            return (
-                                                <Image
-                                                    source={{ uri: avatarUri }}
-                                                    style={styles.requestAvatar}
-                                                />
-                                            );
-                                        }
+                                <View style={styles.requestTopRow}>
+                                    <View style={styles.requestLeft}>
+                                        {(() => {
+                                            const avatarUri = r.fromUser.profilePhoto || r.fromUser.image || r.fromUser.profile?.photos?.[0] || null;
+                                            if (avatarUri) {
+                                                return (
+                                                    <Image
+                                                        source={{ uri: avatarUri }}
+                                                        style={styles.requestAvatar}
+                                                    />
+                                                );
+                                            }
 
-                                        const initial = (r.fromUser.name || "?").trim().charAt(0).toUpperCase();
-                                        return (
-                                            <View style={[styles.requestAvatar, styles.requestAvatarFallback, { borderColor: colors.border }]}>
-                                                <Text style={[styles.requestAvatarInitial, { color: colors.mutedForeground }]}>
-                                                    {initial}
-                                                </Text>
-                                            </View>
-                                        );
-                                    })()}
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={[styles.requestName, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                                            {r.fromUser.name}
-                                        </Text>
-                                        <Text style={[styles.requestMeta, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                                            {r.fromUser.profile?.course || 'Wants to connect'}
+                                            const initial = (r.fromUser.name || "?").trim().charAt(0).toUpperCase();
+                                            return (
+                                                <View style={[styles.requestAvatar, styles.requestAvatarFallback, { borderColor: colors.border }]}>
+                                                    <Text style={[styles.requestAvatarInitial, { color: colors.mutedForeground }]}>
+                                                        {initial}
+                                                    </Text>
+                                                </View>
+                                            );
+                                        })()}
+
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.requestName, { color: isDark ? '#fff' : '#1a1a2e' }]} numberOfLines={1}>
+                                                {r.fromUser.name}
+                                            </Text>
+                                            <Text style={[styles.requestMeta, { color: isDark ? '#94a3b8' : '#6b7280' }]} numberOfLines={1}>
+                                                {getRequestMeta(r)}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={[styles.requestTimePill, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)' }]}>
+                                        <Text style={[styles.requestTimeText, { color: colors.mutedForeground }]}>
+                                            {getTimeAgo(r.createdAt)}
                                         </Text>
                                     </View>
                                 </View>
@@ -330,7 +451,7 @@ export default function MatchesScreen() {
                                         </LinearGradient>
                                     </Pressable>
                                 </View>
-                            </View>
+                            </Animated.View>
                         ))}
                     </View>
                 )}
@@ -436,6 +557,67 @@ const styles = StyleSheet.create({
         paddingBottom: 8,
         gap: 10,
     },
+
+    // Sent
+    sentContainer: {
+        paddingHorizontal: 16,
+        paddingBottom: 10,
+        gap: 10,
+    },
+    sentPill: {
+        borderWidth: 1,
+        paddingHorizontal: 10,
+        height: 26,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sentPillText: {
+        fontSize: 11,
+        fontWeight: '700',
+    },
+    sentCard: {
+        borderRadius: 18,
+        borderWidth: 1,
+        padding: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    sentLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        flex: 1,
+    },
+    sentAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    sentName: {
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    sentMeta: {
+        fontSize: 12,
+        fontWeight: '500',
+        marginTop: 2,
+    },
+    sentStatusPill: {
+        borderWidth: 1,
+        paddingHorizontal: 10,
+        height: 26,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sentStatusText: {
+        fontSize: 11,
+        fontWeight: '800',
+    },
     requestsHeader: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -443,13 +625,31 @@ const styles = StyleSheet.create({
         paddingHorizontal: 4,
         marginTop: 6,
     },
+    requestsTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    requestsEmoji: {
+        fontSize: 16,
+        paddingTop: 1,
+    },
     requestsTitle: {
         fontSize: 14,
         fontWeight: '700',
     },
-    requestsCount: {
+    requestsCountPill: {
+        minWidth: 30,
+        height: 22,
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    requestsCountPillText: {
+        color: '#fff',
         fontSize: 12,
-        fontWeight: '600',
+        fontWeight: '800',
     },
     requestCard: {
         borderRadius: 18,
@@ -457,10 +657,29 @@ const styles = StyleSheet.create({
         padding: 12,
         gap: 10,
     },
+    requestTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
     requestLeft: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
+        flex: 1,
+    },
+    requestTimePill: {
+        borderWidth: 1,
+        paddingHorizontal: 10,
+        height: 26,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    requestTimeText: {
+        fontSize: 11,
+        fontWeight: '700',
     },
     requestAvatar: {
         width: 44,

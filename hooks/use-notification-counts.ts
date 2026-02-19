@@ -31,8 +31,10 @@ async function fetchNotificationCounts(): Promise<NotificationCounts> {
     });
 
     if (!response.ok) {
-        console.error('[NotificationCounts] Error:', response.status);
-        return { unopenedMatches: 0, unreadMessages: 0, total: 0 };
+        const text = await response.text().catch(() => '');
+        console.error('[NotificationCounts] Error:', response.status, text);
+        // Throw so React Query keeps the last successful value instead of overwriting with zeros
+        throw new Error(`Failed to fetch notification counts (${response.status})`);
     }
 
     const result = await response.json();
@@ -94,6 +96,7 @@ export function useNotificationCounts() {
         refetchIntervalInBackground: false,
         staleTime: 10000, // Consider data stale after 10s
         gcTime: 5 * 60 * 1000, // Keep in cache for 5 min
+        retry: 1,
     });
 
     // Mutation to mark match as opened

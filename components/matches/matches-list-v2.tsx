@@ -83,10 +83,10 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
             </View>
 
             <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                No Connections yet
+                No Matches yet
             </Text>
             <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                When you and someone else both want to connect, they&apos;ll appear here
+                When you accept a request (or they accept yours), it becomes a match and shows up here
             </Text>
 
             {onExplore && (
