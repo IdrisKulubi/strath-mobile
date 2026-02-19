@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
             })
             .returning();
 
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.strathspace.com";
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
 
         return successResponse({
             token: link.token,
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
 
             let activeLink = null;
             if (link && link.expiresAt > new Date() && (link.currentUses ?? 0) < (link.maxUses ?? 5)) {
-                const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.strathspace.com";
+                const baseUrl = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
                 activeLink = {
                     token: link.token,
                     url: `${baseUrl}/hype/write/${link.token}`,
