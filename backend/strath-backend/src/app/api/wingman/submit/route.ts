@@ -21,6 +21,14 @@ import { sendPushNotification } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
+function normalizeWingmanToken(raw: string) {
+    const trimmed = raw.trim();
+    // Tokens are generated as 24 random bytes hex => 48 hex chars.
+    // Extract the first 48-hex substring to tolerate punctuation from copy/paste.
+    const match = trimmed.match(/([a-f0-9]{48})/i);
+    return (match?.[1] ?? trimmed).toLowerCase();
+}
+
 const submitSchema = z.object({
     token: z.string().min(1),
     authorName: z.string().min(1).max(50),
@@ -36,7 +44,8 @@ const submitSchema = z.object({
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
-        const token = searchParams.get("token");
+        const tokenParam = searchParams.get("token");
+        const token = tokenParam ? normalizeWingmanToken(tokenParam) : null;
         if (!token) return errorResponse("Token is required", 400);
 
         const link = await db.query.wingmanLinks.findFirst({
@@ -91,7 +100,7 @@ export async function POST(req: NextRequest) {
         if (!parsed.success) return errorResponse(parsed.error, 400);
 
         const {
-            token,
+            token: rawToken,
             authorName,
             relationship,
             threeWords,
@@ -99,6 +108,8 @@ export async function POST(req: NextRequest) {
             redFlagFunny,
             hypeNote,
         } = parsed.data;
+
+        const token = normalizeWingmanToken(rawToken);
 
         const link = await db.query.wingmanLinks.findFirst({
             where: eq(wingmanLinks.token, token),

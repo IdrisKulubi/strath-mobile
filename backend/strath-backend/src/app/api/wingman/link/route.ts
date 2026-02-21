@@ -90,7 +90,13 @@ export async function POST(req: NextRequest) {
             })
             .catch(() => {});
 
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
+        // IMPORTANT: The token must be validated against the same deployment that created it.
+        // If NEXT_PUBLIC_APP_URL points to a different environment (e.g., prod) than this API (e.g., staging),
+        // users will see "Link not found" because the token won't exist in that DB.
+        const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL;
+        const baseUrl = configuredAppUrl && new URL(configuredAppUrl).origin === req.nextUrl.origin
+            ? configuredAppUrl
+            : req.nextUrl.origin;
 
         return successResponse({
             roundNumber: link.roundNumber,

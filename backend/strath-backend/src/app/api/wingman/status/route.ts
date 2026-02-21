@@ -60,7 +60,10 @@ export async function GET(req: NextRequest) {
             },
         });
 
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
+        const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL;
+        const baseUrl = configuredAppUrl && new URL(configuredAppUrl).origin === req.nextUrl.origin
+            ? configuredAppUrl
+            : req.nextUrl.origin;
 
         return successResponse({
             activeLink: activeLink

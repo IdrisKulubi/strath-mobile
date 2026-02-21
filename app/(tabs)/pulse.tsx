@@ -215,6 +215,16 @@ export default function WingmanTabScreen() {
             >
               <Text style={styles.primaryBtnText}>{pack.isFetching ? 'Opening…' : 'Open Wingman Pack'}</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleStart}
+              disabled={startRound.isPending}
+              style={[styles.secondaryBtn, { borderColor: colors.border, marginTop: 10, opacity: startRound.isPending ? 0.7 : 1 }]}
+            >
+              <Text style={{ color: colors.foreground, fontWeight: '700', textAlign: 'center' }}>
+                {startRound.isPending ? 'Creating…' : 'Create new link'}
+              </Text>
+            </TouchableOpacity>
           </>
         )}
       </View>
