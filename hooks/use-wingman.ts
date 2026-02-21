@@ -26,13 +26,28 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
     const res = await fetch(`${API_URL}${path}`, { ...options, headers });
-    const json = await res.json().catch(() => ({}));
+
+    const rawText = await res.text().catch(() => "");
+    const json = rawText ? (() => {
+        try {
+            return JSON.parse(rawText);
+        } catch {
+            return null;
+        }
+    })() : null;
+
     if (!res.ok) {
-        throw new Error(
-            typeof json?.error === "string" ? json.error : json?.message ?? "Request failed"
-        );
+        const serverMessage =
+            typeof json?.error === "string"
+                ? json.error
+                : typeof json?.message === "string"
+                    ? json.message
+                    : null;
+
+        throw new Error(serverMessage || `Request failed (${res.status})`);
     }
-    return json.data as T;
+
+    return (json?.data ?? json) as T;
 }
 
 export function useWingmanStatus() {

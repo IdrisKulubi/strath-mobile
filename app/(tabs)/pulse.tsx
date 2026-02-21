@@ -8,17 +8,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useStartWingmanRound, useWingmanHistory, useWingmanPack, useWingmanStatus } from '@/hooks/use-wingman';
 import type { AgentMatch } from '@/hooks/use-agent';
 import { WingmanMatchCard, WingmanMatchDetail } from '@/components/wingman';
-import { getAuthToken } from '@/lib/auth-helpers';
+import { clearSession, getAuthToken } from '@/lib/auth-helpers';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.strathspace.com';
 
 export default function WingmanTabScreen() {
+  const router = useRouter();
   const { colors, colorScheme } = useTheme();
   const isDark = colorScheme === 'dark';
 
@@ -106,7 +108,7 @@ export default function WingmanTabScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSelectedMatch(null);
-    } catch (e) {
+    } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsConnecting(false);
@@ -126,11 +128,22 @@ export default function WingmanTabScreen() {
   }
 
   if (status.isError) {
+    const message = status.error instanceof Error ? status.error.message : 'Request failed';
+    const isUnauthorized = /unauthorized|401/i.test(message);
+    const isNotEnabled = /not enabled|migrations|501|failed to load wingman status/i.test(message);
+
     return (
       <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top']}>
         <View style={styles.centered}>
           <Text style={{ color: colors.foreground, fontSize: 16, fontWeight: '700' }}>
             Couldn&apos;t load Wingman
+          </Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 13, textAlign: 'center' }}>
+            {isUnauthorized
+              ? 'Your session expired. Please sign in again.'
+              : isNotEnabled
+                ? 'Wingman isn\'t enabled on the current API yet (missing DB migration).'
+                : message}
           </Text>
           <TouchableOpacity
             onPress={() => status.refetch()}
@@ -138,6 +151,18 @@ export default function WingmanTabScreen() {
           >
             <Text style={{ color: colors.foreground, fontWeight: '600' }}>Try again</Text>
           </TouchableOpacity>
+
+          {isUnauthorized ? (
+            <TouchableOpacity
+              onPress={async () => {
+                await clearSession();
+                router.replace('/(auth)/login');
+              }}
+              style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+            >
+              <Text style={styles.primaryBtnText}>Sign in again</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </SafeAreaView>
     );
@@ -213,10 +238,11 @@ export default function WingmanTabScreen() {
             <>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Your pack</Text>
               <View style={styles.matchesList}>
-                {matches.map((m) => (
+                {matches.map((m, index) => (
                   <WingmanMatchCard
                     key={m.profile.userId}
                     match={m}
+                    index={index}
                     onPress={handleMatchPress}
                   />
                 ))}
@@ -283,146 +309,5 @@ const styles = StyleSheet.create({
   matchesList: { gap: 12 },
   historyList: { gap: 10, paddingBottom: 24 },
   historyItem: { borderWidth: 1, borderRadius: 16, padding: 12 },
-});
-              refreshing={isRefetching}
-              onRefresh={refetch}
-              tintColor={colors.primary}
-              colors={[colors.primary]}
-            />
-          }
-          ListEmptyComponent={<EmptyState category={category} />}
-          ListFooterComponent={
-            isFetchingNextPage ? (
-              <ActivityIndicator
-                size="small"
-                color={colors.primary}
-                style={{ marginVertical: 16 }}
-              />
-            ) : null
-          }
-        />
-      )}
-
-      {/* ── Floating compose button ── */}
-      <Animated.View style={[styles.fab, fabStyle]}>
-        <TouchableOpacity
-          onPress={handleCompose}
-          style={[styles.fabInner, { backgroundColor: colors.primary }]}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.fabIcon}>✏️</Text>
-        </TouchableOpacity>
-      </Animated.View>
-
-      {/* ── Composer bottom sheet ── */}
-      <Modal
-        visible={composerVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setComposerVisible(false)}
-      >
-        <View style={[styles.sheetBg, { backgroundColor: isDark ? '#1a1a2e' : '#fff' }]}>
-          <PostComposer onClose={() => setComposerVisible(false)} />
-        </View>
-      </Modal>
-
-      {/* ── Reveal flow bottom sheet ── */}
-      <Modal
-        visible={!!revealPost}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setRevealPost(null)}
-      >
-        <View style={[styles.sheetBg, { backgroundColor: isDark ? '#1a1a2e' : '#fff' }]}>
-          {revealPost && (
-            <RevealFlow
-              post={revealPost}
-              revealResult={revealResult}
-              onClose={() => {
-                setRevealPost(null);
-                setRevealResult(undefined);
-              }}
-            />
-          )}
-        </View>
-      </Modal>
-    </SafeAreaView>
-  );
-}
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 4,
-    gap: 2,
-  },
-  headerTitle: {
-    fontSize: 26,
-    lineHeight: 32,
-    fontWeight: '800',
-  },
-  headerSub: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '500',
-  },
-  filterScroll: {
-    flexGrow: 0,
-    marginTop: 10,
-  },
-  filterRow: {
-    paddingHorizontal: 16,
-    gap: 8,
-    paddingBottom: 4,
-  },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  filterChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 120,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 96,
-    right: 20,
-  },
-  fabInner: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#ec4899',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  fabIcon: {
-    fontSize: 22,
-  },
-  sheetBg: {
-    flex: 1,
-  },
 });
 

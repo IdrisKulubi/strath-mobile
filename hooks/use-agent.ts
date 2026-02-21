@@ -129,7 +129,6 @@ async function agentSearchAPI(
 ): Promise<AgentSearchResponse> {
     const token = await getAuthToken();
     const url = `${API_URL}/api/agent/search`;
-    console.log('[Agent] Searching:', query, 'url:', url, 'hasToken:', !!token);
 
     let response: Response;
     const controller = new AbortController();
@@ -148,7 +147,6 @@ async function agentSearchAPI(
         if (isAbortError(networkErr)) {
             throw new Error(AGENT_TIMEOUT_MESSAGE);
         }
-        console.error('[Agent] Network error:', networkErr);
         throw new Error("Can't reach server — check your connection");
     } finally {
         clearTimeout(timeoutId);
@@ -163,12 +161,10 @@ async function agentSearchAPI(
                 errMsg = errData.error || errMsg;
             }
         } catch {}
-        console.error('[Agent] API error:', response.status, errMsg);
         throw new Error(errMsg);
     }
 
     const result = await response.json();
-    console.log('[Agent] Got', (result.data || result).matches?.length, 'matches');
     return result.data || result;
 }
 
@@ -377,10 +373,6 @@ export function useAgent() {
 
             // Invalidate wingman stats
             queryClient.invalidateQueries({ queryKey: ["wingman-stats"] });
-        },
-
-        onError: (error, variables) => {
-            console.error('[useAgent] Search failed:', error.message, 'query:', variables.query);
         },
     });
 

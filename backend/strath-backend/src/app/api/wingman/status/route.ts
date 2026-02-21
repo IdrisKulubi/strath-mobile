@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
@@ -13,10 +13,11 @@ type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
 async function getSession(req: NextRequest): Promise<AuthSession> {
     let session: AuthSession = await auth.api.getSession({ headers: req.headers });
 
-    if (!session) {
+    if (!session?.user?.id) {
         const authHeader = req.headers.get("authorization");
-        if (authHeader?.startsWith("Bearer ")) {
-            const token = authHeader.split(" ")[1];
+        const match = authHeader?.match(/^bearer\s+(.+)$/i);
+        const token = match?.[1]?.trim();
+        if (token) {
             const dbSession = await db.query.session.findFirst({
                 where: eq(sessionTable.token, token),
                 with: { user: true },
@@ -35,6 +36,13 @@ export async function GET(req: NextRequest) {
         const session = await getSession(req);
         if (!session?.user?.id) return errorResponse("Unauthorized", 401);
         const userId = session.user.id;
+
+        // If the Wingman tables haven't been migrated yet, fail fast with a clear message.
+        const reg = await db.execute(sql`select to_regclass('public.wingman_links') as t`);
+        const tableName = (reg.rows?.[0] as { t?: string | null } | undefined)?.t ?? null;
+        if (!tableName) {
+            return errorResponse("Wingman is not enabled on this server yet. Please run the latest DB migrations.", 501);
+        }
 
         const activeLink = await db.query.wingmanLinks.findFirst({
             where: and(eq(wingmanLinks.profileUserId, userId), gt(wingmanLinks.expiresAt, new Date())),

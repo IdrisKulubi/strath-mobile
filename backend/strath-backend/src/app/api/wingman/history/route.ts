@@ -13,10 +13,11 @@ type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
 async function getSession(req: NextRequest): Promise<AuthSession> {
     let session: AuthSession = await auth.api.getSession({ headers: req.headers });
 
-    if (!session) {
+    if (!session?.user?.id) {
         const authHeader = req.headers.get("authorization");
-        if (authHeader?.startsWith("Bearer ")) {
-            const token = authHeader.split(" ")[1];
+        const match = authHeader?.match(/^bearer\s+(.+)$/i);
+        const token = match?.[1]?.trim();
+        if (token) {
             const dbSession = await db.query.session.findFirst({
                 where: eq(sessionTable.token, token),
                 with: { user: true },
