@@ -984,6 +984,73 @@ export const studySessions = pgTable("study_sessions", {
     expiresIdx: index("study_sessions_expires_idx").on(table.availableUntil),
 }));
 
+// Wingman — pass-the-phone links + friend submissions + compiled packs
+export const wingmanLinks = pgTable("wingman_links", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    profileUserId: text("profile_user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+
+    roundNumber: integer("round_number").notNull(),
+
+    token: text("token").notNull().unique(),
+
+    targetSubmissions: integer("target_submissions").default(3),
+    currentSubmissions: integer("current_submissions").default(0),
+    expiresAt: timestamp("expires_at").notNull(),
+
+    status: text("status").$type<"collecting" | "ready" | "expired">().default("collecting"),
+    lastSubmissionAt: timestamp("last_submission_at"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    profileIdx: index("wingman_links_profile_idx").on(table.profileUserId),
+    expiresIdx: index("wingman_links_expires_idx").on(table.expiresAt),
+    profileRoundIdx: index("wingman_links_profile_round_idx").on(table.profileUserId, table.roundNumber),
+}));
+
+export const wingmanSubmissions = pgTable("wingman_submissions", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    linkId: uuid("link_id")
+        .notNull()
+        .references(() => wingmanLinks.id, { onDelete: "cascade" }),
+
+    authorName: text("author_name").notNull(),
+    relationship: text("relationship"),
+
+    threeWords: jsonb("three_words").$type<string[]>().default([]),
+    greenFlags: jsonb("green_flags").$type<string[]>().default([]),
+    redFlagFunny: text("red_flag_funny"),
+    hypeNote: text("hype_note"),
+
+    isFlagged: boolean("is_flagged").default(false),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    linkIdx: index("wingman_submissions_link_idx").on(table.linkId),
+}));
+
+export const wingmanPacks = pgTable("wingman_packs", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    profileUserId: text("profile_user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+    linkId: uuid("link_id")
+        .notNull()
+        .references(() => wingmanLinks.id, { onDelete: "cascade" }),
+
+    roundNumber: integer("round_number").notNull(),
+
+    compiledSummary: jsonb("compiled_summary").$type<Record<string, unknown>>().default({}),
+    wingmanPrompt: text("wingman_prompt").notNull(),
+    matchData: jsonb("match_data").$type<any[]>().default([]),
+
+    generatedAt: timestamp("generated_at").defaultNow().notNull(),
+    openedAt: timestamp("opened_at"),
+}, (table) => ({
+    profileIdx: index("wingman_packs_profile_idx").on(table.profileUserId),
+    profileRoundIdx: index("wingman_packs_profile_round_idx").on(table.profileUserId, table.roundNumber),
+}));
+
 // Hype Me — friend vouches on profiles
 export const hypeVouches = pgTable("hype_vouches", {
     id: uuid("id").defaultRandom().primaryKey(),
@@ -1059,7 +1126,9 @@ export const agentAnalytics = pgTable("agent_analytics", {
         "agent_search" | "agent_refine" | "drop_opened" | "drop_expired" |
         "mission_accepted" | "mission_completed" | "vibe_check_started" |
         "vibe_check_agreed" | "study_date_created" | "blind_date_confirmed" |
-        "pulse_posted" | "hype_written"
+        "pulse_posted" | "hype_written" |
+        "wingman_link_created" | "wingman_submission_received" |
+        "wingman_pack_opened" | "wingman_pack_shared" | "wingman_match_connected"
     >().notNull(),
 
     metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
@@ -1138,6 +1207,32 @@ export const studySessionsRelations = relations(studySessions, ({ one }) => ({
     }),
 }));
 
+export const wingmanLinksRelations = relations(wingmanLinks, ({ one, many }) => ({
+    profileUser: one(user, {
+        fields: [wingmanLinks.profileUserId],
+        references: [user.id],
+    }),
+    submissions: many(wingmanSubmissions),
+}));
+
+export const wingmanSubmissionsRelations = relations(wingmanSubmissions, ({ one }) => ({
+    link: one(wingmanLinks, {
+        fields: [wingmanSubmissions.linkId],
+        references: [wingmanLinks.id],
+    }),
+}));
+
+export const wingmanPacksRelations = relations(wingmanPacks, ({ one }) => ({
+    profileUser: one(user, {
+        fields: [wingmanPacks.profileUserId],
+        references: [user.id],
+    }),
+    link: one(wingmanLinks, {
+        fields: [wingmanPacks.linkId],
+        references: [wingmanLinks.id],
+    }),
+}));
+
 export const hypeVouchesRelations = relations(hypeVouches, ({ one }) => ({
     profileUser: one(user, {
         fields: [hypeVouches.profileUserId],
@@ -1198,6 +1293,12 @@ export type NewPulsePost = typeof pulsePosts.$inferInsert;
 export type PulseReaction = typeof pulseReactions.$inferSelect;
 export type StudySession = typeof studySessions.$inferSelect;
 export type NewStudySession = typeof studySessions.$inferInsert;
+export type WingmanLink = typeof wingmanLinks.$inferSelect;
+export type NewWingmanLink = typeof wingmanLinks.$inferInsert;
+export type WingmanSubmission = typeof wingmanSubmissions.$inferSelect;
+export type NewWingmanSubmission = typeof wingmanSubmissions.$inferInsert;
+export type WingmanPack = typeof wingmanPacks.$inferSelect;
+export type NewWingmanPack = typeof wingmanPacks.$inferInsert;
 export type HypeVouch = typeof hypeVouches.$inferSelect;
 export type NewHypeVouch = typeof hypeVouches.$inferInsert;
 export type HypeInviteLink = typeof hypeInviteLinks.$inferSelect;

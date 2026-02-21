@@ -20,7 +20,7 @@
    - [Stage 5: Match Missions](#stage-5-match-missions)
    - [Stage 6: Wingman Memory](#stage-6-wingman-memory)
    - [Stage 7: Vibe Check Voice Calls](#stage-7-vibe-check-voice-calls)
-   - [Stage 8: Campus Pulse Feed](#stage-8-campus-pulse-feed)
+  - [Stage 8: Wingman Link (Pass-the-Phone)](#stage-8-wingman-link-pass-the-phone)
    - [Stage 9: Study Date Mode](#stage-9-study-date-mode)
    - [Stage 10: Compatibility Scoring](#stage-10-compatibility-scoring)
    - [Stage 11: Hype Me (Friend Vouches)](#stage-11-hype-me-friend-vouches)
@@ -113,8 +113,8 @@ An **intent-driven matchmaking agent** for university students. Users describe w
 ┌─────────────────────────────────────────────────────────┐
 │                    MOBILE APP (Expo)                     │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐│
-│  │ Agent UI │  │ Matches  │  │  Pulse   │  │ Profile ││
-│  │(Talk/Mic)│  │ + Missions│  │  Feed    │  │ + Hype  ││
+│  │ Agent UI │  │ Matches  │  │ Wingman  │  │ Profile ││
+│  │(Talk/Mic)│  │ + Missions│  │  Packs  │  │ + Hype  ││
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬────┘│
 │       │              │              │              │     │
 │       └──────────────┴──────────────┴──────────────┘     │
@@ -133,7 +133,7 @@ An **intent-driven matchmaking agent** for university students. Users describe w
 │  │  /api/agent/refine     → Refinement pipeline      │    │
 │  │  /api/drops/generate   → Weekly drop cron         │    │
 │  │  /api/missions/assign  → Post-match missions      │    │
-│  │  /api/pulse/feed       → Anonymous feed           │    │
+│  │  /api/wingman/pack     → Wingman pack + matches    │    │
 │  │  /api/vibe-check/      → Voice call sessions      │    │
 │  │  /api/study-date/      → Availability broadcast   │    │
 │  │  /api/hype/            → Friend vouches           │    │
@@ -458,76 +458,99 @@ CREATE INDEX vibe_checks_status_idx ON vibe_checks(status);
 
 
 -- =============================================
--- 6. CAMPUS PULSE (Anonymous Feed)
+-- 6. WINGMAN LINKS + WINGMAN PACKS (Pass-the-Phone)
 -- =============================================
--- (Extends existing feed system if present)
-CREATE TABLE pulse_posts (
+CREATE TABLE wingman_links (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    author_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    profile_user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    round_number INTEGER NOT NULL,
     
-    content TEXT NOT NULL,
-    category TEXT DEFAULT 'general',
-    -- 'missed_connection', 'campus_thought', 'dating_rant', 'hot_take', 'looking_for'
+    -- Share token
+    token TEXT NOT NULL UNIQUE,
     
-    -- Privacy
-    is_anonymous BOOLEAN DEFAULT TRUE,
+    -- Collection rules
+    target_submissions INTEGER DEFAULT 3,
+    current_submissions INTEGER DEFAULT 0,
+    expires_at TIMESTAMP NOT NULL,
     
-    -- Engagement
-    fire_count INTEGER DEFAULT 0,    -- 🔥
-    skull_count INTEGER DEFAULT 0,   -- 💀
-    heart_count INTEGER DEFAULT 0,   -- 🫶
+    status TEXT DEFAULT 'collecting',
+    -- 'collecting', 'ready', 'expired'
+    last_submission_at TIMESTAMP,
     
-    -- Reveal system
-    reveal_requests JSONB DEFAULT '[]', -- user_ids who want to reveal
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    UNIQUE(profile_user_id, round_number)
+);
+
+CREATE INDEX wingman_links_profile_idx ON wingman_links(profile_user_id);
+CREATE INDEX wingman_links_expires_idx ON wingman_links(expires_at);
+
+CREATE TABLE wingman_submissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    link_id UUID NOT NULL REFERENCES wingman_links(id) ON DELETE CASCADE,
     
-    -- Moderation
+    author_name TEXT NOT NULL,
+    relationship TEXT, -- optional: 'friend', 'roommate', 'coworker', etc.
+    
+    -- Structured inputs (keep it simple, compile later)
+    three_words JSONB NOT NULL DEFAULT '[]', -- ["calm", "funny", "lowkey"]
+    green_flags JSONB NOT NULL DEFAULT '[]',
+    red_flag_funny TEXT,
+    hype_note TEXT,
+    
     is_flagged BOOLEAN DEFAULT FALSE,
-    is_hidden BOOLEAN DEFAULT FALSE,
-    
-    expires_at TIMESTAMP, -- Posts auto-expire after 48h
     created_at TIMESTAMP DEFAULT NOW() NOT NULL
 );
 
-CREATE INDEX pulse_posts_created_idx ON pulse_posts(created_at DESC);
-CREATE INDEX pulse_posts_category_idx ON pulse_posts(category);
-CREATE INDEX pulse_posts_author_idx ON pulse_posts(author_id);
+CREATE INDEX wingman_submissions_link_idx ON wingman_submissions(link_id);
 
-CREATE TABLE pulse_reactions (
+CREATE TABLE wingman_packs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    post_id UUID NOT NULL REFERENCES pulse_posts(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
-    reaction TEXT NOT NULL, -- 'fire', 'skull', 'heart'
-    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-    UNIQUE(post_id, user_id)
+    profile_user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    link_id UUID NOT NULL REFERENCES wingman_links(id) ON DELETE CASCADE,
+    round_number INTEGER NOT NULL,
+    
+    -- Compiled summary shown in the app
+    compiled_summary JSONB NOT NULL DEFAULT '{}',
+    -- { top_words: [...], green_flags: [...], funniest_red_flag: "...", hype_lines: [...] }
+    
+    -- The prompt used to run the agent search
+    wingman_prompt TEXT NOT NULL,
+    
+    -- Cached results for the pack (3-7 matches)
+    match_data JSONB NOT NULL DEFAULT '[]',
+    
+    generated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    opened_at TIMESTAMP,
+    UNIQUE(profile_user_id, round_number)
 );
 
-CREATE INDEX pulse_reactions_post_idx ON pulse_reactions(post_id);
+CREATE INDEX wingman_packs_profile_idx ON wingman_packs(profile_user_id);
 
 
 -- =============================================
 -- 7. STUDY DATE MODE
 -- =============================================
 CREATE TABLE study_sessions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
     
-    -- Location
-    location_name TEXT NOT NULL, -- "Main Library", "Strath Café"
-    university TEXT NOT NULL,
+  -- Location
+  location_name TEXT NOT NULL, -- "Main Library", "Strath Café"
+  university TEXT NOT NULL,
     
-    -- Availability
-    available_until TIMESTAMP NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
+  -- Availability
+  available_until TIMESTAMP NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE,
     
-    -- What they're studying (optional, for matching)
-    subject TEXT,
-    vibe TEXT, -- 'silent_focus', 'chill_chat', 'group_study'
+  -- What they're studying (optional, for matching)
+  subject TEXT,
+  vibe TEXT, -- 'silent_focus', 'chill_chat', 'group_study'
     
-    -- Preferences
-    open_to_anyone BOOLEAN DEFAULT TRUE,
-    preferred_gender TEXT, -- Optional filter
+  -- Preferences
+  open_to_anyone BOOLEAN DEFAULT TRUE,
+  preferred_gender TEXT, -- Optional filter
     
-    created_at TIMESTAMP DEFAULT NOW() NOT NULL
+  created_at TIMESTAMP DEFAULT NOW() NOT NULL
 );
 
 CREATE INDEX study_sessions_active_idx ON study_sessions(is_active, university);
@@ -615,7 +638,9 @@ CREATE TABLE agent_analytics (
     -- 'agent_search', 'agent_refine', 'drop_opened', 'drop_expired',
     -- 'mission_accepted', 'mission_completed', 'vibe_check_started',
     -- 'vibe_check_agreed', 'study_date_created', 'blind_date_confirmed',
-    -- 'pulse_posted', 'hype_written'
+  -- 'wingman_link_created', 'wingman_submission_received',
+  -- 'wingman_pack_opened', 'wingman_pack_shared', 'wingman_match_connected',
+  -- 'hype_written'
     
     metadata JSONB DEFAULT '{}',
     created_at TIMESTAMP DEFAULT NOW() NOT NULL
@@ -642,7 +667,7 @@ Week 4:    Stage 4 — Weekly Drop System
 Week 5:    Stage 5 — Match Missions
 Week 5-6:  Stage 6 — Wingman Memory
 Week 6-7:  Stage 7 — Vibe Check Voice Calls
-Week 7-8:  Stage 8 — Campus Pulse Feed
+Week 7-8:  Stage 8 — Wingman Link (Pass-the-Phone)
 Week 8:    Stage 9 — Study Date Mode
 Week 9:    Stage 10 — Compatibility Scoring
 Week 9-10: Stage 11 — Hype Me (Friend Vouches)
@@ -1463,98 +1488,193 @@ Visual:
 - [ ] Works on both iOS and Android
 - [ ] Handles poor connectivity gracefully
 
+
 ---
 
-### Stage 8: Campus Pulse Feed
-**Duration: 4-5 days**
-**Priority: 🟢 MEDIUM — Daily retention driver**
+### Stage 8: Wingman Link (Pass-the-Phone)
+**Duration: 3-4 days**
+**Priority: 🟡 HIGH — Viral loop + useful matchmaking signal**
 
 #### What We're Building
-- Anonymous post feed with campus dating/social thoughts
-- Reaction system (🔥 💀 🫶)
-- Category filters (missed_connection, hot_take, looking_for, etc.)
-- Reveal system: if two anonymous users vibe, they can reveal identities
-- 48-hour post expiry
-- Content moderation basics
+- A share link that lets **3 friends** describe you (no app required)
+- A "Wingman Pack" result that compiles friend answers into:
+  - a **shareable Wingman Card** (screenshot bait)
+  - a **Wingman Prompt** the agent uses to find better matches
+  - a curated list of **3–7 Wingman Matches**
+- A dedicated tab experience that replaces the old Pulse/Explore feed
+- A lightweight retention loop: **Wingman Rounds** (Round 1, Round 2, ...)
+  - Each round is a fresh link → fresh friend inputs → fresh matches
+  - The app nudges you when you're close (2/3) and when the pack is ready
+  - After ~30 days, a refresh prompt encourages starting a new round
+
+> **Why this is viral**: friends are part of the creation step.
+> The link gets forwarded naturally, and the final Wingman Card is designed to be shared.
 
 #### Backend Tasks
 
-##### 8.1 Pulse API
+##### 8.1 Wingman Service
 ```
-File: src/app/api/pulse/route.ts
-GET → Paginated feed (newest first, with reaction counts)
-POST → Create new post
+File: src/lib/services/wingman-service.ts
+Purpose: Create links, accept submissions, compile packs, generate Wingman Matches
 
-File: src/app/api/pulse/[postId]/react/route.ts
-POST → Add/remove reaction
-
-File: src/app/api/pulse/[postId]/reveal/route.ts
-POST → Request to reveal identity to another anonymous user
-```
-
-##### 8.2 Auto-Expiry
-```
-File: src/app/api/cron/pulse-cleanup/route.ts
-Schedule: Every 6 hours
-Action: Mark posts older than 48h as expired/hidden
+Functions:
+- startNewRound(profileUserId) → { roundNumber, token, expiresAt }
+- getStatus(profileUserId) → { roundNumber, target, current, expiresAt, status }
+- submitResponse(token, payload) → { ok }
+- buildPack(profileUserId, roundNumber) → { compiledSummary, wingmanPrompt, matches }
+- getPack(profileUserId, roundNumber?) → WingmanPack
+- getPackHistory(profileUserId, limit = 5) → WingmanPack[]
 ```
 
-##### 8.3 Content Moderation
+##### 8.2 Wingman API
 ```
-File: src/lib/services/content-moderation.ts
-Purpose: Basic check before posting
-Uses: Keyword blocklist + Gemini Flash Lite for borderline cases
-Action: Flag, don't auto-delete (admin review)
+File: src/app/api/wingman/link/route.ts
+POST → Starts a new Wingman round and returns link (token)
+
+File: src/app/api/wingman/status/route.ts
+GET → Returns current round status { round_number, target_submissions, current_submissions, expires_at, status }
+
+File: src/app/api/wingman/pack/route.ts
+GET → Returns latest Wingman Pack + 3-7 Wingman Matches
+
+File: src/app/api/wingman/history/route.ts
+GET → Returns last 3-5 Wingman Packs (for "previous rounds")
+
+File: src/app/api/wingman/submit/route.ts (public, token-gated)
+POST → Friend submits Wingman answers (no auth required)
 ```
+
+##### 8.3 Progress Notifications
+Trigger push notifications at the moments that make users return:
+- On each submission: "Wingman update: 2/3 friends replied"
+- On completion: "✨ Your Wingman Pack is ready"
+
+Optional (simple) reminder:
+- If a link is still collecting after 24h: "One friend left to unlock your pack"
+
+Implementation note:
+- These are server-triggered after `submitResponse()` and can be sent via Expo Push.
+
+##### 8.4 Pack Compilation (No Over-Engineering)
+Keep compilation deterministic and transparent:
+- Count the most common "three words" across friends
+- Merge + dedupe green flags
+- Pick the funniest red flag (or the first non-empty)
+- Build one short Wingman Prompt string and run the existing agent search pipeline
+
+Example prompt:
+"Find someone compatible with me. My friends describe me as calm, funny, lowkey. I prefer grounded vibes, low drama, and people who can hold a real conversation."
 
 #### Frontend Tasks
 
-##### 8.4 Pulse Feed Screen
+##### 8.5 Wingman Tab Screen
 ```
-File: app/(tabs)/explore.tsx (repurpose or add)
-Purpose: Scrollable anonymous feed
+File: app/(tabs)/explore.tsx (replace with Wingman)
+Purpose: The viral home screen + pack results
 
-Post card:
+State A — No link yet:
 ┌────────────────────────────────────┐
-│ 🎭 Anonymous • 3h ago             │
-│ #missed_connection                 │
+│  Wingman 😮‍💨                      │
 │                                    │
-│ "Someone in my 8am lecture has     │
-│  the best smile and doesn't       │
-│  know it 🥹"                       │
+│  Let your friends describe you.    │
+│  Then I’ll find matches from it.   │
 │                                    │
-│ 🔥 24   💀 3   🫶 41              │
+│  [Generate Wingman Link]           │
+│  "Send to 3 friends"               │
+└────────────────────────────────────┘
+
+State B — Collecting (1/3, 2/3):
+┌────────────────────────────────────┐
+│  Wingman Link                       │
+│  Progress: 2/3                      │
 │                                    │
-│ [React]        [👀 Reveal to me]  │
+│  [Copy Link]   [WhatsApp]           │
+│                                    │
+│  Friend 1 ✅                         │
+│  Friend 2 ✅                         │
+│  Friend 3 ⏳                         │
+└────────────────────────────────────┘
+
+State C — Pack Ready:
+┌────────────────────────────────────┐
+│  Your Wingman Pack is ready ✨      │
+│  [Open Wingman Pack]               │
+└────────────────────────────────────┘
+
+State D — Keep it alive (weeks later):
+┌────────────────────────────────────┐
+│  Last updated: 19 days ago          │
+│  Want fresh matches from friends?   │
+│  [Start Round 2]                    │
+│                                    │
+│  Previous Packs:                    │
+│  • Round 1 (Opened)                 │
+│  • Round 0 (Archived)               │
 └────────────────────────────────────┘
 ```
 
-##### 8.5 Post Composer
+##### 8.6 Wingman Pack Screen (In-tab)
 ```
-File: components/pulse/post-composer.tsx
-Visual: Bottom sheet with text input + category selector
-Max length: 280 chars
+Purpose: Show the Wingman Card + Wingman Matches
+
+Section 1: Wingman Card
+- "They described you as: calm • funny • lowkey"
+- Green flags: 2-3 lines
+- Red flag (funny): 1 line
+- CTA: [Share my Wingman Card]
+
+Section 2: Wingman Matches
+- 3–7 curated matches
+- Each match shows: score + 2 reasons linked to friend inputs
+- CTA: [Connect]
+
+Footer:
+- [Start a New Round] (generates a new link + new pack)
 ```
 
-##### 8.6 Reveal Flow
+##### 8.7 Public Friend Submission Page
 ```
-File: components/pulse/reveal-flow.tsx
-Process:
-1. User A taps "Reveal to me" on User B's post
-2. User B gets notification: "Someone wants to connect over your post"
-3. User B can accept (mutual reveal) or ignore
-4. If accepted: both see each other's real profiles
+File: src/app/wingman/[token]/page.tsx (web page on backend)
+Purpose: Mobile web form for friends to submit quickly
+
+Fields (fast):
+- Your name
+- Describe them in 3 words
+- 1-2 green flags
+- 1 funny red flag
+- Short hype note (optional)
+```
+
+##### 8.8 Wingman Hook
+```
+File: hooks/use-wingman.ts
+
+const {
+  link,
+  status,
+  pack,
+  generateLink,
+  refreshStatus,
+  openPack,
+  shareWingmanCard,
+  connectFromPack,
+  isLoading,
+} = useWingman();
 ```
 
 #### Verification Checklist
-- [ ] Posts appear in feed (newest first)
-- [ ] Reactions work (toggle on/off)
-- [ ] Categories filter correctly
-- [ ] Posts auto-expire at 48h
-- [ ] Reveal flow works bidirectionally
-- [ ] Content moderation catches obvious violations
-- [ ] Anonymous posts don't leak identity
-- [ ] Pagination works smoothly
+- [ ] User can generate a Wingman link and share via WhatsApp
+- [ ] Friends can submit without the app (token-gated public form)
+- [ ] Progress updates in real time (0/3 → 3/3)
+- [ ] Pack only unlocks once target submissions reached
+- [ ] Wingman Card compiles friend inputs correctly
+- [ ] Wingman Matches are generated from the compiled prompt
+- [ ] Share flow works (card is screenshot-friendly)
+- [ ] User can start a new round after opening the pack (Round 2, Round 3...)
+- [ ] Pack history is accessible (last 3-5 rounds)
+- [ ] Push notifications fire on 1/3, 2/3, and Pack Ready
+- [ ] Refresh prompt appears when last pack is stale (e.g., > 30 days)
+- [ ] Reports/flagging for abusive submissions exists
 
 ---
 
@@ -1866,7 +1986,11 @@ Key events to track:
 - vibe_check_agreed_to_meet
 - study_date_created
 - blind_date_confirmed
-- pulse_posted (category)
+- wingman_link_created
+- wingman_submission_received
+- wingman_pack_opened
+- wingman_pack_shared
+- wingman_match_connected
 - hype_written
 ```
 
@@ -1884,7 +2008,7 @@ Key events to track:
 |---|---|---|
 | Agent results | 0 (always fresh) | 5 min |
 | Weekly drop | 30 sec | 10 min |
-| Pulse feed | 30 sec | 5 min |
+| Wingman pack | 30 sec | 10 min |
 | Match compatibility | 5 min | 30 min |
 | Study sessions | 15 sec | 2 min |
 | Hype vouches | 5 min | 30 min |
@@ -1974,7 +2098,7 @@ Key events to track:
 | Risk | Mitigation |
 |---|---|
 | Users don't trust AI matching | Explainability layer (match reasons), transparency |
-| Low engagement after novelty | Weekly drops, missions, pulse feed for daily pulls |
+| Low engagement after novelty | Weekly drops, missions, wingman packs for social pulls |
 | Matches never meet IRL | Missions have deadlines, blind dates have code words |
 | Toxic/inappropriate queries | Content moderation on input, keyword filters |
 | "Not enough people" at launch | Lower thresholds, broader matching, show "close matches" |
@@ -2004,7 +2128,7 @@ Key events to track:
 | Mission acceptance rate | 40% | 35% |
 | Mission completion rate | 20% | 25% |
 | Vibe check calls per day | — | 30 |
-| Pulse posts per day | 20 | 100 |
+| Wingman packs opened per day | 50 | 300 |
 | Study date broadcasts per day | — | 15 |
 | 7-day retention | 50% | 45% |
 | 30-day retention | — | 30% |
@@ -2015,7 +2139,7 @@ Key events to track:
 | Agent search latency (p95) | < 3 seconds |
 | Match feedback "amazing" + "nice" | > 60% |
 | Vibe check "meet" rate (mutual) | > 40% |
-| Pulse post engagement rate | > 30% react |
+| Wingman completion rate (links that reach 3 friends) | > 35% |
 | Hype vouches per active profile | > 1.5 avg |
 
 ---

@@ -76,8 +76,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="pulse"
         options={{
-          title: 'Pulse',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "flame" : "flame-outline"} color={color} />,
+          title: 'Wingman',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "people" : "people-outline"} color={color} />,
         }}
       />
       <Tabs.Screen
