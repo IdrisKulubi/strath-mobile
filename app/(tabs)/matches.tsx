@@ -53,7 +53,7 @@ export default function MatchesScreen() {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showArchivedSheet, setShowArchivedSheet] = useState(false);
     const [sentDetails, setSentDetails] = useState<SentConnection | null>(null);
-    const [isSentExpanded, setIsSentExpanded] = useState(true);
+    const [isSentExpanded, setIsSentExpanded] = useState(false);
     const [activeSentIndex, setActiveSentIndex] = useState(0);
     const lastSentScrollHapticAt = useRef(0);
     const { width: screenWidth } = useWindowDimensions();
@@ -323,7 +323,7 @@ export default function MatchesScreen() {
                 {matches.length > 0 && (
                     <Animated.View entering={FadeIn}>
                         <Text style={[styles.headerSubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                            {matches.length} {matches.length === 1 ? 'connection' : 'connections'} waiting to chat
+                            {matches.length} {matches.length === 1 ? 'connection' : 'connections'} — tap one to start chatting
                         </Text>
                     </Animated.View>
                 )}
@@ -340,9 +340,9 @@ export default function MatchesScreen() {
                             style={({ pressed }) => ([styles.sentCollapseHeader, { opacity: pressed ? 0.8 : 1 }])}
                         >
                             <View style={styles.requestsTitleRow}>
-                                <Text style={[styles.requestsEmoji, { color: colors.primary }]}>📨</Text>
+                                <Text style={styles.requestsEmoji}>📨</Text>
                                 <Text style={[styles.requestsTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                                    Sent
+                                    Sent requests
                                 </Text>
                             </View>
 
@@ -458,9 +458,9 @@ export default function MatchesScreen() {
                     <View style={styles.requestsContainer}>
                         <View style={styles.requestsHeader}>
                             <View style={styles.requestsTitleRow}>
-                                <Text style={[styles.requestsEmoji, { color: colors.primary }]}>💌</Text>
+                                <Text style={styles.requestsEmoji}>💌</Text>
                                 <Text style={[styles.requestsTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                                    Requests
+                                    Incoming requests
                                 </Text>
                             </View>
                             {isRequestsLoading ? (
@@ -487,64 +487,69 @@ export default function MatchesScreen() {
                                     styles.requestCard,
                                     {
                                         backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#ffffff',
-                                        borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+                                        borderColor: isDark ? 'rgba(236,72,153,0.22)' : 'rgba(236,72,153,0.16)',
                                     }
                                 ]}
                             >
                                 <View style={styles.requestTopRow}>
-                                    <View style={styles.requestLeft}>
-                                        {(() => {
-                                            const avatarUri = r.fromUser.profilePhoto || r.fromUser.image || r.fromUser.profile?.photos?.[0] || null;
-                                            if (avatarUri) {
-                                                return (
-                                                    <Image
-                                                        source={{ uri: avatarUri }}
-                                                        style={styles.requestAvatar}
-                                                    />
-                                                );
-                                            }
-
-                                            const initial = (r.fromUser.name || "?").trim().charAt(0).toUpperCase();
+                                    {/* Avatar — rounded square */}
+                                    {(() => {
+                                        const avatarUri = r.fromUser.profilePhoto || r.fromUser.image || r.fromUser.profile?.photos?.[0] || null;
+                                        if (avatarUri) {
                                             return (
-                                                <View style={[styles.requestAvatar, styles.requestAvatarFallback, { borderColor: colors.border }]}>
-                                                    <Text style={[styles.requestAvatarInitial, { color: colors.mutedForeground }]}>
-                                                        {initial}
-                                                    </Text>
-                                                </View>
+                                                <Image
+                                                    source={{ uri: avatarUri }}
+                                                    style={styles.requestAvatar}
+                                                    resizeMode="cover"
+                                                />
                                             );
-                                        })()}
+                                        }
+                                        const initial = (r.fromUser.name || '?').trim().charAt(0).toUpperCase();
+                                        return (
+                                            <LinearGradient
+                                                colors={['#ec4899', '#f43f5e']}
+                                                style={[styles.requestAvatar, { alignItems: 'center', justifyContent: 'center' }]}
+                                            >
+                                                <Text style={[styles.requestAvatarInitial, { color: '#fff' }]}>
+                                                    {initial}
+                                                </Text>
+                                            </LinearGradient>
+                                        );
+                                    })()}
 
-                                        <View style={{ flex: 1 }}>
+                                    {/* Info */}
+                                    <View style={{ flex: 1 }}>
+                                        <View style={styles.requestNameRow}>
                                             <Text style={[styles.requestName, { color: isDark ? '#fff' : '#1a1a2e' }]} numberOfLines={1}>
                                                 {r.fromUser.name}
                                             </Text>
-                                            <Text style={[styles.requestMeta, { color: isDark ? '#94a3b8' : '#6b7280' }]} numberOfLines={1}>
-                                                {getRequestMeta(r)}
-                                            </Text>
+                                            <View style={[styles.requestTimePill, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)' }]}>
+                                                <Text style={[styles.requestTimeText, { color: colors.mutedForeground }]}>
+                                                    {getTimeAgo(r.createdAt)}
+                                                </Text>
+                                            </View>
                                         </View>
-                                    </View>
-
-                                    <View style={[styles.requestTimePill, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)' }]}>
-                                        <Text style={[styles.requestTimeText, { color: colors.mutedForeground }]}>
-                                            {getTimeAgo(r.createdAt)}
+                                        <Text style={[styles.requestMeta, { color: isDark ? '#94a3b8' : '#6b7280' }]} numberOfLines={1}>
+                                            {getRequestMeta(r)}
                                         </Text>
                                     </View>
                                 </View>
 
+                                {/* Actions */}
                                 <View style={styles.requestActions}>
                                     <Pressable
                                         onPress={() => handleDeclineRequest(r)}
                                         disabled={respondMutation.isPending}
                                         style={[
-                                            styles.requestBtn,
+                                            styles.requestBtnDecline,
                                             {
                                                 backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                                                borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+                                                borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.07)',
                                                 opacity: respondMutation.isPending ? 0.6 : 1,
                                             },
                                         ]}
                                     >
-                                        <Text style={[styles.requestBtnText, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+                                        <Text style={[styles.requestBtnDeclineText, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
                                             Decline
                                         </Text>
                                     </Pressable>
@@ -552,15 +557,16 @@ export default function MatchesScreen() {
                                     <Pressable
                                         onPress={() => handleAcceptRequest(r)}
                                         disabled={respondMutation.isPending}
-                                        style={{ opacity: respondMutation.isPending ? 0.6 : 1 }}
+                                        style={[{ flex: 1, borderRadius: 999, overflow: 'hidden' }, respondMutation.isPending && { opacity: 0.6 }]}
                                     >
                                         <LinearGradient
                                             colors={['#ec4899', '#f43f5e']}
                                             start={{ x: 0, y: 0 }}
                                             end={{ x: 1, y: 0 }}
-                                            style={styles.requestBtnPrimary}
+                                            style={styles.requestBtnAccept}
                                         >
-                                            <Text style={styles.requestBtnPrimaryText}>
+                                            <Heart size={14} color="#fff" weight="fill" />
+                                            <Text style={styles.requestBtnAcceptText}>
                                                 Accept
                                             </Text>
                                         </LinearGradient>
@@ -716,8 +722,9 @@ const styles = StyleSheet.create({
     },
     headerTitle: {
         fontSize: 28,
-        fontWeight: '700',
-        lineHeight: 36,
+        fontWeight: '800',
+        lineHeight: 34,
+        letterSpacing: -0.5,
     },
     headerSubtitle: {
         fontSize: 14,
@@ -973,39 +980,38 @@ const styles = StyleSheet.create({
         fontWeight: '800',
     },
     requestCard: {
-        borderRadius: 18,
+        borderRadius: 20,
         borderWidth: 1,
-        padding: 12,
-        gap: 10,
+        padding: 14,
+        gap: 12,
     },
     requestTopRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
         gap: 12,
     },
-    requestLeft: {
+    requestNameRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-        flex: 1,
+        justifyContent: 'space-between',
+        marginBottom: 3,
     },
     requestTimePill: {
         borderWidth: 1,
-        paddingHorizontal: 10,
-        height: 26,
+        paddingHorizontal: 9,
+        height: 24,
         borderRadius: 999,
         alignItems: 'center',
         justifyContent: 'center',
     },
     requestTimeText: {
         fontSize: 11,
-        fontWeight: '700',
+        fontWeight: '600',
     },
     requestAvatar: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 58,
+        height: 58,
+        borderRadius: 18,
         backgroundColor: 'rgba(255,255,255,0.08)',
     },
     requestAvatarFallback: {
@@ -1015,46 +1021,45 @@ const styles = StyleSheet.create({
         backgroundColor: 'transparent',
     },
     requestAvatarInitial: {
-        fontSize: 16,
+        fontSize: 22,
         fontWeight: '800',
     },
     requestName: {
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '700',
+        flex: 1,
+        marginRight: 8,
     },
     requestMeta: {
         fontSize: 12,
         fontWeight: '500',
-        marginTop: 2,
     },
     requestActions: {
         flexDirection: 'row',
         gap: 10,
-        justifyContent: 'flex-end',
     },
-    requestBtn: {
-        paddingHorizontal: 14,
-        paddingVertical: 9,
+    requestBtnDecline: {
+        paddingHorizontal: 18,
+        paddingVertical: 11,
         borderRadius: 999,
         borderWidth: 1,
-        minWidth: 88,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    requestBtnText: {
-        fontSize: 12,
+    requestBtnDeclineText: {
+        fontSize: 13,
         fontWeight: '700',
     },
-    requestBtnPrimary: {
-        paddingHorizontal: 14,
-        paddingVertical: 9,
-        borderRadius: 999,
-        minWidth: 88,
+    requestBtnAccept: {
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 11,
+        borderRadius: 999,
     },
-    requestBtnPrimaryText: {
-        fontSize: 12,
+    requestBtnAcceptText: {
+        fontSize: 13,
         fontWeight: '800',
         color: '#fff',
     },

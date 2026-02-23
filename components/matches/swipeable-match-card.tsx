@@ -214,8 +214,10 @@ export function SwipeableMatchCard({ match, onPress, onArchive, onUnmatch, missi
                     style={[
                         styles.card,
                         {
-                            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#ffffff',
-                            borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
+                            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#ffffff',
+                            borderColor: (hasUnread || isNew)
+                                ? (isDark ? 'rgba(236,72,153,0.30)' : 'rgba(236,72,153,0.22)')
+                                : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
                         },
                         cardStyle,
                     ]}
@@ -225,50 +227,73 @@ export function SwipeableMatchCard({ match, onPress, onArchive, onUnmatch, missi
                     onPressIn={handlePressIn}
                     onPressOut={handlePressOut}
                 >
-                    {/* Avatar Section */}
-                    <View style={styles.avatarSection}>
-                        <View style={styles.avatarWrapper}>
-                            {avatarUri ? (
-                                <CachedImage uri={avatarUri} style={styles.avatar} fallbackType="avatar" />
-                            ) : (
-                                <LinearGradient
-                                    colors={['#ec4899', '#f43f5e']}
-                                    style={styles.avatarPlaceholder}
-                                >
-                                    <Text style={styles.avatarInitial}>{initial}</Text>
-                                </LinearGradient>
-                            )}
-                            {/* Online indicator */}
-                            {isOnline && (
-                                <View style={[styles.onlineIndicator, { borderColor: isDark ? '#0f0d23' : '#fff' }]}>
-                                    <View style={styles.onlineDot} />
-                                </View>
-                            )}
-                        </View>
+                    {/* New-match left accent stripe */}
+                    {(hasUnread || isNew) && (
+                        <LinearGradient
+                            colors={['#ec4899', '#f43f5e']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 0, y: 1 }}
+                            style={styles.accentStripe}
+                        />
+                    )}
 
-                        {/* Unread badge */}
-                        {hasUnread && (
-                            <View style={styles.unreadBadge}>
-                                <Text style={styles.unreadText}>
-                                    {unreadCount > 99 ? '99+' : unreadCount}
-                                </Text>
+                    {/* Avatar */}
+                    <View style={styles.avatarSection}>
+                        {/* Gradient ring for active/new matches */}
+                        {(hasUnread || isNew) ? (
+                            <LinearGradient
+                                colors={['#ec4899', '#f43f5e']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.avatarRing}
+                            >
+                                <View style={[styles.avatarRingInner, { backgroundColor: isDark ? 'rgba(15,13,35,1)' : '#fff' }]}>
+                                    {avatarUri ? (
+                                        <CachedImage uri={avatarUri} style={styles.avatar} fallbackType="avatar" />
+                                    ) : (
+                                        <LinearGradient colors={['#ec4899', '#f43f5e']} style={styles.avatarPlaceholder}>
+                                            <Text style={styles.avatarInitial}>{initial}</Text>
+                                        </LinearGradient>
+                                    )}
+                                </View>
+                            </LinearGradient>
+                        ) : (
+                            <View style={styles.avatarWrapper}>
+                                {avatarUri ? (
+                                    <CachedImage uri={avatarUri} style={styles.avatar} fallbackType="avatar" />
+                                ) : (
+                                    <LinearGradient colors={['#ec4899', '#f43f5e']} style={styles.avatarPlaceholder}>
+                                        <Text style={styles.avatarInitial}>{initial}</Text>
+                                    </LinearGradient>
+                                )}
                             </View>
                         )}
-                        
-                        {/* NEW badge for unopened matches */}
-                        {isNew && !hasUnread && (
-                            <View style={styles.newBadge}>
-                                <Text style={styles.newBadgeText}>NEW</Text>
+
+                        {/* Online dot */}
+                        {isOnline && (
+                            <View style={[styles.onlineIndicator, { borderColor: isDark ? '#0f0d23' : '#fff' }]} />
+                        )}
+
+                        {/* Unread count */}
+                        {hasUnread && (
+                            <View style={styles.unreadBadge}>
+                                <Text style={styles.unreadText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
                             </View>
                         )}
                     </View>
 
-                    {/* Content Section */}
+                    {/* Content */}
                     <View style={styles.contentSection}>
-                        {/* Top row: Name + Time */}
+                        {/* Row 1: Name + time */}
                         <View style={styles.topRow}>
                             <Text
-                                style={[styles.name, { color: isDark ? '#fff' : '#1a1a2e' }]}
+                                style={[
+                                    styles.name,
+                                    {
+                                        color: isDark ? '#fff' : '#1a1a2e',
+                                        fontWeight: (hasUnread || isNew) ? '700' : '600',
+                                    },
+                                ]}
                                 numberOfLines={1}
                                 ellipsizeMode="tail"
                             >
@@ -282,89 +307,49 @@ export function SwipeableMatchCard({ match, onPress, onArchive, onUnmatch, missi
                             </View>
                         </View>
 
-                        {/* Status row */}
-                        <View style={styles.statusRow}>
-                            <View style={[
-                                styles.statusBadge,
-                                { backgroundColor: isOnline ? 'rgba(16, 185, 129, 0.15)' : (isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)') }
-                            ]}>
-                                <View style={[
-                                    styles.statusDot,
-                                    { backgroundColor: isOnline ? '#10b981' : '#64748b' }
-                                ]} />
-                                <Text style={[
-                                    styles.statusText,
-                                    { color: isOnline ? '#10b981' : (isDark ? '#64748b' : '#9ca3af') }
-                                ]}>
-                                    {activeStatus}
-                                </Text>
-                            </View>
-                        </View>
-
-                        {/* Message preview or icebreaker */}
+                        {/* Row 2: Message preview / icebreaker */}
                         {lastMessageText ? (
                             <Text
                                 style={[
                                     styles.preview,
                                     {
-                                        color: hasUnread ? (isDark ? '#fff' : '#1a1a2e') : (isDark ? '#94a3b8' : '#6b7280'),
-                                        fontWeight: hasUnread ? '600' : '400',
-                                    }
+                                        color: hasUnread ? (isDark ? '#e2e8f0' : '#334155') : (isDark ? '#64748b' : '#9ca3af'),
+                                        fontWeight: hasUnread ? '500' : '400',
+                                    },
                                 ]}
                                 numberOfLines={1}
                             >
                                 {lastMessageText}
                             </Text>
                         ) : (
-                            <View
-                                style={[
-                                    styles.icebreaker,
-                                    { backgroundColor: isDark ? 'rgba(236, 72, 153, 0.15)' : 'rgba(236, 72, 153, 0.1)' }
-                                ]}
-                            >
+                            <View style={[styles.icebreaker, { backgroundColor: isDark ? 'rgba(236,72,153,0.12)' : 'rgba(236,72,153,0.08)' }]}>
                                 <Text style={styles.icebreakerText}>Say hi! 👋</Text>
                             </View>
                         )}
 
-                        {/* Spark score + interests + mission badge */}
+                        {/* Row 3: status + mission chip */}
                         <View style={styles.bottomRow}>
-                            <LinearGradient
-                                colors={['#ec4899', '#f43f5e']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                                style={styles.sparkBadge}
-                            >
-                                <Ionicons name="sparkles" size={11} color="#fff" />
-                                <Text style={styles.sparkText}>{sparkScore}%</Text>
-                            </LinearGradient>
-
-                            {/* Mission badge */}
+                            {isOnline && (
+                                <View style={[styles.onlinePill, { backgroundColor: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.08)' }]}>
+                                    <View style={styles.onlinePillDot} />
+                                    <Text style={styles.onlinePillText}>Online</Text>
+                                </View>
+                            )}
                             {mission && mission.status !== 'completed' && mission.status !== 'expired' && mission.status !== 'skipped' && (
-                                <View style={[
-                                    styles.missionBadge,
-                                    { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(139, 92, 246, 0.12)' }
-                                ]}>
+                                <View style={[styles.missionBadge, { backgroundColor: isDark ? 'rgba(139,92,246,0.18)' : 'rgba(139,92,246,0.10)' }]}>
                                     <Text style={styles.missionBadgeText}>
-                                        {mission.emoji}{' '}
-                                        {mission.status === 'accepted' ? 'In progress' : 'Mission'}
+                                        {mission.emoji} {mission.status === 'accepted' ? 'In progress' : 'Mission'}
                                     </Text>
                                 </View>
                             )}
-
-                            {interests.length > 0 && !mission && (
+                            {!isOnline && !mission && interests.length > 0 && (
                                 <View style={styles.interestsContainer}>
-                                    {interests.map((interest, idx) => (
+                                    {interests.slice(0, 2).map((interest, idx) => (
                                         <View
                                             key={idx}
-                                            style={[
-                                                styles.interestBadge,
-                                                { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' }
-                                            ]}
+                                            style={[styles.interestBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}
                                         >
-                                            <Text 
-                                                style={[styles.interestText, { color: isDark ? '#94a3b8' : '#6b7280' }]}
-                                                numberOfLines={1}
-                                            >
+                                            <Text style={[styles.interestText, { color: isDark ? '#94a3b8' : '#6b7280' }]} numberOfLines={1}>
                                                 {interest}
                                             </Text>
                                         </View>
@@ -375,12 +360,7 @@ export function SwipeableMatchCard({ match, onPress, onArchive, onUnmatch, missi
                     </View>
 
                     {/* Chevron */}
-                    <Ionicons
-                        name="chevron-forward"
-                        size={18}
-                        color={isDark ? '#4a5568' : '#cbd5e0'}
-                        style={styles.chevron}
-                    />
+                    <Ionicons name="chevron-forward" size={16} color={isDark ? '#3d4d60' : '#d1d5db'} style={styles.chevron} />
                 </AnimatedPressable>
             </GestureDetector>
         </View>
@@ -391,7 +371,7 @@ const styles = StyleSheet.create({
     container: {
         position: 'relative',
         marginHorizontal: 16,
-        marginVertical: 6,
+        marginVertical: 5,
     },
     actionsContainer: {
         position: 'absolute',
@@ -400,7 +380,7 @@ const styles = StyleSheet.create({
         bottom: 0,
         width: ACTION_WIDTH,
         flexDirection: 'row',
-        borderRadius: 20,
+        borderRadius: 22,
         overflow: 'hidden',
     },
     actionButton: {
@@ -423,57 +403,76 @@ const styles = StyleSheet.create({
     card: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 14,
-        borderRadius: 20,
+        paddingVertical: 13,
+        paddingRight: 14,
+        paddingLeft: 18,
+        borderRadius: 22,
         borderWidth: 1,
-        minHeight: 100,
+        minHeight: 90,
+        overflow: 'hidden',
     },
+    // Left accent stripe for unread/new
+    accentStripe: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 4,
+        borderTopLeftRadius: 22,
+        borderBottomLeftRadius: 22,
+    },
+
+    // Avatar
     avatarSection: {
         position: 'relative',
-        marginRight: 12,
+        marginRight: 14,
     },
-    avatarWrapper: {
-        position: 'relative',
+    avatarWrapper: { position: 'relative' },
+    avatarRing: {
+        width: 70,
+        height: 70,
+        borderRadius: 35,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 2.5,
+    },
+    avatarRingInner: {
+        width: 65,
+        height: 65,
+        borderRadius: 32.5,
+        overflow: 'hidden',
     },
     avatar: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: 65,
+        height: 65,
+        borderRadius: 32.5,
     },
     avatarPlaceholder: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: 65,
+        height: 65,
+        borderRadius: 32.5,
         justifyContent: 'center',
         alignItems: 'center',
     },
     avatarInitial: {
         color: '#fff',
-        fontSize: 22,
+        fontSize: 24,
         fontWeight: '700',
     },
     onlineIndicator: {
         position: 'absolute',
-        bottom: 0,
-        right: 0,
-        width: 16,
-        height: 16,
-        borderRadius: 8,
+        bottom: 2,
+        right: 2,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
         borderWidth: 2,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#10b981',
-    },
-    onlineDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
         backgroundColor: '#10b981',
     },
     unreadBadge: {
         position: 'absolute',
-        top: -4,
-        right: -4,
+        top: -2,
+        right: -2,
         minWidth: 20,
         height: 20,
         borderRadius: 10,
@@ -485,107 +484,90 @@ const styles = StyleSheet.create({
     unreadText: {
         color: '#fff',
         fontSize: 10,
-        fontWeight: '700',
-    },
-    newBadge: {
-        position: 'absolute',
-        top: -6,
-        right: -8,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 6,
-        backgroundColor: '#8b5cf6', // Purple for "new" to differentiate from unread
-    },
-    newBadgeText: {
-        color: '#fff',
-        fontSize: 9,
         fontWeight: '800',
-        letterSpacing: 0.5,
     },
+
+    // Content
     contentSection: {
         flex: 1,
         marginRight: 4,
+        gap: 3,
     },
     topRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 3,
     },
     name: {
         fontSize: 16,
-        fontWeight: '600',
         flex: 1,
         marginRight: 8,
+        letterSpacing: -0.2,
     },
     timeContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 5,
     },
     newDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+        width: 7,
+        height: 7,
+        borderRadius: 3.5,
         backgroundColor: '#ec4899',
     },
     time: {
         fontSize: 12,
         fontWeight: '500',
     },
-    statusRow: {
-        marginBottom: 4,
-    },
-    statusBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        alignSelf: 'flex-start',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 8,
-        gap: 4,
-    },
-    statusDot: {
-        width: 5,
-        height: 5,
-        borderRadius: 2.5,
-    },
-    statusText: {
-        fontSize: 10,
-        fontWeight: '600',
-    },
     preview: {
         fontSize: 13,
         lineHeight: 18,
-        marginBottom: 6,
     },
     icebreaker: {
         alignSelf: 'flex-start',
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 10,
-        marginBottom: 6,
     },
     icebreakerText: {
         color: '#ec4899',
         fontSize: 12,
         fontWeight: '600',
     },
+
+    // Bottom row (status / mission / interests)
     bottomRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
+        marginTop: 2,
     },
-    sparkBadge: {
+    onlinePill: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 4,
         paddingHorizontal: 7,
         paddingVertical: 3,
         borderRadius: 8,
-        gap: 3,
     },
-    sparkText: {
-        color: '#fff',
+    onlinePillDot: {
+        width: 5,
+        height: 5,
+        borderRadius: 2.5,
+        backgroundColor: '#10b981',
+    },
+    onlinePillText: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: '#10b981',
+    },
+    missionBadge: {
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 8,
+    },
+    missionBadgeText: {
+        color: '#8b5cf6',
         fontSize: 11,
         fontWeight: '700',
     },
@@ -603,18 +585,6 @@ const styles = StyleSheet.create({
     interestText: {
         fontSize: 10,
         fontWeight: '500',
-    },
-    missionBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 7,
-        paddingVertical: 3,
-        borderRadius: 8,
-    },
-    missionBadgeText: {
-        color: '#8b5cf6',
-        fontSize: 11,
-        fontWeight: '700',
     },
     chevron: {
         marginLeft: 4,

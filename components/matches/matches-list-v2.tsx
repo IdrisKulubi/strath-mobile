@@ -3,6 +3,7 @@ import {
     View,
     FlatList,
     RefreshControl,
+    ScrollView,
     StyleSheet,
     ActivityIndicator,
     Pressable,
@@ -63,34 +64,48 @@ function MatchSkeleton({ index }: { index: number }) {
     );
 }
 
-// Enhanced empty state
+// Redesigned empty state — Apple-level polish
+const HOW_IT_WORKS = [
+    { emoji: '🔍', title: 'Find someone you like', desc: 'Browse profiles on Find and send a connection request' },
+    { emoji: '💌', title: 'They accept your request', desc: "If they like you back, boom — you're a match!" },
+    { emoji: '💬', title: 'Start the conversation', desc: 'Break the ice and see where it takes you' },
+];
+
 function EmptyState({ onExplore }: { onExplore?: () => void }) {
     const { isDark } = useTheme();
 
     return (
-        <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconWrapper}>
+        <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.emptyScroll}
+        >
+            {/* Concentric ring hero */}
+            <View style={styles.emptyHeroWrapper}>
+                <View style={[styles.emptyRing3, { borderColor: isDark ? 'rgba(236,72,153,0.07)' : 'rgba(236,72,153,0.06)' }]} />
+                <View style={[styles.emptyRing2, { borderColor: isDark ? 'rgba(236,72,153,0.13)' : 'rgba(236,72,153,0.10)' }]} />
+                <View style={[styles.emptyRing1, { borderColor: isDark ? 'rgba(236,72,153,0.20)' : 'rgba(236,72,153,0.16)' }]} />
                 <LinearGradient
-                    colors={['rgba(236, 72, 153, 0.2)', 'rgba(244, 63, 94, 0.2)']}
-                    style={styles.emptyIconGlow}
-                />
-                <View style={[
-                    styles.emptyIconContainer,
-                    { backgroundColor: isDark ? 'rgba(236, 72, 153, 0.15)' : 'rgba(236, 72, 153, 0.1)' }
-                ]}>
-                    <Heart size={56} color="#ec4899" weight="fill" />
-                </View>
+                    colors={['#f472b6', '#f43f5e']}
+                    start={{ x: 0.2, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.emptyHeartGradient}
+                >
+                    <Heart size={44} color="#fff" weight="fill" />
+                </LinearGradient>
             </View>
 
             <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                No Matches yet
+                Your matches live here
             </Text>
             <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                When you accept a request (or they accept yours), it becomes a match and shows up here
+                The moment someone accepts your request — or you accept theirs — you'll see them right here.
             </Text>
 
             {onExplore && (
-                <Pressable onPress={onExplore}>
+                <Pressable
+                    onPress={onExplore}
+                    style={{ borderRadius: 18, overflow: 'hidden', marginBottom: 40 }}
+                >
                     <LinearGradient
                         colors={['#ec4899', '#f43f5e']}
                         start={{ x: 0, y: 0 }}
@@ -98,21 +113,47 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
                         style={styles.exploreButton}
                     >
                         <MagnifyingGlass size={20} color="#fff" weight="bold" />
-                        <Text style={styles.exploreButtonText}>Start Exploring</Text>
+                        <Text style={styles.exploreButtonText}>Find Someone</Text>
                     </LinearGradient>
                 </Pressable>
             )}
 
+            {/* How matching works */}
             <View style={[
-                styles.tipContainer,
-                { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.03)' }
+                styles.howSection,
+                {
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
+                    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                },
             ]}>
-                <Sparkle size={18} color="#f59e0b" weight="fill" />
-                <Text style={[styles.tipText, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                    Pro tip: Complete your profile to get 3x more connections!
+                <Text style={[styles.howSectionLabel, { color: isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)' }]}>
+                    HOW MATCHING WORKS
+                </Text>
+                {HOW_IT_WORKS.map((step, i) => (
+                    <View key={i} style={[styles.stepRow, i < HOW_IT_WORKS.length - 1 && styles.stepRowBorder, { borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }]}>
+                        <View style={[styles.stepEmojiBox, { backgroundColor: isDark ? 'rgba(236,72,153,0.12)' : 'rgba(236,72,153,0.07)' }]}>
+                            <Text style={styles.stepEmoji}>{step.emoji}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.stepTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+                                {step.title}
+                            </Text>
+                            <Text style={[styles.stepDesc, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
+                                {step.desc}
+                            </Text>
+                        </View>
+                    </View>
+                ))}
+            </View>
+
+            {/* Pro tip */}
+            <View style={[styles.tipRow, { backgroundColor: isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.07)', borderColor: isDark ? 'rgba(245,158,11,0.20)' : 'rgba(245,158,11,0.18)' }]}>
+                <Text style={styles.tipEmoji}>✨</Text>
+                <Text style={[styles.tipText, { color: isDark ? '#fbbf24' : '#92400e' }]}>
+                    Complete your profile to get 3× more connections
                 </Text>
             </View>
-        </View>
+        </ScrollView>
     );
 }
 
@@ -244,74 +285,151 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 8,
     },
-    emptyContainer: {
-        flex: 1,
-        justifyContent: 'center',
+    // ── Empty State ────────────────────────────────────────────────────────
+    emptyScroll: {
+        flexGrow: 1,
         alignItems: 'center',
-        paddingHorizontal: 32,
+        paddingTop: 48,
+        paddingHorizontal: 24,
+        paddingBottom: 60,
     },
-    emptyIconWrapper: {
-        position: 'relative',
-        marginBottom: 24,
+    emptyHeroWrapper: {
+        width: 200,
+        height: 200,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 32,
     },
-    emptyIconGlow: {
+    emptyRing3: {
         position: 'absolute',
-        width: 140,
-        height: 140,
-        borderRadius: 70,
-        top: -10,
-        left: -10,
+        width: 200,
+        height: 200,
+        borderRadius: 100,
+        borderWidth: 1,
     },
-    emptyIconContainer: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        justifyContent: 'center',
+    emptyRing2: {
+        position: 'absolute',
+        width: 156,
+        height: 156,
+        borderRadius: 78,
+        borderWidth: 1.5,
+    },
+    emptyRing1: {
+        position: 'absolute',
+        width: 116,
+        height: 116,
+        borderRadius: 58,
+        borderWidth: 1.5,
+    },
+    emptyHeartGradient: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
         alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#ec4899',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.45,
+        shadowRadius: 18,
+        elevation: 12,
     },
     emptyTitle: {
-        fontSize: 24,
-        fontWeight: '700',
+        fontSize: 26,
+        fontWeight: '800',
         textAlign: 'center',
+        letterSpacing: -0.4,
+        lineHeight: 34,
+        paddingTop: 2,
         marginBottom: 12,
     },
     emptySubtitle: {
         fontSize: 15,
         textAlign: 'center',
-        lineHeight: 22,
-        marginBottom: 28,
+        lineHeight: 23,
+        marginBottom: 32,
+        maxWidth: 300,
     },
     exploreButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 28,
-        paddingVertical: 14,
-        borderRadius: 16,
+        paddingHorizontal: 32,
+        paddingVertical: 16,
+        borderRadius: 18,
         gap: 8,
         shadowColor: '#ec4899',
         shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
+        shadowOpacity: 0.35,
+        shadowRadius: 14,
         elevation: 8,
     },
     exploreButtonText: {
         color: '#fff',
         fontSize: 16,
-        fontWeight: '700',
+        fontWeight: '800',
+        letterSpacing: -0.2,
     },
-    tipContainer: {
+    // How it works section
+    howSection: {
+        width: '100%',
+        borderRadius: 20,
+        borderWidth: 1,
+        padding: 18,
+        marginBottom: 16,
+    },
+    howSectionLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 1.2,
+        marginBottom: 16,
+    },
+    stepRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 32,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderRadius: 12,
-        gap: 10,
+        gap: 14,
+        paddingBottom: 14,
     },
+    stepRowBorder: {
+        borderBottomWidth: 1,
+        marginBottom: 14,
+    },
+    stepEmojiBox: {
+        width: 42,
+        height: 42,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    stepEmoji: {
+        fontSize: 20,
+    },
+    stepTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 2,
+    },
+    stepDesc: {
+        fontSize: 12,
+        lineHeight: 17,
+        fontWeight: '400',
+    },
+    // Pro tip row
+    tipRow: {
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        borderRadius: 14,
+        borderWidth: 1,
+        marginBottom: 8,
+    },
+    tipEmoji: { fontSize: 15 },
     tipText: {
         fontSize: 13,
         fontWeight: '500',
         flex: 1,
+        lineHeight: 18,
     },
     listHeader: {
         paddingHorizontal: 20,

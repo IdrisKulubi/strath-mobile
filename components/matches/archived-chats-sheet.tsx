@@ -1,32 +1,21 @@
-import React from 'react';
+﻿import React from 'react';
 import {
     View,
     Modal,
     StyleSheet,
     Pressable,
-    Dimensions,
     FlatList,
     ActivityIndicator,
+    TouchableOpacity,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { Match } from '@/hooks/use-matches';
 import { MatchCard } from './match-card';
-import { Ionicons } from '@expo/vector-icons';
-import { Archive, Trash } from 'phosphor-react-native';
-import Animated, {
-    useSharedValue,
-    useAnimatedStyle,
-    withSpring,
-    withTiming,
-    runOnJS,
-    FadeIn,
-} from 'react-native-reanimated';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Archive, Trash, X } from 'phosphor-react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface ArchivedChatsSheetProps {
     visible: boolean;
@@ -48,81 +37,41 @@ export function ArchivedChatsSheet({
     onDelete,
 }: ArchivedChatsSheetProps) {
     const { isDark } = useTheme();
-    const insets = useSafeAreaInsets();
-    const translateY = useSharedValue(SCREEN_HEIGHT);
-
-    React.useEffect(() => {
-        if (visible) {
-            translateY.value = withSpring(0, { damping: 25, stiffness: 300 });
-        } else {
-            translateY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [visible]);
-
-    const closeSheet = () => {
-        translateY.value = withTiming(SCREEN_HEIGHT, { duration: 250 }, () => {
-            runOnJS(onClose)();
-        });
-    };
-
-    const panGesture = Gesture.Pan()
-        .onUpdate((event) => {
-            if (event.translationY > 0) {
-                translateY.value = event.translationY;
-            }
-        })
-        .onEnd((event) => {
-            if (event.translationY > 100 || event.velocityY > 500) {
-                closeSheet();
-            } else {
-                translateY.value = withSpring(0, { damping: 25, stiffness: 300 });
-            }
-        });
-
-    const sheetStyle = useAnimatedStyle(() => ({
-        transform: [{ translateY: translateY.value }],
-    }));
-
-    const backdropStyle = useAnimatedStyle(() => ({
-        opacity: withTiming(visible ? 1 : 0, { duration: 200 }),
-    }));
 
     const renderItem = ({ item, index }: { item: Match; index: number }) => (
-        <Animated.View entering={FadeIn.delay(index * 50)}>
+        <Animated.View entering={FadeIn.delay(index * 40)}>
             <View style={styles.archivedItem}>
-                <MatchCard
-                    match={item}
-                    onPress={onMatchPress}
-                    showOptions={false}
-                />
+                <MatchCard match={item} onPress={onMatchPress} showOptions={false} />
                 <View style={styles.archivedActions}>
-                    <Pressable
+                    <TouchableOpacity
+                        activeOpacity={0.75}
                         style={[
                             styles.actionButton,
-                            { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.1)' }
+                            { backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.1)' },
                         ]}
                         onPress={() => {
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                             onUnarchive(item);
                         }}
                     >
-                        <Archive size={18} color="#10b981" weight="bold" />
+                        <Archive size={16} color="#10b981" weight="bold" />
                         <Text style={[styles.actionButtonText, { color: '#10b981' }]}>Unarchive</Text>
-                    </Pressable>
-                    <Pressable
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        activeOpacity={0.75}
                         style={[
                             styles.actionButton,
-                            { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.1)' }
+                            { backgroundColor: isDark ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.1)' },
                         ]}
                         onPress={() => {
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                             onDelete(item);
                         }}
                     >
-                        <Trash size={18} color="#ef4444" weight="bold" />
+                        <Trash size={16} color="#ef4444" weight="bold" />
                         <Text style={[styles.actionButtonText, { color: '#ef4444' }]}>Delete</Text>
-                    </Pressable>
+                    </TouchableOpacity>
                 </View>
             </View>
         </Animated.View>
@@ -131,148 +80,128 @@ export function ArchivedChatsSheet({
     const renderEmpty = () => (
         <View style={styles.emptyContainer}>
             <View style={[
-                styles.emptyIcon,
-                { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)' }
+                styles.emptyIconBox,
+                { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
             ]}>
-                <Archive size={48} color={isDark ? '#64748b' : '#9ca3af'} />
+                <Archive size={40} color={isDark ? '#475569' : '#94a3b8'} />
             </View>
             <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
                 No archived chats
             </Text>
-            <Text style={[styles.emptySubtitle, { color: isDark ? '#64748b' : '#9ca3af' }]}>
-                Long press a match to archive it
+            <Text style={[styles.emptySubtitle, { color: isDark ? '#64748b' : '#94a3b8' }]}>
+                Long press a match card to archive it
             </Text>
         </View>
     );
 
-    if (!visible) return null;
-
     return (
-        <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
-            <GestureHandlerRootView style={styles.modalContainer}>
-                {/* Backdrop */}
-                <Animated.View style={[styles.backdrop, backdropStyle]}>
-                    <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} />
-                </Animated.View>
-
-                {/* Sheet */}
-                <GestureDetector gesture={panGesture}>
-                    <Animated.View
-                        style={[
-                            styles.sheet,
-                            {
-                                backgroundColor: isDark ? '#1a1a2e' : '#ffffff',
-                                paddingBottom: insets.bottom + 20,
-                            },
-                            sheetStyle,
-                        ]}
-                    >
-                        {/* Handle */}
-                        <View style={styles.handleContainer}>
-                            <View style={[
-                                styles.handle,
-                                { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.15)' }
-                            ]} />
+        <Modal
+            visible={visible}
+            animationType="slide"
+            presentationStyle="pageSheet"
+            onRequestClose={onClose}
+        >
+            <SafeAreaView
+                style={[styles.root, { backgroundColor: isDark ? '#0f0d23' : '#f8fafc' }]}
+                edges={['top', 'bottom']}
+            >
+                {/* Header */}
+                <View style={[
+                    styles.header,
+                    {
+                        backgroundColor: isDark ? '#0f0d23' : '#f8fafc',
+                        borderBottomColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
+                    },
+                ]}>
+                    <View style={styles.headerLeft}>
+                        <View style={[
+                            styles.headerIconBox,
+                            { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' },
+                        ]}>
+                            <Archive size={18} color={isDark ? '#94a3b8' : '#6b7280'} weight="fill" />
                         </View>
-
-                        {/* Header */}
-                        <View style={styles.header}>
-                            <View style={styles.headerLeft}>
-                                <Archive size={24} color={isDark ? '#fff' : '#1a1a2e'} weight="fill" />
-                                <Text style={[styles.headerTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                                    Archived Chats
-                                </Text>
-                            </View>
-                            <Pressable
-                                style={[
-                                    styles.closeButton,
-                                    { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)' }
-                                ]}
-                                onPress={closeSheet}
-                            >
-                                <Ionicons name="close" size={20} color={isDark ? '#fff' : '#1a1a2e'} />
-                            </Pressable>
-                        </View>
-
-                        {archivedMatches.length > 0 && (
-                            <Text style={[styles.countText, { color: isDark ? '#64748b' : '#9ca3af' }]}>
-                                {archivedMatches.length} archived {archivedMatches.length === 1 ? 'chat' : 'chats'}
+                        <View>
+                            <Text style={[styles.headerTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+                                Archived Chats
                             </Text>
-                        )}
+                            {archivedMatches.length > 0 && (
+                                <Text style={[styles.headerCount, { color: isDark ? '#64748b' : '#94a3b8' }]}>
+                                    {archivedMatches.length} {archivedMatches.length === 1 ? 'chat' : 'chats'}
+                                </Text>
+                            )}
+                        </View>
+                    </View>
 
-                        {/* Content */}
-                        {isLoading ? (
-                            <View style={styles.loadingContainer}>
-                                <ActivityIndicator size="large" color="#ec4899" />
-                            </View>
-                        ) : (
-                            <FlatList
-                                data={archivedMatches}
-                                renderItem={renderItem}
-                                keyExtractor={(item) => item.id}
-                                ListEmptyComponent={renderEmpty}
-                                contentContainerStyle={[
-                                    styles.listContent,
-                                    archivedMatches.length === 0 && styles.emptyList
-                                ]}
-                                showsVerticalScrollIndicator={false}
-                            />
-                        )}
-                    </Animated.View>
-                </GestureDetector>
-            </GestureHandlerRootView>
+                    <Pressable
+                        onPress={onClose}
+                        hitSlop={12}
+                        style={({ pressed }) => ([
+                            styles.closeButton,
+                            {
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.06)',
+                                opacity: pressed ? 0.7 : 1,
+                            },
+                        ])}
+                    >
+                        <X size={18} color={isDark ? '#94a3b8' : '#6b7280'} weight="bold" />
+                    </Pressable>
+                </View>
+
+                {/* Content */}
+                {isLoading ? (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color="#ec4899" />
+                    </View>
+                ) : (
+                    <FlatList
+                        data={archivedMatches}
+                        renderItem={renderItem}
+                        keyExtractor={(item) => item.id}
+                        ListEmptyComponent={renderEmpty}
+                        contentContainerStyle={[
+                            styles.listContent,
+                            archivedMatches.length === 0 && styles.emptyList,
+                        ]}
+                        showsVerticalScrollIndicator={false}
+                    />
+                )}
+            </SafeAreaView>
         </Modal>
     );
 }
 
 const styles = StyleSheet.create({
-    modalContainer: {
-        flex: 1,
-    },
-    backdrop: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    },
-    sheet: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        maxHeight: SCREEN_HEIGHT * 0.85,
-        minHeight: SCREEN_HEIGHT * 0.5,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 16,
-        elevation: 16,
-    },
-    handleContainer: {
-        alignItems: 'center',
-        paddingTop: 12,
-        paddingBottom: 8,
-    },
-    handle: {
-        width: 40,
-        height: 5,
-        borderRadius: 3,
-    },
+    root: { flex: 1 },
+
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        paddingBottom: 12,
+        paddingVertical: 16,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     headerLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
+    },
+    headerIconBox: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     headerTitle: {
-        fontSize: 20,
-        fontWeight: '700',
+        fontSize: 18,
+        fontWeight: '800',
+        letterSpacing: -0.3,
+    },
+    headerCount: {
+        fontSize: 12,
+        fontWeight: '500',
+        marginTop: 1,
     },
     closeButton: {
         width: 36,
@@ -281,31 +210,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    countText: {
-        fontSize: 13,
-        fontWeight: '500',
-        paddingHorizontal: 20,
-        marginBottom: 12,
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+
     listContent: {
-        paddingBottom: 20,
+        paddingTop: 8,
+        paddingBottom: 32,
     },
-    emptyList: {
-        flexGrow: 1,
-    },
-    archivedItem: {
-        marginBottom: 8,
-    },
+    emptyList: { flexGrow: 1 },
+
+    archivedItem: { marginBottom: 4 },
     archivedActions: {
         flexDirection: 'row',
         gap: 10,
-        paddingHorizontal: 20,
-        marginTop: 8,
+        paddingHorizontal: 16,
+        paddingBottom: 10,
     },
     actionButton: {
         flex: 1,
@@ -313,34 +230,44 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 10,
-        borderRadius: 12,
+        borderRadius: 14,
         gap: 6,
     },
     actionButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 13,
+        fontWeight: '700',
     },
+
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+
     emptyContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 32,
+        paddingHorizontal: 40,
     },
-    emptyIcon: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
+    emptyIconBox: {
+        width: 80,
+        height: 80,
+        borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 20,
     },
     emptyTitle: {
         fontSize: 20,
-        fontWeight: '700',
+        fontWeight: '800',
         marginBottom: 8,
+        textAlign: 'center',
+        letterSpacing: -0.3,
     },
     emptySubtitle: {
         fontSize: 14,
         textAlign: 'center',
+        lineHeight: 20,
     },
 });
