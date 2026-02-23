@@ -100,14 +100,14 @@ export async function createVibeCheckRoom(matchId: string): Promise<DailyRoom> {
                 // Audio-only settings
                 enable_screenshare: false,
                 enable_chat: false,
-                // Enforce 3-min call limit
-                eject_at_token_exp: true,
+                // Enforce call end on room expiry, and cap call length.
+                // NOTE: `eject_at_token_exp` is a *meeting token* property, not a room property.
+                eject_at_room_exp: true,
+                eject_after_elapsed: MAX_CALL_DURATION_SECONDS,
                 nbf: Math.floor(Date.now() / 1000) - 30, // valid from 30s ago (clock skew)
                 // UI customisations — not all apply to prebuilt but set for API completeness
                 start_video_off: true,
                 start_audio_off: false,
-                // Max call duration enforced at room level
-                meeting_expiry_threshold: MAX_CALL_DURATION_SECONDS,
             },
         }),
     });
