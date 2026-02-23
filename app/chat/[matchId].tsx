@@ -93,12 +93,12 @@ export default function ChatScreen() {
         setIsSafetyModalVisible(false);
 
         Alert.alert(
-            'Disconnect',
-            `Are you sure you want to disconnect from ${partner?.name || 'this person'}?\n\nThis will:\n• Remove them from your connections\n• Delete all your messages\n• This action cannot be undone`,
+            'Unmatch',
+            `Are you sure you want to unmatch from ${partner?.name || 'this person'}?\n\nThis will:\n• Remove them from your matches\n• Delete all your messages\n• This action cannot be undone`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Disconnect',
+                    text: 'Unmatch',
                     style: 'destructive',
                     onPress: () => {
                         if (!matchId) return;
@@ -113,7 +113,7 @@ export default function ChatScreen() {
                                 },
                                 onError: (error) => {
                                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                                    Alert.alert('Error', error.message || 'Failed to disconnect');
+                                    Alert.alert('Error', error.message || 'Failed to unmatch. Please try again.');
                                 },
                             }
                         );
