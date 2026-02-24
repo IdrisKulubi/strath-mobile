@@ -167,7 +167,14 @@ export async function POST(req: NextRequest) {
                             await sendPushNotification(
                                 user2.pushToken,
                                 body,
-                                { matchId: newMatch.id, partnerId: session.user.id, type: 'match_with_mission' }
+                                {
+                                    type: 'match',
+                                    matchId: newMatch.id,
+                                    partnerId: session.user.id,
+                                    route: `/chat/${newMatch.id}`,
+                                    missionTitle,
+                                    missionEmoji,
+                                }
                             );
                         }
 
@@ -179,7 +186,14 @@ export async function POST(req: NextRequest) {
                             await sendPushNotification(
                                 user1.pushToken,
                                 body,
-                                { matchId: newMatch.id, partnerId: targetUserId, type: 'match_with_mission' }
+                                {
+                                    type: 'match',
+                                    matchId: newMatch.id,
+                                    partnerId: targetUserId,
+                                    route: `/chat/${newMatch.id}`,
+                                    missionTitle,
+                                    missionEmoji,
+                                }
                             );
                         }
 

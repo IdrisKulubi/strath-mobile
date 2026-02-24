@@ -148,7 +148,8 @@ export async function POST(
                 {
                     type: "message",
                     matchId,
-                    messageId: newMessage.id
+                    messageId: newMessage.id,
+                    route: `/chat/${matchId}`,
                 }
             );
         }

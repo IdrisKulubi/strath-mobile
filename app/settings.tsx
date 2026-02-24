@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Platform, ActivityIndicator, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
@@ -15,11 +15,14 @@ export default function SettingsScreen() {
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    // Mock state
-    const [dateMode, setDateMode] = useState(true);
-    const [incognito, setIncognito] = useState(false);
-    const [spotlight, setSpotlight] = useState(false);
-    const [pushEnabled, setPushEnabled] = useState(true);
+    const handleOpenNotificationSettings = async () => {
+        try {
+            await Linking.openSettings();
+        } catch (error) {
+            console.error('Failed to open settings:', error);
+            Alert.alert('Notifications', 'Unable to open system settings. Please open your phone settings and manage notifications for Strathspace.');
+        }
+    };
 
     const clearAllLocalData = async () => {
         try {
@@ -36,7 +39,7 @@ export default function SettingsScreen() {
             for (const key of keysToDelete) {
                 try {
                     await SecureStore.deleteItemAsync(key);
-                } catch (e) {
+                } catch {
                     // Key might not exist, continue
                 }
             }
@@ -250,59 +253,14 @@ export default function SettingsScreen() {
                         label="Phone Number"
                         value={profile?.phoneNumber || "Not set"}
                         type="value"
+                        icon="call-outline"
                     />
                     <View style={[styles.separator, { backgroundColor: colors.border }]} />
                     <SettingItem
                         label="Email"
                         value={profile?.user?.email || "Not set"}
                         type="value"
-                    />
-                </SettingCard>
-
-                {/* Discovery Section */}
-                <SettingCard title="Discovery">
-                    <SettingItem
-                        label="Current Location"
-                        value="Nairobi, KE"
-                        type="link"
-                        onPress={() => { }}
-                    />
-                </SettingCard>
-
-                {/* Modes Section */}
-                <SettingCard title="Modes">
-                    <SettingItem
-                        label="Date Mode"
-                        type="switch"
-                        value={dateMode}
-                        onValueChange={setDateMode}
-                        description="Hide your profile in Date and just use BFF or Bizz. If you do this, you'll lose your connections and chats in Date."
-                    />
-                    <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                    <SettingItem
-                        label="Snooze Mode"
-                        type="link"
-                        description="Hide your profile temporarily, in all modes. You won't lose any connections or chats."
-                        onPress={() => { }}
-                    />
-                    <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                    <SettingItem
-                        label="Incognito Mode"
-                        type="switch"
-                        value={incognito}
-                        onValueChange={setIncognito}
-                        description="Only people you've liked already will see your profile."
-                    />
-                </SettingCard>
-
-                {/* Boost Section */}
-                <SettingCard>
-                    <SettingItem
-                        label="Auto-Spotlight"
-                        type="switch"
-                        value={spotlight}
-                        onValueChange={setSpotlight}
-                        description="We'll use Spotlight automatically to boost your profile when most people will see it."
+                        icon="mail-outline"
                     />
                 </SettingCard>
 
@@ -313,19 +271,15 @@ export default function SettingsScreen() {
                         type="switch"
                         value={isDark}
                         onValueChange={toggleTheme}
+                        icon={isDark ? 'moon' : 'moon-outline'}
                     />
                     <View style={[styles.separator, { backgroundColor: colors.border }]} />
                     <SettingItem
                         label="Notifications"
                         type="link"
-                        onPress={() => { }}
-                    />
-                    <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                    <SettingItem
-                        label="Video Autoplay"
-                        type="link"
-                        value="Always"
-                        onPress={() => { }}
+                        description="Manage notification preferences in your system settings"
+                        icon="notifications-outline"
+                        onPress={handleOpenNotificationSettings}
                     />
                 </SettingCard>
 
@@ -340,14 +294,7 @@ export default function SettingsScreen() {
                     <SettingItem label="Licenses" type="link" onPress={() => router.push('/legal?section=licenses')} />
                 </SettingCard>
 
-                {/* Dev tools */}
-                <TouchableOpacity
-                    style={[styles.devButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-                    onPress={() => router.push('/ui-preview' as any)}
-                >
-                    <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '700' }}>🧪 UI Preview</Text>
-                    <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>Component sandbox</Text>
-                </TouchableOpacity>
+               
 
                 {/* Actions */}
                 <View style={styles.actionsContainer}>
@@ -369,9 +316,9 @@ export default function SettingsScreen() {
                         disabled={isLoggingOut || isDeleting}
                     >
                         {isDeleting ? (
-                            <ActivityIndicator size="small" color="#ef4444" />
+                            <ActivityIndicator size="small" color={colors.destructive} />
                         ) : (
-                            <Text style={[styles.actionButtonText, { color: '#ef4444' }]}>Delete Account</Text>
+                            <Text style={[styles.actionButtonText, { color: colors.destructive }]}>Delete Account</Text>
                         )}
                     </TouchableOpacity>
                 </View>
@@ -471,14 +418,6 @@ const styles = StyleSheet.create({
     actionsContainer: {
         marginTop: 16,
         gap: 16,
-        alignItems: 'center',
-    },
-    devButton: {
-        marginHorizontal: 20,
-        marginTop: 16,
-        padding: 14,
-        borderRadius: 14,
-        borderWidth: StyleSheet.hairlineWidth,
         alignItems: 'center',
     },
     actionButton: {

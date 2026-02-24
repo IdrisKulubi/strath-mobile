@@ -93,8 +93,8 @@ export function WingmanSearchBar({
         borderColor: interpolateColor(
             focusProgress.value,
             [0, 1],
-            [isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
-             isDark ? '#e91e8c' : '#e91e8c']
+            [isDark ? 'rgba(255,255,255,0.12)' : colors.border,
+             colors.primary]
         ),
         transform: [{ scale: withSpring(isFocused ? 1.01 : 1, { damping: 20 }) }],
     }));
@@ -175,7 +175,7 @@ export function WingmanSearchBar({
             <Animated.View style={[
                 styles.container,
                 {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f5f5f5',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.secondary,
                     borderWidth: 1.5,
                 },
                 containerStyle,
@@ -241,7 +241,7 @@ export function WingmanSearchBar({
                         style={[
                             styles.actionButton,
                             {
-                                backgroundColor: isRecording ? '#ef4444' : colors.primary,
+                                backgroundColor: isRecording ? colors.destructive : colors.primary,
                             },
                             micButtonStyle,
                         ]}
@@ -261,8 +261,8 @@ export function WingmanSearchBar({
                     entering={FadeIn.duration(200)}
                     exiting={FadeOut.duration(150)}
                     style={[styles.suggestions, {
-                        backgroundColor: isDark ? '#2d1b47' : '#fff',
-                        borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.card,
+                        borderColor: isDark ? 'rgba(255,255,255,0.14)' : colors.border,
                     }]}
                 >
                     <Text style={[styles.suggestionsTitle, { color: colors.mutedForeground }]}>
@@ -276,8 +276,10 @@ export function WingmanSearchBar({
                                 styles.suggestionItem,
                                 {
                                     backgroundColor: pressed
-                                        ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)')
-                                        : 'transparent',
+                                        ? (isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)')
+                                        : (isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.025)'),
+                                    borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+                                    transform: [{ scale: pressed ? 0.99 : 1 }],
                                 },
                             ]}
                         >
@@ -335,11 +337,12 @@ const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 16,
+        borderRadius: 18,
         paddingLeft: 14,
-        paddingRight: 6,
+        paddingRight: 8,
         height: 52,
         gap: 8,
+        overflow: 'hidden',
     },
     searchIcon: {
         marginRight: 2,
@@ -367,35 +370,46 @@ const styles = StyleSheet.create({
         marginTop: 8,
         borderRadius: 16,
         borderWidth: 1,
-        paddingVertical: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 8,
+        overflow: 'hidden',
         ...Platform.select({
             ios: {
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15,
-                shadowRadius: 12,
+                shadowOpacity: 0.10,
+                shadowRadius: 10,
             },
             android: {
-                elevation: 8,
+                elevation: 6,
             },
         }),
     },
     suggestionsTitle: {
         fontSize: 12,
-        fontWeight: '600',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
+        fontWeight: '700',
+        paddingHorizontal: 8,
+        paddingTop: 6,
+        paddingBottom: 8,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
     suggestionItem: {
-        paddingHorizontal: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 14,
         paddingVertical: 12,
-        borderRadius: 8,
-        marginHorizontal: 4,
+        borderRadius: 14,
+        marginHorizontal: 0,
+        marginVertical: 5,
+        minHeight: 48,
+        borderWidth: 1,
+        overflow: 'hidden',
     },
     suggestionText: {
         fontSize: 14,
-        fontWeight: '500',
+        fontWeight: '700',
+        lineHeight: 19,
+        letterSpacing: 0.2,
     },
 });

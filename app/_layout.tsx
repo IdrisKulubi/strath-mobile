@@ -15,6 +15,7 @@ import { ToastProvider } from '@/components/ui/toast';
 import SplashScreen from '@/components/splash-screen';
 import { NoInternetScreen } from '@/components/no-internet-screen';
 import { useNetwork } from '@/hooks/use-network';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 
 // Prevent the native splash screen from auto-hiding
 ExpoSplashScreen.preventAutoHideAsync();
@@ -57,6 +58,11 @@ function RootLayoutNav() {
   );
 }
 
+function NotificationsBootstrap() {
+  usePushNotifications();
+  return null;
+}
+
 export default function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
@@ -95,6 +101,7 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <ToastProvider>
+            <NotificationsBootstrap />
             <RootLayoutNav />
           </ToastProvider>
         </ThemeProvider>
