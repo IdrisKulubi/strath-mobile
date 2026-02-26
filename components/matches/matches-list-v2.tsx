@@ -15,7 +15,7 @@ import { Match } from '@/hooks/use-matches';
 import { type Mission } from '@/hooks/use-missions';
 import { SwipeableMatchCard } from './swipeable-match-card';
 import { ActiveMissionsStrip } from './active-missions-strip';
-import { Heart, Sparkle, MagnifyingGlass } from 'phosphor-react-native';
+import { Heart, MagnifyingGlass } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, Layout } from 'react-native-reanimated';
 
@@ -95,10 +95,10 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
             </View>
 
             <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                Your matches live here
+                Your connections are simmering
             </Text>
             <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                The moment someone accepts your request — or you accept theirs — you&apos;ll see them right here.
+                A special match could be a like away. Need help? Ask your Wingman for a profile boost.
             </Text>
 
             {onExplore && (
