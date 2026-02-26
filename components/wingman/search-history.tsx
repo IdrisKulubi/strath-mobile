@@ -220,61 +220,71 @@ export function SearchHistory({ onRepeatQuery, onClose }: SearchHistoryProps) {
             {/* Search History timeline */}
             {wingmanContext.recentQueries.length > 0 && (
                 <Animated.View entering={FadeIn.duration(400).delay(150)}>
-                    <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>
-                        Recent Searches
-                    </Text>
+                    <View style={styles.sectionHeaderRow}>
+                        <MagnifyingGlass size={14} color={colors.primary} weight="bold" />
+                        <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>
+                            Recent Searches
+                        </Text>
+                        <View style={[styles.sectionBadge, { backgroundColor: colors.primary + '22' }]}>
+                            <Text style={[styles.sectionBadgeText, { color: colors.primary }]}>
+                                {wingmanContext.recentQueries.length}
+                            </Text>
+                        </View>
+                    </View>
 
-                    <View style={styles.timeline}>
+                    <View style={styles.searchCardList}>
                         {wingmanContext.recentQueries.map((item, index) => (
                             <Animated.View
                                 key={`${item.timestamp}-${index}`}
                                 entering={FadeIn.duration(300).delay(index * 60)}
                                 layout={Layout.springify()}
-                                style={styles.timelineItemWrapper}
                             >
-                                {/* Timeline dot + line */}
-                                <View style={styles.timelineLeft}>
-                                    <View style={[styles.timelineDot, { backgroundColor: colors.primary }]} />
-                                    {index < wingmanContext.recentQueries.length - 1 && (
-                                        <View style={[styles.timelineLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]} />
-                                    )}
-                                </View>
-
-                                {/* Query card */}
                                 <Pressable
                                     onPress={() => handleRepeatQuery(item.query)}
                                     style={({ pressed }) => [
-                                        styles.timelineCard,
+                                        styles.searchCard,
                                         {
                                             backgroundColor: pressed
-                                                ? (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.04)')
-                                                : (isDark ? 'rgba(255,255,255,0.06)' : '#fff'),
-                                            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                                                ? (isDark ? 'rgba(236,72,153,0.12)' : 'rgba(236,72,153,0.06)')
+                                                : (isDark ? 'rgba(255,255,255,0.05)' : '#fff'),
+                                            borderColor: pressed
+                                                ? (isDark ? 'rgba(236,72,153,0.35)' : 'rgba(236,72,153,0.25)')
+                                                : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'),
                                         },
                                     ]}
                                 >
-                                    <View style={styles.timelineCardRow}>
-                                        <MagnifyingGlass size={14} color={colors.primary} weight="bold" />
-                                        <Text style={[styles.timelineQuery, { color: colors.foreground }]} numberOfLines={2}>
-                                            {item.query}
-                                        </Text>
-                                    </View>
-                                    <View style={styles.timelineMetaRow}>
-                                        <Text style={[styles.timelineTime, { color: colors.mutedForeground }]}>
-                                            {formatRelativeTime(item.timestamp)}
-                                        </Text>
-                                        {item.resultCount > 0 && (
-                                            <View style={[styles.resultBadge, { backgroundColor: colors.primary + '20' }]}>
-                                                <Text style={[styles.resultBadgeText, { color: colors.primary }]}>
-                                                    {item.resultCount} {item.resultCount === 1 ? 'result' : 'results'}
-                                                </Text>
-                                            </View>
-                                        )}
-                                        <View style={[styles.repeatBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}>
-                                            <ArrowCounterClockwise size={12} color={colors.mutedForeground} />
-                                            <Text style={[styles.repeatText, { color: colors.mutedForeground }]}>
-                                                Repeat
+                                    <View style={styles.searchCardTopRow}>
+                                        {/* Left: icon accent */}
+                                        <View style={[styles.searchCardIcon, { backgroundColor: colors.primary + '18' }]}>
+                                            <MagnifyingGlass size={16} color={colors.primary} weight="bold" />
+                                        </View>
+
+                                        {/* Middle: query + meta */}
+                                        <View style={styles.searchCardBody}>
+                                            <Text
+                                                style={[styles.searchCardQuery, { color: colors.foreground }]}
+                                                numberOfLines={2}
+                                            >
+                                                {item.query}
                                             </Text>
+                                            <View style={styles.searchCardMeta}>
+                                                <Text style={[styles.searchCardTime, { color: colors.mutedForeground }]}>
+                                                    {formatRelativeTime(item.timestamp)}
+                                                </Text>
+                                                {item.resultCount > 0 && (
+                                                    <View style={[styles.resultPill, { backgroundColor: colors.primary + '1A' }]}>
+                                                        <View style={[styles.resultPillDot, { backgroundColor: colors.primary }]} />
+                                                        <Text style={[styles.resultPillText, { color: colors.primary }]}>
+                                                            {item.resultCount} found
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        </View>
+
+                                        {/* Right: repeat button */}
+                                        <View style={[styles.repeatBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)' }]}>
+                                            <ArrowCounterClockwise size={15} color={colors.primary} weight="bold" />
                                         </View>
                                     </View>
                                 </Pressable>
@@ -285,7 +295,7 @@ export function SearchHistory({ onRepeatQuery, onClose }: SearchHistoryProps) {
             )}
 
             {/* Reset memory button */}
-            <Animated.View entering={FadeIn.duration(400).delay(300)}>
+            <Animated.View entering={FadeIn.duration(400).delay(300)} style={styles.resetSection}>
                 <Pressable
                     onPress={handleResetMemory}
                     disabled={isResettingMemory}
@@ -293,21 +303,25 @@ export function SearchHistory({ onRepeatQuery, onClose }: SearchHistoryProps) {
                         styles.resetButton,
                         {
                             backgroundColor: pressed
-                                ? 'rgba(239,68,68,0.15)'
-                                : 'rgba(239,68,68,0.08)',
-                            borderColor: 'rgba(239,68,68,0.25)',
+                                ? 'rgba(239,68,68,0.18)'
+                                : 'rgba(239,68,68,0.09)',
+                            borderColor: pressed ? 'rgba(239,68,68,0.5)' : 'rgba(239,68,68,0.28)',
                             opacity: isResettingMemory ? 0.6 : 1,
                         },
                     ]}
                 >
-                    {isResettingMemory ? (
-                        <ActivityIndicator size="small" color="#ef4444" />
-                    ) : (
-                        <Trash size={16} color="#ef4444" weight="bold" />
-                    )}
-                    <Text style={styles.resetButtonText}>
-                        {isResettingMemory ? 'Resetting...' : 'Reset Wingman Memory'}
-                    </Text>
+                    <View style={styles.resetButtonInner}>
+                        {isResettingMemory ? (
+                            <ActivityIndicator size="small" color="#ef4444" />
+                        ) : (
+                            <View style={styles.resetIconCircle}>
+                                <Trash size={15} color="#ef4444" weight="bold" />
+                            </View>
+                        )}
+                        <Text style={styles.resetButtonText}>
+                            {isResettingMemory ? 'Resetting...' : 'Reset Wingman Memory'}
+                        </Text>
+                    </View>
                 </Pressable>
                 <Text style={[styles.resetCaption, { color: colors.mutedForeground }]}>
                     This clears all history and learned preferences
@@ -436,105 +450,126 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         lineHeight: 20,
     },
+    sectionHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 12,
+        paddingLeft: 2,
+    },
     sectionTitle: {
         fontSize: 12,
         fontWeight: '700',
         textTransform: 'uppercase',
         letterSpacing: 0.8,
-        marginBottom: 12,
-        paddingLeft: 4,
-    },
-    timeline: {
-        gap: 0,
-    },
-    timelineItemWrapper: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    timelineLeft: {
-        width: 16,
-        alignItems: 'center',
-        paddingTop: 16,
-    },
-    timelineDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        marginTop: 2,
-    },
-    timelineLine: {
-        width: 2,
         flex: 1,
-        minHeight: 16,
-        marginTop: 4,
-        borderRadius: 1,
     },
-    timelineCard: {
-        flex: 1,
-        borderRadius: 14,
-        borderWidth: 1,
-        padding: 12,
-        marginBottom: 10,
+    sectionBadge: {
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 20,
+    },
+    sectionBadgeText: {
+        fontSize: 11,
+        fontWeight: '800',
+    },
+    searchCardList: {
         gap: 8,
     },
-    timelineCardRow: {
+    searchCard: {
+        borderRadius: 16,
+        borderWidth: 1,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+    },
+    searchCardTopRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        gap: 8,
     },
-    timelineQuery: {
+    searchCardIcon: {
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        marginRight: 10,
+    },
+    searchCardBody: {
         flex: 1,
-        fontSize: 14,
-        fontWeight: '500',
-        lineHeight: 20,
+        minWidth: 0,
+        gap: 4,
     },
-    timelineMetaRow: {
+    searchCardQuery: {
+        fontSize: 14,
+        fontWeight: '600',
+        lineHeight: 19,
+    },
+    searchCardMeta: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        flexWrap: 'wrap',
     },
-    timelineTime: {
+    searchCardTime: {
         fontSize: 11,
         fontWeight: '500',
-        flex: 1,
     },
-    resultBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 8,
-    },
-    resultBadgeText: {
-        fontSize: 11,
-        fontWeight: '700',
-    },
-    repeatBadge: {
+    resultPill: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 8,
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 20,
     },
-    repeatText: {
+    resultPillDot: {
+        width: 5,
+        height: 5,
+        borderRadius: 3,
+    },
+    resultPillText: {
         fontSize: 11,
-        fontWeight: '600',
+        fontWeight: '700',
+    },
+    repeatBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        marginLeft: 10,
+        marginTop: 2,
+    },
+    resetSection: {
+        marginTop: 4,
     },
     resetButton: {
+        borderWidth: 1,
+        borderRadius: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        overflow: 'hidden',
+    },
+    resetButtonInner: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
-        borderWidth: 1,
-        borderRadius: 14,
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        marginTop: 8,
+    },
+    resetIconCircle: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        backgroundColor: 'rgba(239,68,68,0.18)',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     resetButtonText: {
         fontSize: 14,
-        fontWeight: '600',
+        fontWeight: '700',
         color: '#ef4444',
+        letterSpacing: 0.2,
+        marginLeft: 10,
     },
     resetCaption: {
         fontSize: 12,
