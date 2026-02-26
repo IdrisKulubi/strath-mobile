@@ -10,6 +10,7 @@ import { useCancelSentConnection, useSentConnections, type SentConnection } from
 import { useAllMissions } from '@/hooks/use-missions';
 import { useNotificationCounts } from '@/hooks/use-notification-counts';
 import { MatchesListV2 } from '@/components/matches/matches-list-v2';
+import { ActiveMissionsStrip } from '@/components/matches/active-missions-strip';
 import { ArchivedChatsSheet } from '@/components/matches/archived-chats-sheet';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -236,6 +237,15 @@ export default function MatchesScreen() {
         router.push({ pathname: '/chat/[matchId]', params: { matchId: match.id } } as any);
     }, [router, markMatchAsOpened]);
 
+    const handleArchiveMatch = useCallback((match: Match) => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setArchivedMatchIds((prev) => {
+            const next = new Set(prev);
+            next.add(match.id);
+            return next;
+        });
+    }, []);
+
     const handleAcceptRequest = useCallback(async (req: ConnectionRequest) => {
         try {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -368,8 +378,17 @@ export default function MatchesScreen() {
 
             {/* Matches List */}
             <View style={styles.listContainer}>
+                {matches.length > 0 && (
+                    <View style={styles.topMissionsWrap}>
+                        <ActiveMissionsStrip
+                            byMatchId={missionsByMatchId}
+                            matches={matches}
+                        />
+                    </View>
+                )}
+
                 <View style={styles.connectionSpacesWrap}>
-                    <View style={[styles.activityHubContainer, { backgroundColor: '#1D1429', borderColor: 'rgba(255,255,255,0.08)' }]}>
+                    <View style={styles.activityHubContainer}>
                         <Text style={styles.activityHubTitle}>Activity Hub</Text>
 
                         <View style={styles.activityHubRow}>
@@ -383,9 +402,6 @@ export default function MatchesScreen() {
                                     </View>
 
                                     <View style={styles.activityCardContent}>
-                                        <View style={styles.activityEmojiWrap}>
-                                            <Text style={styles.activityEmoji}>💘</Text>
-                                        </View>
                                         <Text
                                             style={styles.activityCardTitle}
                                             numberOfLines={2}
@@ -423,9 +439,6 @@ export default function MatchesScreen() {
                                     </View>
 
                                     <View style={styles.activityCardContent}>
-                                        <View style={styles.activityEmojiWrap}>
-                                            <Text style={styles.activityEmoji}>💌</Text>
-                                        </View>
                                         <Text
                                             style={styles.activityCardTitle}
                                             numberOfLines={2}
@@ -455,74 +468,7 @@ export default function MatchesScreen() {
                         </View>
                     </View>
 
-                    <View style={[styles.messagePreviewSection, { backgroundColor: '#1D1429', borderColor: 'rgba(255,255,255,0.08)' }]}>
-                        <View style={styles.messagePreviewHeader}>
-                            <Text style={styles.messagePreviewTitle}>Recent chats</Text>
-                            <Text style={styles.messagePreviewCount}>{matches.length}</Text>
-                        </View>
-
-                        {matches.length === 0 ? (
-                            <View style={styles.messagePreviewEmpty}>
-                                <Text style={styles.messagePreviewEmptyText}>No chats yet — your first conversation will appear here.</Text>
-                            </View>
-                        ) : (
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={styles.messagePreviewScroll}
-                            >
-                                {matches.map((match) => {
-                                    const avatarUri = match.partner.image || match.partner.profile?.profilePhoto || match.partner.profile?.photos?.[0] || null;
-                                    const previewText = match.lastMessage?.content?.trim() || 'You matched — say hi 👋';
-                                    const previewTime = getTimeAgo(match.lastMessage?.createdAt || match.createdAt);
-
-                                    return (
-                                        <Pressable
-                                            key={`preview-${match.id}`}
-                                            onPress={() => handleMatchPress(match)}
-                                            style={({ pressed }) => ([
-                                                styles.messagePreviewCard,
-                                                {
-                                                    borderColor: match.unreadCount > 0 ? 'rgba(236,72,153,0.36)' : 'rgba(255,255,255,0.10)',
-                                                    backgroundColor: 'rgba(255,255,255,0.04)',
-                                                    opacity: pressed ? 0.9 : 1,
-                                                    transform: [{ scale: pressed ? 0.985 : 1 }],
-                                                },
-                                            ])}
-                                        >
-                                            {avatarUri ? (
-                                                <Image source={{ uri: avatarUri }} style={styles.messagePreviewAvatar} resizeMode="cover" />
-                                            ) : (
-                                                <View style={[styles.messagePreviewAvatar, styles.requestAvatarFallback, { borderColor: colors.border }]}>
-                                                    <Text style={[styles.requestAvatarInitial, { color: '#cbd5e1' }]}>
-                                                        {(match.partner.name || '?').trim().charAt(0).toUpperCase()}
-                                                    </Text>
-                                                </View>
-                                            )}
-
-                                            <View style={{ flex: 1 }}>
-                                                <View style={styles.messagePreviewTopRow}>
-                                                    <Text style={styles.messagePreviewName} numberOfLines={1}>{match.partner.name}</Text>
-                                                    <Text style={styles.messagePreviewTime}>{previewTime}</Text>
-                                                </View>
-
-                                                <Text style={styles.messagePreviewText} numberOfLines={2}>{previewText}</Text>
-                                            </View>
-                                        </Pressable>
-                                    );
-                                })}
-                            </ScrollView>
-                        )}
-                    </View>
-
-                    {!isSentLoading && !isRequestsLoading && (sent.length === 0 || visibleRequests.length === 0) && (
-                        <View style={styles.heartEmptyHint}>
-                            <Text style={styles.heartEmptyHintTitle}>Keep your profile active ✨</Text>
-                            <Text style={styles.heartEmptyHintSubtitle}>
-                                Send likes in Discover and keep your profile fresh to get more incoming likes.
-                            </Text>
-                        </View>
-                    )}
+                 
                 </View>
 
                 <MatchesListV2
@@ -531,7 +477,7 @@ export default function MatchesScreen() {
                     isRefreshing={isRefreshing}
                     onRefresh={handleRefresh}
                     onMatchPress={handleMatchPress}
-                    missionsByMatchId={missionsByMatchId}
+                    onArchive={handleArchiveMatch}
                 />
             </View>
 
@@ -791,10 +737,14 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingBottom: 4,
     },
+    topMissionsWrap: {
+        paddingTop: 2,
+        paddingBottom: 2,
+    },
     connectionSpacesWrap: {
         paddingHorizontal: 16,
-        gap: 12,
-        paddingBottom: 4,
+        gap: 8,
+        paddingBottom: 2,
     },
     connectionSpacesHeader: {
         gap: 4,
@@ -809,23 +759,21 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     activityHubContainer: {
-        borderWidth: 1,
-        borderRadius: 22,
-        padding: 14,
-        gap: 10,
+        paddingHorizontal: 2,
+        gap: 8,
     },
     activityHubTitle: {
         textAlign: 'center',
-        fontSize: 26,
+        fontSize: 16,
         fontWeight: '800',
-        lineHeight: 32,
+        lineHeight: 20,
         color: '#fff',
-        marginBottom: 4,
+        marginBottom: 0,
     },
     activityHubRow: {
         flexDirection: 'row',
         alignItems: 'stretch',
-        gap: 10,
+        gap: 8,
     },
     activityCardCol: {
         flex: 1,
@@ -834,10 +782,10 @@ const styles = StyleSheet.create({
     activityCard: {
         width: '100%',
         borderWidth: 1,
-        borderRadius: 18,
-        padding: 14,
+        borderRadius: 16,
+        padding: 10,
         flexDirection: 'column',
-        height: 248,
+        height: 174,
     },
     activityCardGold: {
         backgroundColor: 'rgba(236,202,120,0.08)',
@@ -851,74 +799,65 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        minHeight: 28,
+        minHeight: 24,
     },
     activityCardTagGold: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '800',
         color: '#d4b57f',
     },
     activityCardTagPink: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '800',
         color: '#f472b6',
     },
     activityCountBadgeGold: {
-        minWidth: 28,
-        height: 28,
-        borderRadius: 14,
+        minWidth: 24,
+        height: 24,
+        borderRadius: 12,
         backgroundColor: '#e9d08d',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 8,
+        paddingHorizontal: 6,
     },
     activityCountBadgePink: {
-        minWidth: 28,
-        height: 28,
-        borderRadius: 14,
+        minWidth: 24,
+        height: 24,
+        borderRadius: 12,
         backgroundColor: '#f43f5e',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 8,
+        paddingHorizontal: 6,
     },
     activityCountTextDark: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '800',
         color: '#1d1429',
     },
     activityCountTextLight: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '800',
         color: '#fff',
     },
     activityCardContent: {
         flexDirection: 'column',
         flex: 1,
-        paddingTop: 12,
-    },
-    activityEmojiWrap: {
-        height: 40,
-        justifyContent: 'center',
-        marginBottom: 6,
-    },
-    activityEmoji: {
-        fontSize: 30,
-        lineHeight: 34,
+        paddingTop: 4,
     },
     activityCardTitle: {
-        fontSize: 17,
+        fontSize: 13,
         fontWeight: '800',
-        lineHeight: 22,
+        lineHeight: 17,
         color: '#fff',
-        marginBottom: 4,
-        minHeight: 44,
+        marginBottom: 3,
+        minHeight: 34,
     },
     activityCardSubtitle: {
-        fontSize: 13,
+        fontSize: 11,
         fontWeight: '500',
-        lineHeight: 18,
+        lineHeight: 14,
         color: '#c8bfd6',
-        minHeight: 36,
+        minHeight: 28,
     },
     activityCtaGold: {
         marginTop: 'auto',
@@ -928,7 +867,7 @@ const styles = StyleSheet.create({
         borderRadius: 999,
         alignItems: 'center',
         justifyContent: 'center',
-        height: 40,
+        height: 34,
     },
     activityCtaPink: {
         marginTop: 'auto',
@@ -938,15 +877,15 @@ const styles = StyleSheet.create({
         borderRadius: 999,
         alignItems: 'center',
         justifyContent: 'center',
-        height: 40,
+        height: 34,
     },
     activityCtaTextDark: {
-        fontSize: 16,
+        fontSize: 13,
         fontWeight: '800',
         color: '#f8e7b8',
     },
     activityCtaTextLight: {
-        fontSize: 16,
+        fontSize: 13,
         fontWeight: '800',
         color: '#ffd7e2',
     },
@@ -971,94 +910,6 @@ const styles = StyleSheet.create({
         color: '#a9a1b8',
         textAlign: 'center',
     },
-    messagePreviewSection: {
-        borderWidth: 1,
-        borderRadius: 18,
-        paddingVertical: 10,
-    },
-    messagePreviewHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 12,
-        marginBottom: 8,
-    },
-    messagePreviewTitle: {
-        fontSize: 14,
-        lineHeight: 18,
-        fontWeight: '800',
-        color: '#fff',
-    },
-    messagePreviewCount: {
-        minWidth: 24,
-        height: 24,
-        borderRadius: 12,
-        textAlign: 'center',
-        textAlignVertical: 'center',
-        overflow: 'hidden',
-        fontSize: 12,
-        lineHeight: 24,
-        fontWeight: '800',
-        color: '#1d1429',
-        backgroundColor: '#e9d08d',
-        paddingHorizontal: 8,
-    },
-    messagePreviewEmpty: {
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-    },
-    messagePreviewEmptyText: {
-        fontSize: 12,
-        lineHeight: 16,
-        fontWeight: '500',
-        color: '#9f96b4',
-    },
-    messagePreviewScroll: {
-        paddingHorizontal: 12,
-        gap: 10,
-    },
-    messagePreviewCard: {
-        width: 228,
-        borderRadius: 14,
-        borderWidth: 1,
-        padding: 10,
-        flexDirection: 'row',
-        gap: 10,
-        alignItems: 'center',
-    },
-    messagePreviewAvatar: {
-        width: 46,
-        height: 46,
-        borderRadius: 12,
-        backgroundColor: 'rgba(255,255,255,0.08)',
-    },
-    messagePreviewTopRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 4,
-        gap: 6,
-    },
-    messagePreviewName: {
-        flex: 1,
-        fontSize: 13,
-        lineHeight: 17,
-        fontWeight: '700',
-        color: '#fff',
-    },
-    messagePreviewTime: {
-        fontSize: 11,
-        lineHeight: 14,
-        fontWeight: '600',
-        color: '#9f96b4',
-    },
-    messagePreviewText: {
-        fontSize: 12,
-        lineHeight: 16,
-        fontWeight: '500',
-        color: '#c8bfd6',
-    },
-
     activitySheetRoot: {
         flex: 1,
         justifyContent: 'flex-end',

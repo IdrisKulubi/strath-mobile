@@ -6,16 +6,16 @@ import {
     ScrollView,
     StyleSheet,
     ActivityIndicator,
+    Pressable,
 } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 import { Match } from '@/hooks/use-matches';
-import { type Mission } from '@/hooks/use-missions';
 import { MatchCard } from './match-card';
-import { ActiveMissionsStrip } from './active-missions-strip';
 import { Heart } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Swipeable } from 'react-native-gesture-handler';
 import Animated, { FadeIn, Layout } from 'react-native-reanimated';
 
 interface MatchesListV2Props {
@@ -24,11 +24,10 @@ interface MatchesListV2Props {
     isRefreshing: boolean;
     onRefresh: () => void;
     onMatchPress: (match: Match) => void;
+    onArchive?: (match: Match) => void;
     onEndReached?: () => void;
     hasNextPage?: boolean;
     isFetchingNextPage?: boolean;
-    /** Map of matchId → Mission for badge display & missions strip */
-    missionsByMatchId?: Record<string, Mission>;
 }
 
 // Enhanced loading skeleton
@@ -99,25 +98,43 @@ export function MatchesListV2({
     isRefreshing,
     onRefresh,
     onMatchPress,
+    onArchive,
     onEndReached,
     hasNextPage,
     isFetchingNextPage,
-    missionsByMatchId,
 }: MatchesListV2Props) {
     const { colors, isDark } = useTheme();
+
+    const renderRightActions = useCallback((item: Match) => (
+        <View style={styles.swipeActionWrap}>
+            <Pressable
+                onPress={() => onArchive?.(item)}
+                style={({ pressed }) => [styles.archiveSwipeBtn, { opacity: pressed ? 0.88 : 1 }]}
+            >
+                <Text style={styles.archiveSwipeText}>Archive</Text>
+            </Pressable>
+        </View>
+    ), [onArchive]);
 
     const renderItem = useCallback(({ item, index }: { item: Match; index: number }) => (
         <Animated.View
             entering={FadeIn.delay(index * 50)}
             layout={Layout.springify()}
         >
-            <MatchCard
-                match={item}
-                onPress={onMatchPress}
-                showOptions={false}
-            />
+            <Swipeable
+                renderRightActions={() => renderRightActions(item)}
+                overshootRight={false}
+                rightThreshold={48}
+                enabled={Boolean(onArchive)}
+            >
+                <MatchCard
+                    match={item}
+                    onPress={onMatchPress}
+                    showOptions={false}
+                />
+            </Swipeable>
         </Animated.View>
-    ), [onMatchPress]);
+    ), [onMatchPress, onArchive, renderRightActions]);
 
     const keyExtractor = useCallback((item: Match) => item.id, []);
 
@@ -132,19 +149,6 @@ export function MatchesListV2({
             </View>
         );
     }, [isFetchingNextPage, colors.primary, isDark]);
-
-    const renderHeader = useCallback(() => {
-        if (matches.length === 0) return null;
-        return (
-            <View>
-                {/* Active Missions horizontal strip */}
-                <ActiveMissionsStrip
-                    byMatchId={missionsByMatchId}
-                    matches={matches}
-                />
-            </View>
-        );
-    }, [matches, missionsByMatchId]);
 
     // Loading state
     if (isLoading && !isRefreshing) {
@@ -167,7 +171,6 @@ export function MatchesListV2({
             data={matches}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
-            ListHeaderComponent={renderHeader}
             ListFooterComponent={renderFooter}
             refreshControl={
                 <RefreshControl
@@ -291,5 +294,25 @@ const styles = StyleSheet.create({
     footerText: {
         fontSize: 13,
         fontWeight: '500',
+    },
+    swipeActionWrap: {
+        justifyContent: 'center',
+        alignItems: 'flex-end',
+        paddingRight: 16,
+        marginVertical: 4,
+    },
+    archiveSwipeBtn: {
+        minWidth: 88,
+        height: 96,
+        borderRadius: 16,
+        backgroundColor: 'rgba(236,72,153,0.92)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+    },
+    archiveSwipeText: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '700',
     },
 });

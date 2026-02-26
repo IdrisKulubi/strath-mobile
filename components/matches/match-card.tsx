@@ -47,7 +47,7 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
     const hasUnread = unreadCount > 0;
     const sparkScore = match.sparkScore || 70;
     const { text: activeStatus, isOnline } = getLastActiveStatus(match.partner.lastActive);
-    const interests = match.partner.profile?.interests?.slice(0, 3) || [];
+    const interests = match.partner.profile?.interests?.slice(0, 2) || [];
 
     const handlePress = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -226,7 +226,7 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
                             end={{ x: 1, y: 0 }}
                             style={styles.sparkBadge}
                         >
-                            <Ionicons name="sparkles" size={12} color="#fff" />
+                            <Ionicons name="sparkles" size={11} color="#fff" />
                             <Text style={styles.sparkText}>{sparkScore}%</Text>
                         </LinearGradient>
                     </View>
@@ -255,7 +255,7 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
             {/* Chevron */}
             <Ionicons
                 name="chevron-forward"
-                size={20}
+                size={18}
                 color={isDark ? '#64748b' : '#9ca3af'}
                 style={styles.chevron}
             />
@@ -267,70 +267,71 @@ const styles = StyleSheet.create({
     card: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
         marginHorizontal: 16,
-        marginVertical: 6,
-        borderRadius: 20,
+        marginVertical: 4,
+        borderRadius: 16,
         borderWidth: 1,
-        minHeight: 110,
+        minHeight: 96,
     },
     avatarSection: {
         position: 'relative',
-        marginRight: 14,
+        marginRight: 10,
     },
     avatarWrapper: {
         position: 'relative',
     },
     avatar: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
     },
     avatarPlaceholder: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
         justifyContent: 'center',
         alignItems: 'center',
     },
     avatarInitial: {
         color: '#fff',
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: '700',
     },
     onlineIndicator: {
         position: 'absolute',
         bottom: 0,
         right: 0,
-        width: 18,
-        height: 18,
-        borderRadius: 9,
-        borderWidth: 3,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        borderWidth: 2,
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: '#10b981',
     },
     onlineDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+        width: 6,
+        height: 6,
+        borderRadius: 3,
         backgroundColor: '#10b981',
     },
     unreadBadge: {
         position: 'absolute',
-        top: -4,
-        right: -4,
-        minWidth: 22,
-        height: 22,
-        borderRadius: 11,
+        top: -3,
+        right: -3,
+        minWidth: 18,
+        height: 18,
+        borderRadius: 9,
         backgroundColor: '#ec4899',
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 6,
+        paddingHorizontal: 4,
     },
     unreadText: {
         color: '#fff',
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '700',
     },
     contentSection: {
@@ -340,7 +341,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 4,
+        marginBottom: 2,
     },
     nameRow: {
         flexDirection: 'row',
@@ -349,7 +350,7 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     name: {
-        fontSize: 17,
+        fontSize: 15,
         fontWeight: '600',
     },
     newDot: {
@@ -359,20 +360,20 @@ const styles = StyleSheet.create({
         backgroundColor: '#ec4899',
     },
     time: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '500',
     },
     statusRow: {
-        marginBottom: 6,
+        marginBottom: 4,
     },
     statusBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         alignSelf: 'flex-start',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 10,
-        gap: 4,
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 9,
+        gap: 3,
     },
     statusDot: {
         width: 6,
@@ -380,30 +381,30 @@ const styles = StyleSheet.create({
         borderRadius: 3,
     },
     statusText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '600',
     },
     preview: {
-        fontSize: 14,
-        lineHeight: 20,
-        marginBottom: 8,
+        fontSize: 13,
+        lineHeight: 17,
+        marginBottom: 6,
     },
     icebreaker: {
         alignSelf: 'flex-start',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 12,
-        marginBottom: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 10,
+        marginBottom: 6,
     },
     icebreakerText: {
         color: '#ec4899',
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '600',
     },
     bottomRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 8,
     },
     sparkContainer: {
         flexDirection: 'row',
@@ -413,32 +414,32 @@ const styles = StyleSheet.create({
     sparkBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 10,
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 9,
         gap: 3,
     },
     sparkText: {
         color: '#fff',
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '700',
     },
     interestsContainer: {
         flexDirection: 'row',
-        gap: 6,
+        gap: 5,
         flex: 1,
         flexWrap: 'wrap',
     },
     interestBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 8,
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 7,
     },
     interestText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '500',
     },
     chevron: {
-        marginLeft: 8,
+        marginLeft: 6,
     },
 });
