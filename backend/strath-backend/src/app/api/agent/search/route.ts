@@ -9,6 +9,7 @@ import { agentSearch } from "@/services/agent-search";
 import { rankCandidates } from "@/services/ranking-service";
 import { generateQuickExplanations, generateResultCommentary } from "@/services/explanation-service";
 import { getAgentContext, recordQuery, saveAgentMessage } from "@/services/agent-context";
+import { getAgentSearchQuota, trackAgentSearchUsage } from "@/lib/agent-search-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30; // Vercel timeout
@@ -93,6 +94,15 @@ export async function POST(request: NextRequest) {
         }
 
         const userId = session.user.id;
+
+        step = "daily_limit";
+        const quota = await getAgentSearchQuota(userId);
+        if (quota.isExhausted) {
+            return errorResponse(
+                "You've exhausted your Wingman searches for today. Come back tomorrow.",
+                429,
+            );
+        }
 
         // 1. Get wingman memory
         step = "agent_context";
@@ -241,6 +251,13 @@ export async function POST(request: NextRequest) {
         const matchedIds = ranked.map(r => r.profile.userId);
         recordQuery(userId, query.trim(), matchedIds).catch(console.error);
         saveAgentMessage(userId, commentary).catch(console.error);
+        trackAgentSearchUsage(userId, "agent_search", {
+            queryLength: query.trim().length,
+            resultsCount: matches.length,
+            offset,
+            limit,
+            remainingAfter: Math.max(quota.remaining - 1, 0),
+        }).catch(console.error);
 
         const latency = Date.now() - startTime;
         const refinementHints = buildRefinementHints(query.trim(), intent.vibe);
