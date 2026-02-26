@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import { View, StyleSheet, StatusBar, Pressable, Alert, Image, ActivityIndicator, Modal, ScrollView, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useMatches, Match } from '@/hooks/use-matches';
@@ -16,97 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, Archive, ArrowLeft, X, PaperPlaneTilt } from 'phosphor-react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { FadeIn, Easing, runOnJS, useAnimatedStyle, useSharedValue, withRepeat, withSpring, withTiming } from 'react-native-reanimated';
-import { getAuthToken } from '@/lib/auth-helpers';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
-
-// Unmatch API call
-async function unmatchUser(matchId: string): Promise<void> {
-    const token = await getAuthToken();
-
-    const response = await fetch(`${API_URL}/api/matches/${matchId}`, {
-        method: 'DELETE',
-        headers: {
-            'Authorization': token ? `Bearer ${token}` : '',
-            'Content-Type': 'application/json',
-        },
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to unmatch');
-    }
-}
-
-function PulsingHeart({ isDark }: { isDark: boolean }) {
-    const pulseScale = useSharedValue(1);
-    const ringScale = useSharedValue(1);
-    const ringOpacity = useSharedValue(0.24);
-
-    useEffect(() => {
-        pulseScale.value = withRepeat(
-            withTiming(1.08, {
-                duration: 1300,
-                easing: Easing.inOut(Easing.ease),
-            }),
-            -1,
-            true,
-        );
-
-        ringScale.value = withRepeat(
-            withTiming(1.2, {
-                duration: 1300,
-                easing: Easing.inOut(Easing.ease),
-            }),
-            -1,
-            true,
-        );
-
-        ringOpacity.value = withRepeat(
-            withTiming(0.12, {
-                duration: 1300,
-                easing: Easing.inOut(Easing.ease),
-            }),
-            -1,
-            true,
-        );
-    }, [pulseScale, ringScale, ringOpacity]);
-
-    const pulseStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: pulseScale.value }],
-    }));
-
-    const ringStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: ringScale.value }],
-        opacity: ringOpacity.value,
-    }));
-
-    return (
-        <View style={styles.pulseHubWrap}>
-            <Animated.View
-                style={[
-                    styles.pulseHubRingAnimated,
-                    ringStyle,
-                    { borderColor: isDark ? 'rgba(236,72,153,0.35)' : 'rgba(236,72,153,0.24)' },
-                ]}
-            />
-            <View style={[styles.pulseHubRingMid, { borderColor: isDark ? 'rgba(236,72,153,0.24)' : 'rgba(236,72,153,0.14)' }]} />
-            <View style={[styles.pulseHubRingOuter, { borderColor: isDark ? 'rgba(236,72,153,0.14)' : 'rgba(236,72,153,0.1)' }]} />
-
-            <Animated.View style={pulseStyle}>
-                <LinearGradient
-                    colors={['#f472b6', '#f43f5e']}
-                    start={{ x: 0.2, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.pulseHubHeart}
-                >
-                    <Heart size={34} color="#fff" weight="fill" />
-                </LinearGradient>
-            </Animated.View>
-        </View>
-    );
-}
+import Animated, { FadeIn, Easing, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
 interface ActivityHubSheetProps {
     visible: boolean;
@@ -197,7 +106,6 @@ function ActivityHubSheet({ visible, title, subtitle, isDark, onClose, children 
 export default function MatchesScreen() {
     const { colors, colorScheme, isDark } = useTheme();
     const router = useRouter();
-    const queryClient = useQueryClient();
 
     const { data, isLoading, refetch } = useMatches();
     const { data: requests = [], isLoading: isRequestsLoading } = useConnectionRequests();
@@ -328,11 +236,6 @@ export default function MatchesScreen() {
         router.push({ pathname: '/chat/[matchId]', params: { matchId: match.id } } as any);
     }, [router, markMatchAsOpened]);
 
-    const handleExplore = useCallback(() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.push('/(tabs)/explore');
-    }, [router]);
-
     const handleAcceptRequest = useCallback(async (req: ConnectionRequest) => {
         try {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -356,11 +259,6 @@ export default function MatchesScreen() {
         }
     }, [respondMutation]);
 
-    const handleArchive = useCallback((match: Match) => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setArchivedMatchIds(prev => new Set([...prev, match.id]));
-    }, []);
-
     const handleUnarchive = useCallback((match: Match) => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setArchivedMatchIds(prev => {
@@ -369,44 +267,6 @@ export default function MatchesScreen() {
             return newSet;
         });
     }, []);
-
-    // Unmatch mutation
-    const unmatchMutation = useMutation({
-        mutationFn: unmatchUser,
-        onSuccess: () => {
-            // Refresh matches list after successful unmatch
-            queryClient.invalidateQueries({ queryKey: ['matches'] });
-            queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
-        },
-        onError: (error) => {
-            Alert.alert('Error', error instanceof Error ? error.message : 'Failed to unmatch');
-        },
-    });
-
-    const handleUnmatch = useCallback((match: Match) => {
-        Alert.alert(
-            'Disconnect',
-            `Are you sure you want to disconnect from ${match.partner.name}? This will remove your conversation and cannot be undone.`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Disconnect',
-                    style: 'destructive',
-                    onPress: async () => {
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                        // Remove from archived if it was archived
-                        setArchivedMatchIds(prev => {
-                            const newSet = new Set(prev);
-                            newSet.delete(match.id);
-                            return newSet;
-                        });
-                        // Call the unmatch API
-                        unmatchMutation.mutate(match.id);
-                    },
-                },
-            ]
-        );
-    }, [unmatchMutation]);
 
     const handleDeleteArchived = useCallback((match: Match) => {
         Alert.alert(
@@ -595,11 +455,69 @@ export default function MatchesScreen() {
                         </View>
                     </View>
 
-                    <PulsingHeart isDark={isDark} />
+                    <View style={[styles.messagePreviewSection, { backgroundColor: '#1D1429', borderColor: 'rgba(255,255,255,0.08)' }]}>
+                        <View style={styles.messagePreviewHeader}>
+                            <Text style={styles.messagePreviewTitle}>Recent chats</Text>
+                            <Text style={styles.messagePreviewCount}>{matches.length}</Text>
+                        </View>
+
+                        {matches.length === 0 ? (
+                            <View style={styles.messagePreviewEmpty}>
+                                <Text style={styles.messagePreviewEmptyText}>No chats yet — your first conversation will appear here.</Text>
+                            </View>
+                        ) : (
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.messagePreviewScroll}
+                            >
+                                {matches.map((match) => {
+                                    const avatarUri = match.partner.image || match.partner.profile?.profilePhoto || match.partner.profile?.photos?.[0] || null;
+                                    const previewText = match.lastMessage?.content?.trim() || 'You matched — say hi 👋';
+                                    const previewTime = getTimeAgo(match.lastMessage?.createdAt || match.createdAt);
+
+                                    return (
+                                        <Pressable
+                                            key={`preview-${match.id}`}
+                                            onPress={() => handleMatchPress(match)}
+                                            style={({ pressed }) => ([
+                                                styles.messagePreviewCard,
+                                                {
+                                                    borderColor: match.unreadCount > 0 ? 'rgba(236,72,153,0.36)' : 'rgba(255,255,255,0.10)',
+                                                    backgroundColor: 'rgba(255,255,255,0.04)',
+                                                    opacity: pressed ? 0.9 : 1,
+                                                    transform: [{ scale: pressed ? 0.985 : 1 }],
+                                                },
+                                            ])}
+                                        >
+                                            {avatarUri ? (
+                                                <Image source={{ uri: avatarUri }} style={styles.messagePreviewAvatar} resizeMode="cover" />
+                                            ) : (
+                                                <View style={[styles.messagePreviewAvatar, styles.requestAvatarFallback, { borderColor: colors.border }]}>
+                                                    <Text style={[styles.requestAvatarInitial, { color: '#cbd5e1' }]}>
+                                                        {(match.partner.name || '?').trim().charAt(0).toUpperCase()}
+                                                    </Text>
+                                                </View>
+                                            )}
+
+                                            <View style={{ flex: 1 }}>
+                                                <View style={styles.messagePreviewTopRow}>
+                                                    <Text style={styles.messagePreviewName} numberOfLines={1}>{match.partner.name}</Text>
+                                                    <Text style={styles.messagePreviewTime}>{previewTime}</Text>
+                                                </View>
+
+                                                <Text style={styles.messagePreviewText} numberOfLines={2}>{previewText}</Text>
+                                            </View>
+                                        </Pressable>
+                                    );
+                                })}
+                            </ScrollView>
+                        )}
+                    </View>
 
                     {!isSentLoading && !isRequestsLoading && (sent.length === 0 || visibleRequests.length === 0) && (
                         <View style={styles.heartEmptyHint}>
-                            <Text style={styles.heartEmptyHintTitle}>Keep the heart active ❤️</Text>
+                            <Text style={styles.heartEmptyHintTitle}>Keep your profile active ✨</Text>
                             <Text style={styles.heartEmptyHintSubtitle}>
                                 Send likes in Discover and keep your profile fresh to get more incoming likes.
                             </Text>
@@ -613,9 +531,6 @@ export default function MatchesScreen() {
                     isRefreshing={isRefreshing}
                     onRefresh={handleRefresh}
                     onMatchPress={handleMatchPress}
-                    onArchive={handleArchive}
-                    onUnmatch={handleUnmatch}
-                    onExplore={handleExplore}
                     missionsByMatchId={missionsByMatchId}
                 />
             </View>
@@ -1035,45 +950,8 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: '#ffd7e2',
     },
-    pulseHubWrap: {
-        alignSelf: 'center',
-        width: 230,
-        height: 230,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 8,
-        marginBottom: 2,
-    },
-    pulseHubRingAnimated: {
-        position: 'absolute',
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        borderWidth: 2,
-    },
-    pulseHubRingMid: {
-        position: 'absolute',
-        width: 166,
-        height: 166,
-        borderRadius: 83,
-        borderWidth: 1.5,
-    },
-    pulseHubRingOuter: {
-        position: 'absolute',
-        width: 214,
-        height: 214,
-        borderRadius: 107,
-        borderWidth: 1,
-    },
-    pulseHubHeart: {
-        width: 96,
-        height: 96,
-        borderRadius: 48,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
     heartEmptyHint: {
-        marginTop: -8,
+        marginTop: 2,
         marginBottom: 8,
         alignItems: 'center',
         paddingHorizontal: 20,
@@ -1092,6 +970,93 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         color: '#a9a1b8',
         textAlign: 'center',
+    },
+    messagePreviewSection: {
+        borderWidth: 1,
+        borderRadius: 18,
+        paddingVertical: 10,
+    },
+    messagePreviewHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 12,
+        marginBottom: 8,
+    },
+    messagePreviewTitle: {
+        fontSize: 14,
+        lineHeight: 18,
+        fontWeight: '800',
+        color: '#fff',
+    },
+    messagePreviewCount: {
+        minWidth: 24,
+        height: 24,
+        borderRadius: 12,
+        textAlign: 'center',
+        textAlignVertical: 'center',
+        overflow: 'hidden',
+        fontSize: 12,
+        lineHeight: 24,
+        fontWeight: '800',
+        color: '#1d1429',
+        backgroundColor: '#e9d08d',
+        paddingHorizontal: 8,
+    },
+    messagePreviewEmpty: {
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+    },
+    messagePreviewEmptyText: {
+        fontSize: 12,
+        lineHeight: 16,
+        fontWeight: '500',
+        color: '#9f96b4',
+    },
+    messagePreviewScroll: {
+        paddingHorizontal: 12,
+        gap: 10,
+    },
+    messagePreviewCard: {
+        width: 228,
+        borderRadius: 14,
+        borderWidth: 1,
+        padding: 10,
+        flexDirection: 'row',
+        gap: 10,
+        alignItems: 'center',
+    },
+    messagePreviewAvatar: {
+        width: 46,
+        height: 46,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    messagePreviewTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+        gap: 6,
+    },
+    messagePreviewName: {
+        flex: 1,
+        fontSize: 13,
+        lineHeight: 17,
+        fontWeight: '700',
+        color: '#fff',
+    },
+    messagePreviewTime: {
+        fontSize: 11,
+        lineHeight: 14,
+        fontWeight: '600',
+        color: '#9f96b4',
+    },
+    messagePreviewText: {
+        fontSize: 12,
+        lineHeight: 16,
+        fontWeight: '500',
+        color: '#c8bfd6',
     },
 
     activitySheetRoot: {

@@ -6,16 +6,15 @@ import {
     ScrollView,
     StyleSheet,
     ActivityIndicator,
-    Pressable,
 } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 import { Match } from '@/hooks/use-matches';
 import { type Mission } from '@/hooks/use-missions';
-import { SwipeableMatchCard } from './swipeable-match-card';
+import { MatchCard } from './match-card';
 import { ActiveMissionsStrip } from './active-missions-strip';
-import { Heart, MagnifyingGlass } from 'phosphor-react-native';
+import { Heart } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, Layout } from 'react-native-reanimated';
 
@@ -25,9 +24,6 @@ interface MatchesListV2Props {
     isRefreshing: boolean;
     onRefresh: () => void;
     onMatchPress: (match: Match) => void;
-    onArchive?: (match: Match) => void;
-    onUnmatch?: (match: Match) => void;
-    onExplore?: () => void;
     onEndReached?: () => void;
     hasNextPage?: boolean;
     isFetchingNextPage?: boolean;
@@ -64,14 +60,7 @@ function MatchSkeleton({ index }: { index: number }) {
     );
 }
 
-// Redesigned empty state — Apple-level polish
-const HOW_IT_WORKS = [
-    { emoji: '🔍', title: 'Find someone you like', desc: 'Browse profiles on Find and send a connection request' },
-    { emoji: '💌', title: 'They accept your request', desc: "If they like you back, boom — you're a match!" },
-    { emoji: '💬', title: 'Start the conversation', desc: 'Break the ice and see where it takes you' },
-];
-
-function EmptyState({ onExplore }: { onExplore?: () => void }) {
+function EmptyState() {
     const { isDark } = useTheme();
 
     return (
@@ -100,59 +89,6 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
             <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
                 A special match could be a like away. Need help? Ask your Wingman for a profile boost.
             </Text>
-
-            {onExplore && (
-                <Pressable
-                    onPress={onExplore}
-                    style={{ borderRadius: 18, overflow: 'hidden', marginBottom: 40 }}
-                >
-                    <LinearGradient
-                        colors={['#ec4899', '#f43f5e']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.exploreButton}
-                    >
-                        <MagnifyingGlass size={20} color="#fff" weight="bold" />
-                        <Text style={styles.exploreButtonText}>Find Someone</Text>
-                    </LinearGradient>
-                </Pressable>
-            )}
-
-            {/* How matching works */}
-            <View style={[
-                styles.howSection,
-                {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
-                    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                },
-            ]}>
-                <Text style={[styles.howSectionLabel, { color: isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)' }]}>
-                    HOW MATCHING WORKS
-                </Text>
-                {HOW_IT_WORKS.map((step, i) => (
-                    <View key={i} style={[styles.stepRow, i < HOW_IT_WORKS.length - 1 && styles.stepRowBorder, { borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }]}>
-                        <View style={[styles.stepEmojiBox, { backgroundColor: isDark ? 'rgba(236,72,153,0.12)' : 'rgba(236,72,153,0.07)' }]}>
-                            <Text style={styles.stepEmoji}>{step.emoji}</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.stepTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                                {step.title}
-                            </Text>
-                            <Text style={[styles.stepDesc, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                                {step.desc}
-                            </Text>
-                        </View>
-                    </View>
-                ))}
-            </View>
-
-            {/* Pro tip */}
-            <View style={[styles.tipRow, { backgroundColor: isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.07)', borderColor: isDark ? 'rgba(245,158,11,0.20)' : 'rgba(245,158,11,0.18)' }]}>
-                <Text style={styles.tipEmoji}>✨</Text>
-                <Text style={[styles.tipText, { color: isDark ? '#fbbf24' : '#92400e' }]}>
-                    Complete your profile to get 3× more connections
-                </Text>
-            </View>
         </ScrollView>
     );
 }
@@ -163,9 +99,6 @@ export function MatchesListV2({
     isRefreshing,
     onRefresh,
     onMatchPress,
-    onArchive,
-    onUnmatch,
-    onExplore,
     onEndReached,
     hasNextPage,
     isFetchingNextPage,
@@ -178,15 +111,13 @@ export function MatchesListV2({
             entering={FadeIn.delay(index * 50)}
             layout={Layout.springify()}
         >
-            <SwipeableMatchCard
+            <MatchCard
                 match={item}
                 onPress={onMatchPress}
-                onArchive={onArchive}
-                onUnmatch={onUnmatch}
-                mission={missionsByMatchId?.[item.id]}
+                showOptions={false}
             />
         </Animated.View>
-    ), [onMatchPress, onArchive, onUnmatch, missionsByMatchId]);
+    ), [onMatchPress]);
 
     const keyExtractor = useCallback((item: Match) => item.id, []);
 
@@ -211,14 +142,9 @@ export function MatchesListV2({
                     byMatchId={missionsByMatchId}
                     matches={matches}
                 />
-                <View style={styles.listHeader}>
-                    <Text style={[styles.hintText, { color: isDark ? '#64748b' : '#9ca3af' }]}>
-                        ← Swipe left on a card for options
-                    </Text>
-                </View>
             </View>
         );
-    }, [matches, isDark, missionsByMatchId]);
+    }, [matches, missionsByMatchId]);
 
     // Loading state
     if (isLoading && !isRefreshing) {
@@ -233,7 +159,7 @@ export function MatchesListV2({
 
     // Empty state
     if (!isLoading && matches.length === 0) {
-        return <EmptyState onExplore={onExplore} />;
+        return <EmptyState />;
     }
 
     return (
@@ -346,99 +272,8 @@ const styles = StyleSheet.create({
         fontSize: 15,
         textAlign: 'center',
         lineHeight: 23,
-        marginBottom: 32,
-        maxWidth: 300,
-    },
-    exploreButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 32,
-        paddingVertical: 16,
-        borderRadius: 18,
-        gap: 8,
-        shadowColor: '#ec4899',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.35,
-        shadowRadius: 14,
-        elevation: 8,
-    },
-    exploreButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '800',
-        letterSpacing: -0.2,
-    },
-    // How it works section
-    howSection: {
-        width: '100%',
-        borderRadius: 20,
-        borderWidth: 1,
-        padding: 18,
-        marginBottom: 16,
-    },
-    howSectionLabel: {
-        fontSize: 11,
-        fontWeight: '700',
-        letterSpacing: 1.2,
-        marginBottom: 16,
-    },
-    stepRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-        paddingBottom: 14,
-    },
-    stepRowBorder: {
-        borderBottomWidth: 1,
-        marginBottom: 14,
-    },
-    stepEmojiBox: {
-        width: 42,
-        height: 42,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    stepEmoji: {
-        fontSize: 20,
-    },
-    stepTitle: {
-        fontSize: 14,
-        fontWeight: '700',
-        marginBottom: 2,
-    },
-    stepDesc: {
-        fontSize: 12,
-        lineHeight: 17,
-        fontWeight: '400',
-    },
-    // Pro tip row
-    tipRow: {
-        width: '100%',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        borderRadius: 14,
-        borderWidth: 1,
         marginBottom: 8,
-    },
-    tipEmoji: { fontSize: 15 },
-    tipText: {
-        fontSize: 13,
-        fontWeight: '500',
-        flex: 1,
-        lineHeight: 18,
-    },
-    listHeader: {
-        paddingHorizontal: 20,
-        paddingTop: 4,
-        paddingBottom: 8,
-    },
-    hintText: {
-        fontSize: 12,
-        fontWeight: '500',
+        maxWidth: 300,
     },
     listContent: {
         paddingBottom: 100,
