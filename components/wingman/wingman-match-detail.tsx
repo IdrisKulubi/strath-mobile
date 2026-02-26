@@ -22,7 +22,7 @@ import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { AgentMatch } from '@/hooks/use-agent';
 import { BlockReportModal } from '@/components/discover/block-report-modal';
-import { X, ChatCircle, GraduationCap, Sparkle, UserCircle } from 'phosphor-react-native';
+import { X, ChatCircle, GraduationCap, Sparkle, UserCircle, CaretLeft } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 
 interface WingmanMatchDetailProps {
@@ -60,6 +60,7 @@ export function WingmanMatchDetail({
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+    const [showFullProfile, setShowFullProfile] = useState(false);
     const [blockReportMode, setBlockReportMode] = useState<'block' | 'report' | null>(null);
     const translateY = useSharedValue(0);
 
@@ -102,6 +103,90 @@ export function WingmanMatchDetail({
         return items.slice(0, 3);
     }, [match]);
 
+    const profile = match?.profile;
+
+    const profileCards = useMemo(() => {
+        if (!profile) return [] as { title: string; chips?: string[]; text?: string; prompts?: { promptId: string; response: string }[] }[];
+
+        const aboutMe = profile.aboutMe || profile.bio || profile.personalitySummary || null;
+
+        const aboutChips = [
+            profile.gender,
+            profile.zodiacSign,
+            profile.drinkingPreference,
+            profile.smoking,
+            profile.religion,
+            profile.education,
+            profile.height,
+        ].filter(Boolean) as string[];
+
+        const lookingForChips = [
+            profile.lookingFor,
+            profile.communicationStyle,
+            profile.loveLanguage,
+            profile.personalityType,
+            profile.sleepingHabits,
+            profile.workoutFrequency,
+            profile.socialMediaUsage,
+            profile.politics,
+        ].filter(Boolean) as string[];
+
+        const cards: { title: string; chips?: string[]; text?: string; prompts?: { promptId: string; response: string }[] }[] = [];
+
+        if (aboutMe || aboutChips.length > 0) {
+            cards.push({ title: 'About me', text: aboutMe || undefined, chips: aboutChips });
+        }
+
+        if (lookingForChips.length > 0) {
+            cards.push({ title: "I'm looking for", chips: lookingForChips });
+        }
+
+        if ((profile.interests || []).length > 0) {
+            cards.push({ title: 'Interests', chips: profile.interests || [] });
+        }
+
+        if ((profile.qualities || []).length > 0) {
+            cards.push({ title: 'Qualities', chips: profile.qualities || [] });
+        }
+
+        if ((profile.languages || []).length > 0) {
+            cards.push({ title: 'Languages', chips: profile.languages || [] });
+        }
+
+        if ((profile.prompts || []).length > 0) {
+            cards.push({ title: 'Prompts', prompts: profile.prompts || [] });
+        }
+
+        return cards;
+    }, [profile]);
+
+    const fullProfileBlocks = useMemo(() => {
+        const blocks: { type: 'photo' | 'card'; photo?: string; card?: { title: string; chips?: string[]; text?: string; prompts?: { promptId: string; response: string }[] } }[] = [];
+
+        if (photos.length === 0 && profileCards.length === 0) {
+            return blocks;
+        }
+
+        let photoIndex = 0;
+
+        if (photos.length > 0) {
+            blocks.push({ type: 'photo', photo: photos[photoIndex++] });
+        }
+
+        profileCards.forEach((card) => {
+            blocks.push({ type: 'card', card });
+            if (photoIndex < photos.length) {
+                blocks.push({ type: 'photo', photo: photos[photoIndex++] });
+            }
+        });
+
+        while (photoIndex < photos.length) {
+            blocks.push({ type: 'photo', photo: photos[photoIndex++] });
+        }
+
+        return blocks;
+    }, [photos, profileCards]);
+
     const handleConnect = async () => {
         if (!match) return;
 
@@ -130,6 +215,15 @@ export function WingmanMatchDetail({
         onClose();
     }, [onClose]);
 
+    const openFullProfile = useCallback(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setShowFullProfile(true);
+    }, []);
+
+    const closeFullProfile = useCallback(() => {
+        setShowFullProfile(false);
+    }, []);
+
     const animateClose = useCallback(() => {
         translateY.value = withTiming(900, { duration: 220 }, () => {
             runOnJS(closeModal)();
@@ -141,6 +235,7 @@ export function WingmanMatchDetail({
             translateY.value = 0;
         } else {
             setBlockReportMode(null);
+            setShowFullProfile(false);
         }
     }, [translateY, visible]);
 
@@ -337,22 +432,146 @@ export function WingmanMatchDetail({
                             </ScrollView>
 
                             <View style={[styles.footer, { borderTopColor: colors.border }]}>
-                                <Pressable
-                                    onPress={handleConnect}
-                                    disabled={isConnecting}
-                                    style={[styles.connectButton, { opacity: isConnecting ? 0.7 : 1 }]}
-                                >
-                                    {isConnecting ? (
-                                        <ActivityIndicator size="small" color="#fff" />
-                                    ) : (
-                                        <Text style={styles.connectButtonText}>Connect</Text>
-                                    )}
-                                </Pressable>
+                                <View style={styles.footerRow}>
+                                    <Pressable
+                                        onPress={handleConnect}
+                                        disabled={isConnecting}
+                                        style={[styles.connectButton, styles.footerButton, { opacity: isConnecting ? 0.7 : 1 }]}
+                                    >
+                                        {isConnecting ? (
+                                            <ActivityIndicator size="small" color="#fff" />
+                                        ) : (
+                                            <Text style={styles.connectButtonText}>Connect</Text>
+                                        )}
+                                    </Pressable>
+
+                                    <Pressable
+                                        onPress={openFullProfile}
+                                        style={[
+                                            styles.viewProfileButton,
+                                            styles.footerButton,
+                                            {
+                                                borderColor: colors.border,
+                                                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                                            },
+                                        ]}
+                                    >
+                                        <Text style={[styles.viewProfileButtonText, { color: colors.foreground }]}>View Profile</Text>
+                                    </Pressable>
+                                </View>
                             </View>
                         </>
                     )}
                 </Animated.View>
             </Animated.View>
+
+            <Modal
+                visible={showFullProfile}
+                animationType="slide"
+                onRequestClose={closeFullProfile}
+            >
+                <View style={[styles.fullProfileScreen, { backgroundColor: colors.background }]}> 
+                    <View style={[styles.fullProfileHeader, { borderBottomColor: colors.border }]}> 
+                        <Pressable
+                            onPress={closeFullProfile}
+                            style={[styles.backButton, {
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                            }]}
+                        >
+                            <CaretLeft size={18} color={colors.foreground} weight="bold" />
+                        </Pressable>
+                        <Text style={[styles.fullProfileTitle, { color: colors.foreground }]}>Profile</Text>
+                        <View style={styles.headerSpacer} />
+                    </View>
+
+                    <ScrollView contentContainerStyle={styles.fullProfileContent}>
+                        {fullProfileBlocks.length === 0 ? (
+                            <View style={[styles.emptyProfileCard, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }]}>
+                                <Text style={[styles.emptyProfileText, { color: colors.mutedForeground }]}>No additional profile details yet.</Text>
+                            </View>
+                        ) : (
+                            fullProfileBlocks.map((block, index) => {
+                                if (block.type === 'photo' && block.photo) {
+                                    return (
+                                        <View key={`profile-photo-${index}`} style={styles.fullPhotoCard}>
+                                            <CachedImage uri={block.photo} style={styles.fullPhoto} />
+                                            {index === 0 ? (
+                                                <View style={styles.fullPhotoNameOverlay}>
+                                                    <Text style={styles.fullPhotoNameText}>
+                                                        {profile?.firstName || 'Someone'}{profile?.age ? `, ${profile.age}` : ''}
+                                                    </Text>
+                                                </View>
+                                            ) : null}
+                                        </View>
+                                    );
+                                }
+
+                                if (block.type === 'card' && block.card) {
+                                    return (
+                                        <View
+                                            key={`profile-card-${index}`}
+                                            style={[
+                                                styles.profileInfoCard,
+                                                {
+                                                    borderColor: colors.border,
+                                                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                                                },
+                                            ]}
+                                        >
+                                            <Text style={[styles.profileInfoTitle, { color: colors.foreground }]}>{block.card.title}</Text>
+
+                                            {block.card.text ? (
+                                                <Text style={[styles.profileInfoText, { color: colors.mutedForeground }]}>{block.card.text}</Text>
+                                            ) : null}
+
+                                            {block.card.chips && block.card.chips.length > 0 ? (
+                                                <View style={styles.profileChipWrap}>
+                                                    {block.card.chips.map((chip, chipIndex) => (
+                                                        <View
+                                                            key={`${chip}-${chipIndex}`}
+                                                            style={[
+                                                                styles.profileChip,
+                                                                {
+                                                                    borderColor: colors.border,
+                                                                    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.9)',
+                                                                },
+                                                            ]}
+                                                        >
+                                                            <Text style={[styles.profileChipText, { color: colors.foreground }]}>{chip}</Text>
+                                                        </View>
+                                                    ))}
+                                                </View>
+                                            ) : null}
+
+                                            {block.card.prompts && block.card.prompts.length > 0 ? (
+                                                <View style={styles.promptListWrap}>
+                                                    {block.card.prompts.map((prompt, promptIndex) => (
+                                                        <View
+                                                            key={`${prompt.promptId}-${promptIndex}`}
+                                                            style={[
+                                                                styles.promptCard,
+                                                                {
+                                                                    borderColor: colors.border,
+                                                                    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.9)',
+                                                                },
+                                                            ]}
+                                                        >
+                                                            <Text style={[styles.promptQuestion, { color: colors.mutedForeground }]}>{prompt.promptId}</Text>
+                                                            <Text style={[styles.promptAnswer, { color: colors.foreground }]}>{prompt.response}</Text>
+                                                        </View>
+                                                    ))}
+                                                </View>
+                                            ) : null}
+                                        </View>
+                                    );
+                                }
+
+                                return null;
+                            })
+                        )}
+                    </ScrollView>
+                </View>
+            </Modal>
 
             {/* Reuse the existing Block/Report sheet */}
             {blockReportMode && match && (
@@ -555,6 +774,137 @@ const styles = StyleSheet.create({
     footer: {
         borderTopWidth: 1,
         padding: 14,
+    },
+    footerRow: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    footerButton: {
+        flex: 1,
+    },
+    viewProfileButton: {
+        borderRadius: 14,
+        borderWidth: 1,
+        paddingVertical: 13,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 46,
+    },
+    viewProfileButtonText: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    fullProfileScreen: {
+        flex: 1,
+    },
+    fullProfileHeader: {
+        paddingHorizontal: 16,
+        paddingTop: 14,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    backButton: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    fullProfileTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+    },
+    headerSpacer: {
+        width: 34,
+        height: 34,
+    },
+    fullProfileContent: {
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+        gap: 14,
+        paddingBottom: 40,
+    },
+    fullPhotoCard: {
+        borderRadius: 24,
+        overflow: 'hidden',
+    },
+    fullPhoto: {
+        width: '100%',
+        height: 420,
+    },
+    fullPhotoNameOverlay: {
+        position: 'absolute',
+        left: 14,
+        bottom: 14,
+        backgroundColor: 'rgba(0,0,0,0.42)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 999,
+    },
+    fullPhotoNameText: {
+        color: '#fff',
+        fontSize: 24,
+        fontWeight: '700',
+    },
+    profileInfoCard: {
+        borderRadius: 22,
+        borderWidth: 1,
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+        gap: 10,
+    },
+    profileInfoTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    profileInfoText: {
+        fontSize: 14,
+        lineHeight: 20,
+    },
+    profileChipWrap: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    profileChip: {
+        borderRadius: 999,
+        borderWidth: 1,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+    },
+    profileChipText: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    promptListWrap: {
+        gap: 8,
+    },
+    promptCard: {
+        borderRadius: 14,
+        borderWidth: 1,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        gap: 4,
+    },
+    promptQuestion: {
+        fontSize: 12,
+        fontWeight: '600',
+        textTransform: 'capitalize',
+    },
+    promptAnswer: {
+        fontSize: 14,
+        lineHeight: 20,
+    },
+    emptyProfileCard: {
+        borderRadius: 16,
+        borderWidth: 1,
+        padding: 16,
+    },
+    emptyProfileText: {
+        fontSize: 14,
     },
     fullscreenBackdrop: {
         flex: 1,

@@ -22,6 +22,7 @@ import * as Haptics from 'expo-haptics';
 import { Calendar, User, MagnifyingGlass, CheckCircle } from 'phosphor-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Phone } from 'phosphor-react-native';
+import { AsYouType, parsePhoneNumberFromString } from 'libphonenumber-js';
 
 interface TheEssentialsProps {
     data: {
@@ -135,12 +136,14 @@ const ChipSelector = ({
 };
 
 export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
-    const [step, setStep] = useState(0); // 0: name, 1: phone, 2: birthday, 3: gender, 4: looking for
+    const hasPrefilledName = (data.firstName || '').trim().length >= 2 && (data.lastName || '').trim().length >= 2;
+    const [step, setStep] = useState(hasPrefilledName ? 1 : 0); // 0: name, 1: phone, 2: birthday, 3: gender, 4: looking for
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [birthday, setBirthday] = useState<Date | null>(null);
     const [firstName, setFirstName] = useState(data.firstName || '');
     const [lastName, setLastName] = useState(data.lastName || '');
     const [phoneNumber, setPhoneNumber] = useState(data.phoneNumber || '');
+    const [phoneError, setPhoneError] = useState('');
 
     const progressWidth = useSharedValue(0);
 
@@ -148,6 +151,21 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
         progressWidth.value = withSpring(((step + 1) / 5) * 100, { damping: 15 });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [step]);
+
+    useEffect(() => {
+        const nextFirstName = data.firstName || '';
+        const nextLastName = data.lastName || '';
+
+        setFirstName((current) => current || nextFirstName);
+        setLastName((current) => current || nextLastName);
+
+        const hasName = nextFirstName.trim().length >= 2 && nextLastName.trim().length >= 2;
+        if (hasName && step === 0) {
+            onUpdate({ firstName: nextFirstName.trim(), lastName: nextLastName.trim() });
+            setStep(1);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.firstName, data.lastName, onUpdate]);
 
     const progressStyle = useAnimatedStyle(() => ({
         width: `${progressWidth.value}%`,
@@ -161,51 +179,51 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
         }
     };
 
-    // Format phone number for display (Kenyan format)
-    const formatPhoneNumber = (text: string) => {
-        // Remove all non-digits
-        const digits = text.replace(/\D/g, '');
-        
-        // Limit to 12 digits (including country code)
-        const limited = digits.slice(0, 12);
-        
-        // Format based on length
-        if (limited.startsWith('254')) {
-            // Already has country code
-            if (limited.length <= 3) return `+${limited}`;
-            if (limited.length <= 6) return `+${limited.slice(0, 3)} ${limited.slice(3)}`;
-            return `+${limited.slice(0, 3)} ${limited.slice(3, 6)} ${limited.slice(6)}`;
-        } else if (limited.startsWith('0')) {
-            // Local format starting with 0
-            if (limited.length <= 4) return limited;
-            if (limited.length <= 7) return `${limited.slice(0, 4)} ${limited.slice(4)}`;
-            return `${limited.slice(0, 4)} ${limited.slice(4, 7)} ${limited.slice(7)}`;
-        } else {
-            // Just digits
-            return limited;
+    const getParsedPhone = (value: string) => {
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+
+        const parsed = trimmed.startsWith('+')
+            ? parsePhoneNumberFromString(trimmed)
+            : parsePhoneNumberFromString(trimmed, 'KE');
+
+        if (!parsed || !parsed.isValid()) {
+            return null;
         }
+
+        return parsed;
     };
 
     const handlePhoneChange = (text: string) => {
-        const formatted = formatPhoneNumber(text);
+        const hasPlusPrefix = text.trim().startsWith('+');
+        const digits = text.replace(/\D/g, '');
+        const normalizedInput = hasPlusPrefix ? `+${digits}` : digits;
+
+        const formatter = hasPlusPrefix ? new AsYouType() : new AsYouType('KE');
+        const formatted = formatter.input(normalizedInput);
         setPhoneNumber(formatted);
+
+        if (phoneError) {
+            setPhoneError('');
+        }
     };
 
     const isPhoneValid = () => {
-        const digits = phoneNumber.replace(/\D/g, '');
-        // Valid if it's 10 digits (local) or 12 digits (with country code)
-        return digits.length === 10 || digits.length === 12;
+        return !!getParsedPhone(phoneNumber);
     };
 
     const handlePhoneContinue = () => {
-        if (isPhoneValid()) {
+        const parsedPhone = getParsedPhone(phoneNumber);
+
+        if (parsedPhone) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            // Store in standardized format with country code
-            const digits = phoneNumber.replace(/\D/g, '');
-            const standardized = digits.startsWith('254') ? `+${digits}` : `+254${digits.slice(1)}`;
-            onUpdate({ phoneNumber: standardized });
+            onUpdate({ phoneNumber: parsedPhone.number });
             setStep(2);
+            return;
         }
+
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setPhoneError('Enter a valid phone number with country code (or local Kenyan number).');
     };
 
     const handleBirthdayChange = (event: any, selectedDate?: Date) => {
@@ -346,7 +364,7 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                         <View style={styles.inputContainer}>
                             <TextInput
                                 style={styles.input}
-                                placeholder="+254 7XX XXX XXX"
+                                placeholder="+1 202 555 0123"
                                 placeholderTextColor="#64748b"
                                 value={phoneNumber}
                                 onChangeText={handlePhoneChange}
@@ -356,8 +374,12 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                         </View>
 
                         <Text style={[styles.phoneHint, { color: '#64748b' }]}>
-                            Enter your Kenyan phone number
+                            Enter any valid international number (local KE numbers also work)
                         </Text>
+
+                        {!!phoneError && (
+                            <Text style={styles.phoneErrorText}>{phoneError}</Text>
+                        )}
 
                         <TouchableOpacity
                             onPress={handlePhoneContinue}
@@ -603,6 +625,13 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: -8,
         marginBottom: 24,
+    },
+    phoneErrorText: {
+        color: '#f87171',
+        fontSize: 13,
+        textAlign: 'center',
+        marginTop: -16,
+        marginBottom: 18,
     },
     inputContainer: {
         marginBottom: 16,

@@ -235,14 +235,10 @@ export default function LoginScreen() {
                 variant: 'success'
             });
             
-            // Navigate based on whether user is new
-            if (data.data?.isNewUser) {
-                console.log("[Apple Auth] New user, going to onboarding");
-                router.replace('/onboarding');
-            } else {
-                console.log("[Apple Auth] Existing user, going to tabs");
-                router.replace('/(tabs)');
-            }
+            // Always route through index so it can check profile existence
+            // index.tsx handles: 404 → onboarding, complete profile → tabs, incomplete → onboarding
+            console.log("[Apple Auth] Routing through index for profile check (isNewUser:", data.data?.isNewUser, ")");
+            router.replace('/');
         } catch (error: any) {
             if (error.code === 'ERR_REQUEST_CANCELED' || error.code === 'ERR_CANCELED') {
                 // User canceled the sign-in flow - show helpful message about alternatives

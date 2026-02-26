@@ -75,7 +75,8 @@ export default function Index() {
             }
         } catch (e) {
             console.error("Profile check failed:", e);
-            router.replace('/(tabs)/explore'); // Fallback to Find tab if profile check fails
+            // On network failure, go to onboarding which is safer than dumping into tabs with no profile
+            router.replace('/onboarding' as any);
         } finally {
             setIsCheckingProfile(false);
         }

@@ -14,8 +14,7 @@ import {
     LaunchCelebration,
 } from '../../components/onboarding';
 import { useImageUpload } from '@/hooks/use-image-upload';
-import { getAuthToken, clearSession } from '@/lib/auth-helpers';
-import * as SecureStore from 'expo-secure-store';
+import { getAuthToken, clearSession, getCurrentUser } from '@/lib/auth-helpers';
 
 // Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=OpeningLine, 8=Celebration
 type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
@@ -71,32 +70,114 @@ export default function OnboardingScreen() {
         showActiveStatus: true,
     });
 
-    // Pre-populate name from Apple Sign In or existing user data
-    // This addresses Apple Guideline 4.0 - use data already provided by Apple Sign In
+    // Pre-populate name from auth user info (Apple/Google), with email fallback
     useEffect(() => {
+        const normalizeToken = (token: string) =>
+            token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+
+        const toNameParts = (fullName?: string | null) => {
+            if (!fullName?.trim()) {
+                return { firstName: '', lastName: '' };
+            }
+
+            const cleaned = fullName.replace(/\s+/g, ' ').trim();
+            const nameParts = cleaned.split(' ');
+            const firstName = normalizeToken(nameParts[0] || '');
+            const lastName = nameParts.slice(1).map(normalizeToken).join(' ') || '';
+
+            return { firstName, lastName };
+        };
+
+        const fromEmail = (email?: string | null) => {
+            if (!email?.includes('@')) {
+                return { firstName: '', lastName: '' };
+            }
+
+            const [localPartRaw = '', domainRaw = ''] = email.toLowerCase().split('@');
+            const localPart = localPartRaw.trim();
+            const domain = domainRaw.trim();
+
+            // Apple private relay addresses are anonymous aliases (e.g. random strings)
+            // and should not be used to infer names.
+            if (domain === 'privaterelay.appleid.com') {
+                return { firstName: '', lastName: '' };
+            }
+
+            const hasSeparator = /[._-]/.test(localPart);
+            const hasDigits = /\d/.test(localPart);
+
+            // Heuristic: likely alias/random handle, avoid generating garbage names.
+            if (!hasSeparator && hasDigits && localPart.length >= 8) {
+                return { firstName: '', lastName: '' };
+            }
+
+            const tokens = localPart
+                .replace(/[._-]+/g, ' ')
+                .replace(/\d+/g, ' ')
+                .split(' ')
+                .map((token) => token.trim())
+                .filter((token) => token.length > 0);
+
+            if (tokens.length === 0) {
+                return { firstName: '', lastName: '' };
+            }
+
+            // If what's left is mostly short fragments, don't treat it as a real name.
+            if (tokens.every((token) => token.length <= 2)) {
+                return { firstName: '', lastName: '' };
+            }
+
+            const firstName = normalizeToken(tokens[0]);
+            const lastName = tokens.length > 1
+                ? tokens.slice(1).map(normalizeToken).join(' ')
+                : 'Student';
+
+            return { firstName, lastName };
+        };
+
+        const finalizeNames = (
+            nameFromProfile: { firstName: string; lastName: string },
+            email?: string | null
+        ) => {
+            const genericFirstNames = new Set(['user', 'unknown', 'apple', 'account']);
+            let firstName = nameFromProfile.firstName.trim();
+            let lastName = nameFromProfile.lastName.trim();
+
+            const emailName = fromEmail(email);
+
+            if (!firstName || genericFirstNames.has(firstName.toLowerCase())) {
+                firstName = emailName.firstName || firstName;
+            }
+
+            if (!lastName) {
+                lastName = emailName.lastName || 'Student';
+            }
+
+            if (!firstName) {
+                firstName = 'Campus';
+            }
+
+            return { firstName, lastName };
+        };
+
         const loadUserData = async () => {
             try {
-                // Check if we have session data from Apple Sign In
-                const sessionData = await SecureStore.getItemAsync('strathspace_session');
-                if (sessionData) {
-                    const parsed = JSON.parse(sessionData);
-                    const userName = parsed?.user?.name;
-                    
-                    if (userName) {
-                        console.log('[Onboarding] Pre-populating name from session:', userName);
-                        // Split "First Last" into parts
-                        const nameParts = userName.trim().split(' ');
-                        const firstName = nameParts[0] || '';
-                        const lastName = nameParts.slice(1).join(' ') || '';
-                        
-                        if (firstName) {
-                            setFormData(prev => ({
-                                ...prev,
-                                firstName,
-                                lastName,
-                            }));
-                        }
-                    }
+                const user = await getCurrentUser();
+                if (!user) {
+                    return;
+                }
+
+                const normalized = finalizeNames(toNameParts(user.name), user.email);
+                const firstName = normalized.firstName;
+                const lastName = normalized.lastName;
+
+                if (firstName) {
+                    console.log('[Onboarding] Pre-populating name from auth user data');
+                    setFormData((prev) => ({
+                        ...prev,
+                        firstName: prev.firstName || firstName,
+                        lastName: prev.lastName || lastName,
+                    }));
                 }
             } catch (error) {
                 console.log('[Onboarding] Could not load user data:', error);
@@ -234,8 +315,8 @@ export default function OnboardingScreen() {
 
             console.log('[Onboarding] Profile saved successfully!');
 
-            // Navigate to main app
-            router.replace('/(tabs)');
+            // Navigate directly to active Find experience (Wingman Explore)
+            router.replace('/(tabs)/explore');
         } catch (error: any) {
             console.error('[Onboarding] Error:', error.message || error);
             setSubmitError(error.message || 'Failed to save your profile. Please try again.');

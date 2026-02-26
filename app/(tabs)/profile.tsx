@@ -30,6 +30,7 @@ export default function ProfileScreen() {
     const isDark = colorScheme === 'dark';
     const { data: profile, isLoading } = useProfile();
     const router = useRouter();
+    const profileAvatarUri = profile?.profilePhoto || profile?.photos?.[0] || profile?.user?.image;
 
     const calculateCompletion = () => {
         if (!profile) return 0;
@@ -156,7 +157,7 @@ export default function ProfileScreen() {
                         )}
                         <CompletionHalo percentage={completion} radius={70} strokeWidth={6}>
                             <CachedImage
-                                uri={profile?.profilePhoto || profile?.user?.image}
+                                uri={profileAvatarUri}
                                 style={styles.profileImage}
                                 fallbackType="avatar"
                             />

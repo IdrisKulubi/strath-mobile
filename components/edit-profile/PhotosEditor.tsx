@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
     View,
     Text,
@@ -239,6 +239,24 @@ export function PhotosEditor({
     const [photoSlots, setPhotoSlots] = useState<PhotoSlot[]>(initialSlots);
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
     const nextId = useRef(photoSlots.length + 10);
+
+    useEffect(() => {
+        const nextSlots = initialSlots();
+
+        setPhotoSlots((prev) => {
+            const prevUris = prev.map((slot) => slot.uri).filter(Boolean);
+            const nextUris = nextSlots.map((slot) => slot.uri).filter(Boolean);
+
+            const isSame =
+                prevUris.length === nextUris.length &&
+                prevUris.every((uri, index) => uri === nextUris[index]);
+
+            return isSame ? prev : nextSlots;
+        });
+
+        nextId.current = Math.max(nextId.current, nextSlots.length + 10);
+        setSelectedIndex(null);
+    }, [profilePhoto, photos]);
 
     const photosWithContent = photoSlots.filter((p) => p.uri !== null);
 

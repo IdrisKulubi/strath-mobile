@@ -52,6 +52,16 @@ export interface AgentMatch {
         loveLanguage: string | null;
         lookingFor: string | null;
         religion: string | null;
+        zodiacSign: string | null;
+        drinkingPreference: string | null;
+        workoutFrequency: string | null;
+        socialMediaUsage: string | null;
+        sleepingHabits: string | null;
+        height: string | null;
+        education: string | null;
+        smoking: string | null;
+        politics: string | null;
+        languages: string[] | null;
         lastActive: string | null;
     };
     explanation: {
