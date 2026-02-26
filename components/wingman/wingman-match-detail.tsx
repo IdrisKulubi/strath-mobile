@@ -24,6 +24,7 @@ import { AgentMatch } from '@/hooks/use-agent';
 import { BlockReportModal } from '@/components/discover/block-report-modal';
 import { X, ChatCircle, GraduationCap, Sparkle, UserCircle, CaretLeft } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface WingmanMatchDetailProps {
     visible: boolean;
@@ -59,6 +60,7 @@ export function WingmanMatchDetail({
 }: WingmanMatchDetailProps) {
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const insets = useSafeAreaInsets();
     const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
     const [showFullProfile, setShowFullProfile] = useState(false);
     const [blockReportMode, setBlockReportMode] = useState<'block' | 'report' | null>(null);
@@ -471,7 +473,10 @@ export function WingmanMatchDetail({
                 onRequestClose={closeFullProfile}
             >
                 <View style={[styles.fullProfileScreen, { backgroundColor: colors.background }]}> 
-                    <View style={[styles.fullProfileHeader, { borderBottomColor: colors.border }]}> 
+                    <View style={[styles.fullProfileHeader, {
+                        borderBottomColor: colors.border,
+                        paddingTop: insets.top + 10,
+                    }]}> 
                         <Pressable
                             onPress={closeFullProfile}
                             style={[styles.backButton, {
@@ -841,13 +846,14 @@ const styles = StyleSheet.create({
         bottom: 14,
         backgroundColor: 'rgba(0,0,0,0.42)',
         paddingHorizontal: 12,
-        paddingVertical: 6,
+        paddingVertical: 8,
         borderRadius: 999,
     },
     fullPhotoNameText: {
         color: '#fff',
         fontSize: 24,
         fontWeight: '700',
+        lineHeight: 30,
     },
     profileInfoCard: {
         borderRadius: 22,

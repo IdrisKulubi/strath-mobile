@@ -290,12 +290,7 @@ export default function MatchesScreen() {
             <View style={styles.header}>
                 <View style={styles.headerTop}>
                     <View style={styles.headerTitleRow}>
-                        <LinearGradient
-                            colors={['#ec4899', '#f43f5e']}
-                            style={styles.headerIcon}
-                        >
-                            <Heart size={18} color="#fff" weight="fill" />
-                        </LinearGradient>
+                        
                         <Text style={[styles.headerTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
                             Matches
                         </Text>

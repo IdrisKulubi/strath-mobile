@@ -182,6 +182,16 @@ export default function ExploreScreen() {
         loveLanguage: null,
         lookingFor: null,
         religion: null,
+        zodiacSign: null,
+        drinkingPreference: null,
+        workoutFrequency: null,
+        socialMediaUsage: null,
+        sleepingHabits: null,
+        height: null,
+        education: null,
+        smoking: null,
+        politics: null,
+        languages: null,
         lastActive: null,
       },
       explanation: {
@@ -211,7 +221,8 @@ export default function ExploreScreen() {
         <View style={styles.header}>
           <View style={styles.headerTitleRow}>
             
-            <Text style={[styles.headerTitle, { color: colors.primary }]}>Strathspace</Text>
+
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>Strathspace</Text>
           </View>
         </View>
 

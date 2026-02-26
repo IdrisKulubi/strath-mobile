@@ -98,7 +98,7 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
                 Your matches live here
             </Text>
             <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                The moment someone accepts your request — or you accept theirs — you'll see them right here.
+                The moment someone accepts your request — or you accept theirs — you&apos;ll see them right here.
             </Text>
 
             {onExplore && (

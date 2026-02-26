@@ -259,7 +259,7 @@ export default function WingmanTabScreen() {
       >
         {/* ── Header ── */}
         <View style={s.header}>
-          <Text style={[s.headerTitle, { color: colors.foreground }]}>Wingman 🪽</Text>
+          <Text style={[s.headerTitle, { color: colors.foreground }]}>Wingman </Text>
           <Text style={[s.headerSub, { color: colors.mutedForeground }]}>
             Let friends describe you. Get better matches.
           </Text>
