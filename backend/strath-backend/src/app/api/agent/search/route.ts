@@ -251,13 +251,15 @@ export async function POST(request: NextRequest) {
         const matchedIds = ranked.map(r => r.profile.userId);
         recordQuery(userId, query.trim(), matchedIds).catch(console.error);
         saveAgentMessage(userId, commentary).catch(console.error);
-        trackAgentSearchUsage(userId, "agent_search", {
+
+        step = "track_usage";
+        await trackAgentSearchUsage(userId, "agent_search", {
             queryLength: query.trim().length,
             resultsCount: matches.length,
             offset,
             limit,
             remainingAfter: Math.max(quota.remaining - 1, 0),
-        }).catch(console.error);
+        });
 
         const latency = Date.now() - startTime;
         const refinementHints = buildRefinementHints(query.trim(), intent.vibe);
@@ -278,6 +280,9 @@ export async function POST(request: NextRequest) {
                 nextOffset: offset + matches.length,
                 searchMethod: searchResults.searchMethod,
                 latencyMs: latency,
+                dailyLimit: quota.limit,
+                usedToday: quota.used + 1,
+                remainingToday: Math.max(quota.remaining - 1, 0),
             },
         });
     } catch (error) {

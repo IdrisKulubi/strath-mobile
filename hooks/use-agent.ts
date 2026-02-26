@@ -96,6 +96,9 @@ export interface AgentSearchResponse {
         nextOffset: number;
         searchMethod: string;
         latencyMs: number;
+        dailyLimit?: number;
+        usedToday?: number;
+        remainingToday?: number;
     };
 }
 
