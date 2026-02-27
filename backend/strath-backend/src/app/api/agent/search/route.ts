@@ -10,6 +10,7 @@ import { rankCandidates } from "@/services/ranking-service";
 import { generateQuickExplanations, generateResultCommentary } from "@/services/explanation-service";
 import { getAgentContext, recordQuery, saveAgentMessage } from "@/services/agent-context";
 import { getAgentSearchQuota, trackAgentSearchUsage } from "@/lib/agent-search-limit";
+import { evaluateAgentQueryGuardrails } from "@/lib/agent-guardrails";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30; // Vercel timeout
@@ -102,6 +103,39 @@ export async function POST(request: NextRequest) {
                 "You've exhausted your Wingman searches for today. Come back tomorrow.",
                 429,
             );
+        }
+
+        step = "guardrails";
+        const guardrail = evaluateAgentQueryGuardrails(query);
+        if (!guardrail.allowed) {
+            const latency = Date.now() - startTime;
+            return successResponse({
+                commentary: guardrail.userMessage,
+                matches: [],
+                refinement_hints: [
+                    "someone funny and kind",
+                    "creative person who likes music",
+                    "ambitious and study-focused",
+                    "chill and into fitness",
+                ],
+                intent: {
+                    vibe: "any",
+                    confidence: 0,
+                    semanticQuery: guardrail.normalizedQuery,
+                    isRefinement: false,
+                },
+                meta: {
+                    totalFound: 0,
+                    hasMore: false,
+                    nextOffset: 0,
+                    searchMethod: "guardrail_block",
+                    latencyMs: latency,
+                    dailyLimit: quota.limit,
+                    usedToday: quota.used,
+                    remainingToday: quota.remaining,
+                    guardrailCode: guardrail.code,
+                },
+            });
         }
 
         // 1. Get wingman memory

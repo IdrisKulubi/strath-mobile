@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
+import { evaluateAgentQueryGuardrails } from "@/lib/agent-guardrails";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
@@ -104,8 +105,16 @@ export async function POST(request: NextRequest) {
             return errorResponse("Could not understand the audio. Please try again.", 400);
         }
 
+        const guardrail = evaluateAgentQueryGuardrails(transcript);
+        if (!guardrail.allowed) {
+            return errorResponse(
+                guardrail.userMessage || "I can’t process that right now.",
+                400,
+            );
+        }
+
         return successResponse({
-            transcript,
+            transcript: guardrail.normalizedQuery,
             confidence: data?.candidates?.[0]?.avgLogprobs ? 
                 Math.min(1, Math.max(0, 1 + (data.candidates[0].avgLogprobs / 5))) : null,
         });
