@@ -14,6 +14,7 @@ import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import { WingmanSearchBar, WingmanResults, VoiceRecordingOverlay, WingmanMatchDetail, ConnectionSentPopup, DropNotification, WeeklyDrop, WeeklyDropStrip, SearchHistory } from '@/components/wingman';
+import { isDailyLimitError } from '@/components/wingman/wingman-error-utils';
 import { useAgent, AgentMatch } from '@/hooks/use-agent';
 import { useVoiceInput } from '@/hooks/use-voice-input';
 import { useWeeklyDrop, WeeklyDropMatch } from '@/hooks/use-weekly-drop';
@@ -86,6 +87,7 @@ export default function ExploreScreen() {
   // Show search errors to user
   useEffect(() => {
     if (agent.searchError) {
+      if (isDailyLimitError(agent.searchError)) return;
       Alert.alert('Search Error', agent.searchError);
     }
   }, [agent.searchError]);

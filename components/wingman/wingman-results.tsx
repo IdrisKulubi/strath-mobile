@@ -25,6 +25,8 @@ import {
     Waveform,
 } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
+import { isDailyLimitError } from './wingman-error-utils';
+import { WingmanLimitReached } from './wingman-limit-reached';
 
 
 
@@ -183,7 +185,7 @@ function NoResults() {
                 No one matched exactly.
             </Text>
             <Text style={[styles.errorDetail, { color: colors.mutedForeground }]}>
-                Here's who came close.
+                Here&apos;s who came close.
             </Text>
         </Animated.View>
     );
@@ -253,6 +255,10 @@ export function WingmanResults({
 
     // Error
     if (searchError && matches.length === 0) {
+        if (isDailyLimitError(searchError)) {
+            return <WingmanLimitReached message={searchError} />;
+        }
+
         return (
             <SearchError
                 error={searchError}
