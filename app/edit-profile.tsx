@@ -68,6 +68,12 @@ import {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+const LEGACY_LOOKING_FOR_OPTIONS = [
+    { value: 'women', label: 'Women' },
+    { value: 'men', label: 'Men' },
+    { value: 'everyone', label: 'Everyone' },
+];
+
 // Styled Input Component
 const StyledInput = ({
     label,
@@ -277,7 +283,7 @@ export default function EditProfileScreen() {
     const getOptionsForField = (field: string) => {
         switch (field) {
             case 'gender': return GENDER_OPTIONS;
-            case 'lookingFor': return LOOKING_FOR_OPTIONS;
+            case 'lookingFor': return [...LOOKING_FOR_OPTIONS, ...LEGACY_LOOKING_FOR_OPTIONS];
             case 'interestedIn': return INTERESTED_IN_OPTIONS;
             case 'zodiacSign': return ZODIAC_SIGNS;
             case 'personalityType': return PERSONALITY_TYPES;
@@ -316,6 +322,27 @@ export default function EditProfileScreen() {
             religion: 'Religion',
         };
         return labels[field] || field;
+    };
+
+    const getDisplayValue = (field: string, value: unknown) => {
+        if (!value) return 'Select';
+
+        const options = getOptionsForField(field);
+        if (!options.length) return String(value);
+
+        if (typeof options[0] === 'string') {
+            return String(value);
+        }
+
+        const matchedOption = (options as { value: string; label: string }[]).find(
+            (option) => option.value === value
+        );
+
+        return matchedOption?.label || String(value);
+    };
+
+    const getPromptLabel = (promptId: string) => {
+        return PROMPT_OPTIONS.find((prompt) => prompt.id === promptId)?.label || promptId;
     };
 
     const calculateCompletion = () => {
@@ -489,10 +516,7 @@ export default function EditProfileScreen() {
                                 <SelectorRow
                                     label="Gender"
                                     value={formData.gender}
-                                    displayValue={
-                                        GENDER_OPTIONS.find((o) => o.value === formData.gender)?.label ||
-                                        'Select'
-                                    }
+                                    displayValue={getDisplayValue('gender', formData.gender)}
                                     onPress={() => setActiveField('gender')}
                                     colors={colors}
                                     isDark={isDark}
@@ -511,10 +535,7 @@ export default function EditProfileScreen() {
                         <SelectorRow
                             label="Looking For"
                             value={formData.lookingFor}
-                            displayValue={
-                                LOOKING_FOR_OPTIONS.find((o) => o.value === formData.lookingFor)
-                                    ?.label || 'Select'
-                            }
+                            displayValue={getDisplayValue('lookingFor', formData.lookingFor)}
                             onPress={() => setActiveField('lookingFor')}
                             colors={colors}
                             isDark={isDark}
@@ -699,16 +720,22 @@ export default function EditProfileScreen() {
                         icon={<ChatCircle />}
                         delay={500}
                     >
-                        {PROMPT_OPTIONS.slice(0, 3).map((prompt, index) => {
-                            const currentPrompt = formData.prompts?.find(
-                                (p) => p.promptId === prompt.id
-                            );
+                        {(formData.prompts && formData.prompts.length > 0
+                            ? formData.prompts
+                            : PROMPT_OPTIONS.slice(0, 1).map((prompt) => ({
+                                  promptId: prompt.id,
+                                  response: '',
+                              }))
+                        ).map((currentPrompt, index) => {
                             return (
-                                <View key={prompt.id} style={styles.promptContainer}>
+                                <View
+                                    key={`${currentPrompt.promptId || 'prompt'}-${index}`}
+                                    style={styles.promptContainer}
+                                >
                                     <Text
                                         style={[styles.promptLabel, { color: colors.primary }]}
                                     >
-                                        {prompt.label}
+                                        {getPromptLabel(currentPrompt.promptId)}
                                     </Text>
                                     <TextInput
                                         style={[
@@ -726,20 +753,17 @@ export default function EditProfileScreen() {
                                         value={currentPrompt?.response || ''}
                                         onChangeText={(text) => {
                                             const newPrompts = [...(formData.prompts || [])];
-                                            const existingIndex = newPrompts.findIndex(
-                                                (p) => p.promptId === prompt.id
-                                            );
-                                            if (existingIndex >= 0) {
-                                                newPrompts[existingIndex] = {
-                                                    promptId: prompt.id,
-                                                    response: text,
+                                            if (!newPrompts[index]) {
+                                                newPrompts[index] = {
+                                                    promptId: currentPrompt.promptId,
+                                                    response: '',
                                                 };
-                                            } else {
-                                                newPrompts.push({
-                                                    promptId: prompt.id,
-                                                    response: text,
-                                                });
                                             }
+                                            newPrompts[index] = {
+                                                ...newPrompts[index],
+                                                promptId: newPrompts[index].promptId || currentPrompt.promptId,
+                                                response: text,
+                                            };
                                             handleChange('prompts', newPrompts);
                                         }}
                                         placeholder="Write your response..."
