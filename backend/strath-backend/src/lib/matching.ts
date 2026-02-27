@@ -1,29 +1,7 @@
 import { db } from "./db";
 import { profiles, swipes, blocks } from "../db/schema";
-import { eq, and, notInArray, inArray, or } from "drizzle-orm";
-
-/**
- * Simple gender-based matching:
- * - Male users see females
- * - Female users see males  
- * - Users interested in both see both
- */
-function getTargetGenders(userGender: string | null, interestedIn: string[] | null): string[] {
-    // If user explicitly set their preferences (interested in both, etc.), use those
-    if (interestedIn && interestedIn.length > 0) {
-        return interestedIn;
-    }
-    
-    // Default: show opposite gender
-    if (userGender === 'male') {
-        return ['female'];
-    } else if (userGender === 'female') {
-        return ['male'];
-    }
-    
-    // If user hasn't set gender, show everyone
-    return ['male', 'female', 'other'];
-}
+import { eq, and, notInArray, inArray } from "drizzle-orm";
+import { getTargetGenders, isReciprocalGenderMatch } from "./gender-preferences";
 
 export async function getRecommendations(userId: string, limit: number = 20, offset: number = 0, vibe: string = 'all') {
     // 1. Get current user profile
@@ -89,8 +67,18 @@ export async function getRecommendations(userId: string, limit: number = 20, off
     
     console.log('[Matching] Candidates found:', candidates.length);
 
-    // 4. Simple scoring - just basics
-    const scoredCandidates = candidates.map((candidate) => {
+    // 4. Reciprocal preference filter + simple scoring
+    const reciprocalCandidates = candidates.filter((candidate) =>
+        isReciprocalGenderMatch(
+            currentUserProfile.gender,
+            candidate.gender,
+            candidate.interestedIn as string[] | null,
+        ),
+    );
+
+    console.log('[Matching] Reciprocal candidates:', reciprocalCandidates.length);
+
+    const scoredCandidates = reciprocalCandidates.map((candidate) => {
         let score = 0;
 
         // Same university bonus

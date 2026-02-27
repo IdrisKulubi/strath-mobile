@@ -2,6 +2,7 @@ import { db } from "../lib/db";
 import { profiles, swipes, blocks, matches } from "../db/schema";
 import { eq, and, notInArray, inArray, sql, gte, lte, ilike, isNotNull, or } from "drizzle-orm";
 import type { ParsedIntent } from "./intent-parser";
+import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
 
 // ============================================
 // AGENT SEARCH SERVICE
@@ -128,7 +129,7 @@ async function vectorSearch(
         const embeddingStr = `[${intentEmbedding.join(",")}]`;
 
         // Build gender filter for the vector search
-        const targetGenders = getTargetGenders(userProfile);
+        const targetGenders = getTargetGendersFromProfile(userProfile);
         const genderFilter = targetGenders.length > 0
             ? sql`AND gender = ANY(ARRAY[${sql.raw(targetGenders.map(g => `'${g}'`).join(","))}]::text[])`
             : sql``;
@@ -146,6 +147,7 @@ async function vectorSearch(
                 bio,
                 age,
                 gender,
+                interested_in,
                 interests,
                 photos,
                 profile_photo,
@@ -178,11 +180,19 @@ async function vectorSearch(
             LIMIT ${limit}
         `);
 
-        return (results.rows || []).map((row: Record<string, unknown>) => ({
-            profile: rowToProfile(row),
-            vectorScore: Number(row.similarity) || 0,
-            filterMatch: false, // Will be updated in merge
-        }));
+        return (results.rows || [])
+            .map((row: Record<string, unknown>) => ({
+                profile: rowToProfile(row),
+                vectorScore: Number(row.similarity) || 0,
+                filterMatch: false,
+            }))
+            .filter((candidate) =>
+                isReciprocalGenderMatch(
+                    userProfile?.gender,
+                    candidate.profile.gender,
+                    candidate.profile.interestedIn as string[] | null,
+                ),
+            );
     } catch (error) {
         console.error("[AgentSearch] Vector search failed:", error);
         return [];
@@ -211,7 +221,7 @@ async function filterSearch(
         }
 
         // Gender targeting
-        const targetGenders = intent.filters.gender || getTargetGenders(userProfile);
+        const targetGenders = intent.filters.gender || getTargetGendersFromProfile(userProfile);
         if (targetGenders.length > 0) {
             conditions.push(inArray(profiles.gender, targetGenders));
         }
@@ -265,11 +275,19 @@ async function filterSearch(
             limit,
         });
 
-        return results.map(profile => ({
-            profile: profile as SearchCandidate["profile"],
-            vectorScore: 0, // Will be calculated in ranking
-            filterMatch: true,
-        }));
+        return results
+            .filter((profile) =>
+                isReciprocalGenderMatch(
+                    userProfile?.gender,
+                    profile.gender,
+                    profile.interestedIn as string[] | null,
+                ),
+            )
+            .map(profile => ({
+                profile: profile as SearchCandidate["profile"],
+                vectorScore: 0,
+                filterMatch: true,
+            }));
     } catch (error) {
         console.error("[AgentSearch] Filter search failed:", error);
         return [];
@@ -323,16 +341,13 @@ function mergeResults(
 /**
  * Get target genders based on user's preferences.
  */
-function getTargetGenders(userProfile?: typeof profiles.$inferSelect | null): string[] {
+function getTargetGendersFromProfile(userProfile?: typeof profiles.$inferSelect | null): string[] {
     if (!userProfile) return [];
-    
-    const interestedIn = userProfile.interestedIn as string[] | null;
-    if (interestedIn && interestedIn.length > 0) return interestedIn;
-    
-    // Default: show opposite gender
-    if (userProfile.gender === "male") return ["female"];
-    if (userProfile.gender === "female") return ["male"];
-    return [];
+
+    return getTargetGenders(
+        userProfile.gender,
+        userProfile.interestedIn as string[] | null,
+    );
 }
 
 /**
@@ -347,6 +362,7 @@ function rowToProfile(row: Record<string, unknown>): SearchCandidate["profile"] 
         bio: row.bio as string | null,
         age: row.age as number | null,
         gender: row.gender as string | null,
+        interestedIn: row.interested_in as string[] | null,
         interests: row.interests as string[] | null,
         photos: row.photos as string[] | null,
         profilePhoto: row.profile_photo as string | null,
