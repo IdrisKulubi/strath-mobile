@@ -15,7 +15,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#0f0d23] text-white overflow-x-hidden">
       {/* Valentine's Banner - Remove after Feb 14 */}
-      <ValentineBanner />
 
       {/* Floating 3D hearts background */}
       <FloatingHearts />

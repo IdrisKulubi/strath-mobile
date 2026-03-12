@@ -1,4 +1,3 @@
-export { ValentineBanner } from "./valentine-banner";
 export { FloatingHearts } from "./floating-hearts";
 export { HeroSection } from "./hero-section";
 export { FeaturesSection } from "./features-section";
