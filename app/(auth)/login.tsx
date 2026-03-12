@@ -287,62 +287,35 @@ export default function LoginScreen() {
                         style={styles.headlineSection}
                     >
                         <Text style={styles.headline}>
-                            <Text style={styles.headlineLight}>Join Your </Text>
-                            <Text style={styles.headlineBold}>Campus{`\n`}Community</Text>
+                            <Text style={styles.headlineLight}>Real connections,{`\n`}</Text>
+                            <Text style={styles.headlineBold}>no swiping.</Text>
                         </Text>
-                        <Text style={styles.subheadline}>Connect, Discover, Vibe – simplified.</Text>
+                        <Text style={styles.subheadline}>Find people at your university who actually get you.</Text>
                     </Animated.View>
 
-                    {/* Feature Cards */}
-                    <View style={styles.featuresSection}>
-                        {/* Connect Card */}
-                        <Animated.View entering={FadeInUp.delay(300).springify()}>
-                            <Pressable style={styles.connectCard}>
-                                <View style={styles.iconCircle}>
-                                    <Ionicons name="people-outline" size={22} color="#E91E8C" />
-                                </View>
-                                <View style={styles.cardTextWrap}>
-                                    <Text style={[styles.cardTitle, { color: '#E91E8C' }]}>Connect</Text>
-                                    <Text style={styles.cardSubtitle}>Meet classmates with ease</Text>
-                                </View>
-                                <View style={[styles.arrowCircle, { backgroundColor: '#E91E8C' }]}>
-                                    <Ionicons name="chevron-forward" size={18} color="#FFF" />
-                                </View>
-                            </Pressable>
-                        </Animated.View>
-
-                        {/* Discover Card */}
-                        <Animated.View entering={FadeInUp.delay(400).springify()}>
-                            <Pressable style={styles.discoverCard}>
-                                <View style={styles.iconCircle}>
-                                    <Ionicons name="sparkles-outline" size={22} color="#FF9800" />
-                                </View>
-                                <View style={styles.cardTextWrap}>
-                                    <Text style={[styles.cardTitle, { color: '#FF9800' }]}>Discover</Text>
-                                    <Text style={styles.cardSubtitle}>Uncover shared interests</Text>
-                                </View>
-                                <View style={[styles.arrowCircle, { backgroundColor: '#FF9800' }]}>
-                                    <Ionicons name="chevron-forward" size={18} color="#FFF" />
-                                </View>
-                            </Pressable>
-                        </Animated.View>
-
-                        {/* Vibe Card */}
-                        <Animated.View entering={FadeInUp.delay(500).springify()}>
-                            <Pressable style={styles.vibeCard}>
-                                <View style={styles.iconCircle}>
-                                    <Ionicons name="pulse-outline" size={22} color="#00BFA5" />
-                                </View>
-                                <View style={styles.cardTextWrap}>
-                                    <Text style={[styles.cardTitle, { color: '#00BFA5' }]}>Vibe</Text>
-                                    <Text style={styles.cardSubtitle}>Find people on your level</Text>
-                                </View>
-                                <View style={[styles.arrowCircle, { backgroundColor: '#00BFA5' }]}>
-                                    <Ionicons name="chevron-forward" size={18} color="#FFF" />
-                                </View>
-                            </Pressable>
-                        </Animated.View>
-                    </View>
+                    {/* Feature Pills */}
+                    <Animated.View entering={FadeInUp.delay(300).springify()} style={styles.featuresSection}>
+                        <View style={styles.pillRow}>
+                            <View style={[styles.pill, { backgroundColor: '#FFCFE3' }]}>
+                                <Ionicons name="heart-outline" size={15} color="#E91E8C" />
+                                <Text style={[styles.pillText, { color: '#C2185B' }]}>Meaningful matches</Text>
+                            </View>
+                            <View style={[styles.pill, { backgroundColor: '#FFE3B6' }]}>
+                                <Ionicons name="school-outline" size={15} color="#E65100" />
+                                <Text style={[styles.pillText, { color: '#E65100' }]}>Campus verified</Text>
+                            </View>
+                        </View>
+                        <View style={styles.pillRow}>
+                            <View style={[styles.pill, { backgroundColor: '#C7F4EC' }]}>
+                                <Ionicons name="gift-outline" size={15} color="#00796B" />
+                                <Text style={[styles.pillText, { color: '#00796B' }]}>Weekly drops</Text>
+                            </View>
+                            <View style={[styles.pill, { backgroundColor: '#E8E0FF' }]}>
+                                <Ionicons name="chatbubble-ellipses-outline" size={15} color="#5E35B1" />
+                                <Text style={[styles.pillText, { color: '#5E35B1' }]}>Real conversations</Text>
+                            </View>
+                        </View>
+                    </Animated.View>
 
                     {/* Bottom Auth Section */}
                     <Animated.View
@@ -387,29 +360,27 @@ export default function LoginScreen() {
                             )}
                         </Button>
 
-                        {/* Demo Login Section - For Apple Review */}
-                        <View style={styles.demoContainer}>
-                            <Text style={styles.demoLabel}>For Apple Reviewers:</Text>
-                            <Pressable
-                                onPress={handleDemoLogin}
-                                disabled={loading || demoLoading || appleLoading}
-                                style={({ pressed }) => [
-                                    styles.demoButton,
-                                    pressed && styles.demoButtonPressed,
-                                    (loading || demoLoading || appleLoading) && styles.demoButtonDisabled,
-                                ]}
-                            >
-                                {demoLoading ? (
-                                    <ActivityIndicator color="#6B7280" size="small" />
-                                ) : (
-                                    <Text style={styles.demoButtonText}>Demo Login</Text>
-                                )}
-                            </Pressable>
-                            <Text style={styles.demoCredentials}>
-                                Email: demo@strathspace.com{"\n"}
-                                Password: AppleReview2026!
-                            </Text>
-                        </View>
+                        {/* Demo Login Button - same style as Google for Apple Reviewers */}
+                        <Button
+                            onPress={handleDemoLogin}
+                            disabled={loading || demoLoading || appleLoading}
+                            variant="secondary"
+                            size="lg"
+                            className="w-full h-14 rounded-full bg-white border-0 shadow-lg shadow-black/20"
+                            style={{ marginTop: 12 }}
+                        >
+                            {demoLoading ? (
+                                <ActivityIndicator color="#4F46E5" size="small" />
+                            ) : (
+                                <>
+                                    <Ionicons name="flask-outline" size={22} color="#4F46E5" />
+                                    <Text className="text-lg font-semibold text-gray-900">Demo Login</Text>
+                                </>
+                            )}
+                        </Button>
+                        <Text style={styles.demoCredentials}>
+                            demo@strathspace.com  ·  AppleReview2026!
+                        </Text>
 
                         {/* Terms Text - Below Button */}
                         <Text style={styles.termsText}>
@@ -507,72 +478,33 @@ const styles = StyleSheet.create({
         marginTop: 10,
     },
 
-    // Features
+    // Feature Pills
     featuresSection: {
         marginBottom: 20,
+        gap: 10,
     },
-
-    // Card styles - with equal vertical padding for perfect centering
-    connectCard: {
+    pillRow: {
         flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFCFE3',
-        borderRadius: 40,
-        paddingVertical: 14,
-        paddingHorizontal: 14,
-        marginBottom: 12,
+        gap: 10,
     },
-    discoverCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFE3B6',
-        borderRadius: 40,
-        paddingVertical: 14,
-        paddingHorizontal: 14,
-        marginBottom: 12,
-    },
-    vibeCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#C7F4EC',
-        borderRadius: 40,
-        paddingVertical: 14,
-        paddingHorizontal: 14,
-        marginBottom: 12,
-    },
-
-    iconCircle: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: '#FFFFFF',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    cardTextWrap: {
+    pill: {
         flex: 1,
-        marginLeft: 12,
-    },
-    cardTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    cardSubtitle: {
-        fontSize: 12,
-        color: '#555',
-        marginTop: 2,
-    },
-    arrowCircle: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
+        flexDirection: 'row',
         alignItems: 'center',
+        gap: 6,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 20,
+    },
+    pillText: {
+        fontSize: 13,
+        fontWeight: '600',
+        flexShrink: 1,
     },
 
     // Auth Section
     authSection: {
-        marginTop: 50,
+        marginTop: 32,
         alignItems: 'center',
         paddingBottom: Platform.OS === 'ios' ? 20 : 30,
         width: '100%',
@@ -612,49 +544,12 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
 
-    // Demo Login Section
-    demoContainer: {
-        marginTop: 24,
-        paddingTop: 20,
-        borderTopWidth: 1,
-        borderTopColor: '#E5E5E5',
-        alignItems: 'center',
-        width: '100%',
-    },
-    demoLabel: {
-        fontSize: 13,
-        color: '#6B7280',
-        marginBottom: 12,
-        fontWeight: '600',
-    },
-    demoButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 14,
-        paddingHorizontal: 32,
-        borderRadius: 25,
-        backgroundColor: '#F0F0F0',
-        borderWidth: 1,
-        borderColor: '#E0E0E0',
-    },
-    demoButtonPressed: {
-        opacity: 0.7,
-        backgroundColor: '#E5E5E5',
-    },
-    demoButtonDisabled: {
-        opacity: 0.5,
-    },
-    demoButtonText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: '#6B7280',
-    },
+    // Demo Login
     demoCredentials: {
         fontSize: 12,
         color: '#9CA3AF',
         textAlign: 'center',
-        marginTop: 12,
+        marginTop: 8,
         lineHeight: 18,
         fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     },

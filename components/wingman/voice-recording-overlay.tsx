@@ -1,15 +1,13 @@
 import React, { useEffect } from 'react';
-import {
-    View,
-    StyleSheet,
-    Pressable,
-} from 'react-native';
+import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
     withRepeat,
     withTiming,
     withSpring,
+    withSequence,
+    withDelay,
     Easing,
     FadeIn,
     FadeOut,
@@ -17,24 +15,84 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
-import { Stop, X } from 'phosphor-react-native';
+import { Microphone, X } from 'phosphor-react-native';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface VoiceRecordingOverlayProps {
     isRecording: boolean;
     isTranscribing: boolean;
-    /** Live partial transcript while user is speaking */
     liveTranscript?: string;
-    /** Volume level from speech recognition (-2 to 10) */
     volume?: number;
     onStop: () => void;
     onCancel: () => void;
 }
 
+// ── Waveform bar ─────────────────────────────────────────────────────────────
+const BAR_COUNT = 7;
+const BAR_MAX_H = 46;
+// Staggered idle peak heights (0–1) — no Math.random, fully deterministic
+const IDLE_PEAKS = [0.18, 0.38, 0.26, 0.54, 0.30, 0.44, 0.22];
+
+function WaveBar({
+    index, volume, isRecording, color,
+}: { index: number; volume: number; isRecording: boolean; color: string }) {
+    const h = useSharedValue(0.06);
+
+    useEffect(() => {
+        if (isRecording) {
+            h.value = withDelay(
+                index * 55,
+                withRepeat(
+                    withSequence(
+                        withTiming(IDLE_PEAKS[index], {
+                            duration: 370 + index * 40,
+                            easing: Easing.out(Easing.sin),
+                        }),
+                        withTiming(0.06, {
+                            duration: 370 + index * 40,
+                            easing: Easing.in(Easing.sin),
+                        }),
+                    ),
+                    -1,
+                    false,
+                ),
+            );
+        } else {
+            cancelAnimation(h);
+            h.value = withTiming(0.06, { duration: 250 });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isRecording]);
+
+    useEffect(() => {
+        if (isRecording && volume > 1) {
+            const target = Math.min(0.22 + (volume / 10) * (0.52 + index * 0.04), 1);
+            h.value = withSpring(target, { damping: 5, stiffness: 270 });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [volume, isRecording]);
+
+    const style = useAnimatedStyle(() => ({
+        height: h.value * BAR_MAX_H,
+        opacity: 0.45 + h.value * 0.55,
+    }));
+
+    return (
+        <Animated.View
+            style={[
+                styles.bar,
+                { backgroundColor: color },
+                style,
+            ]}
+        />
+    );
+}
+
+// ── Overlay ──────────────────────────────────────────────────────────────────
 export function VoiceRecordingOverlay({
     isRecording,
     isTranscribing,
-    liveTranscript = '',
     volume = 0,
     onStop,
     onCancel,
@@ -42,151 +100,179 @@ export function VoiceRecordingOverlay({
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
 
-    // Pulsing ring animation — scales react to volume
-    const ring1Scale = useSharedValue(1);
-    const ring2Scale = useSharedValue(1);
-    const ring3Scale = useSharedValue(1);
-    const ring1Opacity = useSharedValue(0.4);
-    const ring2Opacity = useSharedValue(0.3);
-    const ring3Opacity = useSharedValue(0.2);
-
-    // Volume-driven ring scaling
-    useEffect(() => {
-        if (isRecording && volume > 0) {
-            // Map volume (0–10) to extra scale (0–0.6)
-            const extra = Math.min(volume / 10, 1) * 0.6;
-            ring1Scale.value = withSpring(1.4 + extra, { damping: 12, stiffness: 180 });
-            ring2Scale.value = withSpring(1.7 + extra, { damping: 12, stiffness: 160 });
-            ring3Scale.value = withSpring(2.0 + extra, { damping: 12, stiffness: 140 });
-        }
-    }, [volume, isRecording, ring1Scale, ring2Scale, ring3Scale]);
+    // Mic orb: gentle breathing scale
+    const orbScale = useSharedValue(1);
+    // Glow halo: expands with volume
+    const glowScale = useSharedValue(1);
+    // Recording dot: blinks
+    const dotOpacity = useSharedValue(1);
 
     useEffect(() => {
         if (isRecording) {
-            // Base pulsing animation
-            ring1Scale.value = withRepeat(
-                withTiming(1.8, { duration: 1500, easing: Easing.out(Easing.ease) }),
-                -1, true
+            orbScale.value = withRepeat(
+                withSequence(
+                    withTiming(1.09, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
+                    withTiming(1.0, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
+                ),
+                -1,
+                false,
             );
-            ring1Opacity.value = withRepeat(
-                withTiming(0, { duration: 1500 }),
-                -1, true
+            dotOpacity.value = withRepeat(
+                withSequence(
+                    withTiming(0.2, { duration: 650 }),
+                    withTiming(1, { duration: 650 }),
+                ),
+                -1,
+                false,
             );
-
-            setTimeout(() => {
-                ring2Scale.value = withRepeat(
-                    withTiming(2.2, { duration: 1800, easing: Easing.out(Easing.ease) }),
-                    -1, true
-                );
-                ring2Opacity.value = withRepeat(
-                    withTiming(0, { duration: 1800 }),
-                    -1, true
-                );
-            }, 300);
-
-            setTimeout(() => {
-                ring3Scale.value = withRepeat(
-                    withTiming(2.6, { duration: 2100, easing: Easing.out(Easing.ease) }),
-                    -1, true
-                );
-                ring3Opacity.value = withRepeat(
-                    withTiming(0, { duration: 2100 }),
-                    -1, true
-                );
-            }, 600);
         } else {
-            cancelAnimation(ring1Scale);
-            cancelAnimation(ring2Scale);
-            cancelAnimation(ring3Scale);
-            ring1Scale.value = withSpring(1);
-            ring2Scale.value = withSpring(1);
-            ring3Scale.value = withSpring(1);
-            ring1Opacity.value = withTiming(0);
-            ring2Opacity.value = withTiming(0);
-            ring3Opacity.value = withTiming(0);
+            cancelAnimation(orbScale);
+            cancelAnimation(dotOpacity);
+            orbScale.value = withTiming(1, { duration: 300 });
+            dotOpacity.value = withTiming(0, { duration: 200 });
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isRecording]);
 
-    const ring1Style = useAnimatedStyle(() => ({
-        transform: [{ scale: ring1Scale.value }],
-        opacity: ring1Opacity.value,
+    useEffect(() => {
+        if (isRecording) {
+            const target = 1 + (Math.min(volume, 10) / 10) * 0.65;
+            glowScale.value = withSpring(target, { damping: 6, stiffness: 160 });
+        } else {
+            glowScale.value = withTiming(1, { duration: 350 });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [volume, isRecording]);
+
+    const orbStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: orbScale.value }],
     }));
 
-    const ring2Style = useAnimatedStyle(() => ({
-        transform: [{ scale: ring2Scale.value }],
-        opacity: ring2Opacity.value,
+    const glowStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: glowScale.value }],
+        opacity: 0.18 + (glowScale.value - 1) * 0.5,
     }));
 
-    const ring3Style = useAnimatedStyle(() => ({
-        transform: [{ scale: ring3Scale.value }],
-        opacity: ring3Opacity.value,
+    const glowMidStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: glowScale.value * 0.78 }],
+        opacity: 0.22 + (glowScale.value - 1) * 0.45,
+    }));
+
+    const dotStyle = useAnimatedStyle(() => ({
+        opacity: dotOpacity.value,
     }));
 
     if (!isRecording && !isTranscribing) return null;
 
+    const primary = colors.primary as string;
+    // Derived transparent variants for glow layers
+    const glow1 = `${primary}18`; // ~10%
+    const glow2 = `${primary}28`; // ~16%
+    const gradEnd = `${primary}BB`; // ~73%
+
     return (
         <Animated.View
-            entering={FadeIn.duration(200)}
-            exiting={FadeOut.duration(200)}
+            entering={FadeIn.duration(280)}
+            exiting={FadeOut.duration(280)}
             style={styles.overlay}
         >
             <BlurView
-                intensity={isDark ? 40 : 60}
+                intensity={isDark ? 58 : 72}
                 tint={isDark ? 'dark' : 'light'}
                 style={StyleSheet.absoluteFill}
             />
 
-            <View style={styles.content}>
-                {/* Animated rings */}
-                <View style={styles.ringContainer}>
-                    <Animated.View style={[styles.ring, { borderColor: colors.primary }, ring3Style]} />
-                    <Animated.View style={[styles.ring, { borderColor: colors.primary }, ring2Style]} />
-                    <Animated.View style={[styles.ring, { borderColor: colors.primary }, ring1Style]} />
+            {/* ── Recording state ── */}
+            {isRecording && (
+                <Animated.View
+                    entering={FadeIn.duration(220)}
+                    exiting={FadeOut.duration(180)}
+                    style={styles.content}
+                >
+                    {/* Status pill */}
+                    <View style={[
+                        styles.statusPill,
+                        {
+                            backgroundColor: isDark
+                                ? 'rgba(255,255,255,0.07)'
+                                : 'rgba(0,0,0,0.05)',
+                        },
+                    ]}>
+                        <Animated.View style={[styles.recDot, dotStyle]} />
+                        <Text style={[styles.statusLabel, { color: colors.foreground }]}>
+                            Listening
+                        </Text>
+                    </View>
 
-                    {/* Center mic button */}
+                    {/* Orb + glow */}
+                    <View style={styles.orbWrapper}>
+                        <Animated.View style={[styles.glowOuter, { backgroundColor: glow1 }, glowStyle]} />
+                        <Animated.View style={[styles.glowMid, { backgroundColor: glow2 }, glowMidStyle]} />
+                        <Animated.View style={orbStyle}>
+                            <LinearGradient
+                                colors={[primary, gradEnd]}
+                                start={{ x: 0.15, y: 0 }}
+                                end={{ x: 0.85, y: 1 }}
+                                style={styles.orb}
+                            >
+                                <Microphone size={38} color="#fff" weight="fill" />
+                            </LinearGradient>
+                        </Animated.View>
+                    </View>
+
+                    {/* Waveform bars */}
+                    <View style={styles.waveRow}>
+                        {Array.from({ length: BAR_COUNT }).map((_, i) => (
+                            <WaveBar
+                                key={i}
+                                index={i}
+                                volume={volume}
+                                isRecording={isRecording}
+                                color={primary}
+                            />
+                        ))}
+                    </View>
+
+                    {/* Prompt */}
+                    <Text style={[styles.prompt, { color: colors.mutedForeground }]}>
+                        Describe who you're looking for
+                    </Text>
+
+                    {/* Stop CTA */}
                     <Pressable
                         onPress={onStop}
-                        style={[styles.micButton, { backgroundColor: '#ef4444' }]}
+                        style={[styles.stopButton, { backgroundColor: colors.foreground }]}
                     >
-                        <Stop size={32} color="#fff" weight="fill" />
-                    </Pressable>
-                </View>
-
-                {/* Live transcript — shows what the user is saying in real-time */}
-                {liveTranscript.length > 0 && (
-                    <Animated.View entering={FadeIn.duration(150)} style={styles.liveTranscriptBox}>
-                        <Text style={[styles.liveTranscriptText, { color: colors.foreground }]}>
-                            &ldquo;{liveTranscript}&rdquo;
+                        <Text style={[styles.stopText, { color: colors.background }]}>
+                            Tap to finish
                         </Text>
-                    </Animated.View>
-                )}
+                    </Pressable>
 
-                {/* Status text */}
-                <Text style={[styles.statusText, { color: colors.foreground }]}>
-                    {liveTranscript.length > 0
-                        ? "Listening..."
-                        : "Speak now — describe who you're looking for"
-                    }
-                </Text>
+                    {/* Cancel */}
+                    <Pressable onPress={onCancel} style={styles.cancelRow} hitSlop={12}>
+                        <X size={13} color={colors.mutedForeground} />
+                        <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>
+                            Cancel
+                        </Text>
+                    </Pressable>
+                </Animated.View>
+            )}
 
-                <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-                    Stops automatically when you pause speaking
-                </Text>
-
-                {/* Cancel button */}
-                <Pressable
-                    onPress={onCancel}
-                    style={[styles.cancelButton, {
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
-                    }]}
+            {/* ── Transcribing state (keep existing feel, small polish) ── */}
+            {isTranscribing && (
+                <Animated.View
+                    entering={FadeIn.duration(200)}
+                    style={styles.content}
                 >
-                    <X size={18} color={colors.mutedForeground} />
-                    <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>
-                        Cancel
+                    <ActivityIndicator size="large" color={primary} />
+                    <Text style={[styles.transcribingTitle, { color: colors.foreground }]}>
+                        Processing your voice
                     </Text>
-                </Pressable>
-            </View>
+                    <Text style={[styles.prompt, { color: colors.mutedForeground }]}>
+                        Just a moment…
+                    </Text>
+                </Animated.View>
+            )}
         </Animated.View>
     );
 }
@@ -200,65 +286,106 @@ const styles = StyleSheet.create({
     },
     content: {
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: 24,
+        gap: 28,
+        paddingHorizontal: 32,
     },
-    ringContainer: {
+
+    // Status pill
+    statusPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+    },
+    recDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#ef4444',
+    },
+    statusLabel: {
+        fontSize: 15,
+        fontWeight: '600',
+        letterSpacing: 0.2,
+    },
+
+    // Orb + glow
+    orbWrapper: {
         width: 200,
         height: 200,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    ring: {
+    glowOuter: {
         position: 'absolute',
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        borderWidth: 2,
+        width: 192,
+        height: 192,
+        borderRadius: 96,
     },
-    micButton: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
+    glowMid: {
+        position: 'absolute',
+        width: 148,
+        height: 148,
+        borderRadius: 74,
+    },
+    orb: {
+        width: 92,
+        height: 92,
+        borderRadius: 46,
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 10,
     },
-    liveTranscriptBox: {
-        maxWidth: '85%',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 16,
-        backgroundColor: 'rgba(255,255,255,0.08)',
+
+    // Waveform
+    waveRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        height: BAR_MAX_H + 4,
+        gap: 7,
     },
-    liveTranscriptText: {
-        fontSize: 16,
-        fontWeight: '600',
-        textAlign: 'center',
-        fontStyle: 'italic',
+    bar: {
+        width: 5,
+        borderRadius: 3,
+        // height is driven by animation
     },
-    statusText: {
-        fontSize: 18,
-        fontWeight: '700',
-        textAlign: 'center',
-        paddingHorizontal: 32,
-    },
-    hint: {
-        fontSize: 13,
+
+    // Text
+    prompt: {
+        fontSize: 14,
         fontWeight: '500',
         textAlign: 'center',
+        letterSpacing: 0.1,
     },
-    cancelButton: {
+    transcribingTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        textAlign: 'center',
+    },
+
+    // Stop button
+    stopButton: {
+        paddingHorizontal: 44,
+        paddingVertical: 15,
+        borderRadius: 30,
+        marginTop: 4,
+    },
+    stopText: {
+        fontSize: 16,
+        fontWeight: '700',
+        letterSpacing: 0.2,
+    },
+
+    // Cancel
+    cancelRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: 20,
-        marginTop: 8,
+        gap: 5,
+        marginTop: -8,
     },
     cancelText: {
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 13,
+        fontWeight: '500',
     },
 });
