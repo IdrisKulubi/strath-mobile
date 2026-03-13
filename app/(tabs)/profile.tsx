@@ -80,8 +80,7 @@ export default function ProfileScreen() {
 
     if (isLoading) {
         return (
-            <View style={[styles.container, { backgroundColor: colors.background }]}>
-                {/* Gradient Background */}
+            <View style={[styles.container, { backgroundColor: isDark ? '#1a0d2e' : colors.background }]}>
                 {isDark && (
                     <LinearGradient
                         colors={['#2d1b47', '#1a0d2e', '#0f0a1a']}
@@ -103,8 +102,7 @@ export default function ProfileScreen() {
     }
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Animated Gradient Background for Dark Mode */}
+        <View style={[styles.container, { backgroundColor: isDark ? '#1a0d2e' : colors.background }]}>
             {isDark && (
                 <LinearGradient
                     colors={['#2d1b47', '#1a0d2e', '#0f0a1a']}

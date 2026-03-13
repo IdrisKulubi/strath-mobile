@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
+import { ScreenGradient } from '@/components/ui/screen-gradient';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -200,11 +200,11 @@ export default function WingmanTabScreen() {
 
   if (status.isLoading) {
     return (
-      <SafeAreaView style={[s.root, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenGradient edges={['top']} style={s.root}>
         <View style={s.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      </SafeAreaView>
+      </ScreenGradient>
     );
   }
 
@@ -216,7 +216,7 @@ export default function WingmanTabScreen() {
     const isNotEnabled = /not enabled|migrations|501|failed to load wingman status/i.test(message);
 
     return (
-      <SafeAreaView style={[s.root, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenGradient edges={['top']} style={s.root}>
         <View style={s.centered}>
           <Text style={[s.errorTitle, { color: colors.foreground }]}>Couldn&apos;t load Wingman</Text>
           <Text style={[s.errorSub, { color: colors.mutedForeground }]}>
@@ -244,14 +244,14 @@ export default function WingmanTabScreen() {
             </TouchableOpacity>
           )}
         </View>
-      </SafeAreaView>
+      </ScreenGradient>
     );
   }
 
   // ─── Main render ──────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={[s.root, { backgroundColor: colors.background }]} edges={['top']}>
+    <ScreenGradient edges={['top']} style={s.root}>
       <ScrollView
         contentContainerStyle={s.scroll}
         showsVerticalScrollIndicator={false}
@@ -566,7 +566,7 @@ export default function WingmanTabScreen() {
         onClose={handleCloseDetail}
         onConnect={handleConnectFromDetail}
       />
-    </SafeAreaView>
+    </ScreenGradient>
   );
 }
 

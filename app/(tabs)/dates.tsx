@@ -7,7 +7,7 @@ import {
     StatusBar,
     Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScreenGradient } from '@/components/ui/screen-gradient';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -180,7 +180,7 @@ export default function DatesScreen() {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <ScreenGradient edges={['top']} style={styles.container}>
             <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
             {/* Header */}
@@ -278,7 +278,7 @@ export default function DatesScreen() {
                     />
                 );
             })()}
-        </SafeAreaView>
+        </ScreenGradient>
     );
 }
 

@@ -49,6 +49,25 @@ export interface OnboardingData {
     spotify: string;
     snapchat: string;
 
+    // Personality step (new — compatibility vectors)
+    personalityAnswers: {
+        sleepSchedule?: string;       // 'night_owl' | 'early_bird' | 'depends'
+        socialVibe?: string;          // 'party' | 'chill_in' | 'both'
+        driveStyle?: string;          // 'career_focused' | 'spontaneous' | 'balanced'
+        musicGenres?: string[];       // multi-select
+        convoStyle?: string;          // 'deep_talks' | 'light_banter' | 'both'
+        socialBattery?: string;       // 'introvert' | 'ambivert' | 'extrovert'
+        idealDateVibe?: string;       // 'coffee' | 'walk' | 'dinner' | 'casual_hangout'
+    };
+
+    // Lifestyle step (new — compatibility vectors)
+    lifestyleAnswers: {
+        relationshipGoal?: string;    // 'casual' | 'serious' | 'open'
+        outingFrequency?: string;     // 'rarely' | '1_2_week' | '3_plus_week'
+        drinks?: string;              // 'yes' | 'no' | 'sometimes'
+        smokes?: string;              // 'yes' | 'no' | 'sometimes'
+    };
+
     // Privacy Settings (defaults, not collected in onboarding)
     readReceiptsEnabled: boolean;
     showActiveStatus: boolean;

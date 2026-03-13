@@ -6,8 +6,8 @@ import {
     RefreshControl,
     StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/use-theme';
+import { ScreenGradient } from '@/components/ui/screen-gradient';
 import { useProfile } from '@/hooks/use-profile';
 import { useDailyMatches, useSkipMatch, useMarkRequestSent, DailyMatch } from '@/hooks/use-daily-matches';
 import { HomeHeader } from '@/components/home/home-header';
@@ -70,7 +70,7 @@ export default function HomeScreen() {
     const visibleMatches = matches ?? [];
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <ScreenGradient edges={['top']} style={styles.container}>
             <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
             <ScrollView
@@ -110,7 +110,7 @@ export default function HomeScreen() {
                     onSuccess={handleRequestSuccess}
                 />
             )}
-        </SafeAreaView>
+        </ScreenGradient>
     );
 }
 

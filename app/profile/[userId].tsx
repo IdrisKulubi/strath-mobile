@@ -160,7 +160,7 @@ export default function ProfileViewScreen() {
             {/* Sticky CTA */}
             <ProfileViewCta
                 onAskForDate={handleAskForDate}
-                requestSent={requestSent}
+                requestSent={requestSent || (profile?.requestSent ?? false)}
             />
 
             {/* Date request sheet */}

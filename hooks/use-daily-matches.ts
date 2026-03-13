@@ -1,4 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getAuthToken } from '@/lib/auth-helpers';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export interface DailyMatch {
     userId: string;
@@ -85,14 +88,15 @@ export function useDailyMatches() {
     return useQuery({
         queryKey: ['matches', 'daily'],
         queryFn: async (): Promise<DailyMatch[]> => {
-            // TODO: replace with real API call
-            // const token = await getAuthToken();
-            // const res = await fetch(`${API_URL}/api/matches/daily`, {
-            //   headers: { Authorization: `Bearer ${token}` },
-            // });
-            // return res.json();
-            await new Promise((r) => setTimeout(r, 600));
-            return MOCK_DAILY_MATCHES;
+            const token = await getAuthToken();
+            if (!token) return [];
+            const res = await fetch(`${API_URL}/api/matches/daily`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`Failed to fetch daily matches (${res.status})`);
+            const json = await res.json();
+            const matches = json?.data?.matches ?? [];
+            return matches;
         },
         staleTime: 5 * 60 * 1000, // 5 minutes — matches are daily, no need to refetch often
     });

@@ -10,14 +10,16 @@ import {
     VibeCheckGame,
     BubblePicker,
     QuickFire,
+    PersonalityStep,
+    LifestyleStep,
     OpeningLine,
     LaunchCelebration,
 } from '../../components/onboarding';
 import { useImageUpload } from '@/hooks/use-image-upload';
 import { getAuthToken, clearSession, getCurrentUser } from '@/lib/auth-helpers';
 
-// Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=OpeningLine, 8=Celebration
-type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+// Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=Personality, 8=Lifestyle, 9=OpeningLine, 10=Celebration
+type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 export default function OnboardingScreen() {
     const router = useRouter();
@@ -57,6 +59,10 @@ export default function OnboardingScreen() {
         politics: '',
         religion: '',
         languages: [],
+        // Personality step
+        personalityAnswers: {},
+        // Lifestyle step
+        lifestyleAnswers: {},
         // Opening Line
         prompts: [],
         aboutMe: '',
@@ -315,8 +321,8 @@ export default function OnboardingScreen() {
 
             console.log('[Onboarding] Profile saved successfully!');
 
-            // Navigate directly to active Find experience (Wingman Explore)
-            router.replace('/(tabs)/explore');
+            // Navigate to Home (daily matches)
+            router.replace('/(tabs)');
         } catch (error: any) {
             console.error('[Onboarding] Error:', error.message || error);
             setSubmitError(error.message || 'Failed to save your profile. Please try again.');
@@ -442,8 +448,34 @@ export default function OnboardingScreen() {
                     />
                 );
 
-            // Step 7: Opening Line (Prompts + Bio)
+            // Step 7: Personality questions
             case 7:
+                return (
+                    <PersonalityStep
+                        data={formData.personalityAnswers}
+                        onComplete={(answers) => {
+                            updateData({ personalityAnswers: answers });
+                            setStep(8);
+                        }}
+                        onBack={() => setStep(6)}
+                    />
+                );
+
+            // Step 8: Lifestyle questions
+            case 8:
+                return (
+                    <LifestyleStep
+                        data={formData.lifestyleAnswers}
+                        onComplete={(answers) => {
+                            updateData({ lifestyleAnswers: answers });
+                            setStep(9);
+                        }}
+                        onBack={() => setStep(7)}
+                    />
+                );
+
+            // Step 9: Opening Line (Prompts + Bio)
+            case 9:
                 return (
                     <OpeningLine
                         prompts={formData.prompts}
@@ -452,12 +484,12 @@ export default function OnboardingScreen() {
                             if (data.prompts) updateData({ prompts: data.prompts });
                             if (data.aboutMe) updateData({ aboutMe: data.aboutMe, bio: data.aboutMe });
                         }}
-                        onComplete={() => setStep(8)}
+                        onComplete={() => setStep(10)}
                     />
                 );
 
-            // Step 8: Launch Celebration
-            case 8:
+            // Step 10: Launch Celebration
+            case 10:
                 return (
                     <LaunchCelebration
                         userName={formData.firstName}

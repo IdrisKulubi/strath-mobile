@@ -191,6 +191,23 @@ export const profiles = pgTable("profiles", {
     languages: json("languages").$type<string[]>(), // ['English', 'Spanish', 'French', etc.]
     interestedIn: json("interested_in").$type<string[]>(), // ['male', 'female', 'other'] - genders the user wants to see
 
+    // Personality + Lifestyle (from onboarding — compatibility vectors)
+    personalityAnswers: jsonb("personality_answers").$type<{
+        sleepSchedule?: string;
+        socialVibe?: string;
+        driveStyle?: string;
+        musicGenres?: string[];
+        convoStyle?: string;
+        socialBattery?: string;
+        idealDateVibe?: string;
+    }>(),
+    lifestyleAnswers: jsonb("lifestyle_answers").$type<{
+        relationshipGoal?: string;
+        outingFrequency?: string;
+        drinks?: string;
+        smokes?: string;
+    }>(),
+
     // ============================================
     // AGENTIC AI FIELDS
     // ============================================

@@ -4,6 +4,9 @@ import { db } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { recordDecision } from "@/lib/services/vibe-check-service";
+import { sendPushNotification } from "@/lib/notifications";
+import { NOTIFICATION_TYPES } from "@/lib/notification-types";
+import { vibeChecks, user as userTable, matches } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +54,65 @@ export async function POST(
         }
 
         const result = await recordDecision(vibeCheckId, user.id, decision);
+
+        // Fire notifications once both people have decided
+        if (result.bothDecided) {
+            try {
+                // Fetch the vibe check to get user IDs
+                const check = await db.query.vibeChecks.findFirst({
+                    where: eq(vibeChecks.id, vibeCheckId),
+                });
+
+                if (check) {
+                    const [u1, u2] = await Promise.all([
+                        db.query.user.findFirst({ where: eq(userTable.id, check.user1Id!) }),
+                        db.query.user.findFirst({ where: eq(userTable.id, check.user2Id!) }),
+                    ]);
+
+                    const u1Name = u1?.name?.split(' ')[0] ?? 'Someone';
+                    const u2Name = u2?.name?.split(' ')[0] ?? 'Someone';
+
+                    if (result.bothAgreedToMeet) {
+                        // Both said yes → notify both, status moves to "being arranged"
+                        if (u1?.pushToken) {
+                            await sendPushNotification(u1.pushToken, {
+                                title: "The vibe is real! 🎉",
+                                body: `You and ${u2Name} both want to meet. StrathSpace will reach out soon.`,
+                                data: { type: NOTIFICATION_TYPES.DATE_SCHEDULED },
+                            });
+                        }
+                        if (u2?.pushToken) {
+                            await sendPushNotification(u2.pushToken, {
+                                title: "The vibe is real! 🎉",
+                                body: `You and ${u1Name} both want to meet. StrathSpace will reach out soon.`,
+                                data: { type: NOTIFICATION_TYPES.DATE_SCHEDULED },
+                            });
+                        }
+                    } else {
+                        // One or both said no — notify the one who said "meet" that it didn't work out
+                        const deciderIsUser1 = check.user1Id === user.id;
+                        const partnerDecision = deciderIsUser1 ? check.user2Decision : check.user1Decision;
+                        const partnerSaidMeet = partnerDecision === 'meet';
+
+                        // Only notify the partner who said "meet" if the current user said "pass"
+                        if (decision === 'pass' && partnerSaidMeet) {
+                            const partnerUser = deciderIsUser1 ? u2 : u1;
+                            const thisUserName = deciderIsUser1 ? u1Name : u2Name;
+                            if (partnerUser?.pushToken) {
+                                await sendPushNotification(partnerUser.pushToken, {
+                                    title: "No worries 👋",
+                                    body: `${thisUserName} decided to pass this time.`,
+                                    data: { type: NOTIFICATION_TYPES.DATE_CANCELLED },
+                                });
+                            }
+                        }
+                    }
+                }
+            } catch (notifErr) {
+                // Non-fatal — log but don't fail the response
+                console.warn("[VibeCheck] Failed to send decision notifications:", notifErr);
+            }
+        }
 
         return successResponse({
             decision,

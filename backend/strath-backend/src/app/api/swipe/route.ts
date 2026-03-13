@@ -8,6 +8,7 @@ import { eq, and, or } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 import { sendPushNotification } from "@/lib/notifications";
+import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 import { redis } from "@/lib/redis";
 import { ensureMissionForMatch } from "@/lib/services/mission-service";
 
@@ -123,6 +124,24 @@ export async function POST(req: NextRequest) {
 
                 console.log(`[SWIPE] User ${session.user.id} liked ${targetUserId}. Other user's swipe:`, otherSwipe ? 'EXISTS (liked)' : 'NOT FOUND or PASS');
 
+                if (!otherSwipe) {
+                    // No mutual like yet — send a "date invite received" notification to the target
+                    const senderUser = await db.query.user.findFirst({ where: eq(user.id, session.user.id) });
+                    const targetUser = await db.query.user.findFirst({ where: eq(user.id, targetUserId) });
+                    const senderFirstName = senderUser?.name?.split(' ')[0] ?? 'Someone';
+
+                    if (targetUser?.pushToken) {
+                        await sendPushNotification(targetUser.pushToken, {
+                            title: "New date invite 💜",
+                            body: `${senderFirstName} wants to go on a date with you!`,
+                            data: {
+                                type: NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED,
+                                userId: session.user.id,
+                            },
+                        });
+                    }
+                }
+
                 if (otherSwipe) {
                     isMatch = true;
                     // Create match
@@ -159,42 +178,32 @@ export async function POST(req: NextRequest) {
                             where: eq(user.id, targetUserId),
                         });
 
-                        // Notify user 2 (target)
+                        // Notify both users of the mutual match (date invite accepted)
+                        const user1FirstName = user1?.name?.split(' ')[0] ?? 'Someone';
+                        const user2FirstName = user2?.name?.split(' ')[0] ?? 'Someone';
+
                         if (user2?.pushToken) {
-                            const body = missionTitle
-                                ? `New Match! ${missionEmoji} First mission: ${missionTitle} 🎯`
-                                : "New Match! 🎉";
-                            await sendPushNotification(
-                                user2.pushToken,
-                                body,
-                                {
-                                    type: 'match',
+                            await sendPushNotification(user2.pushToken, {
+                                title: "It's a Date Match! 💜",
+                                body: `You and ${user1FirstName} both accepted! Time for a 3-min call.`,
+                                data: {
+                                    type: NOTIFICATION_TYPES.MUTUAL_MATCH,
                                     matchId: newMatch.id,
-                                    partnerId: session.user.id,
-                                    route: `/chat/${newMatch.id}`,
-                                    missionTitle,
-                                    missionEmoji,
-                                }
-                            );
+                                    userId: session.user.id,
+                                },
+                            });
                         }
 
-                        // Notify user 1 (current) - optional, usually UI handles this immediately
                         if (user1?.pushToken) {
-                            const body = missionTitle
-                                ? `It's a Match! ${missionEmoji} Your first mission: ${missionTitle} 🎯`
-                                : "It's a Match! 🎉";
-                            await sendPushNotification(
-                                user1.pushToken,
-                                body,
-                                {
-                                    type: 'match',
+                            await sendPushNotification(user1.pushToken, {
+                                title: "It's a Date Match! 💜",
+                                body: `You and ${user2FirstName} both accepted! Time for a 3-min call.`,
+                                data: {
+                                    type: NOTIFICATION_TYPES.MUTUAL_MATCH,
                                     matchId: newMatch.id,
-                                    partnerId: targetUserId,
-                                    route: `/chat/${newMatch.id}`,
-                                    missionTitle,
-                                    missionEmoji,
-                                }
-                            );
+                                    userId: targetUserId,
+                                },
+                            });
                         }
 
                         // Log Pulse Event for Match

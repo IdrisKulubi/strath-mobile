@@ -5,5 +5,7 @@ export { PhotoMoment } from './PhotoMoment';
 export { VibeCheckGame } from './VibeCheckGame';
 export { BubblePicker } from './BubblePicker';
 export { QuickFire } from './QuickFire';
+export { PersonalityStep } from './PersonalityStep';
+export { LifestyleStep } from './LifestyleStep';
 export { OpeningLine } from './OpeningLine';
 export { LaunchCelebration } from './LaunchCelebration';
