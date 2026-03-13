@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ValentineBanner,
   FloatingHearts,
   HeroSection,
   FeaturesSection,

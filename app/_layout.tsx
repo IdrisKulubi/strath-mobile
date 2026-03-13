@@ -52,6 +52,7 @@ function RootLayoutNav() {
         <Stack.Screen name="hype-request" />
         <Stack.Screen name="legal" />
         <Stack.Screen name="ui-preview" />
+        <Stack.Screen name="profile/[userId]" />
       </Stack>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
     </NavThemeProvider>
