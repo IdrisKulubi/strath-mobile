@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     View,
     StyleSheet,
@@ -29,6 +29,8 @@ import { ConfirmedMatchCard } from '@/components/dates/confirmed-match-card';
 import { HistoryCard } from '@/components/dates/history-card';
 import { EmptyDates } from '@/components/dates/empty-dates';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DateMatchModal } from '@/components/date-match/date-match-modal';
+import { useProfile } from '@/hooks/use-profile';
 
 type Section = 'incoming' | 'sent' | 'confirmed' | 'history';
 
@@ -58,11 +60,29 @@ export default function DatesScreen() {
     const indicatorX = useSharedValue(0);
     const segmentWidth = useRef(0);
 
+    const { data: myProfile } = useProfile();
     const { data: incoming, isLoading: loadingIncoming, refetch: refetchIncoming } = useIncomingDateRequests();
     const { data: sent, isLoading: loadingSent, refetch: refetchSent } = useSentDateRequests();
     const { data: confirmed, isLoading: loadingConfirmed, refetch: refetchConfirmed } = useConfirmedMatches();
     const { data: history, isLoading: loadingHistory, refetch: refetchHistory } = useDateHistory();
     const { mutate: respond, isPending: isResponding } = useRespondToDateRequest();
+
+    // Match modal — fires once when a new confirmed match is detected
+    const [matchModalVisible, setMatchModalVisible] = useState(false);
+    const seenMatchIds = useRef<Set<string>>(new Set());
+
+    useEffect(() => {
+        if (!confirmed || confirmed.length === 0) return;
+        // Find the first unseen call_pending match to celebrate
+        const newMatch = confirmed.find(
+            (m) => m.arrangementStatus === 'call_pending' && !seenMatchIds.current.has(m.id)
+        );
+        if (newMatch) {
+            seenMatchIds.current.add(newMatch.id);
+            // Small delay so the tab content renders first
+            setTimeout(() => setMatchModalVisible(true), 400);
+        }
+    }, [confirmed]);
 
     const handleSectionChange = useCallback((section: Section, idx: number) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -239,6 +259,25 @@ export default function DatesScreen() {
             >
                 {renderContent()}
             </ScrollView>
+
+            {/* Match celebration modal */}
+            {(() => {
+                const celebMatch = confirmed?.find(
+                    (m) => m.arrangementStatus === 'call_pending' && seenMatchIds.current.has(m.id)
+                );
+                return (
+                    <DateMatchModal
+                        visible={matchModalVisible}
+                        matchId={celebMatch?.id}
+                        callMatchId={celebMatch?.callMatchId}
+                        theirFirstName={celebMatch?.withUser.firstName ?? ''}
+                        theirPhoto={celebMatch?.withUser.profilePhoto}
+                        myPhoto={myProfile?.profilePhoto ?? myProfile?.photos?.[0]}
+                        compatibilityScore={celebMatch?.withUser.compatibilityScore}
+                        onClose={() => setMatchModalVisible(false)}
+                    />
+                );
+            })()}
         </SafeAreaView>
     );
 }

@@ -48,10 +48,10 @@ export function HypeSection({ userId }: HypeSectionProps) {
             {/* Section header */}
             <View style={styles.headerRow}>
                 <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-                    🔥 Friends say…
+                    🪽 Wingman says…
                 </Text>
                 <Text style={[styles.count, { color: colors.mutedForeground }]}>
-                    {vouches.length} {vouches.length === 1 ? "vouch" : "vouches"}
+                    {vouches.length} {vouches.length === 1 ? "review" : "reviews"}
                 </Text>
             </View>
 

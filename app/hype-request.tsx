@@ -25,7 +25,7 @@ export default function HypeRequestScreen() {
                     </Text>
                 </TouchableOpacity>
 
-                <Text style={[styles.headerTitle, { color: colors.foreground }]}>Hype Me</Text>
+                <Text style={[styles.headerTitle, { color: colors.foreground }]}>Wingman Reviews</Text>
 
                 <TouchableOpacity onPress={() => router.back()} style={styles.doneButton}>
                     <Text style={[styles.headerButtonText, { color: colors.primary, fontWeight: "600" }]}

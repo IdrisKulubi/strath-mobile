@@ -135,7 +135,7 @@ export default function WingmanTabScreen() {
     if (!activeLink?.url) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await Share.share({
-      message: `Be my Wingman on StrathSpace 🪽\n\nTakes 20s — answer a few prompts about me:\n${activeLink.url}`,
+      message: `Be my Wingman on StrathSpace 🪽\n\nTakes 30s — answer 3 quick questions about me:\n• Describe me in 3 words\n• What makes me attractive?\n• Best date idea for me?\n\n${activeLink.url}`,
       url: activeLink.url,
     });
   }, [activeLink?.url]);
@@ -281,7 +281,7 @@ export default function WingmanTabScreen() {
             </View>
             <Text style={[s.cardTitle, { color: colors.foreground }]}>Start a Wingman round</Text>
             <Text style={[s.cardSub, { color: colors.mutedForeground }]}>
-              Share a link with 3 friends. They describe you in 20s each. We compile it into AI-powered matches.
+              Share a link with 3 friends. They answer 3 quick questions about you. We use their answers to find you better matches.
             </Text>
             <TouchableOpacity
               onPress={handleStart}

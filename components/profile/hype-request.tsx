@@ -1,4 +1,4 @@
-﻿/**
+/**
  * HypeRequest - "Get Hyped Up!" screen section
  */
 import React, { useCallback } from "react";
@@ -47,7 +47,9 @@ export function HypeRequest() {
 
     const handleShareLink = useCallback(async (url: string) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        await Share.share({ message: `Vouch for me on StrathSpace! ${url}` });
+        await Share.share({
+            message: `Be my Wingman on StrathSpace 🪽\n\nTakes 30s — answer 3 quick questions about me:\n• Describe me in 3 words\n• What makes me attractive?\n• Best date idea for me?\n\n${url}`,
+        });
     }, []);
 
     if (isLoading) {
@@ -71,9 +73,9 @@ export function HypeRequest() {
     const header = (
         <>
             <View style={styles.header}>
-                <Text style={[styles.title, { color: colors.foreground }]}>Get Hyped Up!</Text>
+                <Text style={[styles.title, { color: colors.foreground }]}>Get Wingman Reviews 🪽</Text>
                 <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                    Ask friends to vouch for you. They don&apos;t need the app.
+                    Ask 3 friends to describe you. Their answers help us find you better matches.
                 </Text>
             </View>
 
@@ -89,7 +91,7 @@ export function HypeRequest() {
                 {activeLink ? (
                     <>
                         <Text style={[styles.linkLabel, { color: colors.mutedForeground }]}>
-                            Your invite link ({(activeLink.maxUses ?? 5) - (activeLink.currentUses ?? 0)} uses left)
+                            Your Wingman link ({(activeLink.maxUses ?? 5) - (activeLink.currentUses ?? 0)} uses left)
                         </Text>
                         <Text
                             style={[styles.linkUrl, { color: colors.foreground }]}
@@ -107,13 +109,13 @@ export function HypeRequest() {
                 ) : (
                     <View style={styles.noLinkContent}>
                         <Text style={[styles.noLinkText, { color: colors.mutedForeground }]}>
-                            No active invite link yet.
+                            No Wingman link yet. Generate one and share it with 3 friends.
                         </Text>
                         <TouchableOpacity onPress={handleGenerateLink} disabled={isGenerating} activeOpacity={0.85} style={styles.generateBtn}>
                             {isGenerating ? (
                                 <ActivityIndicator size="small" color="#fff" />
                             ) : (
-                                <Text style={styles.generateBtnText}>Generate invite link</Text>
+                                <Text style={styles.generateBtnText}>Get my Wingman link</Text>
                             )}
                         </TouchableOpacity>
                     </View>
@@ -122,15 +124,15 @@ export function HypeRequest() {
 
             <View style={styles.vouchSectionHeader}>
                 <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-                    Your vouches ({vouches.length})
+                    Wingman reviews ({vouches.length})
                 </Text>
             </View>
 
             {vouches.length === 0 && (
                 <View style={styles.emptyState}>
-                    <Text style={styles.emptyEmoji}>💬</Text>
+                    <Text style={styles.emptyEmoji}>🪽</Text>
                     <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                        No vouches yet. Share your link and let the hype begin!
+                        No reviews yet. Share your Wingman link and get your friends talking!
                     </Text>
                 </View>
             )}

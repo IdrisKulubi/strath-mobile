@@ -98,6 +98,7 @@ export default function VibeCheckCallScreen() {
     const { data: matchesData } = useMatches();
     const currentMatch = matchesData?.matches?.find((m) => m.id === matchId);
     const partnerFirstName = currentMatch?.partner?.name?.split(" ")[0] ?? null;
+    const partnerPhoto = currentMatch?.partner?.image ?? null;
 
     const { endCall } = useVibeCheck(matchId ?? "", session?.id);
 
@@ -229,7 +230,8 @@ export default function VibeCheckCallScreen() {
                     vibeCheckId={session.id}
                     matchId={matchId ?? ""}
                     partnerFirstName={partnerFirstName}
-                    onClose={() => router.back()}
+                    partnerPhoto={partnerPhoto}
+                    onClose={() => router.push('/(tabs)/dates')}
                 />
             </SafeAreaView>
         );

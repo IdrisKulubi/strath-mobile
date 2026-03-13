@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
+import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
@@ -51,7 +52,9 @@ function formatDate(iso: string) {
 
 export function HistoryCard({ date, index }: HistoryCardProps) {
     const { colors, isDark } = useTheme();
+    const router = useRouter();
     const config = STATUS_CONFIG[date.status] ?? STATUS_CONFIG.expired;
+    const showFeedback = date.status === 'attended';
 
     return (
         <Animated.View
@@ -92,6 +95,22 @@ export function HistoryCard({ date, index }: HistoryCardProps) {
                     </Text>
                 </View>
             </View>
+
+            {showFeedback && (
+                <Pressable
+                    onPress={() =>
+                        router.push({
+                            pathname: '/feedback/[dateId]',
+                            params: { dateId: date.id, name: date.withUser.firstName },
+                        })
+                    }
+                    style={[styles.feedbackBtn, { borderTopColor: colors.border }]}
+                >
+                    <Text style={[styles.feedbackBtnText, { color: colors.primary }]}>
+                        Leave feedback →
+                    </Text>
+                </Pressable>
+            )}
         </Animated.View>
     );
 }
@@ -143,6 +162,16 @@ const styles = StyleSheet.create({
     },
     statusText: {
         fontSize: 12,
+        fontWeight: '600',
+    },
+    feedbackBtn: {
+        marginTop: 10,
+        paddingTop: 10,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        alignItems: 'flex-end',
+    },
+    feedbackBtnText: {
+        fontSize: 13,
         fontWeight: '600',
     },
 });
