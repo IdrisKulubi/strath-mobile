@@ -22,6 +22,20 @@
       "when": 1773430932091,
       "tag": "0002_good_hobgoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773430932092,
+      "tag": "0003_daily_match_skips",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773430932093,
+      "tag": "0004_date_flow_tables",
+      "breakpoints": true
     }
   ]
 }

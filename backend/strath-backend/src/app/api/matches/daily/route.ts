@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { profiles, swipes, blocks } from "@/db/schema";
-import { eq, and, notInArray, inArray } from "drizzle-orm";
+import { profiles, swipes, blocks, dailyMatchSkips } from "@/db/schema";
+import { eq, and, notInArray, inArray, gte, lt } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
@@ -71,11 +71,28 @@ export async function GET(req: NextRequest) {
             .from(blocks)
             .where(eq(blocks.blockedId, userId));
 
+        const startOfToday = new Date();
+        startOfToday.setUTCHours(0, 0, 0, 0);
+        const startOfTomorrow = new Date(startOfToday);
+        startOfTomorrow.setUTCDate(startOfTomorrow.getUTCDate() + 1);
+
+        const todaySkips = await db
+            .select({ id: dailyMatchSkips.skippedUserId })
+            .from(dailyMatchSkips)
+            .where(
+                and(
+                    eq(dailyMatchSkips.userId, userId),
+                    gte(dailyMatchSkips.skippedAt, startOfToday),
+                    lt(dailyMatchSkips.skippedAt, startOfTomorrow)
+                )
+            );
+
         const excludedIds = [
             userId,
             ...swipedIds.map((u) => u.id),
             ...blockedIds.map((u) => u.id),
             ...blockedByIds.map((u) => u.id),
+            ...todaySkips.map((s) => s.id),
         ];
 
         const candidateProfiles = await db.query.profiles.findMany({

@@ -1,4 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getAuthToken } from '@/lib/auth-helpers';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export type DateVibe = 'coffee' | 'walk' | 'dinner' | 'hangout';
 
@@ -186,12 +189,14 @@ export function useIncomingDateRequests() {
     return useQuery({
         queryKey: ['dateRequests', 'incoming'],
         queryFn: async (): Promise<DateRequest[]> => {
-            // TODO: replace with real API call
-            // const token = await getAuthToken();
-            // const res = await fetch(`${API_URL}/api/date-requests/incoming`, { headers: { Authorization: `Bearer ${token}` } });
-            // return res.json();
-            await new Promise((r) => setTimeout(r, 400));
-            return MOCK_INCOMING_REQUESTS;
+            const token = await getAuthToken();
+            if (!token) return [];
+            const res = await fetch(`${API_URL}/api/date-requests/incoming`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`Failed to fetch incoming requests (${res.status})`);
+            const json = await res.json();
+            return json?.data ?? [];
         },
         staleTime: 30_000,
     });
@@ -202,10 +207,14 @@ export function useSentDateRequests() {
     return useQuery({
         queryKey: ['dateRequests', 'sent'],
         queryFn: async (): Promise<SentRequest[]> => {
-            // TODO: replace with real API call
-            // const res = await fetch(`${API_URL}/api/date-requests/sent`, { headers: { Authorization: `Bearer ${token}` } });
-            await new Promise((r) => setTimeout(r, 400));
-            return MOCK_SENT_REQUESTS;
+            const token = await getAuthToken();
+            if (!token) return [];
+            const res = await fetch(`${API_URL}/api/date-requests/sent`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`Failed to fetch sent requests (${res.status})`);
+            const json = await res.json();
+            return json?.data ?? [];
         },
         staleTime: 30_000,
     });
@@ -216,9 +225,14 @@ export function useConfirmedMatches() {
     return useQuery({
         queryKey: ['dateMatches', 'confirmed'],
         queryFn: async (): Promise<ConfirmedMatch[]> => {
-            // TODO: replace with real API call
-            await new Promise((r) => setTimeout(r, 400));
-            return MOCK_CONFIRMED_MATCHES;
+            const token = await getAuthToken();
+            if (!token) return [];
+            const res = await fetch(`${API_URL}/api/date-matches/confirmed`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`Failed to fetch confirmed matches (${res.status})`);
+            const json = await res.json();
+            return json?.data ?? [];
         },
         staleTime: 30_000,
     });
@@ -229,9 +243,14 @@ export function useDateHistory() {
     return useQuery({
         queryKey: ['dates', 'history'],
         queryFn: async (): Promise<ScheduledDate[]> => {
-            // TODO: replace with real API call
-            await new Promise((r) => setTimeout(r, 400));
-            return MOCK_HISTORY;
+            const token = await getAuthToken();
+            if (!token) return [];
+            const res = await fetch(`${API_URL}/api/dates/history`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`Failed to fetch date history (${res.status})`);
+            const json = await res.json();
+            return json?.data ?? [];
         },
         staleTime: 60_000,
     });
@@ -252,12 +271,23 @@ export function useCreateDateRequest() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async (payload: { toUserId: string; vibe: DateVibe; message?: string }) => {
-            // TODO: replace with real API call
-            await new Promise((r) => setTimeout(r, 600));
-            return { id: `req-${Date.now()}`, ...payload, status: 'pending' };
+            const token = await getAuthToken();
+            if (!token) throw new Error('Not authenticated');
+            const res = await fetch(`${API_URL}/api/date-requests`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err?.error ?? `Failed to create date request (${res.status})`);
+            }
+            const json = await res.json();
+            return json?.data ?? { id: payload.toUserId, ...payload, status: 'pending' };
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['dateRequests'] });
+            queryClient.invalidateQueries({ queryKey: ['matches', 'daily'] });
         },
     });
 }
@@ -266,8 +296,17 @@ export function useRespondToDateRequest() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async (payload: { requestId: string; action: 'accept' | 'decline' }) => {
-            // TODO: replace with real API call
-            await new Promise((r) => setTimeout(r, 500));
+            const token = await getAuthToken();
+            if (!token) throw new Error('Not authenticated');
+            const res = await fetch(`${API_URL}/api/date-requests/${payload.requestId}/respond`, {
+                method: 'PATCH',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: payload.action }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err?.error ?? `Failed to respond (${res.status})`);
+            }
             return { success: true };
         },
         onSuccess: () => {

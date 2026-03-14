@@ -106,10 +106,13 @@ export function useSkipMatch() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async (userId: string) => {
-            // TODO: replace with real API call
-            // const token = await getAuthToken();
-            // await fetch(`${API_URL}/api/matches/daily/${userId}/skip`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-            await new Promise((r) => setTimeout(r, 200));
+            const token = await getAuthToken();
+            if (!token) throw new Error('Not authenticated');
+            const res = await fetch(`${API_URL}/api/matches/daily/${userId}/skip`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`Failed to skip match (${res.status})`);
             return { userId };
         },
         onSuccess: ({ userId }) => {

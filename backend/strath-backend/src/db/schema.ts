@@ -249,6 +249,111 @@ export const swipes = pgTable(
     })
 );
 
+// Daily match skips — soft skip for today only (user can see skipped person again tomorrow)
+export const dailyMatchSkips = pgTable(
+    "daily_match_skips",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        skippedUserId: text("skipped_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        skippedAt: timestamp("skipped_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdx: index("daily_skip_user_idx").on(table.userId),
+        userSkippedIdx: index("daily_skip_user_skipped_idx").on(table.userId, table.skippedUserId),
+        skippedAtIdx: index("daily_skip_at_idx").on(table.skippedAt),
+    })
+);
+
+// Date requests — invite someone on a date (vibe + message)
+export const dateRequests = pgTable(
+    "date_requests",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        fromUserId: text("from_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        toUserId: text("to_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        vibe: text("vibe")
+            .$type<"coffee" | "walk" | "dinner" | "hangout">()
+            .notNull(),
+        message: text("message"),
+        status: text("status")
+            .$type<"pending" | "accepted" | "declined" | "expired" | "cancelled">()
+            .default("pending")
+            .notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        fromIdx: index("date_request_from_idx").on(table.fromUserId),
+        toIdx: index("date_request_to_idx").on(table.toUserId),
+        statusIdx: index("date_request_status_idx").on(table.status),
+    })
+);
+
+// Date matches — created when a date request is accepted (both sides agreed)
+export const dateMatches = pgTable(
+    "date_matches",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        requestId: uuid("request_id")
+            .notNull()
+            .references(() => dateRequests.id, { onDelete: "cascade" }),
+        userAId: text("user_a_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        userBId: text("user_b_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        vibe: text("vibe")
+            .$type<"coffee" | "walk" | "dinner" | "hangout">()
+            .notNull(),
+        callCompleted: boolean("call_completed").default(false),
+        userAConfirmed: boolean("user_a_confirmed").default(false),
+        userBConfirmed: boolean("user_b_confirmed").default(false),
+        status: text("status")
+            .$type<"pending_setup" | "scheduled" | "attended" | "cancelled" | "no_show">()
+            .default("pending_setup")
+            .notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        requestIdx: index("date_match_request_idx").on(table.requestId),
+        usersIdx: index("date_match_users_idx").on(table.userAId, table.userBId),
+    })
+);
+
+// Date feedback — post-date rating and meet_again
+export const dateFeedback = pgTable(
+    "date_feedback",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        dateMatchId: uuid("date_match_id")
+            .notNull()
+            .references(() => dateMatches.id, { onDelete: "cascade" }),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        rating: integer("rating").notNull(),
+        meetAgain: text("meet_again")
+            .$type<"yes" | "maybe" | "no">()
+            .notNull(),
+        textFeedback: text("text_feedback"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        matchIdx: index("date_feedback_match_idx").on(table.dateMatchId),
+        userIdx: index("date_feedback_user_idx").on(table.userId),
+    })
+);
+
 // Matches
 export const matches = pgTable(
     "matches",

@@ -46,8 +46,8 @@ export const updateProfileSchema = z.object({
     religion: z.string().nullable().optional(),
     languages: z.array(z.string()).nullable().optional(),
     interestedIn: z.array(z.enum(["male", "female", "other"])).nullable().optional(),
-    personalityAnswers: z.record(z.unknown()).nullable().optional(),
-    lifestyleAnswers: z.record(z.unknown()).nullable().optional(),
+    personalityAnswers: z.record(z.string(), z.unknown()).nullable().optional(),
+    lifestyleAnswers: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 export const swipeSchema = z.object({
@@ -62,4 +62,21 @@ export const messageSchema = z.object({
 export const reportSchema = z.object({
     reportedUserId: z.string(),
     reason: z.string().min(1),
+});
+
+export const dateRequestCreateSchema = z.object({
+    toUserId: z.string(),
+    vibe: z.enum(["coffee", "walk", "dinner", "hangout"]),
+    message: z.string().max(150).optional(),
+});
+
+export const dateRequestRespondSchema = z.object({
+    action: z.enum(["accept", "decline"]),
+});
+
+export const dateFeedbackSchema = z.object({
+    dateId: z.string(),
+    rating: z.number().min(1).max(5),
+    meetAgain: z.enum(["yes", "maybe", "no"]),
+    textFeedback: z.string().max(500).optional(),
 });
