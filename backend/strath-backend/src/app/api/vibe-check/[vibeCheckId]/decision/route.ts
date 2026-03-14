@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { eq, or, and } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { recordDecision } from "@/lib/services/vibe-check-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
-import { vibeChecks, user as userTable, matches } from "@/db/schema";
+import { vibeChecks, user as userTable, dateMatches } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +73,23 @@ export async function POST(
                     const u2Name = u2?.name?.split(' ')[0] ?? 'Someone';
 
                     if (result.bothAgreedToMeet) {
+                        // Sync to date_match so Dates tab shows "being arranged"
+                        const userAId = check.user1Id!;
+                        const userBId = check.user2Id!;
+                        await db
+                            .update(dateMatches)
+                            .set({
+                                callCompleted: true,
+                                userAConfirmed: true,
+                                userBConfirmed: true,
+                            })
+                            .where(
+                                or(
+                                    and(eq(dateMatches.userAId, userAId), eq(dateMatches.userBId, userBId)),
+                                    and(eq(dateMatches.userAId, userBId), eq(dateMatches.userBId, userAId))
+                                )
+                            );
+
                         // Both said yes → notify both, status moves to "being arranged"
                         if (u1?.pushToken) {
                             await sendPushNotification(u1.pushToken, {

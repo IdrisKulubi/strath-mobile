@@ -361,7 +361,15 @@ export async function getAdminTimeSeries(days = 30) {
     }
 
     // Fill missing days with zeros for the last N days
-    const result: Array<{ date: string; [key: string]: number | string }> = [];
+    type TimeSeriesPoint = {
+        date: string;
+        date_request_sent: number;
+        date_request_accepted: number;
+        date_scheduled: number;
+        date_attended: number;
+        feedback_submitted: number;
+    };
+    const result: TimeSeriesPoint[] = [];
     for (let i = days - 1; i >= 0; i--) {
         const d = new Date();
         d.setUTCDate(d.getUTCDate() - i);
