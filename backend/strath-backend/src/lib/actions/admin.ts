@@ -238,7 +238,12 @@ export async function scheduleDate(formData: FormData) {
     if (!dm) throw new Error("Date match not found");
 
     await db.update(dateMatches)
-        .set({ status: "scheduled" })
+        .set({
+            status: "scheduled",
+            venueName: venueName || null,
+            venueAddress: venueAddress || null,
+            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+        })
         .where(eq(dateMatches.id, matchId));
 
     logEvent(EVENT_TYPES.DATE_SCHEDULED, null, { matchId, venueName }).catch(() => {});

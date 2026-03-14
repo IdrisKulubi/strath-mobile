@@ -44,9 +44,9 @@ export async function GET(req: NextRequest) {
                     id: dm.id,
                     matchId: dm.id,
                     status: dm.status as "pending_setup" | "scheduled" | "attended" | "cancelled" | "expired",
-                    venueName: undefined,
-                    venueAddress: undefined,
-                    scheduledAt: undefined,
+                    venueName: dm.venueName ?? undefined,
+                    venueAddress: dm.venueAddress ?? undefined,
+                    scheduledAt: dm.scheduledAt?.toISOString() ?? undefined,
                     withUser: {
                         id: otherUserId,
                         firstName: otherProfile?.firstName ?? otherProfile?.user?.name?.split(" ")[0] ?? "Unknown",

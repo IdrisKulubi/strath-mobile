@@ -322,6 +322,9 @@ export const dateMatches = pgTable(
             .$type<"pending_setup" | "scheduled" | "attended" | "cancelled" | "no_show">()
             .default("pending_setup")
             .notNull(),
+        venueName: text("venue_name"),
+        venueAddress: text("venue_address"),
+        scheduledAt: timestamp("scheduled_at"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
     },
     (table) => ({

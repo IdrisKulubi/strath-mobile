@@ -63,6 +63,9 @@ export interface ConfirmedMatch {
      */
     arrangementStatus: 'call_pending' | 'call_done' | 'being_arranged' | 'date_confirmed';
     callMatchId?: string;
+    venueName?: string;
+    venueAddress?: string;
+    scheduledAt?: string;
     createdAt: string;
 }
 

@@ -127,6 +127,23 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                 </Text>
             </View>
 
+            {/* Scheduled date details — shown when date is confirmed */}
+            {match.arrangementStatus === 'date_confirmed' && (match.venueName || match.scheduledAt) && (
+                <View style={[styles.scheduledBlock, { backgroundColor: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)', borderColor: 'rgba(16,185,129,0.25)' }]}>
+                    <Ionicons name="calendar" size={16} color="#10b981" />
+                    {match.venueName && (
+                        <Text style={[styles.scheduledText, { color: colors.foreground }]}>
+                            {match.venueName}{match.venueAddress ? `, ${match.venueAddress}` : ''}
+                        </Text>
+                    )}
+                    {match.scheduledAt && (
+                        <Text style={[styles.scheduledTime, { color: colors.mutedForeground }]}>
+                            {new Date(match.scheduledAt).toLocaleDateString(undefined, { dateStyle: 'full', timeStyle: 'short' })}
+                        </Text>
+                    )}
+                </View>
+            )}
+
             {/* Call CTA — only shown if call not yet done */}
             {match.arrangementStatus === 'call_pending' && (
                 <View style={styles.callSection}>
@@ -135,7 +152,8 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                     </Text>
                     <Pressable
                         onPress={handleStartCall}
-                        style={[styles.callBtn, { backgroundColor: colors.primary }]}
+                        disabled={!match.callMatchId}
+                        style={[styles.callBtn, { backgroundColor: colors.primary, opacity: match.callMatchId ? 1 : 0.6 }]}
                     >
                         <Ionicons name="call-outline" size={16} color="#fff" />
                         <Text style={styles.callBtnText}>Start 3-min call</Text>
@@ -228,6 +246,22 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         paddingHorizontal: 12,
         paddingVertical: 10,
+    },
+    scheduledBlock: {
+        flexDirection: 'column',
+        gap: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+    },
+    scheduledText: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    scheduledTime: {
+        fontSize: 13,
+        fontWeight: '500',
     },
     statusText: {
         fontSize: 13,

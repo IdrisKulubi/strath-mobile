@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { dateMatches, profiles } from "@/db/schema";
-import { eq, or, desc } from "drizzle-orm";
+import { dateMatches, matches, profiles } from "@/db/schema";
+import { eq, or, and, desc } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
 
-        const matches = await db
+        const dateMatchRows = await db
             .select()
             .from(dateMatches)
             .where(
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
             .orderBy(desc(dateMatches.createdAt));
 
         const result = await Promise.all(
-            matches.map(async (dm) => {
+            dateMatchRows.map(async (dm) => {
                 const otherUserId = dm.userAId === session.user.id ? dm.userBId : dm.userAId;
                 const otherProfile = await db.query.profiles.findFirst({
                     where: eq(profiles.userId, otherUserId),
@@ -49,6 +49,15 @@ export async function GET(req: NextRequest) {
                 });
 
                 const { score, reasons } = await computeCompatibility(session.user.id, otherUserId);
+
+                // Look up the chat match (created when date request was accepted) for vibe-check
+                const chatMatch = await db.query.matches.findFirst({
+                    where: or(
+                        and(eq(matches.user1Id, dm.userAId), eq(matches.user2Id, dm.userBId)),
+                        and(eq(matches.user1Id, dm.userBId), eq(matches.user2Id, dm.userAId))
+                    ),
+                    columns: { id: true },
+                });
 
                 return {
                     id: dm.id,
@@ -63,7 +72,10 @@ export async function GET(req: NextRequest) {
                     },
                     vibe: dm.vibe,
                     arrangementStatus: toArrangementStatus(dm),
-                    callMatchId: undefined,
+                    callMatchId: chatMatch?.id ?? undefined,
+                    venueName: dm.venueName ?? undefined,
+                    venueAddress: dm.venueAddress ?? undefined,
+                    scheduledAt: dm.scheduledAt?.toISOString() ?? undefined,
                     createdAt: dm.createdAt.toISOString(),
                 };
             })
