@@ -87,7 +87,6 @@ export default function HomeScreen() {
                 }
             >
                 <HomeHeader firstName={profile?.firstName} matchCount={visibleMatches.length} />
-
                 {isLoading ? (
                     <MatchesSkeleton />
                 ) : visibleMatches.length === 0 ? (

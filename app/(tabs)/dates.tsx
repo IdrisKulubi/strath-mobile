@@ -288,17 +288,20 @@ const styles = StyleSheet.create({
     },
     header: {
         paddingHorizontal: 20,
-        paddingTop: 8,
-        paddingBottom: 16,
-        gap: 2,
+        paddingTop: 20,
+        paddingBottom: 18,
     },
     headerTitle: {
         fontSize: 28,
         fontWeight: '800',
         letterSpacing: -0.5,
+        lineHeight: 34,
+        paddingTop: 2,
     },
     headerSub: {
-        fontSize: 14,
+        fontSize: 13,
+        marginTop: 4,
+        lineHeight: 18,
     },
     segmentWrap: {
         marginHorizontal: 16,

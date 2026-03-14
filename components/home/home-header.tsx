@@ -38,18 +38,20 @@ export function HomeHeader({ firstName, matchCount }: HomeHeaderProps) {
 const styles = StyleSheet.create({
     container: {
         paddingHorizontal: 20,
-        paddingTop: 8,
-        paddingBottom: 16,
+        paddingTop: 20,
+        paddingBottom: 18,
         gap: 4,
     },
     greeting: {
         fontSize: 26,
-        fontWeight: '700',
-        letterSpacing: -0.3,
+        fontWeight: '800',
+        letterSpacing: -0.5,
+        lineHeight: 32,
+        paddingTop: 2,
     },
     subtitle: {
-        fontSize: 15,
-        fontWeight: '400',
-        lineHeight: 22,
+        fontSize: 13,
+        marginTop: 4,
+        lineHeight: 18,
     },
 });
