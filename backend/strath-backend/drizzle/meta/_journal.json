@@ -36,6 +36,13 @@
       "when": 1773430932093,
       "tag": "0004_date_flow_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1773430932094,
+      "tag": "0005_analytics_events",
+      "breakpoints": true
     }
   ]
 }

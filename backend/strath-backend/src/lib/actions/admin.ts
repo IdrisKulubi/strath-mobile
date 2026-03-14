@@ -8,8 +8,10 @@ import {
     dateRequests,
     dateMatches,
     dateFeedback,
+    analyticsEvents,
 } from "@/db/schema";
-import { eq, desc, count, and, or, gte, lt } from "drizzle-orm";
+import { eq, desc, count, and, or, gte, lt, sql } from "drizzle-orm";
+import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 import { revalidatePath } from "next/cache";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
@@ -239,6 +241,8 @@ export async function scheduleDate(formData: FormData) {
         .set({ status: "scheduled" })
         .where(eq(dateMatches.id, matchId));
 
+    logEvent(EVENT_TYPES.DATE_SCHEDULED, null, { matchId, venueName }).catch(() => {});
+
     const [userA, userB] = await Promise.all([
         db.query.user.findFirst({ where: eq(user.id, dm.userAId) }),
         db.query.user.findFirst({ where: eq(user.id, dm.userBId) }),
@@ -287,6 +291,7 @@ export async function updateDateMatchStatus(matchId: string, status: string) {
         .where(eq(dateMatches.id, matchId));
 
     if (status === "attended") {
+        logEvent(EVENT_TYPES.DATE_ATTENDED, null, { matchId }).catch(() => {});
         const dm = await db.query.dateMatches.findFirst({ where: eq(dateMatches.id, matchId) });
         if (dm) {
             const [userA, userB] = await Promise.all([
@@ -320,6 +325,54 @@ export async function updateDateMatchStatus(matchId: string, status: string) {
     revalidatePath("/admin/scheduled-dates");
     revalidatePath("/admin/pending-dates");
     revalidatePath("/admin");
+}
+
+export async function getAdminTimeSeries(days = 30) {
+    await requireAdmin();
+
+    const since = new Date();
+    since.setUTCDate(since.getUTCDate() - days);
+    since.setUTCHours(0, 0, 0, 0);
+
+    const rows = await db
+        .select({
+            day: sql<string>`date_trunc('day', ${analyticsEvents.createdAt})::date::text`,
+            eventType: analyticsEvents.eventType,
+            cnt: count(),
+        })
+        .from(analyticsEvents)
+        .where(gte(analyticsEvents.createdAt, since))
+        .groupBy(
+            sql`date_trunc('day', ${analyticsEvents.createdAt})::date::text`,
+            analyticsEvents.eventType
+        )
+        .orderBy(sql`date_trunc('day', ${analyticsEvents.createdAt})::date::text`);
+
+    // Build a map: day → { eventType: count }
+    const byDay: Record<string, Record<string, number>> = {};
+    for (const row of rows) {
+        if (!byDay[row.day]) byDay[row.day] = {};
+        byDay[row.day][row.eventType] = row.cnt;
+    }
+
+    // Fill missing days with zeros for the last N days
+    const result: Array<{ date: string; [key: string]: number | string }> = [];
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() - i);
+        d.setUTCHours(0, 0, 0, 0);
+        const key = d.toISOString().split("T")[0];
+        result.push({
+            date: key,
+            date_request_sent: byDay[key]?.date_request_sent ?? 0,
+            date_request_accepted: byDay[key]?.date_request_accepted ?? 0,
+            date_scheduled: byDay[key]?.date_scheduled ?? 0,
+            date_attended: byDay[key]?.date_attended ?? 0,
+            feedback_submitted: byDay[key]?.feedback_submitted ?? 0,
+        });
+    }
+
+    return result;
 }
 
 export async function setUserRole(userId: string, role: "user" | "admin") {

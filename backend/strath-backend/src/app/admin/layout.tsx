@@ -8,6 +8,7 @@ const NAV = [
     { href: "/admin/pending-dates", label: "Pending Setup", icon: "⏳" },
     { href: "/admin/scheduled-dates", label: "Scheduled Dates", icon: "📅" },
     { href: "/admin/users", label: "Users", icon: "👥" },
+    { href: "/admin/metrics", label: "Metrics", icon: "📈" },
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {

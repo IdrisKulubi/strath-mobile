@@ -7,6 +7,7 @@ import { dateRequestRespondSchema } from "@/lib/validation";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
+import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +117,12 @@ export async function PATCH(
                     data: { type: NOTIFICATION_TYPES.DATE_REQUEST_DECLINED, toUserId: request.toUserId, requestId },
                 });
             }
+        }
+
+        if (action === "accept") {
+            logEvent(EVENT_TYPES.DATE_REQUEST_ACCEPTED, session.user.id, { requestId, fromUserId: request.fromUserId }).catch(() => {});
+        } else {
+            logEvent(EVENT_TYPES.DATE_REQUEST_DECLINED, session.user.id, { requestId }).catch(() => {});
         }
 
         return successResponse({ success: true, status: newStatus });

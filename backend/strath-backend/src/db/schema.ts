@@ -1428,6 +1428,24 @@ export type BlindDate = typeof blindDates.$inferSelect;
 export type NewBlindDate = typeof blindDates.$inferInsert;
 export type AgentAnalyticsEvent = typeof agentAnalytics.$inferSelect;
 
+// Analytics events — lightweight funnel tracking
+export const analyticsEvents = pgTable(
+    "analytics_events",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        eventType: text("event_type").notNull(),
+        userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        typeIdx: index("analytics_event_type_idx").on(table.eventType),
+        userIdx: index("analytics_event_user_idx").on(table.userId),
+        createdAtIdx: index("analytics_event_created_at_idx").on(table.createdAt),
+        typeCreatedIdx: index("analytics_event_type_created_idx").on(table.eventType, table.createdAt),
+    })
+);
+
 // Mission type for templates
 export type MissionType = "coffee_meetup" | "song_exchange" | "photo_challenge" | "study_date" |
     "campus_walk" | "food_adventure" | "sunset_spot" | "quiz_challenge";

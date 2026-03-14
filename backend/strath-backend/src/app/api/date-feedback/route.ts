@@ -5,6 +5,7 @@ import { eq, and, or } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { dateFeedbackSchema } from "@/lib/validation";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
+import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,8 @@ export async function POST(req: NextRequest) {
             meetAgain,
             textFeedback: textFeedback ?? null,
         });
+
+        logEvent(EVENT_TYPES.FEEDBACK_SUBMITTED, session.user.id, { dateId, rating, meetAgain }).catch(() => {});
 
         return successResponse({ success: true });
     } catch (error) {

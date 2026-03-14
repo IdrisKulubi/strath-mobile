@@ -8,6 +8,7 @@ import { getSessionWithFallback } from "@/lib/auth-helpers";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
+import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -122,6 +123,8 @@ export async function POST(req: NextRequest) {
                 },
             });
         }
+
+        logEvent(EVENT_TYPES.DATE_REQUEST_SENT, session.user.id, { toUserId, vibe }).catch(() => {});
 
         const toUserEnriched = await enrichWithCompatibility(
             session.user.id,
