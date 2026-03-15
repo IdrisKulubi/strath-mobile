@@ -5,13 +5,32 @@ import { profiles } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 
+async function getSessionWithFallback(req: NextRequest) {
+    let session = await auth.api.getSession({ headers: req.headers });
+    if (!session) {
+        const authHeader = req.headers.get("authorization");
+        if (authHeader?.startsWith("Bearer ")) {
+            const token = authHeader.split(" ")[1];
+            const { session: sessionTable } = await import("@/db/schema");
+            const dbSession = await db.query.session.findFirst({
+                where: eq(sessionTable.token, token),
+                with: { user: true },
+            });
+            if (dbSession && dbSession.expiresAt > new Date()) {
+                session = { session: dbSession, user: dbSession.user } as any;
+            }
+        }
+    }
+    return session;
+}
+
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({ headers: req.headers });
-        if (!session) {
+        const session = await getSessionWithFallback(req);
+        if (!session?.user?.id) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
 
