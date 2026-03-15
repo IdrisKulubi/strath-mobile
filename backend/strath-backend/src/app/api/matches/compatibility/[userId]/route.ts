@@ -28,7 +28,7 @@ async function getSessionWithFallback(req: NextRequest) {
 }
 
 /**
- * GET /api/matches/[userId]/compatibility
+ * GET /api/matches/compatibility/[userId]
  *
  * Returns compatibility score and reasons between the current user and the
  * target user. Used on the profile view screen.
@@ -73,7 +73,7 @@ export async function GET(
             requestSent: !!sentLike,
         });
     } catch (error) {
-        console.error("[matches/[userId]/compatibility] Error:", error);
+        console.error("[matches/compatibility/[userId]] Error:", error);
         return errorResponse(error);
     }
 }

@@ -18,7 +18,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfileDetail | nul
         fetch(`${API_URL}/api/user/${userId}`, {
             headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`${API_URL}/api/matches/${userId}/compatibility`, {
+        fetch(`${API_URL}/api/matches/compatibility/${userId}`, {
             headers: { Authorization: `Bearer ${token}` },
         }),
         fetch(`${API_URL}/api/hype?userId=${userId}`, {
