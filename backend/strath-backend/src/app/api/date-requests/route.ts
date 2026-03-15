@@ -17,11 +17,12 @@ function buildUserInfo(
     userId: string
 ) {
     const u = profile?.user;
+    const profilePhoto = profile?.profilePhoto ?? u?.profilePhoto ?? u?.image;
     return {
         id: userId,
         firstName: profile?.firstName ?? u?.name?.split(" ")[0] ?? "Unknown",
         age: profile?.age ?? 0,
-        profilePhoto: profile?.profilePhoto ?? u?.profilePhoto ?? u?.image,
+        profilePhoto: profilePhoto ?? undefined,
     };
 }
 

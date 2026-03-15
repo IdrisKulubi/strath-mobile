@@ -11,7 +11,7 @@ import {
     CartesianGrid,
 } from "recharts";
 
-interface DataPoint {
+export interface DataPoint {
     date: string;
     date_request_sent: number;
     date_request_accepted: number;

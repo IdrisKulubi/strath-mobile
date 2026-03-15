@@ -1,5 +1,5 @@
 import { getAdminMetrics, getAdminTimeSeries } from "@/lib/actions/admin";
-import { MetricsChart } from "./_chart";
+import { MetricsChart, type DataPoint } from "./_chart";
 
 function FunnelStep({
     label,
@@ -88,7 +88,7 @@ export default async function AdminMetricsPage() {
             </div>
 
             {/* Time-series chart */}
-            <MetricsChart data={timeSeries} />
+            <MetricsChart data={timeSeries as DataPoint[]} />
 
             {/* Funnel */}
             <div className="bg-white/5 border border-white/10 rounded-xl p-6 space-y-6">
