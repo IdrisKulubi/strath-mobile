@@ -56,7 +56,7 @@ export default function Index() {
                 const isComplete = responseData.data?.isComplete || responseData.data?.profileCompleted;
 
                 if (isComplete) {
-                    router.replace('/(tabs)/explore');
+                    router.replace('/(tabs)');
                 } else {
                     router.replace('/onboarding' as any);
                 }

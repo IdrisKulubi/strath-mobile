@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { profiles, swipes } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { profiles, dateRequests } from "@/db/schema";
+import { eq, and, inArray } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 
@@ -56,13 +56,13 @@ export async function GET(
             return errorResponse(new Error("User not found"), 404);
         }
 
-        const [{ score, reasons }, sentLike] = await Promise.all([
+        const [{ score, reasons }, sentRequest] = await Promise.all([
             computeCompatibility(session.user.id, targetUserId),
-            db.query.swipes.findFirst({
+            db.query.dateRequests.findFirst({
                 where: and(
-                    eq(swipes.swiperId, session.user.id),
-                    eq(swipes.swipedId, targetUserId),
-                    eq(swipes.isLike, true)
+                    eq(dateRequests.fromUserId, session.user.id),
+                    eq(dateRequests.toUserId, targetUserId),
+                    inArray(dateRequests.status, ["pending", "accepted"])
                 ),
             }),
         ]);
@@ -70,7 +70,7 @@ export async function GET(
         return successResponse({
             score,
             reasons: reasons.length > 0 ? reasons : ["Potential match"],
-            requestSent: !!sentLike,
+            requestSent: !!sentRequest,
         });
     } catch (error) {
         console.error("[matches/compatibility/[userId]] Error:", error);

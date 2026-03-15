@@ -10,11 +10,11 @@ import { useNotificationCounts, formatBadgeCount } from '@/hooks/use-notificatio
 export default function TabLayout() {
   const { colors } = useTheme();
   const { unreadMessages, incomingRequests } = useNotificationCounts();
-  const matchesBadge = incomingRequests ?? 0;
+  const datesBadge = incomingRequests ?? 0;
 
   return (
     <Tabs
-      initialRouteName="explore"
+      initialRouteName="index"
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: '#8E8E93',
@@ -52,25 +52,18 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="drops"
+        name="dates"
         options={{
-          title: 'Drops',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "gift" : "gift-outline"} color={color} />,
+          title: 'Dates',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "calendar" : "calendar-outline"} color={color} />,
+          tabBarBadge: formatBadgeCount(datesBadge),
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="index"
         options={{
-          title: 'Find',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "sparkles" : "sparkles-outline"} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="matches"
-        options={{
-          title: 'Matches',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "chatbubbles" : "chatbubbles-outline"} color={color} />,
-          tabBarBadge: formatBadgeCount(matchesBadge),
+          title: 'Home',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "home" : "home-outline"} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -80,9 +73,17 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "people" : "people-outline"} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="date-kit"
+        options={{
+          title: 'Date Kit',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "reader" : "reader-outline"} color={color} />,
+        }}
+      />
       {/* Hidden routes — accessible but not shown in tab bar */}
-      <Tabs.Screen name="index" options={{ href: null }} />
-      <Tabs.Screen name="dates" options={{ href: null }} />
+      <Tabs.Screen name="explore" options={{ href: null }} />
+      <Tabs.Screen name="drops" options={{ href: null }} />
+      <Tabs.Screen name="matches" options={{ href: null }} />
       <Tabs.Screen name="study-date" options={{ href: null }} />
       <Tabs.Screen
         name="chats"

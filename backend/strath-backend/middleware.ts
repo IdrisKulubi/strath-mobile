@@ -11,7 +11,6 @@ export async function middleware(request: NextRequest) {
         "/api/hype/write",
         "/api/wingman/submit", // public token-gated endpoint (no user auth needed)
         "/api/test-db",
-        "/api/seed-demo",
         "/_next",
         "/favicon.ico",
         "/public",

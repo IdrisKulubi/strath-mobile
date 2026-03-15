@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { profiles, swipes, blocks, dailyMatchSkips } from "@/db/schema";
+import { profiles, swipes, blocks, dailyMatchSkips, dateRequests } from "@/db/schema";
 import { eq, and, notInArray, inArray, gte, lt } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
@@ -61,6 +61,25 @@ export async function GET(req: NextRequest) {
             .from(swipes)
             .where(eq(swipes.swiperId, userId));
 
+        const outgoingDateRequestRows = await db
+            .select({
+                toUserId: dateRequests.toUserId,
+                status: dateRequests.status,
+            })
+            .from(dateRequests)
+            .where(eq(dateRequests.fromUserId, userId));
+
+        const activeRequestStatuses = new Set(["pending", "accepted"]);
+        const activeDateRequestTargets = new Set(
+            outgoingDateRequestRows
+                .filter((request) => activeRequestStatuses.has(request.status))
+                .map((request) => request.toUserId)
+        );
+
+        const swipeExcludedIds = swipedIds
+            .map((u) => u.id)
+            .filter((id) => !activeDateRequestTargets.has(id));
+
         const blockedIds = await db
             .select({ id: blocks.blockedId })
             .from(blocks)
@@ -89,7 +108,7 @@ export async function GET(req: NextRequest) {
 
         const excludedIds = [
             userId,
-            ...swipedIds.map((u) => u.id),
+            ...swipeExcludedIds,
             ...blockedIds.map((u) => u.id),
             ...blockedByIds.map((u) => u.id),
             ...todaySkips.map((s) => s.id),
@@ -125,14 +144,6 @@ export async function GET(req: NextRequest) {
                 if (pa?.socialBattery) personalityTags.push(String(pa.socialBattery).replace(/_/g, " "));
                 if (pa?.convoStyle) personalityTags.push(String(pa.convoStyle).replace(/_/g, " "));
 
-                const mySentLike = await db.query.swipes.findFirst({
-                    where: and(
-                        eq(swipes.swiperId, userId),
-                        eq(swipes.swipedId, candidate.userId),
-                        eq(swipes.isLike, true)
-                    ),
-                });
-
                 return {
                     userId: candidate.userId,
                     firstName: candidate.firstName || u?.name?.split(" ")[0] || "Unknown",
@@ -145,7 +156,7 @@ export async function GET(req: NextRequest) {
                     personalityTags,
                     course: candidate.course,
                     university: candidate.university,
-                    requestSent: !!mySentLike,
+                    requestSent: activeDateRequestTargets.has(candidate.userId),
                 };
             })
         );

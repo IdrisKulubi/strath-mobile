@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { matches, messages, session as sessionTable, swipes } from "@/db/schema";
+import { matches, messages, session as sessionTable, dateRequests } from "@/db/schema";
 import { eq, and, or, ne, sql, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 
@@ -51,43 +51,11 @@ export async function GET(request: NextRequest) {
 
         const unopenedMatches = unopenedMatchesResult[0]?.count || 0;
 
-        // Incoming connection requests (likes you haven't responded to yet)
-        const incomingLikeRows = await db
-            .select({ swiperId: swipes.swiperId })
-            .from(swipes)
-            .where(and(eq(swipes.swipedId, userId), eq(swipes.isLike, true)));
-
-        const swiperIds = Array.from(new Set(incomingLikeRows.map((r) => r.swiperId)));
-        let incomingRequests = 0;
-
-        if (swiperIds.length > 0) {
-            // Exclude already-matched users
-            const existingMatches = await db
-                .select({ user1Id: matches.user1Id, user2Id: matches.user2Id })
-                .from(matches)
-                .where(
-                    or(
-                        and(eq(matches.user1Id, userId), inArray(matches.user2Id, swiperIds)),
-                        and(eq(matches.user2Id, userId), inArray(matches.user1Id, swiperIds))
-                    )
-                );
-
-            const matchedPartnerIds = new Set<string>();
-            for (const m of existingMatches) {
-                const partnerId = m.user1Id === userId ? m.user2Id : m.user1Id;
-                matchedPartnerIds.add(partnerId);
-            }
-
-            // Exclude anyone you already swiped on (accept/decline)
-            const myResponseRows = await db
-                .select({ swipedId: swipes.swipedId })
-                .from(swipes)
-                .where(and(eq(swipes.swiperId, userId), inArray(swipes.swipedId, swiperIds)));
-
-            const respondedIds = new Set(myResponseRows.map((r) => r.swipedId));
-
-            incomingRequests = swiperIds.filter((id) => !matchedPartnerIds.has(id) && !respondedIds.has(id)).length;
-        }
+        const incomingRequestsResult = await db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(dateRequests)
+            .where(and(eq(dateRequests.toUserId, userId), eq(dateRequests.status, "pending")));
+        const incomingRequests = incomingRequestsResult[0]?.count || 0;
 
         // Get all matches for user to calculate unread messages
         const userMatches = await db

@@ -21,14 +21,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { GoogleLogo } from '@/components/icons/google-logo';
 import * as AppleAuthentication from 'expo-apple-authentication';
 
-// Demo account credentials for Apple Review
-const DEMO_EMAIL = "demo@strathspace.com";
-const DEMO_PASSWORD = "AppleReview2026!";
-
 export default function LoginScreen() {
     const [loading, setLoading] = useState(false);
     const [appleLoading, setAppleLoading] = useState(false);
-    const [demoLoading, setDemoLoading] = useState(false);
     const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
     const router = useRouter();
     const toast = useToast();
@@ -72,101 +67,6 @@ export default function LoginScreen() {
             toast.show({ message: 'Authentication failed. Please try again.', variant: 'danger' });
         } finally {
             setLoading(false);
-        }
-    };
-
-    // Demo login for Apple reviewers
-    const handleDemoLogin = async () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setDemoLoading(true);
-
-        try {
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL || "https://www.strathspace.com";
-            console.log("[Demo Login] Starting demo login flow at:", apiUrl);
-            
-            // Step 1: Seed the demo account (creates or recreates with correct password)
-            console.log("[Demo Login] Seeding demo account...");
-            const seedResponse = await fetch(`${apiUrl}/api/seed-demo`, { 
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            });
-            
-            const seedData = await seedResponse.json().catch(() => ({ error: 'Failed to parse response' }));
-            console.log("[Demo Login] Seed response:", JSON.stringify(seedData));
-            
-            if (!seedResponse.ok) {
-                console.error("[Demo Login] Seed failed:", seedData);
-                // Continue anyway - the account might already exist and be valid
-            }
-            
-            // Step 2: Wait a moment for the database to settle
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Step 3: Attempt login with email/password
-            console.log("[Demo Login] Attempting signIn.email with:", DEMO_EMAIL);
-            const result = await signIn.email({
-                email: DEMO_EMAIL,
-                password: DEMO_PASSWORD,
-            });
-
-            console.log("[Demo Login] SignIn result:", JSON.stringify(result));
-
-            if (result.data) {
-                toast.show({
-                    message: 'Welcome, Demo User!',
-                    variant: 'success'
-                });
-                router.replace('/');
-                return;
-            }
-            
-            // If first attempt failed, try seeding again and retry
-            if (result.error) {
-                console.log("[Demo Login] First attempt failed, retrying with fresh seed...");
-                
-                // Re-seed the account
-                await fetch(`${apiUrl}/api/seed-demo`, { 
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                });
-                
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                
-                // Retry login
-                const retryResult = await signIn.email({
-                    email: DEMO_EMAIL,
-                    password: DEMO_PASSWORD,
-                });
-                
-                console.log("[Demo Login] Retry result:", JSON.stringify(retryResult));
-                
-                if (retryResult.data) {
-                    toast.show({
-                        message: 'Welcome, Demo User!',
-                        variant: 'success'
-                    });
-                    router.replace('/');
-                    return;
-                }
-                
-                // Show specific error message
-                const errorMsg = retryResult.error?.message || result.error?.message || 'Unknown error';
-                console.error("[Demo Login] Final error:", errorMsg);
-                toast.show({
-                    message: `Demo login failed: ${errorMsg}. Please try again.`,
-                    variant: 'danger'
-                });
-            }
-        } catch (error: any) {
-            console.error("[Demo Login] Exception:", error);
-            toast.show({ 
-                message: `Demo login error: ${error.message || 'Network error'}. Please check your connection and try again.`, 
-                variant: 'danger' 
-            });
-        } finally {
-            setDemoLoading(false);
         }
     };
 
@@ -244,7 +144,7 @@ export default function LoginScreen() {
                 // User canceled the sign-in flow - show helpful message about alternatives
                 console.log("[Apple Auth] User canceled sign-in");
                 toast.show({ 
-                    message: 'Sign in canceled. You can try Google or Demo login below.'
+                    message: 'Sign in canceled. You can try Google below.'
                 });
                 return;
             }
@@ -344,7 +244,7 @@ export default function LoginScreen() {
                         {/* Google Sign In Button */}
                         <Button
                             onPress={handleGoogleAuth}
-                            disabled={loading || demoLoading}
+                            disabled={loading || appleLoading}
                             variant="secondary"
                             size="lg"
                             className="w-full h-14 rounded-full bg-white border-0 shadow-lg shadow-black/20"
@@ -359,28 +259,6 @@ export default function LoginScreen() {
                                 </>
                             )}
                         </Button>
-
-                        {/* Demo Login Button - same style as Google for Apple Reviewers */}
-                        <Button
-                            onPress={handleDemoLogin}
-                            disabled={loading || demoLoading || appleLoading}
-                            variant="secondary"
-                            size="lg"
-                            className="w-full h-14 rounded-full bg-white border-0 shadow-lg shadow-black/20"
-                            style={{ marginTop: 12 }}
-                        >
-                            {demoLoading ? (
-                                <ActivityIndicator color="#4F46E5" size="small" />
-                            ) : (
-                                <>
-                                    <Ionicons name="flask-outline" size={22} color="#4F46E5" />
-                                    <Text className="text-lg font-semibold text-gray-900">Demo Login</Text>
-                                </>
-                            )}
-                        </Button>
-                        <Text style={styles.demoCredentials}>
-                            demo@strathspace.com  ·  AppleReview2026!
-                        </Text>
 
                         {/* Terms Text - Below Button */}
                         <Text style={styles.termsText}>
@@ -542,16 +420,6 @@ const styles = StyleSheet.create({
     signInLink: {
         color: '#E91E8C',
         fontWeight: '700',
-    },
-
-    // Demo Login
-    demoCredentials: {
-        fontSize: 12,
-        color: '#9CA3AF',
-        textAlign: 'center',
-        marginTop: 8,
-        lineHeight: 18,
-        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     },
 
     // Apple Sign In Button
