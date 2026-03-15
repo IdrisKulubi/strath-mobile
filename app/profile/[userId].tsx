@@ -4,14 +4,15 @@ import {
     StyleSheet,
     ScrollView,
     StatusBar,
-    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useUserProfile } from '@/hooks/use-user-profile';
 import { useMarkRequestSent } from '@/hooks/use-daily-matches';
+import { CachedImage } from '@/components/ui/cached-image';
 import { ProfilePhotos } from '@/components/profile-view/profile-photos';
 import { CompatibilityBlock } from '@/components/profile-view/compatibility-block';
 import { InterestsChips } from '@/components/profile-view/interests-chips';
@@ -31,6 +32,79 @@ function ProfileSkeleton() {
                 <Skeleton style={{ height: 80, borderRadius: 12 }} />
                 <Skeleton style={{ height: 60, borderRadius: 12 }} />
             </View>
+        </View>
+    );
+}
+
+function InlinePhotoBreak({
+    uri,
+    label,
+    variant = 'full',
+}: {
+    uri?: string;
+    label: string;
+    variant?: 'full' | 'left' | 'right';
+}) {
+    const { colors, isDark } = useTheme();
+
+    if (!uri) return null;
+
+    const isFull = variant === 'full';
+    const isRight = variant === 'right';
+
+    return (
+        <View
+            style={[
+                styles.photoBreakWrap,
+                !isFull && styles.photoBreakWrapSplit,
+                isRight && styles.photoBreakWrapRight,
+            ]}
+        >
+            <View
+                style={[
+                    styles.photoBreakCard,
+                    !isFull && styles.photoBreakCardSplit,
+                    isRight && styles.photoBreakCardRight,
+                    {
+                        backgroundColor: isDark ? colors.card : '#fff',
+                        borderColor: colors.border,
+                    },
+                ]}
+            >
+                <CachedImage uri={uri} style={styles.photoBreakImage} contentFit="cover" />
+                <View style={styles.photoBreakOverlay} />
+                <View
+                    style={[
+                        styles.photoBreakLabel,
+                        isRight && styles.photoBreakLabelRight,
+                    ]}
+                >
+                    <Ionicons name="images-outline" size={14} color="#fff" />
+                    <Text style={styles.photoBreakLabelText}>{label}</Text>
+                </View>
+            </View>
+        </View>
+    );
+}
+
+function ProfileSectionCard({
+    children,
+}: {
+    children: React.ReactNode;
+}) {
+    const { colors, isDark } = useTheme();
+
+    return (
+        <View
+            style={[
+                styles.sectionCard,
+                {
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                    borderColor: colors.border,
+                },
+            ]}
+        >
+            {children}
         </View>
     );
 }
@@ -96,6 +170,7 @@ export default function ProfileViewScreen() {
         profile.profilePhoto,
         ...(profile.photos ?? []),
     ].filter(Boolean) as string[];
+    const galleryPhotos = allPhotos.slice(1);
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -134,26 +209,58 @@ export default function ProfileViewScreen() {
 
                     {/* Bio */}
                     {profile.bio && (
-                        <View style={styles.bioSection}>
-                            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>About</Text>
-                            <Text style={[styles.bio, { color: colors.foreground }]}>{profile.bio}</Text>
-                        </View>
+                        <ProfileSectionCard>
+                            <View style={styles.bioSection}>
+                                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>About</Text>
+                                <Text style={[styles.bio, { color: colors.foreground }]}>{profile.bio}</Text>
+                            </View>
+                        </ProfileSectionCard>
                     )}
+
+                    <InlinePhotoBreak
+                        uri={galleryPhotos[0]}
+                        label="A little more of their vibe"
+                        variant="full"
+                    />
 
                     {/* Interests */}
                     {profile.interests && profile.interests.length > 0 && (
-                        <InterestsChips interests={profile.interests} />
+                        <ProfileSectionCard>
+                            <InterestsChips interests={profile.interests} />
+                        </ProfileSectionCard>
                     )}
+
+                    <InlinePhotoBreak
+                        uri={galleryPhotos[1]}
+                        label="More than just the headline"
+                        variant="right"
+                    />
 
                     {/* Personality */}
                     {profile.personalityTags && profile.personalityTags.length > 0 && (
-                        <PersonalityTags tags={profile.personalityTags} />
+                        <ProfileSectionCard>
+                            <PersonalityTags tags={profile.personalityTags} />
+                        </ProfileSectionCard>
                     )}
+
+                    <InlinePhotoBreak
+                        uri={galleryPhotos[2]}
+                        label="How their energy feels"
+                        variant="left"
+                    />
 
                     {/* Wingman quotes */}
                     {profile.wingmanQuotes && profile.wingmanQuotes.length > 0 && (
-                        <WingmanQuotes quotes={profile.wingmanQuotes} />
+                        <ProfileSectionCard>
+                            <WingmanQuotes quotes={profile.wingmanQuotes} />
+                        </ProfileSectionCard>
                     )}
+
+                    <InlinePhotoBreak
+                        uri={galleryPhotos[3]}
+                        label="One last glance"
+                        variant="full"
+                    />
                 </View>
             </ScrollView>
 
@@ -189,8 +296,8 @@ const styles = StyleSheet.create({
     content: {
         paddingHorizontal: 20,
         paddingTop: 20,
-        paddingBottom: 8,
-        gap: 20,
+        paddingBottom: 28,
+        gap: 24,
     },
     nameSection: {
         gap: 4,
@@ -199,6 +306,8 @@ const styles = StyleSheet.create({
         fontSize: 26,
         fontWeight: '700',
         letterSpacing: -0.3,
+        lineHeight: 32,
+        paddingTop: 2,
     },
     courseLine: {
         fontSize: 15,
@@ -206,6 +315,11 @@ const styles = StyleSheet.create({
     },
     bioSection: {
         gap: 6,
+    },
+    sectionCard: {
+        borderRadius: 22,
+        borderWidth: 1,
+        padding: 16,
     },
     sectionLabel: {
         fontSize: 12,
@@ -216,6 +330,63 @@ const styles = StyleSheet.create({
     bio: {
         fontSize: 15,
         lineHeight: 22,
+    },
+    photoBreakWrap: {
+        marginTop: -2,
+    },
+    photoBreakWrapSplit: {
+        width: '86%',
+    },
+    photoBreakWrapRight: {
+        alignSelf: 'flex-end',
+    },
+    photoBreakCard: {
+        height: 250,
+        borderRadius: 24,
+        borderWidth: 1,
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    photoBreakCardSplit: {
+        height: 210,
+        borderRadius: 22,
+    },
+    photoBreakCardRight: {
+        borderTopRightRadius: 32,
+        borderBottomLeftRadius: 32,
+    },
+    photoBreakImage: {
+        width: '100%',
+        height: '100%',
+    },
+    photoBreakOverlay: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: 110,
+        backgroundColor: 'rgba(0,0,0,0.18)',
+    },
+    photoBreakLabel: {
+        position: 'absolute',
+        left: 14,
+        bottom: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(0,0,0,0.32)',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 999,
+    },
+    photoBreakLabelRight: {
+        left: undefined,
+        right: 14,
+    },
+    photoBreakLabelText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '700',
     },
     errorState: {
         flex: 1,
