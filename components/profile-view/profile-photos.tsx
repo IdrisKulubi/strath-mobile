@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { View, StyleSheet, Dimensions, Pressable } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CachedImage } from '@/components/ui/cached-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
@@ -11,10 +12,12 @@ const PHOTO_HEIGHT = 420;
 interface ProfilePhotosProps {
     photos: (string | undefined | null)[];
     onBack?: () => void;
+    onPhotoPress?: (uri: string) => void;
 }
 
-export function ProfilePhotos({ photos, onBack }: ProfilePhotosProps) {
+export function ProfilePhotos({ photos, onBack, onPhotoPress }: ProfilePhotosProps) {
     const { colors } = useTheme();
+    const insets = useSafeAreaInsets();
     const [activeIndex, setActiveIndex] = useState(0);
     const scrollRef = useRef<ScrollView>(null);
 
@@ -39,11 +42,16 @@ export function ProfilePhotos({ photos, onBack }: ProfilePhotosProps) {
                 {displayPhotos.map((photo, i) => (
                     <View key={i} style={styles.photoSlide}>
                         {photo ? (
-                            <CachedImage
-                                uri={photo}
+                            <Pressable
                                 style={styles.photo}
-                                contentFit="cover"
-                            />
+                                onPress={() => onPhotoPress?.(photo)}
+                            >
+                                <CachedImage
+                                    uri={photo}
+                                    style={styles.photo}
+                                    contentFit="cover"
+                                />
+                            </Pressable>
                         ) : (
                             <View style={[styles.photo, styles.photoFallback, { backgroundColor: colors.muted }]}>
                                 <Ionicons name="person-circle-outline" size={96} color={colors.mutedForeground} />
@@ -53,14 +61,17 @@ export function ProfilePhotos({ photos, onBack }: ProfilePhotosProps) {
                 ))}
             </ScrollView>
 
-            {/* Gradient overlay at bottom */}
-            <View style={styles.bottomGradient} />
-
             {/* Back button */}
             {onBack && (
                 <Pressable
                     onPress={onBack}
-                    style={[styles.backBtn, { backgroundColor: 'rgba(0,0,0,0.4)' }]}
+                    style={[
+                        styles.backBtn,
+                        {
+                            backgroundColor: 'rgba(0,0,0,0.32)',
+                            top: Math.max(insets.top, 12) + 8,
+                        },
+                    ]}
                     hitSlop={8}
                 >
                     <Ionicons name="chevron-back" size={22} color="#fff" />
@@ -105,17 +116,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    bottomGradient: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 120,
-        backgroundColor: 'rgba(0,0,0,0.3)',
-    },
     backBtn: {
         position: 'absolute',
-        top: 16,
         left: 16,
         width: 38,
         height: 38,

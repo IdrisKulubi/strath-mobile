@@ -4,6 +4,7 @@ import {
     StyleSheet,
     ScrollView,
     StatusBar,
+    Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,6 +15,7 @@ import { useUserProfile } from '@/hooks/use-user-profile';
 import { useMarkRequestSent } from '@/hooks/use-daily-matches';
 import { CachedImage } from '@/components/ui/cached-image';
 import { ProfilePhotos } from '@/components/profile-view/profile-photos';
+import { ProfilePhotoViewer } from '@/components/profile-view/profile-photo-viewer';
 import { CompatibilityBlock } from '@/components/profile-view/compatibility-block';
 import { InterestsChips } from '@/components/profile-view/interests-chips';
 import { PersonalityTags } from '@/components/profile-view/personality-tags';
@@ -40,10 +42,12 @@ function InlinePhotoBreak({
     uri,
     label,
     variant = 'full',
+    onPhotoPress,
 }: {
     uri?: string;
     label: string;
     variant?: 'full' | 'left' | 'right';
+    onPhotoPress?: (uri: string) => void;
 }) {
     const { colors, isDark } = useTheme();
 
@@ -71,8 +75,9 @@ function InlinePhotoBreak({
                     },
                 ]}
             >
-                <CachedImage uri={uri} style={styles.photoBreakImage} contentFit="cover" />
-                <View style={styles.photoBreakOverlay} />
+                <Pressable style={styles.photoBreakImage} onPress={() => onPhotoPress?.(uri)}>
+                    <CachedImage uri={uri} style={styles.photoBreakImage} contentFit="cover" />
+                </Pressable>
                 <View
                     style={[
                         styles.photoBreakLabel,
@@ -120,6 +125,7 @@ export default function ProfileViewScreen() {
 
     const [sheetVisible, setSheetVisible] = useState(false);
     const [requestSent, setRequestSent] = useState(false);
+    const [fullScreenPhotoUri, setFullScreenPhotoUri] = useState<string | null>(null);
 
     const handleBack = useCallback(() => {
         router.back();
@@ -185,6 +191,7 @@ export default function ProfileViewScreen() {
                 <ProfilePhotos
                     photos={allPhotos.length > 0 ? allPhotos : [undefined]}
                     onBack={handleBack}
+                    onPhotoPress={(uri) => setFullScreenPhotoUri(uri)}
                 />
 
                 {/* Content */}
@@ -221,6 +228,7 @@ export default function ProfileViewScreen() {
                         uri={galleryPhotos[0]}
                         label="A little more of their vibe"
                         variant="full"
+                        onPhotoPress={(uri) => setFullScreenPhotoUri(uri)}
                     />
 
                     {/* Interests */}
@@ -234,6 +242,7 @@ export default function ProfileViewScreen() {
                         uri={galleryPhotos[1]}
                         label="More than just the headline"
                         variant="right"
+                        onPhotoPress={(uri) => setFullScreenPhotoUri(uri)}
                     />
 
                     {/* Personality */}
@@ -247,6 +256,7 @@ export default function ProfileViewScreen() {
                         uri={galleryPhotos[2]}
                         label="How their energy feels"
                         variant="left"
+                        onPhotoPress={(uri) => setFullScreenPhotoUri(uri)}
                     />
 
                     {/* Wingman quotes */}
@@ -260,6 +270,7 @@ export default function ProfileViewScreen() {
                         uri={galleryPhotos[3]}
                         label="One last glance"
                         variant="full"
+                        onPhotoPress={(uri) => setFullScreenPhotoUri(uri)}
                     />
                 </View>
             </ScrollView>
@@ -268,6 +279,13 @@ export default function ProfileViewScreen() {
             <ProfileViewCta
                 onAskForDate={handleAskForDate}
                 requestSent={requestSent || (profile?.requestSent ?? false)}
+            />
+
+            {/* Full-screen photo viewer */}
+            <ProfilePhotoViewer
+                visible={!!fullScreenPhotoUri}
+                uri={fullScreenPhotoUri}
+                onClose={() => setFullScreenPhotoUri(null)}
             />
 
             {/* Date request sheet */}
@@ -335,37 +353,27 @@ const styles = StyleSheet.create({
         marginTop: -2,
     },
     photoBreakWrapSplit: {
-        width: '86%',
+        width: '100%',
     },
-    photoBreakWrapRight: {
-        alignSelf: 'flex-end',
-    },
+    photoBreakWrapRight: {},
     photoBreakCard: {
-        height: 250,
-        borderRadius: 24,
+        height: 480,
+        borderRadius: 28,
         borderWidth: 1,
         overflow: 'hidden',
         position: 'relative',
     },
     photoBreakCardSplit: {
-        height: 210,
-        borderRadius: 22,
+        height: 480,
+        borderRadius: 28,
     },
     photoBreakCardRight: {
-        borderTopRightRadius: 32,
-        borderBottomLeftRadius: 32,
+        borderTopRightRadius: 28,
+        borderBottomLeftRadius: 28,
     },
     photoBreakImage: {
         width: '100%',
         height: '100%',
-    },
-    photoBreakOverlay: {
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        height: 110,
-        backgroundColor: 'rgba(0,0,0,0.18)',
     },
     photoBreakLabel: {
         position: 'absolute',
@@ -374,7 +382,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: 'rgba(0,0,0,0.32)',
+        backgroundColor: 'rgba(0,0,0,0.2)',
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 999,
