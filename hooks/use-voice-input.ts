@@ -4,6 +4,8 @@ import * as Haptics from 'expo-haptics';
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getAuthToken } from '@/lib/auth-helpers';
+import { useAiConsent } from '@/hooks/use-ai-consent';
+import { AI_CONSENT_REQUIRED_MESSAGE } from '@/lib/ai-consent';
 
 // ============================================
 // useVoiceInput — Gemini-powered voice transcription
@@ -55,6 +57,7 @@ function dbfsToVolume(db: number): number {
 
 export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInputReturn {
     const { onTranscript, onError, maxDurationMs = 15000 } = options;
+    const { hasAiConsent } = useAiConsent();
 
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
@@ -130,6 +133,11 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
     const startRecording = useCallback(async () => {
         if (isRecording || isTranscribing) return;
 
+        if (!hasAiConsent) {
+            handleError(AI_CONSENT_REQUIRED_MESSAGE);
+            return;
+        }
+
         cancelledRef.current = false;
         setError(null);
         setTranscript(null);
@@ -183,7 +191,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
         }
     // stopRecording is defined below; we use a ref to avoid circular deps
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isRecording, isTranscribing, handleError, maxDurationMs]);
+    }, [hasAiConsent, isRecording, isTranscribing, handleError, maxDurationMs]);
 
     // ─── Stop recording and transcribe ───────────────────────────────────────
     const stopRecording = useCallback(async () => {

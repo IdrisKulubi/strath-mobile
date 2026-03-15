@@ -31,6 +31,7 @@ export const updateProfileSchema = z.object({
     anonymousAvatar: z.string().nullable().optional(),
     isComplete: z.boolean().nullable().optional(),
     profileCompleted: z.boolean().nullable().optional(),
+    aiConsentGranted: z.boolean().nullable().optional(),
     profilePhoto: z.string().nullable().optional(),
     // New enhanced onboarding fields
     qualities: z.array(z.string()).nullable().optional(),

@@ -5,10 +5,14 @@ import { profiles } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { updateProfileSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/api-response";
+import { resetAgentContext } from "@/services/agent-context";
+import { ZodError } from "zod";
+
+type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
 
 export async function GET(req: NextRequest) {
     try {
-        let session = await auth.api.getSession({ headers: req.headers });
+        let session: AuthSession = await auth.api.getSession({ headers: req.headers });
 
         // Fallback: Manual token check if getSession fails (e.g. Bearer token issue)
         if (!session) {
@@ -33,7 +37,7 @@ export async function GET(req: NextRequest) {
                         session = {
                             session: dbSession,
                             user: dbSession.user
-                        } as any;
+                        } as unknown as AuthSession;
                     }
                 }
             }
@@ -62,7 +66,7 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
     try {
-        let session = await auth.api.getSession({ headers: req.headers });
+        let session: AuthSession = await auth.api.getSession({ headers: req.headers });
 
         // Fallback: Manual token check if getSession fails
         if (!session) {
@@ -81,7 +85,7 @@ export async function PATCH(req: NextRequest) {
                         session = {
                             session: dbSession,
                             user: dbSession.user
-                        } as any;
+                        } as unknown as AuthSession;
                     } else {
                         console.error('[PATCH /api/user/me] Session expired');
                         return errorResponse(new Error("Session expired. Please log in again."), 401);
@@ -120,9 +124,13 @@ export async function PATCH(req: NextRequest) {
         const validatedData = updateProfileSchema.parse(body);
 
         // Filter out null and undefined values (keep empty strings as valid values)
-        const filteredData = Object.fromEntries(
-            Object.entries(validatedData).filter(([_, value]) => value !== null && value !== undefined)
+        const filteredData: Record<string, unknown> = Object.fromEntries(
+            Object.entries(validatedData).filter(([, value]) => value !== null && value !== undefined)
         );
+        const shouldUpdateAiConsent = Object.prototype.hasOwnProperty.call(filteredData, "aiConsentGranted");
+        if (shouldUpdateAiConsent) {
+            (filteredData as Record<string, unknown>).aiConsentUpdatedAt = new Date();
+        }
         console.log('[PATCH /api/user/me] Filtered data keys:', Object.keys(filteredData));
 
         // Check if profile exists
@@ -145,12 +153,21 @@ export async function PATCH(req: NextRequest) {
             resultProfile = updated[0];
         } else {
             // Create new profile
+            const firstName =
+                typeof filteredData.firstName === "string"
+                    ? filteredData.firstName
+                    : session.user.name?.split(' ')[0] || '';
+            const lastName =
+                typeof filteredData.lastName === "string"
+                    ? filteredData.lastName
+                    : session.user.name?.split(' ').slice(1).join(' ') || '';
+
             const inserted = await db
                 .insert(profiles)
                 .values({
                     userId: session.user.id,
-                    firstName: (filteredData as any).firstName || session.user.name?.split(' ')[0] || '',
-                    lastName: (filteredData as any).lastName || session.user.name?.split(' ').slice(1).join(' ') || '',
+                    firstName,
+                    lastName,
                     ...filteredData,
                     createdAt: new Date(),
                     updatedAt: new Date(),
@@ -159,13 +176,19 @@ export async function PATCH(req: NextRequest) {
             resultProfile = inserted[0];
         }
 
+        if (shouldUpdateAiConsent && filteredData.aiConsentGranted === false) {
+            await resetAgentContext(session.user.id).catch((memoryError) => {
+                console.error("[PATCH /api/user/me] Failed to clear wingman memory:", memoryError);
+            });
+        }
+
         return successResponse(resultProfile);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[PATCH /api/user/me] Error:', error);
         
         // Check for Zod validation errors
-        if (error.name === 'ZodError') {
-            const message = error.errors?.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ') || 'Validation error';
+        if (error instanceof ZodError) {
+            const message = error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ') || 'Validation error';
             return errorResponse(new Error(message), 400);
         }
         

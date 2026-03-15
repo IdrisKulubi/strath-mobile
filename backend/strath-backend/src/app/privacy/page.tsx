@@ -21,7 +21,7 @@ export default function PrivacyPage() {
             <section style={{ marginBottom: '2rem' }}>
                 <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>1. Introduction</h2>
                 <p>
-                    Welcome to Strathspace ("we," "our," or "us"). We are committed to protecting your
+                    Welcome to Strathspace (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;). We are committed to protecting your
                     privacy and ensuring you have a positive experience on our platform. This Privacy
                     Policy explains how we collect, use, disclose, and safeguard your information when
                     you use our mobile application.
@@ -57,6 +57,15 @@ export default function PrivacyPage() {
                     <li>Messages sent through the platform</li>
                     <li>App usage patterns and preferences</li>
                 </ul>
+
+                <h3 style={{ fontSize: '1.2rem', marginTop: '1rem' }}>Optional AI Feature Data</h3>
+                <p>If you enable AI features in the app, we may also process:</p>
+                <ul>
+                    <li>Typed Wingman prompts and refinement requests</li>
+                    <li>Optional voice recordings submitted for transcription</li>
+                    <li>Relevant profile details used to personalize AI recommendations</li>
+                    <li>Wingman review responses submitted by friends when you choose to generate a Wingman pack</li>
+                </ul>
             </section>
 
             <section style={{ marginBottom: '2rem' }}>
@@ -67,6 +76,7 @@ export default function PrivacyPage() {
                     <li>Connect you with other users on campus</li>
                     <li>Provide personalized recommendations</li>
                     <li>Enable messaging between matched users</li>
+                    <li>Power optional AI features such as Wingman search, voice transcription, weekly AI recommendations, and Wingman packs</li>
                     <li>Improve our services and user experience</li>
                     <li>Ensure the safety and security of our platform</li>
                     <li>Comply with legal obligations</li>
@@ -78,7 +88,8 @@ export default function PrivacyPage() {
                 <p>We do not sell your personal information. We may share your information:</p>
                 <ul>
                     <li><strong>With other users:</strong> Your profile information is visible to other Strathspace users</li>
-                    <li><strong>Service providers:</strong> We use third-party services (hosting, analytics) that may process your data</li>
+                    <li><strong>Service providers:</strong> We use third-party services (hosting, analytics, storage) that may process your data</li>
+                    <li><strong>Google LLC / Google Gemini:</strong> If you explicitly allow AI features, we may send typed prompts, optional voice recordings, relevant profile details, and Wingman review content so Gemini can transcribe audio and generate AI-powered recommendations</li>
                     <li><strong>Legal requirements:</strong> When required by law or to protect our rights</li>
                 </ul>
             </section>
@@ -99,7 +110,7 @@ export default function PrivacyPage() {
                     <li>Access your personal data</li>
                     <li>Correct inaccurate information</li>
                     <li>Delete your account and associated data</li>
-                    <li>Withdraw consent at any time</li>
+                    <li>Withdraw consent at any time, including AI consent in the app Settings screen</li>
                     <li>Request a copy of your data</li>
                 </ul>
             </section>
@@ -118,14 +129,15 @@ export default function PrivacyPage() {
                 <p>Our app uses the following third-party services:</p>
                 <ul>
                     <li><strong>Google Sign-In:</strong> For authentication</li>
+                    <li><strong>Google LLC / Google Gemini:</strong> For optional AI search understanding, voice transcription, weekly AI recommendations, and Wingman packs after you grant permission in the app</li>
                     <li><strong>Vercel:</strong> For hosting and infrastructure</li>
                     <li><strong>Cloudinary/UploadThing:</strong> For image storage</li>
                 </ul>
-                <p>Each service has its own privacy policy governing their use of your data.</p>
+                <p>Each service has its own privacy policy governing their use of your data. We require third-party providers we share personal data with to protect that data with safeguards that are the same as or stronger than our own.</p>
             </section>
 
             <section style={{ marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>9. Children's Privacy</h2>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>9. Children And Teen Privacy</h2>
                 <p>
                     Strathspace is intended for users who are at least 18 years old. We do not
                     knowingly collect personal information from users under 18. If we become aware
@@ -137,8 +149,8 @@ export default function PrivacyPage() {
                 <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>10. Changes to This Policy</h2>
                 <p>
                     We may update this Privacy Policy from time to time. We will notify you of any
-                    changes by posting the new Privacy Policy on this page and updating the "Last
-                    updated" date.
+                    changes by posting the new Privacy Policy on this page and updating the &quot;Last
+                    updated&quot; date.
                 </p>
             </section>
 

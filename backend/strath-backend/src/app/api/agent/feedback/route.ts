@@ -5,8 +5,11 @@ import { eq } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { recordMatchFeedback, getAgentContext } from "@/services/agent-context";
 import { generateRichExplanation } from "@/services/explanation-service";
+import { AI_CONSENT_REQUIRED_MESSAGE, hasAiConsent } from "@/lib/ai-consent";
 
 export const dynamic = "force-dynamic";
+
+type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
 
 // ============================================
 // AGENT FEEDBACK API — POST /api/agent/feedback
@@ -19,7 +22,7 @@ export const dynamic = "force-dynamic";
 // - "explain": Get a rich AI explanation for a specific match
 
 async function getSessionWithFallback(req: NextRequest) {
-    let session = await auth.api.getSession({ headers: req.headers });
+    let session: AuthSession = await auth.api.getSession({ headers: req.headers });
 
     if (!session) {
         const authHeader = req.headers.get("authorization");
@@ -31,7 +34,7 @@ async function getSessionWithFallback(req: NextRequest) {
                 with: { user: true },
             });
             if (dbSession && dbSession.expiresAt > new Date()) {
-                session = { session: dbSession, user: dbSession.user } as any;
+                session = { session: dbSession, user: dbSession.user } as unknown as AuthSession;
             }
         }
     }
@@ -71,7 +74,11 @@ export async function POST(request: NextRequest) {
 
             case "explain": {
                 const { matchData, query } = body;
-                
+
+                if (!(await hasAiConsent(session.user.id))) {
+                    return errorResponse(AI_CONSENT_REQUIRED_MESSAGE, 403);
+                }
+
                 if (!matchData) {
                     return errorResponse("matchData is required for explain action", 400);
                 }

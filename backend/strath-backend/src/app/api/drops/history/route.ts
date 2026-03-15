@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { profiles, session as sessionTable, weeklyDrops } from "@/db/schema";
 import { successResponse, errorResponse } from "@/lib/api-response";
+import { hasAiConsent } from "@/lib/ai-consent";
 import type { AuthSession } from "@/types/auth";
 
 async function getSessionWithFallback(req: NextRequest) {
@@ -36,6 +37,9 @@ export async function GET(request: NextRequest) {
 
         const now = new Date();
         const userId = session.user.id;
+        if (!(await hasAiConsent(userId))) {
+            return successResponse({ history: [] });
+        }
 
         await db
             .update(weeklyDrops)

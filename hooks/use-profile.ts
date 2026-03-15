@@ -38,6 +38,8 @@ export interface Profile {
     anonymousAvatar?: string;
     readReceiptsEnabled?: boolean;
     showActiveStatus?: boolean;
+    aiConsentGranted?: boolean;
+    aiConsentUpdatedAt?: string | null;
     // New enhanced profile fields
     qualities?: string[];
     prompts?: { promptId: string; response: string }[];
@@ -156,6 +158,7 @@ export function useProfile() {
     return {
         ...query,
         updateProfile: mutation.mutate,
+        updateProfileAsync: mutation.mutateAsync,
         isUpdating: mutation.isPending,
     };
 }

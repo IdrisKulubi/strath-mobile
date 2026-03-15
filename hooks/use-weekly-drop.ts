@@ -83,10 +83,11 @@ async function fetchDropHistoryAPI(): Promise<WeeklyDropHistoryItem[]> {
     return (result.data || result).history || [];
 }
 
-export function useWeeklyDrop() {
+export function useWeeklyDrop(enabled: boolean = true) {
     const currentQuery = useQuery({
         queryKey: ["weekly-drop-current"],
         queryFn: fetchCurrentDropAPI,
+        enabled,
         staleTime: 30 * 1000,
         refetchInterval: 30 * 1000,
         retry: 1,
@@ -95,6 +96,7 @@ export function useWeeklyDrop() {
     const historyQuery = useQuery({
         queryKey: ["weekly-drop-history"],
         queryFn: fetchDropHistoryAPI,
+        enabled,
         staleTime: 2 * 60 * 1000,
         retry: 1,
     });

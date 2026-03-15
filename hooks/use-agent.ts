@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback } from "react";
 import { getAuthToken } from "@/lib/auth-helpers";
+import { useAiConsent } from "@/hooks/use-ai-consent";
+import { AI_CONSENT_REQUIRED_MESSAGE } from "@/lib/ai-consent";
 import {
     WINGMAN_MAX_REQUEST_PAGE_SIZE,
     WINGMAN_REQUEST_PAGE_SIZE,
@@ -344,6 +346,7 @@ async function connectWithIntroAPI(
 
 export function useAgent() {
     const queryClient = useQueryClient();
+    const { hasAiConsent } = useAiConsent();
     const [currentQuery, setCurrentQuery] = useState<string | null>(null);
     const [allMatches, setAllMatches] = useState<AgentMatch[]>([]);
     const [commentary, setCommentary] = useState<string | null>(null);
@@ -364,7 +367,13 @@ export function useAgent() {
             limit?: number;
             offset?: number;
             excludeIds?: string[];
-        }) => agentSearchAPI(query, limit, offset, excludeIds),
+        }) => {
+            if (!hasAiConsent) {
+                throw new Error(AI_CONSENT_REQUIRED_MESSAGE);
+            }
+
+            return agentSearchAPI(query, limit, offset, excludeIds);
+        },
 
         onMutate: (variables) => {
             // Set currentQuery immediately so UI shows loading state
@@ -429,7 +438,13 @@ export function useAgent() {
             refinement: string;
             previousMatchIds: string[];
             limit: number;
-        }) => agentRefineAPI(originalQuery, refinement, previousMatchIds, limit),
+        }) => {
+            if (!hasAiConsent) {
+                throw new Error(AI_CONSENT_REQUIRED_MESSAGE);
+            }
+
+            return agentRefineAPI(originalQuery, refinement, previousMatchIds, limit);
+        },
         onSuccess: (data, variables) => {
             setAllMatches(data.matches);
             setCommentary(data.commentary);
@@ -445,6 +460,7 @@ export function useAgent() {
     const wingmanStats = useQuery({
         queryKey: ["wingman-stats"],
         queryFn: getWingmanStatusAPI,
+        enabled: hasAiConsent,
         staleTime: 5 * 60 * 1000, // 5 min
         retry: 1,
     });
@@ -453,6 +469,7 @@ export function useAgent() {
     const wingmanContextQuery = useQuery({
         queryKey: ["wingman-context"],
         queryFn: getWingmanContextAPI,
+        enabled: hasAiConsent,
         staleTime: 5 * 60 * 1000, // 5 min
         retry: 1,
     });

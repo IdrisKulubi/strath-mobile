@@ -10,11 +10,11 @@ import { useNotificationCounts, formatBadgeCount } from '@/hooks/use-notificatio
 export default function TabLayout() {
   const { colors } = useTheme();
   const { unreadMessages, incomingRequests } = useNotificationCounts();
-  const datesBadge = incomingRequests ?? 0;
+  const matchesBadge = incomingRequests ?? 0;
 
   return (
     <Tabs
-      initialRouteName="index"
+      initialRouteName="explore"
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: '#8E8E93',
@@ -44,14 +44,6 @@ export default function TabLayout() {
           borderRadius: 9,
         },
       }}>
-      {/* Home — daily matches (default tab) */}
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "heart" : "heart-outline"} color={color} />,
-        }}
-      />
       <Tabs.Screen
         name="profile"
         options={{
@@ -60,11 +52,25 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="dates"
+        name="drops"
         options={{
-          title: 'Dates',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "calendar" : "calendar-outline"} color={color} />,
-          tabBarBadge: formatBadgeCount(datesBadge),
+          title: 'Drops',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "gift" : "gift-outline"} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="explore"
+        options={{
+          title: 'Find',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "sparkles" : "sparkles-outline"} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="matches"
+        options={{
+          title: 'Matches',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "chatbubbles" : "chatbubbles-outline"} color={color} />,
+          tabBarBadge: formatBadgeCount(matchesBadge),
         }}
       />
       <Tabs.Screen
@@ -75,9 +81,8 @@ export default function TabLayout() {
         }}
       />
       {/* Hidden routes — accessible but not shown in tab bar */}
-      <Tabs.Screen name="explore" options={{ href: null }} />
-      <Tabs.Screen name="drops" options={{ href: null }} />
-      <Tabs.Screen name="matches" options={{ href: null }} />
+      <Tabs.Screen name="index" options={{ href: null }} />
+      <Tabs.Screen name="dates" options={{ href: null }} />
       <Tabs.Screen name="study-date" options={{ href: null }} />
       <Tabs.Screen
         name="chats"

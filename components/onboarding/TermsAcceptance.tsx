@@ -102,7 +102,7 @@ export function TermsAcceptance({ onAccept, onDecline }: TermsAcceptanceProps) {
                             <View style={styles.cardText}>
                                 <Text style={styles.cardTitle}>Privacy Policy</Text>
                                 <Text style={styles.cardDescription}>
-                                    I understand how my data is collected and used
+                                    I understand how my data is collected and used, and that AI features require a separate opt-in
                                 </Text>
                             </View>
                             <TouchableOpacity 

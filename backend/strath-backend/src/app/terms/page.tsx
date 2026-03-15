@@ -21,8 +21,8 @@ export default function TermsPage() {
             <section style={{ marginBottom: '2rem' }}>
                 <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>1. Acceptance of Terms</h2>
                 <p>
-                    By downloading, accessing, or using Strathspace ("the App"), you agree to be bound
-                    by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use
+                    By downloading, accessing, or using Strathspace (&quot;the App&quot;), you agree to be bound
+                    by these Terms of Service (&quot;Terms&quot;). If you do not agree to these Terms, do not use
                     the App. We reserve the right to modify these Terms at any time, and your continued
                     use of the App constitutes acceptance of any changes.
                 </p>
@@ -118,7 +118,9 @@ export default function TermsPage() {
                 <p>
                     Your privacy is important to us. Please review our{' '}
                     <a href="/privacy" style={{ color: '#ec4899' }}>Privacy Policy</a> to understand
-                    how we collect, use, and protect your personal information.
+                    how we collect, use, and protect your personal information. Optional AI features
+                    such as Wingman search and voice transcription are only available after you grant
+                    permission in the app.
                 </p>
             </section>
 
@@ -150,7 +152,7 @@ export default function TermsPage() {
             <section style={{ marginBottom: '2rem' }}>
                 <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>11. Disclaimers</h2>
                 <p>
-                    THE APP IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND.
+                    THE APP IS PROVIDED &quot;AS IS&quot; AND &quot;AS AVAILABLE&quot; WITHOUT WARRANTIES OF ANY KIND.
                     WE DO NOT GUARANTEE THAT THE APP WILL BE UNINTERRUPTED, SECURE, OR ERROR-FREE.
                     WE ARE NOT RESPONSIBLE FOR THE CONDUCT OF ANY USER ON OR OFF THE APP.
                 </p>

@@ -9,6 +9,7 @@ import { rankCandidates } from "@/services/ranking-service";
 import { generateQuickExplanations, generateResultCommentary } from "@/services/explanation-service";
 import { getAgentContext, recordQuery, saveAgentMessage } from "@/services/agent-context";
 import { getAgentSearchQuota, trackAgentSearchUsage } from "@/lib/agent-search-limit";
+import { AI_CONSENT_REQUIRED_MESSAGE, hasAiConsent } from "@/lib/ai-consent";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -75,6 +76,10 @@ export async function POST(request: NextRequest) {
         const session = await getSessionWithFallback(request);
         if (!session?.user?.id) {
             return errorResponse("Unauthorized", 401);
+        }
+
+        if (!(await hasAiConsent(session.user.id))) {
+            return errorResponse(AI_CONSENT_REQUIRED_MESSAGE, 403);
         }
 
         step = "parse_body";

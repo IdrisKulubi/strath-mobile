@@ -9,6 +9,7 @@ import { rankCandidates } from "@/services/ranking-service";
 import { generateQuickExplanations } from "@/services/explanation-service";
 import { getAgentContext } from "@/services/agent-context";
 import { sendPushNotification } from "@/lib/notifications";
+import { hasAiConsent } from "@/lib/ai-consent";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -109,6 +110,10 @@ export async function GET(request: NextRequest) {
 
         for (const activeUser of activeUsers) {
             try {
+                if (!(await hasAiConsent(activeUser.id))) {
+                    continue;
+                }
+
                 const ctx = await getAgentContext(activeUser.id);
                 const query = buildQueryFromLearnedPrefs(ctx.learnedPreferences);
 

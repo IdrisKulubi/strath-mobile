@@ -20,17 +20,17 @@ export interface CompatibilityResult {
 
 type ProfileRow = typeof profiles.$inferSelect;
 
-function getInterests(p: ProfileRow | null): string[] {
+function getInterests(p: ProfileRow | null | undefined): string[] {
     const arr = p?.interests;
     return Array.isArray(arr) ? arr : [];
 }
 
-function getPersonality(p: ProfileRow | null) {
+function getPersonality(p: ProfileRow | null | undefined) {
     const pa = p?.personalityAnswers as Record<string, unknown> | null;
     return pa ?? {};
 }
 
-function getLifestyle(p: ProfileRow | null) {
+function getLifestyle(p: ProfileRow | null | undefined) {
     const la = p?.lifestyleAnswers as Record<string, unknown> | null;
     return la ?? {};
 }

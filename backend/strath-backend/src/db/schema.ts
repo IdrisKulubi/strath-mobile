@@ -211,6 +211,8 @@ export const profiles = pgTable("profiles", {
     // ============================================
     // AGENTIC AI FIELDS
     // ============================================
+    aiConsentGranted: boolean("ai_consent_granted").default(false).notNull(),
+    aiConsentUpdatedAt: timestamp("ai_consent_updated_at"),
     personalitySummary: text("personality_summary"), // AI-generated natural language summary
     embedding: vector("embedding", { dimension: 3072 }), // pgvector embedding for semantic search
     embeddingUpdatedAt: timestamp("embedding_updated_at"), // Track when embedding was last generated
@@ -222,6 +224,7 @@ export const profiles = pgTable("profiles", {
     completedIdx: index("profile_completed_idx").on(table.profileCompleted),
     usernameIdx: index("profile_username_idx").on(table.username),
     anonymousIdx: index("profile_anonymous_idx").on(table.anonymous),
+    aiConsentIdx: index("profile_ai_consent_idx").on(table.aiConsentGranted),
     educationIdx: index("profile_education_idx").on(table.education),
     smokingIdx: index("profile_smoking_idx").on(table.smoking),
     politicsIdx: index("profile_politics_idx").on(table.politics),
@@ -1167,7 +1170,7 @@ export const wingmanPacks = pgTable("wingman_packs", {
 
     compiledSummary: jsonb("compiled_summary").$type<Record<string, unknown>>().default({}),
     wingmanPrompt: text("wingman_prompt").notNull(),
-    matchData: jsonb("match_data").$type<any[]>().default([]),
+    matchData: jsonb("match_data").$type<Array<Record<string, unknown>>>().default([]),
 
     generatedAt: timestamp("generated_at").defaultNow().notNull(),
     openedAt: timestamp("opened_at"),

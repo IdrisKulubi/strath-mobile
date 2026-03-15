@@ -4,9 +4,12 @@ import { db } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { evaluateAgentQueryGuardrails } from "@/lib/agent-guardrails";
+import { AI_CONSENT_REQUIRED_MESSAGE, hasAiConsent } from "@/lib/ai-consent";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
+
+type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
 
 // ============================================
 // SPEECH-TO-TEXT API — POST /api/agent/voice
@@ -21,7 +24,7 @@ export const maxDuration = 15;
 // - Single provider simplifies billing and maintenance
 
 async function getSessionWithFallback(req: NextRequest) {
-    let session = await auth.api.getSession({ headers: req.headers });
+    let session: AuthSession = await auth.api.getSession({ headers: req.headers });
 
     if (!session) {
         const authHeader = req.headers.get("authorization");
@@ -33,7 +36,7 @@ async function getSessionWithFallback(req: NextRequest) {
                 with: { user: true },
             });
             if (dbSession && dbSession.expiresAt > new Date()) {
-                session = { session: dbSession, user: dbSession.user } as any;
+                session = { session: dbSession, user: dbSession.user } as unknown as AuthSession;
             }
         }
     }
@@ -45,6 +48,10 @@ export async function POST(request: NextRequest) {
         const session = await getSessionWithFallback(request);
         if (!session?.user?.id) {
             return errorResponse("Unauthorized", 401);
+        }
+
+        if (!(await hasAiConsent(session.user.id))) {
+            return errorResponse(AI_CONSENT_REQUIRED_MESSAGE, 403);
         }
 
         const body = await request.json();
