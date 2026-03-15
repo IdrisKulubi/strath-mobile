@@ -12,7 +12,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.strathspace.mobile",
-      "buildNumber": "30",
+      "buildNumber": "31",
       "usesAppleSignIn": true,
       "icon": {
         "light": "./assets/images/icon.png",
