@@ -16,21 +16,31 @@ interface HomeHeaderProps {
 }
 
 export function HomeHeader({ firstName, matchCount }: HomeHeaderProps) {
-    const { colors } = useTheme();
+    const { colors, isDark } = useTheme();
     const greeting = getGreeting();
-
-    const subtext = matchCount && matchCount > 0
-        ? `We found ${matchCount} ${matchCount === 1 ? 'person' : 'people'} you may really click with`
-        : 'Your curated matches for today';
+    const visibleCount = matchCount && matchCount > 0 ? Math.min(matchCount, 4) : 0;
 
     return (
         <View style={styles.container}>
             <Text style={[styles.greeting, { color: colors.foreground }]}>
-                {greeting}{firstName ? `, ${firstName}` : ''}
+                {greeting}{firstName ? `, ${firstName}` : ''} ☀️
             </Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                {subtext}
+                {visibleCount > 0 ? `Your top ${visibleCount} matches today` : 'Your curated matches today'}
             </Text>
+            <View
+                style={[
+                    styles.metaPill,
+                    {
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.035)',
+                        borderColor: colors.border,
+                    },
+                ]}
+            >
+                <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
+                    {visibleCount > 0 ? `Only ${visibleCount} matches today` : 'A small, curated set just for you'}
+                </Text>
+            </View>
         </View>
     );
 }
@@ -38,20 +48,32 @@ export function HomeHeader({ firstName, matchCount }: HomeHeaderProps) {
 const styles = StyleSheet.create({
     container: {
         paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: 18,
-        gap: 4,
+        paddingTop: 18,
+        paddingBottom: 22,
+        gap: 8,
     },
     greeting: {
-        fontSize: 26,
+        fontSize: 34,
         fontWeight: '800',
-        letterSpacing: -0.5,
-        lineHeight: 32,
-        paddingTop: 2,
+        letterSpacing: -1,
+        lineHeight: 40,
     },
     subtitle: {
-        fontSize: 13,
-        marginTop: 4,
-        lineHeight: 18,
+        fontSize: 16,
+        lineHeight: 22,
+        fontWeight: '500',
+    },
+    metaPill: {
+        alignSelf: 'flex-start',
+        borderRadius: 999,
+        borderWidth: 1,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        marginTop: 2,
+    },
+    metaText: {
+        fontSize: 12,
+        fontWeight: '600',
+        letterSpacing: 0.2,
     },
 });

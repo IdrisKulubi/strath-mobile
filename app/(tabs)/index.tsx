@@ -88,8 +88,13 @@ export default function HomeScreen() {
         if (selectedMatch) {
             markRequestSent(selectedMatch.userId);
         }
+        toast.show({
+            message: 'Date invite sent. Waiting for their reply.',
+            variant: 'success',
+            position: 'bottom',
+        });
         setSelectedMatch(null);
-    }, [markRequestSent, selectedMatch]);
+    }, [markRequestSent, selectedMatch, toast]);
 
     const handleSkip = useCallback((userId: string) => {
         skipMatch.mutate(userId, {
@@ -113,7 +118,7 @@ export default function HomeScreen() {
             >
                 <HomeHeader
                     firstName={profile?.firstName}
-                    matchCount={activeMatchCount}
+                    matchCount={matches.length}
                 />
 
                 {isLoading ? (
@@ -166,19 +171,19 @@ const styles = StyleSheet.create({
         gap: 14,
     },
     headerSkeleton: {
-        height: 220,
-        borderRadius: 22,
+        height: 120,
+        borderRadius: 26,
         marginTop: 4,
     },
     subheaderSkeleton: {
-        height: 18,
-        width: '55%',
+        height: 14,
+        width: '42%',
         borderRadius: 10,
-        marginBottom: 6,
+        marginBottom: 10,
     },
     cardSkeleton: {
-        height: 360,
-        borderRadius: 22,
+        height: 520,
+        borderRadius: 28,
     },
     allSentBanner: {
         marginHorizontal: 16,

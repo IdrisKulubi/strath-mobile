@@ -6,8 +6,47 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export interface UserProfileDetail extends DailyMatch {
     bio?: string;
+    aboutMe?: string;
     photos?: string[];
     wingmanQuotes?: { text: string; authorLabel?: string }[];
+    lastName?: string;
+    yearOfStudy?: number;
+    gender?: string;
+    lookingFor?: string;
+    zodiacSign?: string;
+    personalityType?: string;
+    loveLanguage?: string;
+    sleepingHabits?: string;
+    drinkingPreference?: string;
+    workoutFrequency?: string;
+    socialMediaUsage?: string;
+    communicationStyle?: string;
+    height?: string;
+    education?: string;
+    smoking?: string;
+    politics?: string;
+    religion?: string;
+    qualities?: string[];
+    prompts?: { promptId: string; response: string }[];
+    languages?: string[];
+    instagram?: string;
+    spotify?: string;
+    snapchat?: string;
+    personalityAnswers?: {
+        sleepSchedule?: string;
+        socialVibe?: string;
+        driveStyle?: string;
+        musicGenres?: string[];
+        convoStyle?: string;
+        socialBattery?: string;
+        idealDateVibe?: string;
+    };
+    lifestyleAnswers?: {
+        relationshipGoal?: string;
+        outingFrequency?: string;
+        drinks?: string;
+        smokes?: string;
+    };
 }
 
 async function fetchUserProfile(userId: string): Promise<UserProfileDetail | null> {
@@ -45,21 +84,50 @@ async function fetchUserProfile(userId: string): Promise<UserProfileDetail | nul
 
     const interests = Array.isArray(profile?.interests) ? profile.interests : [];
     const photos = Array.isArray(profile?.photos) ? profile.photos : [];
+    const qualities = Array.isArray(profile?.qualities) ? profile.qualities : [];
+    const prompts = Array.isArray(profile?.prompts) ? profile.prompts : [];
+    const languages = Array.isArray(profile?.languages) ? profile.languages : [];
 
     return {
         userId: profile?.userId ?? userId,
         firstName: profile?.firstName ?? profile?.user?.name?.split(' ')[0] ?? 'Unknown',
+        lastName: profile?.lastName ?? undefined,
         age: profile?.age ?? 0,
         profilePhoto: profile?.profilePhoto ?? profile?.user?.profilePhoto ?? profile?.user?.image,
         compatibilityScore: compat?.score ?? 0,
         reasons: compat?.reasons ?? [],
         requestSent: compat?.requestSent ?? false,
         bio: profile?.bio ?? profile?.aboutMe,
+        aboutMe: profile?.aboutMe,
         interests,
         personalityTags,
         course: profile?.course,
+        yearOfStudy: profile?.yearOfStudy,
         university: profile?.university,
         photos,
+        gender: profile?.gender,
+        lookingFor: profile?.lookingFor,
+        zodiacSign: profile?.zodiacSign,
+        personalityType: profile?.personalityType,
+        loveLanguage: profile?.loveLanguage,
+        sleepingHabits: profile?.sleepingHabits,
+        drinkingPreference: profile?.drinkingPreference,
+        workoutFrequency: profile?.workoutFrequency,
+        socialMediaUsage: profile?.socialMediaUsage,
+        communicationStyle: profile?.communicationStyle,
+        height: profile?.height,
+        education: profile?.education,
+        smoking: profile?.smoking,
+        politics: profile?.politics,
+        religion: profile?.religion,
+        qualities,
+        prompts,
+        languages,
+        instagram: profile?.instagram,
+        spotify: profile?.spotify,
+        snapchat: profile?.snapchat,
+        personalityAnswers: profile?.personalityAnswers ?? undefined,
+        lifestyleAnswers: profile?.lifestyleAnswers ?? undefined,
         wingmanQuotes: vouches.map((v: { content: string; authorName?: string }) => ({
             text: v.content,
             authorLabel: v.authorName,

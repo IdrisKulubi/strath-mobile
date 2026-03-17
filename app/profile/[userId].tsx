@@ -23,6 +23,7 @@ import { WingmanQuotes } from '@/components/profile-view/wingman-quotes';
 import { ProfileViewCta } from '@/components/profile-view/profile-view-cta';
 import { DateRequestSheet } from '@/components/date-request/date-request-sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { QualityBadge } from '@/components/ui/quality-badge';
 
 function ProfileSkeleton() {
     return (
@@ -114,6 +115,152 @@ function ProfileSectionCard({
     );
 }
 
+const PROMPT_TITLES: Record<string, string> = {
+    unpopular_opinion: 'My most unpopular opinion is...',
+    conspiracy: 'A conspiracy theory I low-key believe...',
+    guilty_pleasure: 'My guilty pleasure is...',
+    pet_peeve: 'My biggest pet peeve is...',
+    perfect_sunday: 'My perfect Sunday looks like...',
+    life_goal: 'A life goal of mine is...',
+    green_flag: 'The biggest green flag in someone is...',
+    dealbreaker: 'My dating dealbreaker is...',
+    useless_talent: 'My useless talent is...',
+    karaoke: 'My go-to karaoke song is...',
+    comfort_food: 'My comfort food is...',
+    tv_binge: 'I could rewatch __ forever',
+    proud_of: "I'm secretly proud of...",
+    change_mind: 'Something that changed my mind recently...',
+    grateful_for: "I'm most grateful for...",
+    teach_me: 'I want someone to teach me...',
+    ideal_date: 'My ideal first date is...',
+    love_language: 'My love language is...',
+    looking_for: "I'm looking for someone who...",
+    relationship_rule: 'My non-negotiable in a relationship...',
+    campus_spot: 'My favorite spot on campus is...',
+    study_hack: 'My best study hack is...',
+    class_type: "I'm the type to ____ in class",
+};
+
+const DISPLAY_VALUE_LABELS: Record<string, string> = {
+    male: 'Male',
+    female: 'Female',
+    other: 'Other',
+    men: 'Men',
+    women: 'Women',
+    everyone: 'Everyone',
+    high_school: 'High School',
+    bachelors: "Bachelor's",
+    masters: "Master's",
+    phd: 'PhD',
+    yes: 'Yes',
+    no: 'No',
+    sometimes: 'Sometimes',
+    serious: 'Something serious',
+    casual: 'Casual and see where it goes',
+    open: 'Open to anything',
+    rarely: 'Rarely',
+    '1_2_week': '1-2 times a week',
+    '3_plus_week': '3+ times a week',
+    party: 'Out with people',
+    chill_in: 'Chill night in',
+    both: 'A bit of both',
+    career_focused: 'Career-focused',
+    spontaneous: 'Spontaneous',
+    balanced: 'Balanced',
+    deep_talks: 'Deep talks',
+    light_banter: 'Light banter',
+    introvert: 'Introvert',
+    ambivert: 'Ambivert',
+    extrovert: 'Extrovert',
+    casual_hangout: 'Casual hangout',
+    night_owl: 'Night owl',
+    early_bird: 'Early bird',
+    afrobeats: 'Afrobeats',
+    hiphop: 'Hip-Hop',
+    rnb: 'R&B',
+};
+
+function formatDisplayValue(value?: string | number | null) {
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value === 'number') return String(value);
+
+    const normalized = value.trim();
+    if (!normalized) return null;
+
+    return DISPLAY_VALUE_LABELS[normalized]
+        ?? normalized
+            .replace(/[_-]+/g, ' ')
+            .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function normalizeHandle(value?: string | null) {
+    if (!value) return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    return trimmed.replace(/^@+/, '');
+}
+
+function PromptResponseCard({
+    promptId,
+    response,
+}: {
+    promptId: string;
+    response: string;
+}) {
+    const { colors, isDark } = useTheme();
+    const title = PROMPT_TITLES[promptId] ?? formatDisplayValue(promptId) ?? 'Prompt';
+
+    return (
+        <View
+            style={[
+                styles.promptCard,
+                {
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                    borderColor: colors.border,
+                },
+            ]}
+        >
+            <Text style={[styles.promptTitle, { color: colors.mutedForeground }]}>
+                {title}
+            </Text>
+            <Text style={[styles.promptResponse, { color: colors.foreground }]}>
+                {response}
+            </Text>
+        </View>
+    );
+}
+
+function PillCollection({
+    items,
+}: {
+    items: string[];
+}) {
+    const { colors, isDark } = useTheme();
+
+    if (items.length === 0) return null;
+
+    return (
+        <View style={styles.pillWrap}>
+            {items.map((item) => (
+                <View
+                    key={item}
+                    style={[
+                        styles.inlinePill,
+                        {
+                            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                            borderColor: colors.border,
+                        },
+                    ]}
+                >
+                    <Text style={[styles.inlinePillText, { color: colors.foreground }]}>
+                        {item}
+                    </Text>
+                </View>
+            ))}
+        </View>
+    );
+}
+
 export default function ProfileViewScreen() {
     const { userId } = useLocalSearchParams<{ userId: string }>();
     const router = useRouter();
@@ -177,6 +324,53 @@ export default function ProfileViewScreen() {
         ...(profile.photos ?? []),
     ].filter(Boolean) as string[];
     const galleryPhotos = allPhotos.slice(1);
+    const aboutMe = profile.aboutMe?.trim();
+    const bio = profile.bio?.trim();
+    const secondaryAbout = aboutMe && aboutMe !== bio ? aboutMe : null;
+    const musicGenres = (profile.personalityAnswers?.musicGenres ?? [])
+        .map((genre) => formatDisplayValue(genre))
+        .filter(Boolean) as string[];
+    const aboutPills = [
+        formatDisplayValue(profile.height),
+        formatDisplayValue(profile.gender),
+        formatDisplayValue(profile.religion),
+        formatDisplayValue(profile.politics),
+    ].filter(Boolean) as string[];
+    const lookingForPills = [
+        formatDisplayValue(profile.lookingFor),
+        formatDisplayValue(profile.lifestyleAnswers?.relationshipGoal),
+        formatDisplayValue(profile.personalityAnswers?.idealDateVibe),
+    ].filter(Boolean) as string[];
+    const campusPills = [
+        profile.course?.trim(),
+        profile.university?.trim(),
+        profile.yearOfStudy ? `Year ${profile.yearOfStudy}` : null,
+        formatDisplayValue(profile.education),
+    ].filter(Boolean) as string[];
+    const personalityDetails = [
+        formatDisplayValue(profile.personalityType),
+        formatDisplayValue(profile.loveLanguage),
+        formatDisplayValue(profile.communicationStyle),
+        formatDisplayValue(profile.zodiacSign),
+        formatDisplayValue(profile.personalityAnswers?.sleepSchedule),
+        formatDisplayValue(profile.personalityAnswers?.socialVibe),
+        formatDisplayValue(profile.personalityAnswers?.driveStyle),
+        formatDisplayValue(profile.personalityAnswers?.convoStyle),
+        formatDisplayValue(profile.personalityAnswers?.socialBattery),
+    ].filter(Boolean) as string[];
+    const lifestylePills = [
+        formatDisplayValue(profile.sleepingHabits),
+        formatDisplayValue(profile.drinkingPreference ?? profile.lifestyleAnswers?.drinks),
+        formatDisplayValue(profile.smoking ?? profile.lifestyleAnswers?.smokes),
+        formatDisplayValue(profile.workoutFrequency),
+        formatDisplayValue(profile.socialMediaUsage),
+        formatDisplayValue(profile.lifestyleAnswers?.outingFrequency),
+    ].filter(Boolean) as string[];
+    const socialItems = [
+        normalizeHandle(profile.instagram) ? `Instagram @${normalizeHandle(profile.instagram)}` : null,
+        normalizeHandle(profile.spotify) ? `Spotify ${normalizeHandle(profile.spotify)}` : null,
+        normalizeHandle(profile.snapchat) ? `Snapchat @${normalizeHandle(profile.snapchat)}` : null,
+    ].filter(Boolean) as string[];
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -215,11 +409,28 @@ export default function ProfileViewScreen() {
                     />
 
                     {/* Bio */}
-                    {profile.bio && (
+                    {(bio || secondaryAbout) && (
                         <ProfileSectionCard>
                             <View style={styles.bioSection}>
-                                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>About</Text>
-                                <Text style={[styles.bio, { color: colors.foreground }]}>{profile.bio}</Text>
+                                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>About them</Text>
+                                {bio && (
+                                    <Text style={[styles.bio, { color: colors.foreground }]}>{bio}</Text>
+                                )}
+                                {secondaryAbout && (
+                                    <Text style={[styles.bioSecondary, { color: colors.mutedForeground }]}>
+                                        {secondaryAbout}
+                                    </Text>
+                                )}
+                                <PillCollection items={aboutPills} />
+                            </View>
+                        </ProfileSectionCard>
+                    )}
+
+                    {lookingForPills.length > 0 && (
+                        <ProfileSectionCard>
+                            <View style={styles.subSection}>
+                                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Looking for</Text>
+                                <PillCollection items={lookingForPills} />
                             </View>
                         </ProfileSectionCard>
                     )}
@@ -238,6 +449,23 @@ export default function ProfileViewScreen() {
                         </ProfileSectionCard>
                     )}
 
+                    {profile.qualities && profile.qualities.length > 0 && (
+                        <ProfileSectionCard>
+                            <View style={styles.subSection}>
+                                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Standout qualities</Text>
+                                <View style={styles.qualitiesWrap}>
+                                    {profile.qualities.map((quality) => (
+                                        <QualityBadge
+                                            key={quality}
+                                            quality={quality}
+                                            isDark={isDark}
+                                        />
+                                    ))}
+                                </View>
+                            </View>
+                        </ProfileSectionCard>
+                    )}
+
                     <InlinePhotoBreak
                         uri={galleryPhotos[1]}
                         label="More than just the headline"
@@ -246,9 +474,42 @@ export default function ProfileViewScreen() {
                     />
 
                     {/* Personality */}
-                    {profile.personalityTags && profile.personalityTags.length > 0 && (
+                    {((profile.personalityTags && profile.personalityTags.length > 0) || personalityDetails.length > 0) && (
                         <ProfileSectionCard>
-                            <PersonalityTags tags={profile.personalityTags} />
+                            <View style={styles.sectionStack}>
+                                {profile.personalityTags && profile.personalityTags.length > 0 && (
+                                    <PersonalityTags tags={profile.personalityTags} />
+                                )}
+                                <PillCollection items={personalityDetails} />
+                            </View>
+                        </ProfileSectionCard>
+                    )}
+
+                    {musicGenres.length > 0 && (
+                        <ProfileSectionCard>
+                            <View style={styles.subSection}>
+                                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Music taste</Text>
+                                <PillCollection items={musicGenres} />
+                            </View>
+                        </ProfileSectionCard>
+                    )}
+
+                    {profile.prompts && profile.prompts.length > 0 && (
+                        <ProfileSectionCard>
+                            <View style={styles.sectionStack}>
+                                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+                                    Prompt answers
+                                </Text>
+                                <View style={styles.promptsWrap}>
+                                    {profile.prompts.map((prompt, index) => (
+                                        <PromptResponseCard
+                                            key={`${prompt.promptId}-${index}`}
+                                            promptId={prompt.promptId}
+                                            response={prompt.response}
+                                        />
+                                    ))}
+                                </View>
+                            </View>
                         </ProfileSectionCard>
                     )}
 
@@ -258,6 +519,42 @@ export default function ProfileViewScreen() {
                         variant="left"
                         onPhotoPress={(uri) => setFullScreenPhotoUri(uri)}
                     />
+
+                    {campusPills.length > 0 && (
+                        <ProfileSectionCard>
+                            <View style={styles.subSection}>
+                                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Campus life</Text>
+                                <PillCollection items={campusPills} />
+                            </View>
+                        </ProfileSectionCard>
+                    )}
+
+                    {lifestylePills.length > 0 && (
+                        <ProfileSectionCard>
+                            <View style={styles.subSection}>
+                                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Lifestyle</Text>
+                                <PillCollection items={lifestylePills} />
+                            </View>
+                        </ProfileSectionCard>
+                    )}
+
+                    {profile.languages && profile.languages.length > 0 && (
+                        <ProfileSectionCard>
+                            <View style={styles.subSection}>
+                                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Languages</Text>
+                                <PillCollection items={profile.languages} />
+                            </View>
+                        </ProfileSectionCard>
+                    )}
+
+                    {socialItems.length > 0 && (
+                        <ProfileSectionCard>
+                            <View style={styles.subSection}>
+                                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Socials</Text>
+                                <PillCollection items={socialItems} />
+                            </View>
+                        </ProfileSectionCard>
+                    )}
 
                     {/* Wingman quotes */}
                     {profile.wingmanQuotes && profile.wingmanQuotes.length > 0 && (
@@ -334,10 +631,21 @@ const styles = StyleSheet.create({
     bioSection: {
         gap: 6,
     },
+    bioSecondary: {
+        fontSize: 14,
+        lineHeight: 21,
+        marginTop: 4,
+    },
     sectionCard: {
         borderRadius: 22,
         borderWidth: 1,
         padding: 16,
+    },
+    sectionStack: {
+        gap: 16,
+    },
+    subSection: {
+        gap: 10,
     },
     sectionLabel: {
         fontSize: 12,
@@ -345,9 +653,52 @@ const styles = StyleSheet.create({
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
+    sectionTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        letterSpacing: -0.3,
+        lineHeight: 28,
+    },
     bio: {
         fontSize: 15,
         lineHeight: 22,
+    },
+    qualitiesWrap: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    promptsWrap: {
+        gap: 12,
+    },
+    promptCard: {
+        borderRadius: 16,
+        borderWidth: 1,
+        padding: 14,
+        gap: 8,
+    },
+    promptTitle: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    promptResponse: {
+        fontSize: 15,
+        lineHeight: 22,
+    },
+    pillWrap: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    inlinePill: {
+        borderRadius: 999,
+        borderWidth: 1,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+    },
+    inlinePillText: {
+        fontSize: 13,
+        fontWeight: '600',
     },
     photoBreakWrap: {
         marginTop: -2,

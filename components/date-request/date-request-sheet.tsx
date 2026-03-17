@@ -16,7 +16,6 @@ import Animated, {
     withSpring,
     withTiming,
     runOnJS,
-    interpolate,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -37,6 +36,55 @@ const VIBES: DateVibe[] = ['coffee', 'walk', 'dinner', 'hangout'];
 
 const MAX_MESSAGE_LENGTH = 150;
 
+function VibeOptionCard({
+    vibe,
+    idx,
+    isSelected,
+    scale,
+    isDark,
+    colors,
+    onPress,
+}: {
+    vibe: DateVibe;
+    idx: number;
+    isSelected: boolean;
+    scale: { value: number };
+    isDark: boolean;
+    colors: {
+        primary: string;
+        foreground: string;
+        border: string;
+    };
+    onPress: (vibe: DateVibe, idx: number) => void;
+}) {
+    const scaleStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: scale.value }],
+    }));
+
+    return (
+        <Animated.View style={[styles.vibeCardWrap, scaleStyle]}>
+            <Pressable
+                onPress={() => onPress(vibe, idx)}
+                style={[
+                    styles.vibeCard,
+                    {
+                        backgroundColor: isSelected
+                            ? colors.primary + '18'
+                            : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                        borderColor: isSelected ? colors.primary : colors.border,
+                        borderWidth: isSelected ? 2 : 1,
+                    },
+                ]}
+            >
+                <Text style={styles.vibeEmoji}>{VIBE_EMOJIS[vibe]}</Text>
+                <Text style={[styles.vibeLabel, { color: isSelected ? colors.primary : colors.foreground, fontWeight: isSelected ? '700' : '500' }]}>
+                    {VIBE_LABELS[vibe]}
+                </Text>
+            </Pressable>
+        </Animated.View>
+    );
+}
+
 export function DateRequestSheet({
     visible,
     toUserId,
@@ -53,11 +101,15 @@ export function DateRequestSheet({
 
     const translateY = useSharedValue(600);
     const backdropOpacity = useSharedValue(0);
+    const coffeeScale = useSharedValue(1);
+    const walkScale = useSharedValue(1);
+    const dinnerScale = useSharedValue(1);
+    const hangoutScale = useSharedValue(1);
 
     const { mutateAsync: createRequest, isPending } = useCreateDateRequest();
 
     // Vibe card scale values
-    const vibeScales = useRef(VIBES.map(() => useSharedValue(1))).current;
+    const vibeScales = useRef([coffeeScale, walkScale, dinnerScale, hangoutScale]).current;
 
     const openSheet = useCallback(() => {
         translateY.value = withSpring(0, { damping: 20, stiffness: 220 });
@@ -173,7 +225,7 @@ export function DateRequestSheet({
                                 Invite sent 💜
                             </Text>
                             <Text style={[styles.successSub, { color: colors.mutedForeground }]}>
-                                We'll let you know when {toUserName} responds.
+                                We will let you know when {toUserName} responds.
                             </Text>
                         </View>
                     ) : (
@@ -188,31 +240,17 @@ export function DateRequestSheet({
                             </Text>
                             <View style={styles.vibeGrid}>
                                 {VIBES.map((vibe, idx) => {
-                                    const isSelected = selectedVibe === vibe;
-                                    const scaleStyle = useAnimatedStyle(() => ({
-                                        transform: [{ scale: vibeScales[idx].value }],
-                                    }));
                                     return (
-                                        <Animated.View key={vibe} style={[styles.vibeCardWrap, scaleStyle]}>
-                                            <Pressable
-                                                onPress={() => handleVibeSelect(vibe, idx)}
-                                                style={[
-                                                    styles.vibeCard,
-                                                    {
-                                                        backgroundColor: isSelected
-                                                            ? colors.primary + '18'
-                                                            : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                                                        borderColor: isSelected ? colors.primary : colors.border,
-                                                        borderWidth: isSelected ? 2 : 1,
-                                                    },
-                                                ]}
-                                            >
-                                                <Text style={styles.vibeEmoji}>{VIBE_EMOJIS[vibe]}</Text>
-                                                <Text style={[styles.vibeLabel, { color: isSelected ? colors.primary : colors.foreground, fontWeight: isSelected ? '700' : '500' }]}>
-                                                    {VIBE_LABELS[vibe]}
-                                                </Text>
-                                            </Pressable>
-                                        </Animated.View>
+                                        <VibeOptionCard
+                                            key={vibe}
+                                            vibe={vibe}
+                                            idx={idx}
+                                            isSelected={selectedVibe === vibe}
+                                            scale={vibeScales[idx]}
+                                            isDark={isDark}
+                                            colors={colors}
+                                            onPress={handleVibeSelect}
+                                        />
                                     );
                                 })}
                             </View>
