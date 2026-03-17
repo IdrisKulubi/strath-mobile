@@ -91,8 +91,8 @@ export const VIBE_EMOJIS: Record<DateVibe, string> = {
 
 export const ARRANGEMENT_STATUS_LABELS: Record<MutualDate['arrangementStatus'], string> = {
     mutual: 'You both said yes',
-    call_pending: 'Take a quick call first',
-    being_arranged: 'Being arranged by StrathSpace',
+    call_pending: 'Waiting for your call',
+    being_arranged: "We're arranging this one for you",
     upcoming: 'Date confirmed',
     completed: 'Completed',
     cancelled: 'Cancelled',

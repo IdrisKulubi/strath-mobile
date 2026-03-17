@@ -268,9 +268,14 @@ export default function VibeCheckCallScreen() {
                 )}
 
                 {!callStarted && (
-                    <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                        Anonymous • Audio only • 3 minutes
-                    </Text>
+                    <>
+                        <Text style={[styles.preCallTitle, { color: colors.foreground }]}>
+                            Before you meet, take a quick 3-minute call
+                        </Text>
+                        <Text style={[styles.preCallSub, { color: colors.mutedForeground }]}>
+                            Reduce awkwardness and confirm the vibe.{'\n'}Anonymous • Audio only
+                        </Text>
+                    </>
                 )}
             </View>
 
@@ -308,7 +313,7 @@ export default function VibeCheckCallScreen() {
                         activeOpacity={0.85}
                     >
                         <ArrowSquareOut size={18} weight="fill" color="#ffffff" />
-                        <Text style={styles.startButtonText}>Open Call</Text>
+                        <Text style={styles.startButtonText}>Start 3-Minute Call</Text>
                     </TouchableOpacity>
                 ) : (
                     <TouchableOpacity
@@ -381,6 +386,19 @@ const styles = StyleSheet.create({
     subtitle: {
         fontSize: 14,
         textAlign: "center",
+    },
+    preCallTitle: {
+        fontSize: 18,
+        fontWeight: "700",
+        textAlign: "center",
+        paddingHorizontal: 24,
+    },
+    preCallSub: {
+        fontSize: 14,
+        textAlign: "center",
+        lineHeight: 22,
+        paddingHorizontal: 32,
+        marginTop: 8,
     },
     loadingText: {
         fontSize: 15,

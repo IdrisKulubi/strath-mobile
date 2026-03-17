@@ -66,9 +66,8 @@ export function MatchReasons({ reasons }: MatchReasonsProps) {
             ]}
         >
             <View style={styles.labelRow}>
-                <Ionicons name="sparkles" size={12} color={colors.primary} />
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                    Why you might click
+                    ✨ Why you might click
                 </Text>
             </View>
 

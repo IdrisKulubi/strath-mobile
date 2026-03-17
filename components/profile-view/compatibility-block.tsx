@@ -35,7 +35,7 @@ export function CompatibilityBlock({ score, reasons }: CompatibilityBlockProps) 
             {reasons.length > 0 && (
                 <View style={styles.reasonsWrap}>
                     <Text style={[styles.reasonsLabel, { color: colors.mutedForeground }]}>
-                        Why you might match
+                        Why you might click
                     </Text>
                     <View style={styles.reasonChips}>
                         {reasons.map((reason, i) => (

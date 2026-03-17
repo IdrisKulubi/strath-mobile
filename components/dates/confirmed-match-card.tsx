@@ -153,7 +153,7 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
             {match.arrangementStatus === 'call_pending' && (
                 <View style={styles.callSection}>
                     <Text style={[styles.callHint, { color: colors.mutedForeground }]}>
-                        Before you meet, take a quick 3-minute call to confirm the vibe.
+                        Before you meet, take a quick 3-minute call to reduce awkwardness and confirm the vibe.
                     </Text>
                     <Pressable
                         onPress={handleStartCall}
@@ -161,8 +161,17 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                         style={[styles.callBtn, { backgroundColor: colors.primary, opacity: match.legacyMatchId ? 1 : 0.6 }]}
                     >
                         <Ionicons name="call-outline" size={16} color="#fff" />
-                        <Text style={styles.callBtnText}>Start 3-min call</Text>
+                        <Text style={styles.callBtnText}>Start 3-Minute Call</Text>
                     </Pressable>
+                </View>
+            )}
+
+            {match.arrangementStatus === 'being_arranged' && (
+                <View style={[styles.scheduledBlock, { backgroundColor: isDark ? 'rgba(233,30,140,0.08)' : 'rgba(233,30,140,0.06)', borderColor: 'rgba(233,30,140,0.25)' }]}>
+                    <Ionicons name="sparkles" size={16} color={colors.primary} />
+                    <Text style={[styles.scheduledText, { color: colors.foreground }]}>
+                        Our team will reach out soon.
+                    </Text>
                 </View>
             )}
 
@@ -170,7 +179,7 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                 <View style={[styles.scheduledBlock, { backgroundColor: isDark ? 'rgba(233,30,140,0.08)' : 'rgba(233,30,140,0.06)', borderColor: 'rgba(233,30,140,0.25)' }]}>
                     <Ionicons name="sparkles" size={16} color={colors.primary} />
                     <Text style={[styles.scheduledText, { color: colors.foreground }]}>
-                        Mutual interest unlocked. The next coordination step starts from here.
+                        Mutual interest unlocked. Start your 3-minute call when you're ready.
                     </Text>
                 </View>
             )}

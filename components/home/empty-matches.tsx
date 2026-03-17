@@ -44,10 +44,10 @@ export function EmptyMatches({ allActioned = false }: EmptyMatchesProps) {
             {allActioned ? (
                 <>
                     <Text style={[styles.title, { color: colors.foreground }]}>
-                        You have seen everyone for today
+                        We're preparing your next matches
                     </Text>
                     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                        New curated matches refresh tomorrow
+                        Check back tomorrow for a fresh set
                     </Text>
                     <View style={[styles.countdownWrap, { backgroundColor: isDark ? colors.card : '#f5f5f5', borderColor: colors.border }]}>
                         <Text style={[styles.countdownLabel, { color: colors.mutedForeground }]}>
@@ -61,10 +61,10 @@ export function EmptyMatches({ allActioned = false }: EmptyMatchesProps) {
             ) : (
                 <>
                     <Text style={[styles.title, { color: colors.foreground }]}>
-                        No curated matches yet
+                        We're preparing your next matches
                     </Text>
                     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                        Complete your profile to unlock your first daily set
+                        Check back tomorrow for a fresh set
                     </Text>
                 </>
             )}

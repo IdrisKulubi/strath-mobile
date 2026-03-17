@@ -11,6 +11,7 @@ import { useTheme } from '@/hooks/use-theme';
 
 interface ProfileViewCtaProps {
     onOpenToMeet: () => void;
+    onPass?: () => void;
     disabled?: boolean;
     completed?: boolean;
     label?: string;
@@ -18,6 +19,7 @@ interface ProfileViewCtaProps {
 
 export function ProfileViewCta({
     onOpenToMeet,
+    onPass,
     disabled = false,
     completed = false,
     label = 'Open to Meet',
@@ -65,6 +67,13 @@ export function ProfileViewCta({
                     </Text>
                 </Pressable>
             </Animated.View>
+            {onPass && !completed && !disabled && (
+                <Pressable onPress={onPass} style={styles.passWrap}>
+                    <Text style={[styles.passText, { color: colors.mutedForeground }]}>
+                        Pass
+                    </Text>
+                </Pressable>
+            )}
         </View>
     );
 }
@@ -78,6 +87,15 @@ const styles = StyleSheet.create({
     },
     btnWrap: {
         width: '100%',
+    },
+    passWrap: {
+        alignItems: 'center',
+        paddingVertical: 12,
+        marginTop: 4,
+    },
+    passText: {
+        fontSize: 14,
+        fontWeight: '600',
     },
     btn: {
         borderRadius: 16,

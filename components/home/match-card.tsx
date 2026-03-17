@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -104,6 +105,11 @@ export function MatchCard({ match, index, onOpenToMeet, onPass }: MatchCardProps
                         <Ionicons name="person-circle-outline" size={72} color={colors.mutedForeground} />
                     </View>
                 )}
+                <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.75)']}
+                    style={styles.photoGradient}
+                    pointerEvents="none"
+                />
                 <View style={styles.photoMetaRow}>
                     <View style={styles.photoNameWrap}>
                         <Text style={styles.photoName}>
@@ -113,7 +119,7 @@ export function MatchCard({ match, index, onOpenToMeet, onPass }: MatchCardProps
                     </View>
                     <View style={styles.scoreBadge}>
                         <Text style={styles.scoreBadgeValue}>{match.compatibilityScore}%</Text>
-                        <Text style={styles.scoreBadgeLabel}>vibe match</Text>
+                        <Text style={styles.scoreBadgeLabel}>Vibe Match</Text>
                     </View>
                 </View>
             </Pressable>
@@ -144,7 +150,16 @@ export function MatchCard({ match, index, onOpenToMeet, onPass }: MatchCardProps
 
                     <Animated.View style={[styles.ctaAskWrap, askAnimStyle]}>
                         <Pressable onPress={handleOpenToMeet} style={styles.ctaAsk}>
-                            <Text style={styles.ctaAskText}>Open to Meet</Text>
+                            <LinearGradient
+                                colors={['#ec4899', '#e91e8c']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={StyleSheet.absoluteFill}
+                            >
+                                <View style={styles.ctaAskInner}>
+                                    <Text style={styles.ctaAskText}>Open to Meet</Text>
+                                </View>
+                            </LinearGradient>
                         </Pressable>
                     </Animated.View>
                 </View>
@@ -175,6 +190,13 @@ const styles = StyleSheet.create({
     photoWrap: {
         height: 320,
         position: 'relative',
+    },
+    photoGradient: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: 120,
     },
     photo: {
         width: '100%',
@@ -272,13 +294,15 @@ const styles = StyleSheet.create({
     },
     ctaAsk: {
         flex: 1,
-        backgroundColor: '#e91e8c',
         borderRadius: 18,
-        paddingVertical: 16,
+        overflow: 'hidden',
+        minHeight: 56,
+        position: 'relative',
+    },
+    ctaAskInner: {
+        flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        flexDirection: 'row',
-        gap: 6,
         minHeight: 56,
     },
     ctaAskText: {

@@ -195,10 +195,10 @@ export function VibeCheckDecision({
                 {/* Question */}
                 <View style={styles.questionBlock}>
                     <Text style={[styles.heading, { color: colors.foreground }]}>
-                        How did the vibe feel?
+                        Still open to meeting?
                     </Text>
                     <Text style={[styles.body, { color: colors.mutedForeground }]}>
-                        Would you still like to meet?
+                        Your answer stays private until both sides decide.
                     </Text>
                 </View>
 
@@ -216,7 +216,7 @@ export function VibeCheckDecision({
                             {isSubmittingDecision ? (
                                 <ActivityIndicator size="small" color="#fff" />
                             ) : (
-                                <Text style={styles.primaryBtnText}>Yes, let's meet! 🎉</Text>
+                                <Text style={styles.primaryBtnText}>Yes, I'm in</Text>
                             )}
                         </Pressable>
                     </Animated.View>
@@ -241,9 +241,6 @@ export function VibeCheckDecision({
                     </Animated.View>
                 </View>
 
-                <Text style={[styles.privacyNote, { color: colors.mutedForeground }]}>
-                    Your answer stays private until both sides decide.
-                </Text>
             </Animated.View>
         </View>
     );

@@ -279,6 +279,14 @@ export default function ProfileViewScreen() {
         respondToPair.mutate({ pairId: profile.pairId, decision: 'open_to_meet' });
     }, [profile?.pairId, respondToPair]);
 
+    const handlePass = useCallback(() => {
+        if (!profile?.pairId) return;
+        respondToPair.mutate(
+            { pairId: profile.pairId, decision: 'passed' },
+            { onSettled: () => router.back() }
+        );
+    }, [profile?.pairId, respondToPair, router]);
+
     if (isLoading) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -560,6 +568,7 @@ export default function ProfileViewScreen() {
             {/* Sticky CTA */}
             <ProfileViewCta
                 onOpenToMeet={handleOpenToMeet}
+                onPass={profile.pairId ? handlePass : undefined}
                 completed={profile.currentUserDecision !== 'pending'}
                 disabled={!profile.pairId || respondToPair.isPending}
                 label={profile.pairId ? 'Open to Meet' : 'Not in today\'s curated set'}

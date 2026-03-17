@@ -12,7 +12,7 @@ const CONFIG: Record<EmptyDatesProps['section'], { icon: React.ComponentProps<ty
     mutual: {
         icon: 'heart-outline',
         title: 'No mutual matches yet',
-        subtitle: 'Once both of you are open to meet, your mutuals will show up here.',
+        subtitle: 'When both of you are open to meet, they\'ll appear here.',
     },
     call_pending: {
         icon: 'call-outline',
@@ -31,8 +31,8 @@ const CONFIG: Record<EmptyDatesProps['section'], { icon: React.ComponentProps<ty
     },
     history: {
         icon: 'time-outline',
-        title: 'No history yet',
-        subtitle: 'Your completed and past dates will appear here.',
+        title: 'No date history yet',
+        subtitle: 'Your future stories start here.',
     },
 };
 

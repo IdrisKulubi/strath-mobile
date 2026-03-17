@@ -28,19 +28,11 @@ export function HomeHeader({ firstName, matchCount }: HomeHeaderProps) {
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
                 {visibleCount > 0 ? `Your top ${visibleCount} matches today` : 'Your curated matches today'}
             </Text>
-            <View
-                style={[
-                    styles.metaPill,
-                    {
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.035)',
-                        borderColor: colors.border,
-                    },
-                ]}
-            >
-                <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
-                    {visibleCount > 0 ? `Only ${visibleCount} matches today` : 'A small, curated set just for you'}
+            {visibleCount > 0 && (
+                <Text style={[styles.refreshLine, { color: colors.mutedForeground }]}>
+                    Only {visibleCount} matches refresh every 24 hours
                 </Text>
-            </View>
+            )}
         </View>
     );
 }
@@ -63,17 +55,11 @@ const styles = StyleSheet.create({
         lineHeight: 22,
         fontWeight: '500',
     },
-    metaPill: {
-        alignSelf: 'flex-start',
-        borderRadius: 999,
-        borderWidth: 1,
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        marginTop: 2,
-    },
-    metaText: {
+    refreshLine: {
         fontSize: 12,
-        fontWeight: '600',
+        fontWeight: '500',
         letterSpacing: 0.2,
+        marginTop: 2,
+        opacity: 0.85,
     },
 });
