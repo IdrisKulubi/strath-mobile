@@ -9,8 +9,8 @@ import { useNotificationCounts, formatBadgeCount } from '@/hooks/use-notificatio
 
 export default function TabLayout() {
   const { colors } = useTheme();
-  const { unreadMessages, incomingRequests } = useNotificationCounts();
-  const datesBadge = incomingRequests ?? 0;
+  const { unreadMessages, datesAttention } = useNotificationCounts();
+  const datesBadge = datesAttention ?? 0;
 
   return (
     <Tabs

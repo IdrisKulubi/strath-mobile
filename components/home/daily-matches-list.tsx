@@ -6,11 +6,11 @@ import { EmptyMatches } from './empty-matches';
 
 interface DailyMatchesListProps {
     matches: DailyMatch[];
-    onAskForDate: (match: DailyMatch) => void;
-    onSkip: (userId: string) => void;
+    onOpenToMeet: (match: DailyMatch) => void;
+    onPass: (match: DailyMatch) => void;
 }
 
-export function DailyMatchesList({ matches, onAskForDate, onSkip }: DailyMatchesListProps) {
+export function DailyMatchesList({ matches, onOpenToMeet, onPass }: DailyMatchesListProps) {
     if (matches.length === 0) {
         return <EmptyMatches />;
     }
@@ -19,11 +19,11 @@ export function DailyMatchesList({ matches, onAskForDate, onSkip }: DailyMatches
         <View style={styles.container}>
             {matches.map((match, index) => (
                 <MatchCard
-                    key={match.userId}
+                    key={match.pairId}
                     match={match}
                     index={index}
-                    onAskForDate={onAskForDate}
-                    onSkip={onSkip}
+                    onOpenToMeet={onOpenToMeet}
+                    onPass={onPass}
                 />
             ))}
         </View>

@@ -21,8 +21,8 @@ import { MatchReasons } from './match-reasons';
 interface MatchCardProps {
     match: DailyMatch;
     index: number;
-    onAskForDate: (match: DailyMatch) => void;
-    onSkip: (userId: string) => void;
+    onOpenToMeet: (match: DailyMatch) => void;
+    onPass: (match: DailyMatch) => void;
 }
 
 function buildIdentityLine(match: DailyMatch) {
@@ -32,10 +32,18 @@ function buildIdentityLine(match: DailyMatch) {
     return `${parts[0]} • ${parts[1]}`;
 }
 
-export function MatchCard({ match, index, onAskForDate, onSkip }: MatchCardProps) {
+function buildExpiryText(expiresAt: string) {
+    const remainingMs = new Date(expiresAt).getTime() - Date.now();
+    const remainingHours = Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60)));
+    if (remainingHours <= 1) return 'Refreshes in under 1 hour';
+    return `Refreshes in about ${remainingHours} hours`;
+}
+
+export function MatchCard({ match, index, onOpenToMeet, onPass }: MatchCardProps) {
     const { colors, isDark } = useTheme();
     const router = useRouter();
     const identityLine = buildIdentityLine(match);
+    const expiryText = buildExpiryText(match.expiresAt);
 
     const askScale = useSharedValue(1);
     const skipScale = useSharedValue(1);
@@ -50,24 +58,27 @@ export function MatchCard({ match, index, onAskForDate, onSkip }: MatchCardProps
         viewScale.value = withSpring(0.96, { damping: 10, stiffness: 300 }, () => {
             viewScale.value = withSpring(1);
         });
-        router.push(`/profile/${match.userId}`);
-    }, [match.userId, router, viewScale]);
+        router.push({
+            pathname: '/profile/[userId]',
+            params: { userId: match.userId, pairId: match.pairId },
+        });
+    }, [match.pairId, match.userId, router, viewScale]);
 
-    const handleAskForDate = useCallback(() => {
+    const handleOpenToMeet = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         askScale.value = withSpring(0.94, { damping: 10, stiffness: 300 }, () => {
             askScale.value = withSpring(1);
         });
-        onAskForDate(match);
-    }, [match, onAskForDate, askScale]);
+        onOpenToMeet(match);
+    }, [match, onOpenToMeet, askScale]);
 
-    const handleSkip = useCallback(() => {
+    const handlePass = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         skipScale.value = withTiming(0.94, { duration: 80 }, () => {
             skipScale.value = withSpring(1);
         });
-        onSkip(match.userId);
-    }, [match.userId, onSkip, skipScale]);
+        onPass(match);
+    }, [match, onPass, skipScale]);
 
     return (
         <Animated.View
@@ -110,6 +121,9 @@ export function MatchCard({ match, index, onAskForDate, onSkip }: MatchCardProps
             <View style={styles.body}>
                 <CompatibilityBar score={match.compatibilityScore} animationDelay={index * 80 + 200} />
                 <MatchReasons reasons={match.reasons} />
+                <Text style={[styles.refreshText, { color: colors.mutedForeground }]}>
+                    {expiryText}
+                </Text>
                 <View style={styles.ctaRow}>
                     <Animated.View style={[styles.ctaViewWrap, viewAnimStyle]}>
                         <Pressable
@@ -128,24 +142,17 @@ export function MatchCard({ match, index, onAskForDate, onSkip }: MatchCardProps
                         </Pressable>
                     </Animated.View>
 
-                    {match.requestSent ? (
-                        <View style={[styles.ctaAsk, styles.ctaAskSent]}>
-                            <Ionicons name="checkmark-circle" size={16} color="#fff" />
-                            <Text style={styles.ctaAskText}>Invite Sent</Text>
-                        </View>
-                    ) : (
-                        <Animated.View style={[styles.ctaAskWrap, askAnimStyle]}>
-                            <Pressable onPress={handleAskForDate} style={styles.ctaAsk}>
-                                <Text style={styles.ctaAskText}>Invite to Date 💌</Text>
-                            </Pressable>
-                        </Animated.View>
-                    )}
+                    <Animated.View style={[styles.ctaAskWrap, askAnimStyle]}>
+                        <Pressable onPress={handleOpenToMeet} style={styles.ctaAsk}>
+                            <Text style={styles.ctaAskText}>Open to Meet</Text>
+                        </Pressable>
+                    </Animated.View>
                 </View>
 
                 <Animated.View style={[styles.skipWrap, skipAnimStyle]}>
-                    <Pressable onPress={handleSkip} style={styles.skipBtn}>
+                    <Pressable onPress={handlePass} style={styles.skipBtn}>
                         <Text style={[styles.skipText, { color: colors.mutedForeground }]}>
-                            Skip
+                            Pass
                         </Text>
                     </Pressable>
                 </Animated.View>
@@ -236,6 +243,10 @@ const styles = StyleSheet.create({
         paddingBottom: 16,
         gap: 16,
     },
+    refreshText: {
+        fontSize: 12,
+        fontWeight: '500',
+    },
     ctaRow: {
         flexDirection: 'row',
         gap: 12,
@@ -262,17 +273,6 @@ const styles = StyleSheet.create({
     ctaAsk: {
         flex: 1,
         backgroundColor: '#e91e8c',
-        borderRadius: 18,
-        paddingVertical: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'row',
-        gap: 6,
-        minHeight: 56,
-    },
-    ctaAskSent: {
-        backgroundColor: '#10b981',
-        flex: 1,
         borderRadius: 18,
         paddingVertical: 16,
         alignItems: 'center',

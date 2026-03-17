@@ -15,13 +15,11 @@ import { useProfile } from '@/hooks/use-profile';
 import {
     DailyMatch,
     useDailyMatches,
-    useMarkRequestSent,
-    useSkipMatch,
+    useRespondToDailyPair,
 } from '@/hooks/use-daily-matches';
 import { HomeHeader } from '@/components/home/home-header';
 import { DailyMatchesList } from '@/components/home/daily-matches-list';
 import { EmptyMatches } from '@/components/home/empty-matches';
-import { DateRequestSheet } from '@/components/date-request/date-request-sheet';
 
 function HomeSkeleton() {
     return (
@@ -47,10 +45,7 @@ export default function HomeScreen() {
         isRefetching,
         refetch,
     } = useDailyMatches();
-    const skipMatch = useSkipMatch();
-    const markRequestSent = useMarkRequestSent();
-
-    const [selectedMatch, setSelectedMatch] = useState<DailyMatch | null>(null);
+    const respondToPair = useRespondToDailyPair();
     const [refreshing, setRefreshing] = useState(false);
     const [hasSeenMatchesToday, setHasSeenMatchesToday] = useState(false);
 
@@ -63,7 +58,7 @@ export default function HomeScreen() {
     const allActioned = hasSeenMatchesToday && matches.length === 0 && !isLoading && !isRefetching;
 
     const activeMatchCount = useMemo(
-        () => matches.filter((match) => !match.requestSent).length,
+        () => matches.filter((match) => match.currentUserDecision === 'pending').length,
         [matches]
     );
 
@@ -76,36 +71,44 @@ export default function HomeScreen() {
         }
     }, [refetch]);
 
-    const handleAskForDate = useCallback((match: DailyMatch) => {
-        setSelectedMatch(match);
-    }, []);
+    const handleOpenToMeet = useCallback((match: DailyMatch) => {
+        respondToPair.mutate(
+            { pairId: match.pairId, decision: 'open_to_meet' },
+            {
+                onSuccess: () => {
+                    toast.show({
+                        message: `You are open to meeting ${match.firstName}. We'll only reveal it if they say yes too.`,
+                        variant: 'success',
+                        position: 'bottom',
+                    });
+                },
+                onError: () => {
+                    toast.show({
+                        message: 'Could not save your decision right now. Please try again.',
+                        variant: 'danger',
+                    });
+                },
+            }
+        );
+    }, [respondToPair, toast]);
 
-    const handleCloseSheet = useCallback(() => {
-        setSelectedMatch(null);
-    }, []);
-
-    const handleRequestSuccess = useCallback(() => {
-        if (selectedMatch) {
-            markRequestSent(selectedMatch.userId);
-        }
-        toast.show({
-            message: 'Date invite sent. Waiting for their reply.',
-            variant: 'success',
-            position: 'bottom',
-        });
-        setSelectedMatch(null);
-    }, [markRequestSent, selectedMatch, toast]);
-
-    const handleSkip = useCallback((userId: string) => {
-        skipMatch.mutate(userId, {
+    const handlePass = useCallback((match: DailyMatch) => {
+        respondToPair.mutate({ pairId: match.pairId, decision: 'passed' }, {
+            onSuccess: () => {
+                toast.show({
+                    message: `${match.firstName} will be removed from this daily set.`,
+                    variant: 'default',
+                    position: 'bottom',
+                });
+            },
             onError: () => {
                 toast.show({
-                    message: 'Could not skip this match right now. Please try again.',
+                    message: 'Could not pass on this pair right now. Please try again.',
                     variant: 'danger',
                 });
             },
         });
-    }, [skipMatch, toast]);
+    }, [respondToPair, toast]);
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -126,8 +129,8 @@ export default function HomeScreen() {
                 ) : matches.length > 0 ? (
                     <DailyMatchesList
                         matches={matches}
-                        onAskForDate={handleAskForDate}
-                        onSkip={handleSkip}
+                        onOpenToMeet={handleOpenToMeet}
+                        onPass={handlePass}
                     />
                 ) : (
                     <EmptyMatches allActioned={allActioned} />
@@ -136,22 +139,14 @@ export default function HomeScreen() {
                 {!isLoading && matches.length > 0 && activeMatchCount === 0 ? (
                     <View style={[styles.allSentBanner, { backgroundColor: isDark ? colors.card : '#f5f5f5', borderColor: colors.border }]}>
                         <Text style={[styles.allSentTitle, { color: colors.foreground }]}>
-                            Your invites are out
+                            Decisions locked in
                         </Text>
                         <Text style={[styles.allSentSubtitle, { color: colors.mutedForeground }]}>
-                            Check the Dates tab for replies and confirmed plans.
+                            Check the Dates tab for mutuals and confirmed plans.
                         </Text>
                     </View>
                 ) : null}
             </ScrollView>
-
-            <DateRequestSheet
-                visible={!!selectedMatch}
-                toUserId={selectedMatch?.userId ?? ''}
-                toUserName={selectedMatch?.firstName ?? 'them'}
-                onClose={handleCloseSheet}
-                onSuccess={handleRequestSuccess}
-            />
         </SafeAreaView>
     );
 }

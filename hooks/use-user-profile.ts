@@ -1,10 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
-import { DailyMatch } from './use-daily-matches';
 import { getAuthToken } from '@/lib/auth-helpers';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-export interface UserProfileDetail extends DailyMatch {
+export interface UserProfileDetail {
+    pairId?: string;
+    userId: string;
+    firstName: string;
+    age: number;
+    profilePhoto?: string;
+    compatibilityScore: number;
+    reasons: string[];
+    currentUserDecision: 'pending' | 'open_to_meet' | 'passed';
     bio?: string;
     aboutMe?: string;
     photos?: string[];
@@ -71,7 +78,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfileDetail | nul
     const profile = profileData?.data ?? profileData;
 
     const compatData = compatRes.ok ? await compatRes.json() : null;
-    const compat = compatData?.data ?? { score: 0, reasons: [], requestSent: false };
+    const compat = compatData?.data ?? { score: 0, reasons: [], pairId: null, currentUserDecision: 'pending' };
 
     const hypeData = hypeRes.ok ? await hypeRes.json() : null;
     const vouches = hypeData?.data?.vouches ?? [];
@@ -96,7 +103,8 @@ async function fetchUserProfile(userId: string): Promise<UserProfileDetail | nul
         profilePhoto: profile?.profilePhoto ?? profile?.user?.profilePhoto ?? profile?.user?.image,
         compatibilityScore: compat?.score ?? 0,
         reasons: compat?.reasons ?? [],
-        requestSent: compat?.requestSent ?? false,
+        pairId: compat?.pairId ?? undefined,
+        currentUserDecision: compat?.currentUserDecision ?? 'pending',
         bio: profile?.bio ?? profile?.aboutMe,
         aboutMe: profile?.aboutMe,
         interests,

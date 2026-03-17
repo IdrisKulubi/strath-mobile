@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { matches, messages, session as sessionTable, dateRequests } from "@/db/schema";
+import { matches, messages, mutualMatches, session as sessionTable } from "@/db/schema";
 import { eq, and, or, ne, sql, inArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 
@@ -51,11 +51,17 @@ export async function GET(request: NextRequest) {
 
         const unopenedMatches = unopenedMatchesResult[0]?.count || 0;
 
-        const incomingRequestsResult = await db
+        const datesAttentionResult = await db
             .select({ count: sql<number>`count(*)::int` })
-            .from(dateRequests)
-            .where(and(eq(dateRequests.toUserId, userId), eq(dateRequests.status, "pending")));
-        const incomingRequests = incomingRequestsResult[0]?.count || 0;
+            .from(mutualMatches)
+            .where(and(
+                or(
+                    eq(mutualMatches.userAId, userId),
+                    eq(mutualMatches.userBId, userId),
+                ),
+                inArray(mutualMatches.status, ["mutual", "call_pending", "being_arranged", "upcoming"]),
+            ));
+        const datesAttention = datesAttentionResult[0]?.count || 0;
 
         // Get all matches for user to calculate unread messages
         const userMatches = await db
@@ -93,9 +99,9 @@ export async function GET(request: NextRequest) {
             data: {
                 unopenedMatches,
                 unreadMessages,
-                incomingRequests,
-                // Combined count for a single badge if needed
-                total: unopenedMatches + unreadMessages + incomingRequests,
+                datesAttention,
+                incomingRequests: 0,
+                total: unopenedMatches + unreadMessages + datesAttention,
             }
         });
 

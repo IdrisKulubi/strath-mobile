@@ -75,6 +75,15 @@ export const dateRequestRespondSchema = z.object({
     action: z.enum(["accept", "decline"]),
 });
 
+export const pairRespondSchema = z.object({
+    decision: z.enum(["open_to_meet", "passed"]),
+});
+
+export const pairGenerationSchema = z.object({
+    userId: z.string().optional(),
+    limit: z.number().int().min(1).max(1000).optional(),
+});
+
 export const dateFeedbackSchema = z.object({
     dateId: z.string(),
     rating: z.number().min(1).max(5),

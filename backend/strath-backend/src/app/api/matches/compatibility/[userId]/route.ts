@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { profiles, dateRequests } from "@/db/schema";
+import { profiles, candidatePairs } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
+import { canonicalizePairUsers } from "@/lib/services/candidate-pairs-service";
 
 export const dynamic = "force-dynamic";
 
@@ -56,13 +57,15 @@ export async function GET(
             return errorResponse(new Error("User not found"), 404);
         }
 
-        const [{ score, reasons }, sentRequest] = await Promise.all([
+        const { userAId, userBId } = canonicalizePairUsers(session.user.id, targetUserId);
+
+        const [{ score, reasons }, activePair] = await Promise.all([
             computeCompatibility(session.user.id, targetUserId),
-            db.query.dateRequests.findFirst({
+            db.query.candidatePairs.findFirst({
                 where: and(
-                    eq(dateRequests.fromUserId, session.user.id),
-                    eq(dateRequests.toUserId, targetUserId),
-                    inArray(dateRequests.status, ["pending", "accepted"])
+                    eq(candidatePairs.userAId, userAId),
+                    eq(candidatePairs.userBId, userBId),
+                    inArray(candidatePairs.status, ["active", "mutual"])
                 ),
             }),
         ]);
@@ -70,7 +73,11 @@ export async function GET(
         return successResponse({
             score,
             reasons: reasons.length > 0 ? reasons : ["Potential match"],
-            requestSent: !!sentRequest,
+            pairId: activePair?.id ?? null,
+            currentUserDecision:
+                activePair?.userAId === session.user.id
+                    ? activePair.aDecision
+                    : activePair?.bDecision ?? "pending",
         });
     } catch (error) {
         console.error("[matches/compatibility/[userId]] Error:", error);

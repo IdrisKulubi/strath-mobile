@@ -12,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useUserProfile } from '@/hooks/use-user-profile';
-import { useMarkRequestSent } from '@/hooks/use-daily-matches';
 import { CachedImage } from '@/components/ui/cached-image';
 import { ProfilePhotos } from '@/components/profile-view/profile-photos';
 import { ProfilePhotoViewer } from '@/components/profile-view/profile-photo-viewer';
@@ -21,9 +20,9 @@ import { InterestsChips } from '@/components/profile-view/interests-chips';
 import { PersonalityTags } from '@/components/profile-view/personality-tags';
 import { WingmanQuotes } from '@/components/profile-view/wingman-quotes';
 import { ProfileViewCta } from '@/components/profile-view/profile-view-cta';
-import { DateRequestSheet } from '@/components/date-request/date-request-sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { QualityBadge } from '@/components/ui/quality-badge';
+import { useRespondToDailyPair } from '@/hooks/use-daily-matches';
 
 function ProfileSkeleton() {
     return (
@@ -268,31 +267,17 @@ export default function ProfileViewScreen() {
     const isDark = colorScheme === 'dark';
 
     const { data: profile, isLoading } = useUserProfile(userId ?? '');
-    const markRequestSent = useMarkRequestSent();
-
-    const [sheetVisible, setSheetVisible] = useState(false);
-    const [requestSent, setRequestSent] = useState(false);
+    const respondToPair = useRespondToDailyPair();
     const [fullScreenPhotoUri, setFullScreenPhotoUri] = useState<string | null>(null);
 
     const handleBack = useCallback(() => {
         router.back();
     }, [router]);
 
-    const handleAskForDate = useCallback(() => {
-        setSheetVisible(true);
-    }, []);
-
-    const handleSheetClose = useCallback(() => {
-        setSheetVisible(false);
-    }, []);
-
-    const handleRequestSuccess = useCallback(() => {
-        setRequestSent(true);
-        setSheetVisible(false);
-        if (userId) {
-            markRequestSent(userId);
-        }
-    }, [userId, markRequestSent]);
+    const handleOpenToMeet = useCallback(() => {
+        if (!profile?.pairId) return;
+        respondToPair.mutate({ pairId: profile.pairId, decision: 'open_to_meet' });
+    }, [profile?.pairId, respondToPair]);
 
     if (isLoading) {
         return (
@@ -574,8 +559,10 @@ export default function ProfileViewScreen() {
 
             {/* Sticky CTA */}
             <ProfileViewCta
-                onAskForDate={handleAskForDate}
-                requestSent={requestSent || (profile?.requestSent ?? false)}
+                onOpenToMeet={handleOpenToMeet}
+                completed={profile.currentUserDecision !== 'pending'}
+                disabled={!profile.pairId || respondToPair.isPending}
+                label={profile.pairId ? 'Open to Meet' : 'Not in today\'s curated set'}
             />
 
             {/* Full-screen photo viewer */}
@@ -585,14 +572,6 @@ export default function ProfileViewScreen() {
                 onClose={() => setFullScreenPhotoUri(null)}
             />
 
-            {/* Date request sheet */}
-            <DateRequestSheet
-                visible={sheetVisible}
-                toUserId={profile.userId}
-                toUserName={profile.firstName}
-                onClose={handleSheetClose}
-                onSuccess={handleRequestSuccess}
-            />
         </View>
     );
 }

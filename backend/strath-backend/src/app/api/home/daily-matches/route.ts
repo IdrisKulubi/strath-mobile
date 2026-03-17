@@ -8,11 +8,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-/**
- * GET /api/matches/daily
- *
- * Compatibility alias for legacy clients. Reads from candidate_pairs.
- */
 export async function GET(req: NextRequest) {
     try {
         const session = await getSessionWithFallback(req);
@@ -27,7 +22,7 @@ export async function GET(req: NextRequest) {
 
         return successResponse({ matches });
     } catch (error) {
-        console.error("[matches/daily] Error:", error);
+        console.error("[home/daily-matches] Error:", error);
         return errorResponse(error);
     }
 }
