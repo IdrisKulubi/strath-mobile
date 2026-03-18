@@ -14,7 +14,8 @@ import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferen
 
 export const DAILY_CANDIDATE_PAIR_LIMIT = 4;
 export const ACTIVE_EXPOSURE_CAP = 4;
-export const CANDIDATE_PAIR_EXPIRY_HOURS = 24;
+// TODO: revert to 24 for production — 5 min for testing cron/expiry
+export const CANDIDATE_PAIR_EXPIRY_HOURS = 5 / 60;
 export const EXPIRED_PAIR_COOLDOWN_DAYS = 7;
 
 export type CandidateDecision = "pending" | "open_to_meet" | "passed";
