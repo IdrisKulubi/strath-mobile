@@ -36,7 +36,7 @@ export function useDailyMatches() {
             const matches = json?.data?.matches ?? [];
             return matches;
         },
-        staleTime: 5 * 60 * 1000, // 5 minutes — matches are daily, no need to refetch often
+        staleTime: 60 * 1000, // 1 minute — ensures fresh pairs after expiry, pull-to-refresh always refetches
     });
 }
 

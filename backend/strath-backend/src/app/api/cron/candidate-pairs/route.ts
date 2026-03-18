@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { and, gte, isNull } from "drizzle-orm";
+import { and, eq, gte, isNull } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
-import { user } from "@/db/schema";
+import { profiles, user } from "@/db/schema";
 import { db } from "@/lib/db";
 import {
     generateCandidatePairsForUser,
@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
         const baseQuery = db
             .select({ id: user.id })
             .from(user)
+            .innerJoin(profiles, eq(user.id, profiles.userId))
             .where(
                 and(
                     gte(user.lastActive, thirtyDaysAgo),
@@ -47,7 +48,8 @@ export async function GET(req: NextRequest) {
                 ),
             );
 
-        const usersToCheck = runLimit ? await baseQuery.limit(runLimit) : await baseQuery;
+        let usersToCheck = runLimit ? await baseQuery.limit(runLimit) : await baseQuery;
+        usersToCheck = Array.from(new Map(usersToCheck.map((u) => [u.id, u])).values());
 
         let generatedFor = 0;
         for (const activeUser of usersToCheck) {

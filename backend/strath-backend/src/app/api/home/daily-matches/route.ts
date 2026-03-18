@@ -5,6 +5,7 @@ import {
     generateCandidatePairsForUser,
     getActiveCandidatePairsForUser,
 } from "@/lib/services/candidate-pairs-service";
+import { runPairExpiration } from "@/lib/services/pair-expiration-service";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,9 @@ export async function GET(req: NextRequest) {
 
         const userId = session.user.id;
         console.log("[daily-matches] GET", { userId });
+
+        // Expire pairs first so we don't return stale/expired pairs
+        await runPairExpiration();
 
         let matches = await getActiveCandidatePairsForUser(userId);
         console.log("[daily-matches] existing active pairs:", matches.length);

@@ -15,11 +15,20 @@ import { successResponse, errorResponse } from "@/lib/api-response";
 
 export const dynamic = "force-dynamic";
 
+function isAuthorizedCron(req: NextRequest): boolean {
+    const cronSecret = process.env.CRON_SECRET;
+    const authHeader = req.headers.get("authorization") ?? "";
+    const bearer = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+    const xCronSecret = req.headers.get("x-cron-secret");
+    const isVercelCron = req.headers.get("x-vercel-cron") === "1";
+
+    if (!cronSecret) return isVercelCron;
+    return bearer === cronSecret || xCronSecret === cronSecret || isVercelCron;
+}
+
 export async function GET(req: NextRequest) {
-    // Validate cron secret
-    const authHeader = req.headers.get("authorization");
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return errorResponse("Unauthorized", 401);
+    if (!isAuthorizedCron(req)) {
+        return errorResponse(new Error("Unauthorized"), 401);
     }
 
     try {
