@@ -248,10 +248,13 @@ function buildReasons(
 }
 
 export async function generateCandidatePairsForUser(userId: string) {
+    console.log("[candidate-pairs] generateCandidatePairsForUser", { userId });
+
     await expireCandidatePairs();
 
     const existingActivePairs = await getActiveCandidatePairsForUser(userId);
     if (existingActivePairs.length > 0) {
+        console.log("[candidate-pairs] returning existing pairs:", existingActivePairs.length);
         return existingActivePairs;
     }
 
@@ -259,7 +262,19 @@ export async function generateCandidatePairsForUser(userId: string) {
         where: eq(profiles.userId, userId),
     });
 
-    if (!currentProfile?.profileCompleted || !currentProfile.isVisible || currentProfile.discoveryPaused || currentProfile.incognitoMode) {
+    if (!currentProfile) {
+        console.log("[candidate-pairs] SKIP: no profile found for user");
+        return [];
+    }
+
+    const profileReasons: string[] = [];
+    if (!currentProfile.profileCompleted) profileReasons.push("profileCompleted=false");
+    if (!currentProfile.isVisible) profileReasons.push("isVisible=false");
+    if (currentProfile.discoveryPaused) profileReasons.push("discoveryPaused=true");
+    if (currentProfile.incognitoMode) profileReasons.push("incognitoMode=true");
+
+    if (profileReasons.length > 0) {
+        console.log("[candidate-pairs] SKIP: profile ineligible:", profileReasons);
         return [];
     }
 
@@ -290,6 +305,14 @@ export async function generateCandidatePairsForUser(userId: string) {
         limit: 60,
     });
 
+    console.log("[candidate-pairs] pool:", {
+        candidateProfilesCount: candidateProfiles.length,
+        excludedIdsCount: excludedIds.length,
+        blockedCount: blockedIds.size,
+        matchedCount: matchedIds.size,
+        targetGenders: targetGenders.length > 0 ? targetGenders : "any",
+    });
+
     const cooldownCutoff = new Date(Date.now() - EXPIRED_PAIR_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
 
     const reciprocalCandidates = candidateProfiles.filter((candidate) => {
@@ -310,6 +333,8 @@ export async function generateCandidatePairsForUser(userId: string) {
 
         return existingPair.createdAt < cooldownCutoff;
     });
+
+    console.log("[candidate-pairs] after reciprocal filter:", reciprocalCandidates.length);
 
     const scoredCandidates = await Promise.all(
         reciprocalCandidates.map(async (candidate) => {
@@ -338,9 +363,17 @@ export async function generateCandidatePairsForUser(userId: string) {
         .sort((left, right) => right.score - left.score)
         .slice(0, DAILY_CANDIDATE_PAIR_LIMIT);
 
+    const filteredByExposure = scoredCandidates.filter((e) => e === null).length;
+    if (filteredByExposure > 0) {
+        console.log("[candidate-pairs] filtered by exposure cap:", filteredByExposure);
+    }
+
     if (selected.length === 0) {
+        console.log("[candidate-pairs] SKIP: no eligible candidates after scoring (reciprocal:", reciprocalCandidates.length, ", selected: 0)");
         return [];
     }
+
+    console.log("[candidate-pairs] selected:", selected.length, "pairs");
 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + CANDIDATE_PAIR_EXPIRY_HOURS * 60 * 60 * 1000);
@@ -386,7 +419,9 @@ export async function generateCandidatePairsForUser(userId: string) {
         }
     });
 
-    return getActiveCandidatePairsForUser(userId);
+    const result = await getActiveCandidatePairsForUser(userId);
+    console.log("[candidate-pairs] created", result.length, "pairs for user");
+    return result;
 }
 
 export async function getActiveCandidatePairsForUser(userId: string) {

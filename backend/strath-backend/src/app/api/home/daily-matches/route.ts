@@ -15,9 +15,16 @@ export async function GET(req: NextRequest) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
 
-        let matches = await getActiveCandidatePairsForUser(session.user.id);
+        const userId = session.user.id;
+        console.log("[daily-matches] GET", { userId });
+
+        let matches = await getActiveCandidatePairsForUser(userId);
+        console.log("[daily-matches] existing active pairs:", matches.length);
+
         if (matches.length === 0) {
-            matches = await generateCandidatePairsForUser(session.user.id);
+            console.log("[daily-matches] no existing pairs, generating...");
+            matches = await generateCandidatePairsForUser(userId);
+            console.log("[daily-matches] after generate:", matches.length);
         }
 
         return successResponse({ matches });
