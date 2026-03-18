@@ -16,7 +16,8 @@ export const DAILY_CANDIDATE_PAIR_LIMIT = 4;
 export const ACTIVE_EXPOSURE_CAP = 4;
 // TODO: revert to 24 for production — 5 min for testing cron/expiry
 export const CANDIDATE_PAIR_EXPIRY_HOURS = 5 / 60;
-export const EXPIRED_PAIR_COOLDOWN_DAYS = 7;
+// When expiry is 5 min (testing), use 1-min cooldown so expired pairs can be reshown. Revert to 7 for production.
+export const EXPIRED_PAIR_COOLDOWN_DAYS = CANDIDATE_PAIR_EXPIRY_HOURS < 1 ? 1 / (24 * 60) : 7;
 
 export type CandidateDecision = "pending" | "open_to_meet" | "passed";
 export type CandidatePairStatus = "active" | "mutual" | "closed" | "expired";
@@ -312,6 +313,8 @@ export async function generateCandidatePairsForUser(userId: string) {
         blockedCount: blockedIds.size,
         matchedCount: matchedIds.size,
         targetGenders: targetGenders.length > 0 ? targetGenders : "any",
+        cooldownDays: EXPIRED_PAIR_COOLDOWN_DAYS,
+        existingPairsInMap: existingPairMap.size,
     });
 
     const cooldownCutoff = new Date(Date.now() - EXPIRED_PAIR_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
