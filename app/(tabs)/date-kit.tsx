@@ -70,7 +70,7 @@ const PLAYBOOK_SECTIONS: DateKitSection[] = [
         icon: 'videocam-outline',
         accent: '#06b6d4',
         steps: [
-            'Vibe check helps both people feel the chemistry before the date gets locked in.',
+            'Vibe check lets you both feel the chemistry before locking in the date.',
             'Come in relaxed, curious, and present instead of trying to perform.',
             'The goal is not to be perfect. The goal is to see if the energy feels easy.',
             'If it clicks, the date setup feels much smoother and more natural.',

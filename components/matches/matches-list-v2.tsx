@@ -83,10 +83,10 @@ function EmptyState() {
             </View>
 
             <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                Your connections are simmering
+                Your connections are simmering 🔥
             </Text>
             <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                A special match could be a like away. Need help? Ask your Wingman for a profile boost.
+                Someone could be a like away. Need a boost? Ask your Wingman for a profile glow-up ✨
             </Text>
         </ScrollView>
     );

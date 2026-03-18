@@ -40,6 +40,8 @@ export function useDailyMatches() {
     });
 }
 
+const ALREADY_RESPONDED_MSG = 'You have already responded to this pair';
+
 export function useRespondToDailyPair() {
     const queryClient = useQueryClient();
     return useMutation({
@@ -60,13 +62,33 @@ export function useRespondToDailyPair() {
             }
             return payload;
         },
-        onSuccess: ({ pairId }) => {
-            queryClient.setQueryData<DailyMatch[]>(['candidatePairs', 'daily'], (prev) =>
-                prev ? prev.filter((m) => m.pairId !== pairId) : prev
-            );
+        onSuccess: ({ pairId, decision }) => {
+            if (decision === 'passed') {
+                queryClient.setQueryData<DailyMatch[]>(['candidatePairs', 'daily'], (prev) =>
+                    prev ? prev.filter((m) => m.pairId !== pairId) : prev
+                );
+            } else {
+                queryClient.setQueryData<DailyMatch[]>(['candidatePairs', 'daily'], (prev) =>
+                    prev?.map((m) =>
+                        m.pairId === pairId ? { ...m, currentUserDecision: 'open_to_meet' as const } : m
+                    ) ?? prev
+                );
+            }
             queryClient.invalidateQueries({ queryKey: ['candidatePairs', 'daily'] });
             queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
             queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+        },
+        onError: (error, { pairId, decision }) => {
+            if (
+                error?.message?.includes(ALREADY_RESPONDED_MSG) &&
+                decision === 'open_to_meet'
+            ) {
+                queryClient.setQueryData<DailyMatch[]>(['candidatePairs', 'daily'], (prev) =>
+                    prev?.map((m) =>
+                        m.pairId === pairId ? { ...m, currentUserDecision: 'open_to_meet' as const } : m
+                    ) ?? prev
+                );
+            }
         },
     });
 }

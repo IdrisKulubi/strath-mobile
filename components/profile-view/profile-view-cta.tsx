@@ -63,7 +63,7 @@ export function ProfileViewCta({
                     ]}
                 >
                     <Text style={styles.btnText}>
-                        {completed ? 'Decision Saved' : label}
+                        {completed ? 'Decision Saved ✓' : label}
                     </Text>
                 </Pressable>
             </Animated.View>

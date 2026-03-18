@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import {
     View,
     Modal,
@@ -86,10 +86,10 @@ export function ArchivedChatsSheet({
                 <Archive size={40} color={isDark ? '#475569' : '#94a3b8'} />
             </View>
             <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                No archived chats
+                Nothing archived yet 📦
             </Text>
             <Text style={[styles.emptySubtitle, { color: isDark ? '#64748b' : '#94a3b8' }]}>
-                Long press a match card to archive it
+                Archived chats will appear here when you archive them
             </Text>
         </View>
     );

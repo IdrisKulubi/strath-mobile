@@ -45,7 +45,7 @@ export async function POST(
             if (userA?.pushToken) {
                 await sendPushNotification(userA.pushToken, {
                     title: "You both said yes",
-                    body: `You and ${nameB} are open to meeting.`,
+                    body: `You and ${nameB} are open to meeting`,
                     data: {
                         type: NOTIFICATION_TYPES.MUTUAL_MATCH,
                         pairId,
@@ -57,7 +57,7 @@ export async function POST(
             if (userB?.pushToken) {
                 await sendPushNotification(userB.pushToken, {
                     title: "You both said yes",
-                    body: `You and ${nameA} are open to meeting.`,
+                    body: `You and ${nameA} are open to meeting`,
                     data: {
                         type: NOTIFICATION_TYPES.MUTUAL_MATCH,
                         pairId,

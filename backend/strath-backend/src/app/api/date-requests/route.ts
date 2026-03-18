@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
         if (toUser?.pushToken) {
             await sendPushNotification(toUser.pushToken, {
                 title: "New date invite 💜",
-                body: `${fromName} wants to go on a date with you!`,
+                body: `${fromName} wants to go on a date with you`,
                 data: {
                     type: NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED,
                     fromUserId: session.user.id,

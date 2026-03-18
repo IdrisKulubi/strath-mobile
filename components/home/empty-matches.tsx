@@ -44,14 +44,14 @@ export function EmptyMatches({ allActioned = false }: EmptyMatchesProps) {
             {allActioned ? (
                 <>
                     <Text style={[styles.title, { color: colors.foreground }]}>
-                        We're preparing your next matches
+                        Cooking up your next matches 🍳
                     </Text>
                     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                        Check back tomorrow for a fresh set
+                        Fresh set drops tomorrow — we've got you ✨
                     </Text>
                     <View style={[styles.countdownWrap, { backgroundColor: isDark ? colors.card : '#f5f5f5', borderColor: colors.border }]}>
                         <Text style={[styles.countdownLabel, { color: colors.mutedForeground }]}>
-                            Refreshes in
+                            Resets in
                         </Text>
                         <Text style={[styles.countdown, { color: colors.primary }]}>
                             {formatCountdown(secondsLeft)}
@@ -61,10 +61,10 @@ export function EmptyMatches({ allActioned = false }: EmptyMatchesProps) {
             ) : (
                 <>
                     <Text style={[styles.title, { color: colors.foreground }]}>
-                        We're preparing your next matches
+                        Cooking up your next matches 🍳
                     </Text>
                     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                        Check back tomorrow for a fresh set
+                        Fresh set drops tomorrow — we've got you ✨
                     </Text>
                 </>
             )}

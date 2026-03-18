@@ -412,7 +412,7 @@ export default function MatchesScreen() {
                                         </Text>
                                         <Text style={styles.activityCardSubtitle} numberOfLines={2}>
                                             {sent.length === 0
-                                                ? 'Send likes in Discover to see your requests here.'
+                                                ? 'Send likes in Explore to see your requests here.'
                                                 : 'People you already liked'}
                                         </Text>
                                     </View>
@@ -495,8 +495,8 @@ export default function MatchesScreen() {
                     </View>
                 ) : sent.length === 0 ? (
                     <View style={styles.sheetEmptyWrap}>
-                        <Text style={[styles.sheetEmptyTitle, { color: '#fff' }]}>No sent requests yet</Text>
-                        <Text style={[styles.sheetEmptySubtitle, { color: '#94a3b8' }]}>Send a few likes in Discover and they’ll appear here.</Text>
+                        <Text style={[styles.sheetEmptyTitle, { color: '#fff' }]}>No sent requests yet 💌</Text>
+                        <Text style={[styles.sheetEmptySubtitle, { color: '#94a3b8' }]}>Send a few likes in Explore — they’ll show up here.</Text>
                     </View>
                 ) : (
                     <View style={styles.sheetCardsWrap}>
@@ -577,8 +577,8 @@ export default function MatchesScreen() {
                     </View>
                 ) : visibleRequests.length === 0 ? (
                     <View style={styles.sheetEmptyWrap}>
-                        <Text style={[styles.sheetEmptyTitle, { color: '#fff' }]}>No incoming likes yet</Text>
-                        <Text style={[styles.sheetEmptySubtitle, { color: '#94a3b8' }]}>Keep your profile active to attract more likes.</Text>
+                        <Text style={[styles.sheetEmptyTitle, { color: '#fff' }]}>No incoming likes yet 💕</Text>
+                        <Text style={[styles.sheetEmptySubtitle, { color: '#94a3b8' }]}>Keep your profile active — more likes incoming ✨</Text>
                     </View>
                 ) : (
                     <View style={styles.sheetCardsWrap}>

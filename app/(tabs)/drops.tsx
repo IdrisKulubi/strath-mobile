@@ -120,8 +120,8 @@ export default function DropsTabScreen() {
           </View>
         ) : !hasDropData ? (
           <View style={[styles.stateCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No weekly drop yet</Text>
-            <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>Your next curated drop will appear here once generated.</Text>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No weekly drop yet 📬</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>Your next curated drop will appear here — we're on it ✨</Text>
             <Pressable style={[styles.primaryButton, { backgroundColor: colors.primary }]} onPress={() => router.push('/(tabs)/explore')}>
               <Text style={[styles.primaryButtonText, { color: colors.primaryForeground }]}>Go to Find</Text>
             </Pressable>

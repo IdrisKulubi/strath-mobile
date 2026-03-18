@@ -11,27 +11,27 @@ interface EmptyDatesProps {
 const CONFIG: Record<EmptyDatesProps['section'], { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; subtitle: string }> = {
     mutual: {
         icon: 'heart-outline',
-        title: 'No mutual matches yet',
-        subtitle: 'When both of you are open to meet, they\'ll appear here.',
+        title: 'No mutuals yet 💕',
+        subtitle: "When you both say yes, they'll show up here.",
     },
     call_pending: {
         icon: 'call-outline',
-        title: 'No calls waiting',
-        subtitle: 'Pairs that need a quick vibe check call will appear here.',
+        title: 'No vibe checks waiting 📞',
+        subtitle: "Quick 3-min calls will show up here when you're both a match.",
     },
     being_arranged: {
         icon: 'sparkles-outline',
-        title: 'Nothing being arranged yet',
-        subtitle: 'Once a mutual moves into coordination, you will see it here.',
+        title: 'Nothing in the works yet ✨',
+        subtitle: "When plans start getting made, you'll see them here.",
     },
     upcoming: {
         icon: 'calendar-outline',
-        title: 'No upcoming dates',
-        subtitle: 'Confirmed plans will appear here when they are scheduled.',
+        title: 'No dates planned yet 📅',
+        subtitle: 'Scheduled plans will appear here.',
     },
     history: {
         icon: 'time-outline',
-        title: 'No date history yet',
+        title: 'No date history yet 📖',
         subtitle: 'Your future stories start here.',
     },
 };

@@ -7,9 +7,9 @@ import {
     StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useToast } from '@/components/ui/toast';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import {
@@ -20,6 +20,8 @@ import {
 import { HomeHeader } from '@/components/home/home-header';
 import { DailyMatchesList } from '@/components/home/daily-matches-list';
 import { EmptyMatches } from '@/components/home/empty-matches';
+import { useToast } from '@/components/ui/toast';
+import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/decision-info-sheet';
 
 function HomeSkeleton() {
     return (
@@ -35,8 +37,16 @@ function HomeSkeleton() {
 
 export default function HomeScreen() {
     const { colors, colorScheme } = useTheme();
+    const router = useRouter();
     const toast = useToast();
     const isDark = colorScheme === 'dark';
+
+    const [infoSheet, setInfoSheet] = useState<{
+        visible: boolean;
+        type: DecisionSheetType;
+        firstName?: string;
+        match?: DailyMatch;
+    }>({ visible: false, type: 'open_to_meet' });
 
     const { data: profile } = useProfile();
     const {
@@ -76,39 +86,38 @@ export default function HomeScreen() {
             { pairId: match.pairId, decision: 'open_to_meet' },
             {
                 onSuccess: () => {
-                    toast.show({
-                        message: `You are open to meeting ${match.firstName}. We'll only reveal it if they say yes too.`,
-                        variant: 'success',
-                        position: 'bottom',
-                    });
+                    setInfoSheet({ visible: true, type: 'open_to_meet', firstName: match.firstName });
+                },
+                onError: (err) => {
+                    if (err?.message?.includes('You have already responded to this pair')) {
+                        setInfoSheet({ visible: true, type: 'already_responded', firstName: match.firstName });
+                    } else {
+                        toast.show({
+                            message: 'Could not save your decision right now. Please try again.',
+                            variant: 'danger',
+                        });
+                    }
+                },
+            }
+        );
+    }, [respondToPair]);
+
+    const handlePass = useCallback((match: DailyMatch) => {
+        respondToPair.mutate(
+            { pairId: match.pairId, decision: 'passed' },
+            {
+                onSuccess: () => {
+                    setInfoSheet({ visible: true, type: 'pass', firstName: match.firstName });
                 },
                 onError: () => {
                     toast.show({
-                        message: 'Could not save your decision right now. Please try again.',
+                        message: 'Could not pass on this pair right now. Please try again.',
                         variant: 'danger',
                     });
                 },
             }
         );
-    }, [respondToPair, toast]);
-
-    const handlePass = useCallback((match: DailyMatch) => {
-        respondToPair.mutate({ pairId: match.pairId, decision: 'passed' }, {
-            onSuccess: () => {
-                toast.show({
-                    message: `${match.firstName} will be removed from this daily set.`,
-                    variant: 'default',
-                    position: 'bottom',
-                });
-            },
-            onError: () => {
-                toast.show({
-                    message: 'Could not pass on this pair right now. Please try again.',
-                    variant: 'danger',
-                });
-            },
-        });
-    }, [respondToPair, toast]);
+    }, [respondToPair]);
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -131,6 +140,9 @@ export default function HomeScreen() {
                         matches={matches}
                         onOpenToMeet={handleOpenToMeet}
                         onPass={handlePass}
+                        onViewProfile={(match) => {
+                            setInfoSheet({ visible: true, type: 'view_profile', firstName: match.firstName, match });
+                        }}
                     />
                 ) : (
                     <EmptyMatches allActioned={allActioned} />
@@ -139,14 +151,27 @@ export default function HomeScreen() {
                 {!isLoading && matches.length > 0 && activeMatchCount === 0 ? (
                     <View style={[styles.allSentBanner, { backgroundColor: isDark ? colors.card : '#f5f5f5', borderColor: colors.border }]}>
                         <Text style={[styles.allSentTitle, { color: colors.foreground }]}>
-                            Decisions locked in
+                            Decisions locked in ;) ✨
                         </Text>
                         <Text style={[styles.allSentSubtitle, { color: colors.mutedForeground }]}>
-                            Check the Dates tab for mutuals and confirmed plans.
+                            Head to Dates when you're both a match — that's where the magic happens 💫
                         </Text>
                     </View>
                 ) : null}
             </ScrollView>
+
+            <DecisionInfoSheet
+                visible={infoSheet.visible}
+                type={infoSheet.type}
+                firstName={infoSheet.firstName}
+                onClose={() => {
+                    const match = infoSheet.match;
+                    setInfoSheet((s) => ({ ...s, visible: false, match: undefined }));
+                    if (match && infoSheet.type === 'view_profile') {
+                        router.push({ pathname: '/profile/[userId]', params: { userId: match.userId, pairId: match.pairId } });
+                    }
+                }}
+            />
         </SafeAreaView>
     );
 }

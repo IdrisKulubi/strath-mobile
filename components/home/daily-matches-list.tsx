@@ -8,9 +8,10 @@ interface DailyMatchesListProps {
     matches: DailyMatch[];
     onOpenToMeet: (match: DailyMatch) => void;
     onPass: (match: DailyMatch) => void;
+    onViewProfile?: (match: DailyMatch) => void;
 }
 
-export function DailyMatchesList({ matches, onOpenToMeet, onPass }: DailyMatchesListProps) {
+export function DailyMatchesList({ matches, onOpenToMeet, onPass, onViewProfile }: DailyMatchesListProps) {
     if (matches.length === 0) {
         return <EmptyMatches />;
     }
@@ -24,6 +25,7 @@ export function DailyMatchesList({ matches, onOpenToMeet, onPass }: DailyMatches
                     index={index}
                     onOpenToMeet={onOpenToMeet}
                     onPass={onPass}
+                    onViewProfile={onViewProfile}
                 />
             ))}
         </View>

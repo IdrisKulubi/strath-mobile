@@ -24,6 +24,7 @@ interface MatchCardProps {
     index: number;
     onOpenToMeet: (match: DailyMatch) => void;
     onPass: (match: DailyMatch) => void;
+    onViewProfile?: (match: DailyMatch) => void;
 }
 
 function buildIdentityLine(match: DailyMatch) {
@@ -36,11 +37,11 @@ function buildIdentityLine(match: DailyMatch) {
 function buildExpiryText(expiresAt: string) {
     const remainingMs = new Date(expiresAt).getTime() - Date.now();
     const remainingHours = Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60)));
-    if (remainingHours <= 1) return 'Refreshes in under 1 hour';
-    return `Refreshes in about ${remainingHours} hours`;
+    if (remainingHours <= 1) return 'Resets in under 1 hour';
+    return `Resets in ${remainingHours} hours`;
 }
 
-export function MatchCard({ match, index, onOpenToMeet, onPass }: MatchCardProps) {
+export function MatchCard({ match, index, onOpenToMeet, onPass, onViewProfile }: MatchCardProps) {
     const { colors, isDark } = useTheme();
     const router = useRouter();
     const identityLine = buildIdentityLine(match);
@@ -59,11 +60,15 @@ export function MatchCard({ match, index, onOpenToMeet, onPass }: MatchCardProps
         viewScale.value = withSpring(0.96, { damping: 10, stiffness: 300 }, () => {
             viewScale.value = withSpring(1);
         });
-        router.push({
-            pathname: '/profile/[userId]',
-            params: { userId: match.userId, pairId: match.pairId },
-        });
-    }, [match.pairId, match.userId, router, viewScale]);
+        if (onViewProfile) {
+            onViewProfile(match);
+        } else {
+            router.push({
+                pathname: '/profile/[userId]',
+                params: { userId: match.userId, pairId: match.pairId },
+            });
+        }
+    }, [match, onViewProfile, router, viewScale]);
 
     const handleOpenToMeet = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -149,28 +154,44 @@ export function MatchCard({ match, index, onOpenToMeet, onPass }: MatchCardProps
                     </Animated.View>
 
                     <Animated.View style={[styles.ctaAskWrap, askAnimStyle]}>
-                        <Pressable onPress={handleOpenToMeet} style={styles.ctaAsk}>
-                            <LinearGradient
-                                colors={['#ec4899', '#e91e8c']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                                style={StyleSheet.absoluteFill}
-                            >
-                                <View style={styles.ctaAskInner}>
-                                    <Text style={styles.ctaAskText}>Open to Meet</Text>
+                        <Pressable
+                            onPress={match.currentUserDecision === 'pending' ? handleOpenToMeet : undefined}
+                            disabled={match.currentUserDecision !== 'pending'}
+                            style={[
+                                styles.ctaAsk,
+                                match.currentUserDecision === 'open_to_meet' && styles.ctaAskSent,
+                            ]}
+                        >
+                            {match.currentUserDecision === 'open_to_meet' ? (
+                                <View style={[styles.ctaAskInner, styles.ctaAskSentInner]}>
+                                    <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                                    <Text style={styles.ctaAskText}>Decision Saved</Text>
                                 </View>
-                            </LinearGradient>
+                            ) : (
+                                <LinearGradient
+                                    colors={['#ec4899', '#e91e8c']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={StyleSheet.absoluteFill}
+                                >
+                                    <View style={styles.ctaAskInner}>
+                                        <Text style={styles.ctaAskText}>Open to Meet</Text>
+                                    </View>
+                                </LinearGradient>
+                            )}
                         </Pressable>
                     </Animated.View>
                 </View>
 
-                <Animated.View style={[styles.skipWrap, skipAnimStyle]}>
-                    <Pressable onPress={handlePass} style={styles.skipBtn}>
-                        <Text style={[styles.skipText, { color: colors.mutedForeground }]}>
-                            Pass
-                        </Text>
-                    </Pressable>
-                </Animated.View>
+                {match.currentUserDecision === 'pending' && (
+                    <Animated.View style={[styles.skipWrap, skipAnimStyle]}>
+                        <Pressable onPress={handlePass} style={styles.skipBtn}>
+                            <Text style={[styles.skipText, { color: colors.mutedForeground }]}>
+                                Pass
+                            </Text>
+                        </Pressable>
+                    </Animated.View>
+                )}
             </View>
         </Animated.View>
     );
@@ -299,11 +320,18 @@ const styles = StyleSheet.create({
         minHeight: 56,
         position: 'relative',
     },
+    ctaAskSent: {
+        backgroundColor: '#10b981',
+    },
     ctaAskInner: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: 56,
+    },
+    ctaAskSentInner: {
+        flexDirection: 'row',
+        gap: 8,
     },
     ctaAskText: {
         color: '#fff',

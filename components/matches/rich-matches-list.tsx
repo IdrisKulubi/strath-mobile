@@ -78,10 +78,10 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
             </View>
 
             <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                No Connections yet
+                No connections yet 💕
             </Text>
             <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                When you and someone else both want to connect, you&apos;ll see them here. Keep exploring!
+                When you both say yes, they&apos;ll show up here. Keep exploring — you&apos;ve got this ✨
             </Text>
 
             {onExplore && (

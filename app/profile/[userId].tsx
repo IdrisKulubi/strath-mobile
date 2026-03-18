@@ -8,8 +8,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
+import { useToast } from '@/components/ui/toast';
+import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/decision-info-sheet';
 import { useTheme } from '@/hooks/use-theme';
 import { useUserProfile } from '@/hooks/use-user-profile';
 import { CachedImage } from '@/components/ui/cached-image';
@@ -260,32 +263,88 @@ function PillCollection({
     );
 }
 
+const ALREADY_RESPONDED_MSG = 'You have already responded to this pair';
+
 export default function ProfileViewScreen() {
     const { userId } = useLocalSearchParams<{ userId: string }>();
     const router = useRouter();
+    const queryClient = useQueryClient();
+    const toast = useToast();
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
 
     const { data: profile, isLoading } = useUserProfile(userId ?? '');
     const respondToPair = useRespondToDailyPair();
     const [fullScreenPhotoUri, setFullScreenPhotoUri] = useState<string | null>(null);
+    const [infoSheet, setInfoSheet] = useState<{ visible: boolean; type: DecisionSheetType }>({ visible: false, type: 'open_to_meet' });
 
     const handleBack = useCallback(() => {
         router.back();
     }, [router]);
 
+    const updateProfileDecision = useCallback(
+        (decision: 'open_to_meet' | 'passed') => {
+            if (!userId) return;
+            queryClient.setQueryData(
+                ['userProfile', userId],
+                (old: { currentUserDecision?: string } | undefined) =>
+                    old ? { ...old, currentUserDecision: decision } : old
+            );
+        },
+        [queryClient, userId]
+    );
+
     const handleOpenToMeet = useCallback(() => {
         if (!profile?.pairId) return;
-        respondToPair.mutate({ pairId: profile.pairId, decision: 'open_to_meet' });
-    }, [profile?.pairId, respondToPair]);
+        respondToPair.mutate(
+            { pairId: profile.pairId, decision: 'open_to_meet' },
+            {
+                onSuccess: () => {
+                    updateProfileDecision('open_to_meet');
+                    setInfoSheet({ visible: true, type: 'open_to_meet' });
+                },
+                onError: (err) => {
+                    if (err?.message?.includes(ALREADY_RESPONDED_MSG)) {
+                        updateProfileDecision('open_to_meet');
+                        setInfoSheet({ visible: true, type: 'already_responded' });
+                    } else {
+                        toast.show({
+                            message: 'Could not save your decision right now. Please try again.',
+                            variant: 'danger',
+                            position: 'bottom',
+                        });
+                    }
+                },
+            }
+        );
+    }, [profile?.pairId, respondToPair, toast, updateProfileDecision]);
 
     const handlePass = useCallback(() => {
         if (!profile?.pairId) return;
         respondToPair.mutate(
             { pairId: profile.pairId, decision: 'passed' },
-            { onSettled: () => router.back() }
+            {
+                onSuccess: () => {
+                    setInfoSheet({ visible: true, type: 'pass' });
+                },
+                onError: () => {
+                    toast.show({
+                        message: 'Could not pass right now. Please try again.',
+                        variant: 'danger',
+                        position: 'bottom',
+                    });
+                },
+            }
         );
     }, [profile?.pairId, respondToPair, router]);
+
+    const handleCloseInfoSheet = useCallback(() => {
+        const wasPass = infoSheet.type === 'pass';
+        setInfoSheet((s) => ({ ...s, visible: false }));
+        if (wasPass) {
+            router.back();
+        }
+    }, [infoSheet.type, router]);
 
     if (isLoading) {
         return (
@@ -581,6 +640,12 @@ export default function ProfileViewScreen() {
                 onClose={() => setFullScreenPhotoUri(null)}
             />
 
+            <DecisionInfoSheet
+                visible={infoSheet.visible}
+                type={infoSheet.type}
+                firstName={profile?.firstName}
+                onClose={handleCloseInfoSheet}
+            />
         </View>
     );
 }

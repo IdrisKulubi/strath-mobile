@@ -48,10 +48,10 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
                 <Heart size={48} color={colors.primary} />
             </View>
             <Text className="text-foreground text-xl font-bold text-center mt-4">
-                No Connections yet
+                No connections yet 💕
             </Text>
             <Text className="text-muted-foreground text-center mt-2 px-8">
-                Keep exploring! When you and someone else both want to connect, you&apos;ll see them here.
+                When you both say yes, they&apos;ll show up here. Keep exploring — you&apos;ve got this ✨
             </Text>
             {onExplore && (
                 <Pressable

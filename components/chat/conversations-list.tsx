@@ -61,10 +61,10 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
                 <ChatCircleDots size={48} color="#ec4899" weight="duotone" />
             </View>
             <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                No conversations yet
+                No conversations yet 💬
             </Text>
             <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                Start chatting with your connections!{'\n'}Your conversations will appear here.
+                When you match, your chats will show up here.{'\n'}Keep exploring — you&apos;ve got this ✨
             </Text>
         </Animated.View>
     );
