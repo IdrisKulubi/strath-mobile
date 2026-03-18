@@ -90,6 +90,9 @@ export async function recordCandidatePairHistory(
 }
 
 export async function expireCandidatePairs(now = new Date()) {
+    const expiryMs = CANDIDATE_PAIR_EXPIRY_HOURS * 60 * 60 * 1000;
+    const createdAtCutoff = new Date(now.getTime() - expiryMs);
+
     const expired = await db.transaction(async (tx) => {
         const rows = await tx
             .update(candidatePairs)
@@ -100,7 +103,10 @@ export async function expireCandidatePairs(now = new Date()) {
             .where(
                 and(
                     eq(candidatePairs.status, "active"),
-                    lt(candidatePairs.expiresAt, now),
+                    or(
+                        lt(candidatePairs.expiresAt, now),
+                        lt(candidatePairs.createdAt, createdAtCutoff),
+                    ),
                 ),
             )
             .returning({
@@ -430,6 +436,9 @@ export async function generateCandidatePairsForUser(userId: string) {
 
 export async function getActiveCandidatePairsForUser(userId: string) {
     const now = new Date();
+    const expiryMs = CANDIDATE_PAIR_EXPIRY_HOURS * 60 * 60 * 1000;
+    const createdAtCutoff = new Date(now.getTime() - expiryMs);
+
     const rows = await readDb
         .select()
         .from(candidatePairs)
@@ -437,6 +446,7 @@ export async function getActiveCandidatePairsForUser(userId: string) {
             and(
                 eq(candidatePairs.status, "active"),
                 gte(candidatePairs.expiresAt, now),
+                gte(candidatePairs.createdAt, createdAtCutoff),
                 or(
                     eq(candidatePairs.userAId, userId),
                     eq(candidatePairs.userBId, userId),

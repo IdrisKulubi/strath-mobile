@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
         }
 
         const expiration = await runPairExpiration();
+        console.log("[cron/candidate-pairs] expired pairs:", expiration.expiredCount);
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const limitParam = Number(req.nextUrl.searchParams.get("limit") || "0");
         const runLimit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 1000) : undefined;

@@ -20,7 +20,10 @@ export async function GET(req: NextRequest) {
         console.log("[daily-matches] GET", { userId });
 
         // Expire pairs first so we don't return stale/expired pairs
-        await runPairExpiration();
+        const expiration = await runPairExpiration();
+        if (expiration.expiredCount > 0) {
+            console.log("[daily-matches] expired", expiration.expiredCount, "pairs for user", userId);
+        }
 
         let matches = await getActiveCandidatePairsForUser(userId);
         console.log("[daily-matches] existing active pairs:", matches.length);
