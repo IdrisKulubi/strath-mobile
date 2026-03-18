@@ -94,12 +94,9 @@ export async function expireCandidatePairs(now = new Date()) {
     const createdAtCutoff = new Date(now.getTime() - expiryMs);
 
     const expired = await db.transaction(async (tx) => {
-        const rows = await tx
-            .update(candidatePairs)
-            .set({
-                status: "expired",
-                updatedAt: now,
-            })
+        const toExpire = await tx
+            .select({ id: candidatePairs.id, userAId: candidatePairs.userAId, userBId: candidatePairs.userBId })
+            .from(candidatePairs)
             .where(
                 and(
                     eq(candidatePairs.status, "active"),
@@ -108,13 +105,41 @@ export async function expireCandidatePairs(now = new Date()) {
                         lt(candidatePairs.createdAt, createdAtCutoff),
                     ),
                 ),
-            )
-            .returning({
-                id: candidatePairs.id,
-                status: candidatePairs.status,
-            });
+            );
 
-        for (const row of rows) {
+        const toUpdate: typeof toExpire = [];
+        const toDelete: typeof toExpire = [];
+
+        for (const row of toExpire) {
+            const existingExpired = await tx.query.candidatePairs.findFirst({
+                where: and(
+                    eq(candidatePairs.userAId, row.userAId),
+                    eq(candidatePairs.userBId, row.userBId),
+                    eq(candidatePairs.status, "expired"),
+                    ne(candidatePairs.id, row.id),
+                ),
+            });
+            if (existingExpired) {
+                toDelete.push(row);
+            } else {
+                toUpdate.push(row);
+            }
+        }
+
+        for (const row of toDelete) {
+            await tx.delete(candidatePairs).where(eq(candidatePairs.id, row.id));
+        }
+
+        const updated =
+            toUpdate.length > 0
+                ? await tx
+                      .update(candidatePairs)
+                      .set({ status: "expired", updatedAt: now })
+                      .where(inArray(candidatePairs.id, toUpdate.map((r) => r.id)))
+                      .returning({ id: candidatePairs.id })
+                : [];
+
+        for (const row of updated) {
             await recordCandidatePairHistory(tx, {
                 pairId: row.id,
                 eventType: "expired",
@@ -123,7 +148,7 @@ export async function expireCandidatePairs(now = new Date()) {
             });
         }
 
-        return rows;
+        return [...updated, ...toDelete.map((r) => ({ id: r.id }))];
     });
 
     return expired;
