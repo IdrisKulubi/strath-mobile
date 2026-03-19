@@ -14,9 +14,11 @@ import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferen
 
 export const DAILY_CANDIDATE_PAIR_LIMIT = 4;
 export const ACTIVE_EXPOSURE_CAP = 4;
-// TODO: revert to 24 for production — 5 min for testing cron/expiry
-export const CANDIDATE_PAIR_EXPIRY_HOURS = 5 / 60;
-// When expiry is 5 min (testing), use 1-min cooldown so expired pairs can be reshown. Revert to 7 for production.
+
+// Expiry: env CANDIDATE_PAIR_EXPIRY_MINUTES (default 1440 = 24h). Use 5 for testing.
+const EXPIRY_MINUTES = Number(process.env.CANDIDATE_PAIR_EXPIRY_MINUTES) || 1440;
+export const CANDIDATE_PAIR_EXPIRY_HOURS = EXPIRY_MINUTES / 60;
+// Cooldown: when expiry < 1h (testing), use 1-min cooldown. Otherwise 7 days.
 export const EXPIRED_PAIR_COOLDOWN_DAYS = CANDIDATE_PAIR_EXPIRY_HOURS < 1 ? 1 / (24 * 60) : 7;
 
 export type CandidateDecision = "pending" | "open_to_meet" | "passed";
@@ -172,7 +174,18 @@ export async function getActiveExposureCount(userId: string) {
     return result[0]?.count ?? 0;
 }
 
-async function getExistingPairMap(userId: string) {
+type PairAggregate = {
+    hasClosedOrMutual: boolean;
+    hasActive: boolean;
+    oldestExpiredCreatedAt: Date | null;
+};
+
+/**
+ * Aggregates all candidate_pairs rows per (userId, otherUserId).
+ * closed/mutual = never show again. active = in current set. expired = cooldown applies.
+ * Fixes bug where multiple rows (e.g. closed + expired) caused passed users to reappear.
+ */
+async function getExistingPairMap(userId: string): Promise<Map<string, PairAggregate>> {
     const rows = await readDb
         .select()
         .from(candidatePairs)
@@ -183,7 +196,29 @@ async function getExistingPairMap(userId: string) {
             ),
         );
 
-    return new Map(rows.map((row) => [getOtherUserId(row, userId), row]));
+    const byOther = new Map<string, PairAggregate>();
+
+    for (const row of rows) {
+        const other = getOtherUserId(row, userId);
+        const existing = byOther.get(other) ?? {
+            hasClosedOrMutual: false,
+            hasActive: false,
+            oldestExpiredCreatedAt: null as Date | null,
+        };
+
+        if (row.status === "closed" || row.status === "mutual") existing.hasClosedOrMutual = true;
+        if (row.status === "active") existing.hasActive = true;
+        if (row.status === "expired") {
+            existing.oldestExpiredCreatedAt =
+                !existing.oldestExpiredCreatedAt || row.createdAt < existing.oldestExpiredCreatedAt
+                    ? row.createdAt
+                    : existing.oldestExpiredCreatedAt;
+        }
+
+        byOther.set(other, existing);
+    }
+
+    return byOther;
 }
 
 async function getBlockedUserIds(userId: string) {
@@ -202,6 +237,23 @@ async function getBlockedUserIds(userId: string) {
         ...blockedRows.map((row) => row.id),
         ...blockedByRows.map((row) => row.id),
     ]);
+}
+
+async function getPassedUserIds(userId: string): Promise<Set<string>> {
+    const rows = await readDb
+        .select({ userAId: candidatePairs.userAId, userBId: candidatePairs.userBId })
+        .from(candidatePairs)
+        .where(
+            and(
+                eq(candidatePairs.status, "closed"),
+                or(
+                    eq(candidatePairs.userAId, userId),
+                    eq(candidatePairs.userBId, userId),
+                ),
+            ),
+        );
+
+    return new Set(rows.map((row) => (row.userAId === userId ? row.userBId : row.userAId)));
 }
 
 async function getMatchedUserIds(userId: string) {
@@ -311,9 +363,13 @@ export async function generateCandidatePairsForUser(userId: string) {
         return [];
     }
 
-    const blockedIds = await getBlockedUserIds(userId);
-    const matchedIds = await getMatchedUserIds(userId);
-    const existingPairMap = await getExistingPairMap(userId);
+    const [blockedIds, matchedIds, passedIds, existingPairMap] = await Promise.all([
+        getBlockedUserIds(userId),
+        getMatchedUserIds(userId),
+        getPassedUserIds(userId),
+        getExistingPairMap(userId),
+    ]);
+
     const targetGenders = getTargetGenders(
         currentProfile.gender,
         currentProfile.interestedIn as string[] | null,
@@ -323,6 +379,7 @@ export async function generateCandidatePairsForUser(userId: string) {
         userId,
         ...blockedIds,
         ...matchedIds,
+        ...passedIds,
     ];
 
     const candidateProfiles = await readDb.query.profiles.findMany({
@@ -343,7 +400,9 @@ export async function generateCandidatePairsForUser(userId: string) {
         excludedIdsCount: excludedIds.length,
         blockedCount: blockedIds.size,
         matchedCount: matchedIds.size,
+        passedCount: passedIds.size,
         targetGenders: targetGenders.length > 0 ? targetGenders : "any",
+        expiryMinutes: EXPIRY_MINUTES,
         cooldownDays: EXPIRED_PAIR_COOLDOWN_DAYS,
         existingPairsInMap: existingPairMap.size,
     });
@@ -355,18 +414,14 @@ export async function generateCandidatePairsForUser(userId: string) {
             return false;
         }
 
-        const existingPair = existingPairMap.get(candidate.userId);
-        if (!existingPair) return true;
+        const agg = existingPairMap.get(candidate.userId);
+        if (!agg) return true;
 
-        if (existingPair.status === "closed" || existingPair.status === "mutual") {
-            return false;
-        }
+        if (agg.hasClosedOrMutual) return false;
+        if (agg.hasActive) return false;
+        if (agg.oldestExpiredCreatedAt && agg.oldestExpiredCreatedAt >= cooldownCutoff) return false;
 
-        if (existingPair.status === "active") {
-            return false;
-        }
-
-        return existingPair.createdAt < cooldownCutoff;
+        return true;
     });
 
     console.log("[candidate-pairs] after reciprocal filter:", reciprocalCandidates.length);
