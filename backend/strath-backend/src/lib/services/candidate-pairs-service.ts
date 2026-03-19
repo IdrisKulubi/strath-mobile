@@ -332,6 +332,21 @@ function buildReasons(
     return Array.from(new Set(reasons)).slice(0, 4);
 }
 
+async function getLastPairActivityAt(userId: string): Promise<Date | null> {
+    const row = await readDb
+        .select({ updatedAt: candidatePairs.updatedAt })
+        .from(candidatePairs)
+        .where(
+            or(
+                eq(candidatePairs.userAId, userId),
+                eq(candidatePairs.userBId, userId),
+            ),
+        )
+        .orderBy(desc(candidatePairs.updatedAt))
+        .limit(1);
+    return row[0]?.updatedAt ?? null;
+}
+
 export async function generateCandidatePairsForUser(userId: string) {
     console.log("[candidate-pairs] generateCandidatePairsForUser", { userId });
 
@@ -341,6 +356,17 @@ export async function generateCandidatePairsForUser(userId: string) {
     if (existingActivePairs.length > 0) {
         console.log("[candidate-pairs] returning existing pairs:", existingActivePairs.length);
         return existingActivePairs;
+    }
+
+    const lastActivity = await getLastPairActivityAt(userId);
+    if (lastActivity) {
+        const minWaitMs = EXPIRY_MINUTES * 60 * 1000;
+        const elapsed = Date.now() - lastActivity.getTime();
+        if (elapsed < minWaitMs) {
+            const waitSec = Math.ceil((minWaitMs - elapsed) / 1000);
+            console.log("[candidate-pairs] last batch too recent, wait", waitSec, "s before next pairs");
+            return [];
+        }
     }
 
     const currentProfile = await readDb.query.profiles.findFirst({
