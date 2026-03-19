@@ -12,8 +12,8 @@ import {
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
 
-export const DAILY_CANDIDATE_PAIR_LIMIT = 4;
-export const ACTIVE_EXPOSURE_CAP = 4;
+export const DAILY_CANDIDATE_PAIR_LIMIT = 2;
+export const ACTIVE_EXPOSURE_CAP = 2;
 
 // Expiry: env CANDIDATE_PAIR_EXPIRY_MINUTES (default 1440 = 24h). Use 5 for testing.
 const EXPIRY_MINUTES = Number(process.env.CANDIDATE_PAIR_EXPIRY_MINUTES) || 1440;
