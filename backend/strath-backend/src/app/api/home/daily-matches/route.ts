@@ -4,6 +4,7 @@ import { getSessionWithFallback } from "@/lib/auth-helpers";
 import {
     generateCandidatePairsForUser,
     getActiveCandidatePairsForUser,
+    getNextPairsAvailableAt,
 } from "@/lib/services/candidate-pairs-service";
 import { runPairExpiration } from "@/lib/services/pair-expiration-service";
 
@@ -34,7 +35,10 @@ export async function GET(req: NextRequest) {
             console.log("[daily-matches] after generate:", matches.length);
         }
 
-        return successResponse({ matches });
+        const nextPairsAvailableAt =
+            matches.length === 0 ? await getNextPairsAvailableAt(userId) : undefined;
+
+        return successResponse({ matches, nextPairsAvailableAt });
     } catch (error) {
         console.error("[home/daily-matches] Error:", error);
         return errorResponse(error);

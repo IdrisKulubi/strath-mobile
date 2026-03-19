@@ -347,6 +347,16 @@ async function getLastPairActivityAt(userId: string): Promise<Date | null> {
     return row[0]?.updatedAt ?? null;
 }
 
+/** Returns ISO timestamp when next pairs will be available (during cooldown), or null if not in cooldown. */
+export async function getNextPairsAvailableAt(userId: string): Promise<string | null> {
+    const lastActivity = await getLastPairActivityAt(userId);
+    if (!lastActivity) return null;
+    const minWaitMs = EXPIRY_MINUTES * 60 * 1000;
+    const elapsed = Date.now() - lastActivity.getTime();
+    if (elapsed >= minWaitMs) return null;
+    return new Date(lastActivity.getTime() + minWaitMs).toISOString();
+}
+
 export async function generateCandidatePairsForUser(userId: string) {
     console.log("[candidate-pairs] generateCandidatePairsForUser", { userId });
 

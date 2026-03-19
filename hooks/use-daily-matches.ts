@@ -22,19 +22,26 @@ export interface DailyMatch {
     expiresInMs: number;
 }
 
+export interface DailyMatchesResponse {
+    matches: DailyMatch[];
+    nextPairsAvailableAt?: string;
+}
+
 export function useDailyMatches() {
     return useQuery({
         queryKey: ['candidatePairs', 'daily'],
-        queryFn: async (): Promise<DailyMatch[]> => {
+        queryFn: async (): Promise<DailyMatchesResponse> => {
             const token = await getAuthToken();
-            if (!token) return [];
+            if (!token) return { matches: [] };
             const res = await fetch(`${API_URL}/api/home/daily-matches`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (!res.ok) throw new Error(`Failed to fetch daily matches (${res.status})`);
             const json = await res.json();
-            const matches = json?.data?.matches ?? [];
-            return matches;
+            return {
+                matches: json?.data?.matches ?? [],
+                nextPairsAvailableAt: json?.data?.nextPairsAvailableAt,
+            };
         },
         staleTime: 60 * 1000, // 1 minute — ensures fresh pairs after expiry, pull-to-refresh always refetches
     });
@@ -64,14 +71,19 @@ export function useRespondToDailyPair() {
         },
         onSuccess: ({ pairId, decision }) => {
             if (decision === 'passed') {
-                queryClient.setQueryData<DailyMatch[]>(['candidatePairs', 'daily'], (prev) =>
-                    prev ? prev.filter((m) => m.pairId !== pairId) : prev
+                queryClient.setQueryData<DailyMatchesResponse>(['candidatePairs', 'daily'], (prev) =>
+                    prev ? { ...prev, matches: prev.matches.filter((m) => m.pairId !== pairId) } : prev
                 );
             } else {
-                queryClient.setQueryData<DailyMatch[]>(['candidatePairs', 'daily'], (prev) =>
-                    prev?.map((m) =>
-                        m.pairId === pairId ? { ...m, currentUserDecision: 'open_to_meet' as const } : m
-                    ) ?? prev
+                queryClient.setQueryData<DailyMatchesResponse>(['candidatePairs', 'daily'], (prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              matches: prev.matches.map((m) =>
+                                  m.pairId === pairId ? { ...m, currentUserDecision: 'open_to_meet' as const } : m
+                              ),
+                          }
+                        : prev
                 );
             }
             queryClient.invalidateQueries({ queryKey: ['candidatePairs', 'daily'] });
@@ -83,10 +95,15 @@ export function useRespondToDailyPair() {
                 error?.message?.includes(ALREADY_RESPONDED_MSG) &&
                 decision === 'open_to_meet'
             ) {
-                queryClient.setQueryData<DailyMatch[]>(['candidatePairs', 'daily'], (prev) =>
-                    prev?.map((m) =>
-                        m.pairId === pairId ? { ...m, currentUserDecision: 'open_to_meet' as const } : m
-                    ) ?? prev
+                queryClient.setQueryData<DailyMatchesResponse>(['candidatePairs', 'daily'], (prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              matches: prev.matches.map((m) =>
+                                  m.pairId === pairId ? { ...m, currentUserDecision: 'open_to_meet' as const } : m
+                              ),
+                          }
+                        : prev
                 );
             }
         },

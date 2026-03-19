@@ -50,11 +50,13 @@ export default function HomeScreen() {
 
     const { data: profile } = useProfile();
     const {
-        data: matches = [],
+        data: matchesData,
         isLoading,
         isRefetching,
         refetch,
     } = useDailyMatches();
+    const matches = matchesData?.matches ?? [];
+    const nextPairsAvailableAt = matchesData?.nextPairsAvailableAt;
     const respondToPair = useRespondToDailyPair();
     const [refreshing, setRefreshing] = useState(false);
     const [hasSeenMatchesToday, setHasSeenMatchesToday] = useState(false);
@@ -145,7 +147,7 @@ export default function HomeScreen() {
                         }}
                     />
                 ) : (
-                    <EmptyMatches allActioned={allActioned} />
+                    <EmptyMatches allActioned={allActioned} nextPairsAvailableAt={nextPairsAvailableAt} />
                 )}
 
                 {!isLoading && matches.length > 0 && activeMatchCount === 0 ? (
