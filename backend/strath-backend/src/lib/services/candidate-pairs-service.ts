@@ -581,46 +581,64 @@ export async function respondToCandidatePair(
 
         const nextStatus = resolveCandidatePairStatus(nextADecision, nextBDecision);
 
-        const [updatedPair] = await tx
-            .update(candidatePairs)
-            .set({
-                aDecision: nextADecision,
-                bDecision: nextBDecision,
-                status: nextStatus,
-                updatedAt: now,
-            })
-            .where(eq(candidatePairs.id, pairId))
-            .returning();
-
-        await recordCandidatePairHistory(tx, {
-            pairId,
-            actorUserId: userId,
-            eventType:
-                nextStatus === "mutual"
-                    ? "mutual"
-                    : nextStatus === "closed"
-                        ? "closed"
-                        : "responded",
-            fromStatus: pair.status,
-            toStatus: nextStatus,
-            metadata: {
-                decision,
-                aDecision: nextADecision,
-                bDecision: nextBDecision,
-            },
+        const existingSameStatus = await tx.query.candidatePairs.findFirst({
+            where: and(
+                eq(candidatePairs.userAId, pair.userAId),
+                eq(candidatePairs.userBId, pair.userBId),
+                eq(candidatePairs.status, nextStatus),
+                ne(candidatePairs.id, pairId),
+            ),
         });
+
+        let updatedPair: typeof pair;
+
+        if (existingSameStatus) {
+            await tx.delete(candidatePairs).where(eq(candidatePairs.id, pairId));
+            updatedPair = { ...pair, aDecision: nextADecision, bDecision: nextBDecision, status: nextStatus, updatedAt: now };
+        } else {
+            const [upd] = await tx
+                .update(candidatePairs)
+                .set({
+                    aDecision: nextADecision,
+                    bDecision: nextBDecision,
+                    status: nextStatus,
+                    updatedAt: now,
+                })
+                .where(eq(candidatePairs.id, pairId))
+                .returning();
+            updatedPair = upd!;
+
+            await recordCandidatePairHistory(tx, {
+                pairId: updatedPair.id,
+                actorUserId: userId,
+                eventType:
+                    nextStatus === "mutual"
+                        ? "mutual"
+                        : nextStatus === "closed"
+                            ? "closed"
+                            : "responded",
+                fromStatus: pair.status,
+                toStatus: nextStatus,
+                metadata: {
+                    decision,
+                    aDecision: nextADecision,
+                    bDecision: nextBDecision,
+                },
+            });
+        }
 
         let mutual = null;
         if (nextStatus === "mutual") {
+            const pairIdForMutual = existingSameStatus ? existingSameStatus.id : updatedPair.id;
             mutual = await tx.query.mutualMatches.findFirst({
-                where: eq(mutualMatches.candidatePairId, pairId),
+                where: eq(mutualMatches.candidatePairId, pairIdForMutual),
             });
 
-            if (!mutual) {
+            if (!mutual && !existingSameStatus) {
                 const [createdMutual] = await tx
                     .insert(mutualMatches)
                     .values({
-                        candidatePairId: pairId,
+                        candidatePairId: updatedPair.id,
                         userAId: updatedPair.userAId,
                         userBId: updatedPair.userBId,
                         status: "mutual",
