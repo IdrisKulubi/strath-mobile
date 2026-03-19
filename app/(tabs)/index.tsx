@@ -147,16 +147,20 @@ export default function HomeScreen() {
                         }}
                     />
                 ) : (
-                    <EmptyMatches allActioned={allActioned} nextPairsAvailableAt={nextPairsAvailableAt} />
+                    <EmptyMatches
+                        allActioned={allActioned}
+                        nextPairsAvailableAt={nextPairsAvailableAt}
+                        onCountdownEnd={refetch}
+                    />
                 )}
 
                 {!isLoading && matches.length > 0 && activeMatchCount === 0 ? (
                     <View style={[styles.allSentBanner, { backgroundColor: isDark ? colors.card : '#f5f5f5', borderColor: colors.border }]}>
                         <Text style={[styles.allSentTitle, { color: colors.foreground }]}>
-                            Decisions locked in ;) ✨
+                            Decisions locked in 😉 
                         </Text>
                         <Text style={[styles.allSentSubtitle, { color: colors.mutedForeground }]}>
-                            Head to Dates when you're both a match — that's where the magic happens 💫
+                            Head to Dates when you&apos;re both a match — that&apos;s where the magic happens 💫
                         </Text>
                     </View>
                 ) : null}

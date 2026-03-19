@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
@@ -30,27 +30,36 @@ interface EmptyMatchesProps {
     allActioned?: boolean;
     /** ISO timestamp when next pairs will be available (e.g. after cooldown). When set, countdown uses this instead of midnight. */
     nextPairsAvailableAt?: string;
+    /** Called when countdown reaches 0 so the parent can refetch new pairs. */
+    onCountdownEnd?: () => void;
 }
 
-export function EmptyMatches({ allActioned = false, nextPairsAvailableAt }: EmptyMatchesProps) {
+export function EmptyMatches({ allActioned = false, nextPairsAvailableAt, onCountdownEnd }: EmptyMatchesProps) {
     const { colors, isDark } = useTheme();
     const getSeconds = useCallback(
         () => (nextPairsAvailableAt ? getSecondsUntil(nextPairsAvailableAt) : getSecondsUntilMidnight()),
         [nextPairsAvailableAt]
     );
     const [secondsLeft, setSecondsLeft] = useState(getSeconds);
+    const hasFiredCountdownEnd = useRef(false);
 
     useEffect(() => {
         setSecondsLeft(getSeconds());
+        hasFiredCountdownEnd.current = false;
     }, [getSeconds]);
 
     useEffect(() => {
         if (!allActioned) return;
         const interval = setInterval(() => {
-            setSecondsLeft(getSeconds());
+            const next = getSeconds();
+            setSecondsLeft(next);
+            if (next <= 0 && onCountdownEnd && !hasFiredCountdownEnd.current) {
+                hasFiredCountdownEnd.current = true;
+                onCountdownEnd();
+            }
         }, 1000);
         return () => clearInterval(interval);
-    }, [allActioned, getSeconds]);
+    }, [allActioned, getSeconds, onCountdownEnd]);
 
     return (
         <View style={styles.container}>
