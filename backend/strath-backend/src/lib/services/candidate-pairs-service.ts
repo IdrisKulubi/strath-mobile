@@ -332,9 +332,12 @@ function buildReasons(
     return Array.from(new Set(reasons)).slice(0, 4);
 }
 
+/** When we last showed this user a batch of pairs (createdAt). Used for cooldown.
+ * Uses createdAt, not updatedAt, so system expiration doesn't count as "activity" —
+ * when pairs expire, we're past cooldown and should generate new pairs. */
 async function getLastPairActivityAt(userId: string): Promise<Date | null> {
     const row = await readDb
-        .select({ updatedAt: candidatePairs.updatedAt })
+        .select({ createdAt: candidatePairs.createdAt })
         .from(candidatePairs)
         .where(
             or(
@@ -342,9 +345,9 @@ async function getLastPairActivityAt(userId: string): Promise<Date | null> {
                 eq(candidatePairs.userBId, userId),
             ),
         )
-        .orderBy(desc(candidatePairs.updatedAt))
+        .orderBy(desc(candidatePairs.createdAt))
         .limit(1);
-    return row[0]?.updatedAt ?? null;
+    return row[0]?.createdAt ?? null;
 }
 
 /** Returns ISO timestamp when next pairs will be available (during cooldown), or null if not in cooldown. */

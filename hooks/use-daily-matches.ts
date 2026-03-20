@@ -44,6 +44,16 @@ export function useDailyMatches() {
             };
         },
         staleTime: 60 * 1000, // 1 minute — ensures fresh pairs after expiry, pull-to-refresh always refetches
+        // Auto-refetch when the soonest displayed match expires so cards disappear without pull-to-refresh
+        refetchInterval: (query) => {
+            const matches = query.state.data?.matches ?? [];
+            if (matches.length === 0) return false;
+            const now = Date.now();
+            const soonestMs = Math.min(...matches.map((m) => new Date(m.expiresAt).getTime()));
+            const msUntilExpiry = soonestMs - now;
+            if (msUntilExpiry <= 0) return 1000; // already expired, refetch in 1s
+            return msUntilExpiry;
+        },
     });
 }
 
