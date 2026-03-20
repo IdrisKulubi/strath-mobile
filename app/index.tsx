@@ -4,12 +4,14 @@ import { useSession } from '../lib/auth-client';
 import { useEffect, useState, useCallback } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { getAuthToken, clearSession } from '@/lib/auth-helpers';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function Index() {
     const { data: session, isPending } = useSession();
     const [isCheckingProfile, setIsCheckingProfile] = useState(false);
     const [hasManualSession, setHasManualSession] = useState<boolean | null>(null);
     const router = useRouter();
+    const { colors } = useTheme();
 
     // Check for manually stored session (Apple Sign In)
     useEffect(() => {
@@ -91,17 +93,30 @@ export default function Index() {
     // Still loading Better Auth session or checking manual session
     if (isPending || hasManualSession === null) {
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
-                <ActivityIndicator size="large" color="#fff" />
+            <View
+                style={{
+                    flex: 1,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    backgroundColor: colors.background,
+                }}
+            >
+                <ActivityIndicator size="large" color={colors.primary} />
             </View>
         );
     }
 
-    // Checking profile after finding a session
     if ((session || hasManualSession) && isCheckingProfile) {
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
-                <ActivityIndicator size="large" color="#fff" />
+            <View
+                style={{
+                    flex: 1,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    backgroundColor: colors.background,
+                }}
+            >
+                <ActivityIndicator size="large" color={colors.primary} />
             </View>
         );
     }

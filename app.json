@@ -50,10 +50,10 @@
         {
           "image": "./assets/images/splash.png",
           "resizeMode": "contain",
-          "backgroundColor": "#7B4397",
+          "backgroundColor": "#FAF6F8",
           "dark": {
             "image": "./assets/images/splash.png",
-            "backgroundColor": "#7B4397"
+            "backgroundColor": "#0f0a14"
           }
         }
       ],
