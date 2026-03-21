@@ -1,19 +1,19 @@
-import React, { useCallback, useState } from 'react';
-import {
-    View,
-    StyleSheet,
-    Pressable,
-    ScrollView,
-} from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Animated, {
+    FadeIn,
     FadeInDown,
-    useSharedValue,
+    SlideInRight,
     useAnimatedStyle,
+    useSharedValue,
     withSpring,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
+import { HeartStraight, CalendarBlank, Leaf } from 'phosphor-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { Text } from '@/components/ui/text';
 import type { OnboardingData } from '@/components/digital-dna/types';
 
@@ -29,7 +29,7 @@ interface Question {
     id: keyof LifestyleAnswers;
     title: string;
     subtitle: string;
-    emoji: string;
+    icon: React.ComponentType<{ size: number; color: string; weight?: 'fill' }>;
     options: { value: string; label: string; emoji: string }[];
 }
 
@@ -37,350 +37,264 @@ const QUESTIONS: Question[] = [
     {
         id: 'relationshipGoal',
         title: 'What are you looking for?',
-        subtitle: 'Be honest — it helps us match better',
-        emoji: '💜',
+        subtitle: 'Be honest - it helps us match better',
+        icon: HeartStraight,
         options: [
             { value: 'serious', label: 'Something serious', emoji: '💍' },
-            { value: 'casual', label: 'Casual & see where it goes', emoji: '🌊' },
+            { value: 'casual', label: 'Casual and see where it goes', emoji: '🌊' },
             { value: 'open', label: 'Open to anything', emoji: '✨' },
         ],
     },
     {
         id: 'outingFrequency',
         title: 'How often do you go out?',
-        subtitle: 'Per week on average',
-        emoji: '📅',
+        subtitle: 'Your average week',
+        icon: CalendarBlank,
         options: [
-            { value: 'rarely', label: 'Rarely — homebody', emoji: '🏠' },
-            { value: '1_2_week', label: '1–2 times a week', emoji: '🚶' },
+            { value: 'rarely', label: 'Rarely - homebody', emoji: '🏠' },
+            { value: '1_2_week', label: '1-2 times a week', emoji: '🚶' },
             { value: '3_plus_week', label: '3+ times a week', emoji: '🎉' },
-        ],
-    },
-    {
-        id: 'drinks',
-        title: 'Do you drink?',
-        subtitle: 'No judgment here',
-        emoji: '🥂',
-        options: [
-            { value: 'yes', label: 'Yes', emoji: '🍻' },
-            { value: 'sometimes', label: 'Sometimes', emoji: '🤷' },
-            { value: 'no', label: 'No', emoji: '🚫' },
-        ],
-    },
-    {
-        id: 'smokes',
-        title: 'Do you smoke?',
-        subtitle: 'Still no judgment',
-        emoji: '💨',
-        options: [
-            { value: 'yes', label: 'Yes', emoji: '🚬' },
-            { value: 'sometimes', label: 'Sometimes', emoji: '🤷' },
-            { value: 'no', label: 'No', emoji: '🚫' },
         ],
     },
 ];
 
 const TOTAL = QUESTIONS.length;
 
-function OptionButton({
+function LifestyleOption({
     option,
-    selected,
+    isSelected,
     onPress,
+    index,
 }: {
     option: Question['options'][number];
-    selected: boolean;
+    isSelected: boolean;
     onPress: () => void;
+    index: number;
 }) {
-    const scale = useSharedValue(1);
-    const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-
-    const handlePress = useCallback(() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        scale.value = withSpring(0.94, { damping: 10, stiffness: 300 }, () => {
-            scale.value = withSpring(1);
-        });
-        onPress();
-    }, [onPress, scale]);
-
     return (
-        <Animated.View style={animStyle}>
-            <Pressable
-                onPress={handlePress}
-                style={[styles.option, selected && styles.optionSelected]}
+        <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
+            <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    onPress();
+                }}
             >
-                <Text style={styles.optionEmoji}>{option.emoji}</Text>
-                <Text style={[styles.optionLabel, selected && styles.optionLabelSelected]}>
-                    {option.label}
-                </Text>
-                {selected && (
-                    <View style={styles.checkMark}>
-                        <Ionicons name="checkmark" size={14} color="#fff" />
-                    </View>
-                )}
-            </Pressable>
+                <View style={[styles.optionCard, isSelected && styles.optionCardSelected]}>
+                    <Text style={styles.optionEmoji}>{option.emoji}</Text>
+                    <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>{option.label}</Text>
+                    {isSelected && <Ionicons name="checkmark-circle" size={22} color="#fff" />}
+                </View>
+            </TouchableOpacity>
         </Animated.View>
     );
 }
 
 export function LifestyleStep({ data, onComplete, onBack }: LifestyleStepProps) {
-    const [qIndex, setQIndex] = useState(0);
+    const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<LifestyleAnswers>(data ?? {});
+    const progressWidth = useSharedValue(0);
+    const insets = useSafeAreaInsets();
 
-    const current = QUESTIONS[qIndex];
-    const isAnswered = Boolean(answers[current?.id]);
+    const currentQuestion = QUESTIONS[currentIndex];
+    const selectedValue = answers[currentQuestion.id];
+    const Icon = currentQuestion.icon;
+
+    useEffect(() => {
+        progressWidth.value = withSpring(((currentIndex + 1) / TOTAL) * 100, { damping: 15 });
+    }, [currentIndex, progressWidth]);
+
+    const progressStyle = useAnimatedStyle(() => ({
+        width: `${progressWidth.value}%`,
+    }));
 
     const handleSelect = useCallback((value: string) => {
-        if (!current) return;
+        const nextAnswers = { ...answers, [currentQuestion.id]: value };
+        setAnswers(nextAnswers);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setAnswers((prev) => ({ ...prev, [current.id]: value }));
-    }, [current]);
 
-    const handleNext = useCallback(() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        if (qIndex < TOTAL - 1) {
-            setQIndex((i) => i + 1);
-        } else {
-            onComplete(answers);
-        }
-    }, [qIndex, answers, onComplete]);
+        setTimeout(() => {
+            if (currentIndex === TOTAL - 1) {
+                onComplete(nextAnswers);
+            } else {
+                setCurrentIndex((prev) => prev + 1);
+            }
+        }, 220);
+    }, [answers, currentIndex, currentQuestion.id, onComplete]);
 
     const handleBack = useCallback(() => {
-        if (qIndex > 0) {
-            setQIndex((i) => i - 1);
+        if (currentIndex > 0) {
+            setCurrentIndex((prev) => prev - 1);
         } else {
             onBack();
         }
-    }, [qIndex, onBack]);
-
-    if (!current) return null;
+    }, [currentIndex, onBack]);
 
     return (
-        <LinearGradient
-            colors={['#2d1b47', '#1a0d2e']}
-            style={styles.container}
-        >
-            {/* Top bar */}
-            <View style={styles.topBar}>
-                <Pressable onPress={handleBack} style={styles.backBtn} hitSlop={10}>
-                    <Ionicons name="chevron-back" size={26} color="rgba(255,255,255,0.8)" />
-                </Pressable>
+        <View style={styles.container}>
+            <LinearGradient colors={['#0f0d23', '#1a0d2e', '#0f0d23']} style={StyleSheet.absoluteFill} />
 
-                <View style={styles.dots}>
-                    {QUESTIONS.map((_, i) => (
-                        <View
-                            key={i}
-                            style={[
-                                styles.dot,
-                                i === qIndex && styles.dotActive,
-                                i < qIndex && styles.dotDone,
-                            ]}
+            <View style={[styles.progressContainer, { paddingTop: Math.max(insets.top + 12, 60) }]}>
+                <TouchableOpacity onPress={handleBack} activeOpacity={0.7} style={styles.backButton}>
+                    <Ionicons name="chevron-back" size={24} color="rgba(255,255,255,0.85)" />
+                </TouchableOpacity>
+
+                <View style={styles.progressBarBg}>
+                    <Animated.View style={[styles.progressBarFill, progressStyle]}>
+                        <LinearGradient
+                            colors={['#ec4899', '#f43f5e']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={StyleSheet.absoluteFill}
                         />
-                    ))}
+                    </Animated.View>
                 </View>
 
-                <View style={{ width: 40 }} />
-            </View>
-
-            {/* Step label */}
-            <View style={styles.stepLabelWrap}>
-                <View style={styles.stepLabel}>
-                    <Ionicons name="leaf-outline" size={12} color="#e91e8c" />
-                    <Text style={styles.stepLabelText}>Lifestyle</Text>
+                <View style={styles.progressInfo}>
+                    <Leaf size={16} color="#f59e0b" weight="fill" />
+                    <Text style={styles.progressText}>Lifestyle</Text>
+                    <Text style={styles.progressCount}>{currentIndex + 1}/{TOTAL}</Text>
                 </View>
             </View>
 
-            {/* Question */}
-            <Animated.View
-                key={qIndex}
-                entering={FadeInDown.springify().damping(16)}
-                style={styles.questionBlock}
-            >
-                <Text style={styles.questionEmoji}>{current.emoji}</Text>
-                <Text style={styles.questionTitle}>{current.title}</Text>
-                <Text style={styles.questionSub}>{current.subtitle}</Text>
-            </Animated.View>
+            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <Animated.View key={currentQuestion.id} entering={SlideInRight.springify()} style={styles.content}>
+                    <View style={styles.iconContainer}>
+                        <Icon size={32} color="#ec4899" weight="fill" />
+                    </View>
 
-            {/* Options */}
-            <ScrollView
-                style={styles.scroll}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-            >
-                <Animated.View
-                    key={`opts-${qIndex}`}
-                    entering={FadeInDown.delay(80).springify().damping(16)}
-                    style={styles.optionsGrid}
-                >
-                    {current.options.map((opt) => (
-                        <OptionButton
-                            key={opt.value}
-                            option={opt}
-                            selected={answers[current.id] === opt.value}
-                            onPress={() => handleSelect(opt.value)}
-                        />
-                    ))}
+                    <Text style={styles.title}>{currentQuestion.title}</Text>
+                    <Text style={styles.subtitle}>{currentQuestion.subtitle}</Text>
+
+                    <View style={styles.optionsContainer}>
+                        {currentQuestion.options.map((option, index) => (
+                            <LifestyleOption
+                                key={option.value}
+                                option={option}
+                                isSelected={selectedValue === option.value}
+                                onPress={() => handleSelect(option.value)}
+                                index={index}
+                            />
+                        ))}
+                    </View>
                 </Animated.View>
             </ScrollView>
 
-            {/* Next button */}
-            <View style={styles.footer}>
-                <Pressable
-                    onPress={handleNext}
-                    disabled={!isAnswered}
-                    style={[styles.nextBtn, !isAnswered && styles.nextBtnDisabled]}
-                >
-                    <LinearGradient
-                        colors={isAnswered ? ['#e91e8c', '#d946a6'] : ['#3d2459', '#3d2459']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.nextBtnInner}
-                    >
-                        <Text style={[styles.nextBtnText, !isAnswered && styles.nextBtnTextDisabled]}>
-                            {qIndex < TOTAL - 1 ? 'Next' : 'Continue'}
-                        </Text>
-                        <Ionicons
-                            name={qIndex < TOTAL - 1 ? 'arrow-forward' : 'checkmark'}
-                            size={20}
-                            color={isAnswered ? '#fff' : 'rgba(255,255,255,0.4)'}
-                        />
-                    </LinearGradient>
-                </Pressable>
-
-                <Text style={styles.counter}>{qIndex + 1} of {TOTAL}</Text>
-            </View>
-        </LinearGradient>
+            <Animated.Text entering={FadeIn.delay(250)} style={styles.helperText}>
+                Tap an answer to continue
+            </Animated.Text>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
-    topBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingTop: 16,
-        paddingBottom: 8,
-    },
-    backBtn: {
-        width: 40,
-        height: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    dots: {
-        flexDirection: 'row',
-        gap: 6,
-        alignItems: 'center',
-    },
-    dot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-    },
-    dotActive: {
-        width: 18,
-        backgroundColor: '#e91e8c',
-    },
-    dotDone: {
-        backgroundColor: 'rgba(233,30,140,0.5)',
-    },
-    stepLabelWrap: {
-        paddingHorizontal: 28,
-        paddingTop: 12,
-    },
-    stepLabel: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        alignSelf: 'flex-start',
-        backgroundColor: 'rgba(233,30,140,0.12)',
-        borderRadius: 20,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-    },
-    stepLabelText: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#e91e8c',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    questionBlock: {
-        paddingHorizontal: 28,
-        paddingTop: 16,
-        paddingBottom: 20,
-        gap: 6,
-    },
-    questionEmoji: { fontSize: 40, marginBottom: 4 },
-    questionTitle: {
-        fontSize: 26,
-        fontWeight: '800',
-        color: '#fff',
-        letterSpacing: -0.3,
-        lineHeight: 32,
-    },
-    questionSub: {
-        fontSize: 14,
-        color: 'rgba(255,255,255,0.55)',
-        marginTop: 2,
-    },
-    scroll: { flex: 1 },
-    scrollContent: { paddingHorizontal: 20, paddingBottom: 16 },
-    optionsGrid: { gap: 10 },
-    option: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-        backgroundColor: 'rgba(255,255,255,0.07)',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.12)',
-        borderRadius: 18,
-        paddingVertical: 16,
-        paddingHorizontal: 18,
-    },
-    optionSelected: {
-        backgroundColor: 'rgba(233,30,140,0.15)',
-        borderColor: '#e91e8c',
-    },
-    optionEmoji: { fontSize: 24 },
-    optionLabel: {
+    container: {
         flex: 1,
-        fontSize: 16,
-        color: 'rgba(255,255,255,0.85)',
-        fontWeight: '500',
     },
-    optionLabelSelected: { color: '#fff', fontWeight: '700' },
-    checkMark: {
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        backgroundColor: '#e91e8c',
-        alignItems: 'center',
+    progressContainer: {
+        paddingHorizontal: 24,
+        paddingBottom: 16,
+    },
+    backButton: {
+        width: 36,
+        height: 36,
         justifyContent: 'center',
+        marginBottom: 14,
     },
-    footer: {
-        paddingHorizontal: 20,
-        paddingBottom: 32,
-        paddingTop: 12,
-        gap: 10,
-        alignItems: 'center',
+    progressBarBg: {
+        height: 6,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 3,
+        overflow: 'hidden',
+        marginBottom: 12,
     },
-    nextBtn: { width: '100%', borderRadius: 18, overflow: 'hidden' },
-    nextBtnDisabled: { opacity: 0.6 },
-    nextBtnInner: {
+    progressBarFill: {
+        height: '100%',
+        borderRadius: 3,
+    },
+    progressInfo: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        paddingVertical: 16,
     },
-    nextBtnText: { fontSize: 17, fontWeight: '800', color: '#fff' },
-    nextBtnTextDisabled: { color: 'rgba(255,255,255,0.4)' },
-    counter: {
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.35)',
-        fontWeight: '500',
+    progressText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#f59e0b',
+    },
+    progressCount: {
+        fontSize: 14,
+        color: '#64748b',
+    },
+    scrollView: {
+        flex: 1,
+    },
+    scrollContent: {
+        paddingBottom: 24,
+    },
+    content: {
+        paddingHorizontal: 24,
+        paddingTop: 22,
+    },
+    iconContainer: {
+        width: 64,
+        height: 64,
+        borderRadius: 20,
+        backgroundColor: 'rgba(236,72,153,0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    title: {
+        fontSize: 28,
+        fontWeight: '800',
+        color: '#fff',
+        marginBottom: 8,
+        lineHeight: 36,
+        paddingTop: 2,
+    },
+    subtitle: {
+        fontSize: 16,
+        color: '#94a3b8',
+        marginBottom: 28,
+        lineHeight: 24,
+    },
+    optionsContainer: {
+        gap: 12,
+    },
+    optionCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 22,
+        paddingVertical: 18,
+        paddingHorizontal: 18,
+    },
+    optionCardSelected: {
+        backgroundColor: 'rgba(236,72,153,0.18)',
+        borderColor: '#ec4899',
+    },
+    optionEmoji: {
+        fontSize: 22,
+    },
+    optionText: {
+        flex: 1,
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#E2D8EC',
+        letterSpacing: -0.2,
+    },
+    optionTextSelected: {
+        color: '#fff',
+    },
+    helperText: {
+        paddingBottom: 34,
+        textAlign: 'center',
+        fontSize: 13,
+        color: '#64748b',
     },
 });

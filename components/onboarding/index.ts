@@ -8,4 +8,5 @@ export { QuickFire } from './QuickFire';
 export { PersonalityStep } from './PersonalityStep';
 export { LifestyleStep } from './LifestyleStep';
 export { OpeningLine } from './OpeningLine';
+export { ProfileDetailsStep } from './ProfileDetailsStep';
 export { LaunchCelebration } from './LaunchCelebration';

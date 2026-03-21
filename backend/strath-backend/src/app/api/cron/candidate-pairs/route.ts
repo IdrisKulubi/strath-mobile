@@ -3,6 +3,7 @@ import { and, eq, gte, isNull } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { profiles, user } from "@/db/schema";
 import { db } from "@/lib/db";
+import { isAuthorizedCronRequest } from "@/lib/security";
 import {
     generateCandidatePairsForUser,
     getActiveCandidatePairsForUser,
@@ -12,23 +13,9 @@ import { runPairExpiration } from "@/lib/services/pair-expiration-service";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-function isAuthorizedCron(req: NextRequest) {
-    const cronSecret = process.env.CRON_SECRET;
-    const authHeader = req.headers.get("authorization") || "";
-    const bearer = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
-    const xCronSecret = req.headers.get("x-cron-secret");
-    const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-
-    if (!cronSecret) {
-        return isVercelCron;
-    }
-
-    return bearer === cronSecret || xCronSecret === cronSecret || isVercelCron;
-}
-
 export async function GET(req: NextRequest) {
     try {
-        if (!isAuthorizedCron(req)) {
+        if (!isAuthorizedCronRequest(req)) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
 

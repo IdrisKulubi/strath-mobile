@@ -13,13 +13,14 @@ import {
     PersonalityStep,
     LifestyleStep,
     OpeningLine,
+    ProfileDetailsStep,
     LaunchCelebration,
 } from '../../components/onboarding';
 import { useImageUpload } from '@/hooks/use-image-upload';
 import { getAuthToken, clearSession, getCurrentUser } from '@/lib/auth-helpers';
 
-// Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=Personality, 8=Lifestyle, 9=OpeningLine, 10=Celebration
-type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+// Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=Personality, 8=Lifestyle, 9=OpeningLine, 10=ProfileDetails, 11=Celebration
+type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 
 export default function OnboardingScreen() {
     const router = useRouter();
@@ -488,8 +489,28 @@ export default function OnboardingScreen() {
                     />
                 );
 
-            // Step 10: Launch Celebration
+            // Step 10: Remaining profile details
             case 10:
+                return (
+                    <ProfileDetailsStep
+                        data={{
+                            course: formData.course,
+                            education: formData.education,
+                            politics: formData.politics,
+                            languages: formData.languages,
+                            qualities: formData.qualities,
+                            instagram: formData.instagram,
+                            spotify: formData.spotify,
+                            snapchat: formData.snapchat,
+                        }}
+                        onUpdate={(data) => updateData(data as Partial<OnboardingData>)}
+                        onComplete={() => setStep(11)}
+                        onBack={() => setStep(9)}
+                    />
+                );
+
+            // Step 11: Launch Celebration
+            case 11:
                 return (
                     <LaunchCelebration
                         userName={formData.firstName}
