@@ -112,7 +112,7 @@ export default function LoginScreen() {
         await SecureStore.setItemAsync('strathspace_session_token', data.data.token);
       }
 
-      toast.show({ message: 'Welcome to StrathSpace!', variant: 'success' });
+      toast.show({ message: 'Welcome to StrathSpace', variant: 'success' });
       router.replace('/');
     } catch (error: unknown) {
       const err = error as { code?: string; message?: string };
