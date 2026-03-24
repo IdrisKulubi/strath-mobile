@@ -9,6 +9,7 @@ const DEFAULT_PREFIX = "face-verification";
 const SIGNED_URL_EXPIRY_SECONDS = 600;
 
 type UploadSlot = "front" | "left" | "right" | "smile" | "extra";
+const REKOGNITION_SUPPORTED_EXTENSIONS = new Set(["jpg", "jpeg", "png"]);
 
 export function getFaceVerificationPrefix() {
     return (process.env.FACE_VERIFICATION_R2_PREFIX?.trim() || DEFAULT_PREFIX).replace(/^\/+|\/+$/g, "");
@@ -32,6 +33,15 @@ export function extractR2ObjectKeyFromUrl(assetUrl: string) {
 
     const key = trimmed.slice(baseUrl.length).replace(/^\/+/, "");
     return key || null;
+}
+
+export function isRekognitionSupportedImageKey(key: string) {
+    const extension = key.split(".").pop()?.trim().toLowerCase();
+    return !!extension && REKOGNITION_SUPPORTED_EXTENSIONS.has(extension);
+}
+
+export function getRekognitionUnsupportedImageKeys(keys: string[]) {
+    return keys.filter((key) => !isRekognitionSupportedImageKey(key));
 }
 
 export async function createFaceVerificationUploadTarget(key: string, contentType: string) {

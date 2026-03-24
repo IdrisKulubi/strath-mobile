@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getAuthHeaders } from '@/lib/auth-helpers';
+import { normalizeImageForUpload } from '@/lib/image-normalization';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.strathspace.com';
 
@@ -204,9 +205,10 @@ export function useFaceVerification() {
                 throw new Error('Verification session is missing. Please start the verification again.');
             }
 
-            const blobResponse = await fetch(selfieUri);
+            const normalizedSelfie = await normalizeImageForUpload(selfieUri);
+            const blobResponse = await fetch(normalizedSelfie.uri);
             const blob = await blobResponse.blob();
-            const contentType = blob.type || 'image/jpeg';
+            const contentType = normalizedSelfie.contentType;
 
             const { uploadTargets } = await requestUploadTargets(sessionId, contentType);
             const target = uploadTargets[0];

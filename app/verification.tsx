@@ -3,6 +3,7 @@ import {
     ActivityIndicator,
     Alert,
     Image,
+    Modal,
     Pressable,
     SafeAreaView,
     ScrollView,
@@ -41,12 +42,46 @@ export default function VerificationScreen() {
         () => (profile?.photos ?? []).filter((photo: string | undefined | null): photo is string => !!photo).slice(0, 4),
         [profile?.photos],
     );
+    const supportedProfilePhotoUrls = useMemo(
+        () => profilePhotoUrls.filter(isRekognitionSupportedProfilePhoto),
+        [profilePhotoUrls],
+    );
+    const unsupportedProfilePhotoUrls = useMemo(
+        () => profilePhotoUrls.filter((photo: string) => !isRekognitionSupportedProfilePhoto(photo)),
+        [profilePhotoUrls],
+    );
+    const processingSteps = useMemo(
+        () => [
+            'Checking your selfie vibe against your profile pics...',
+            'Filtering out fake-energy and bot behavior...',
+            'Almost there. Giving your account the green-light treatment...',
+        ],
+        [],
+    );
+    const [processingStepIndex, setProcessingStepIndex] = useState(0);
 
     useEffect(() => {
         if (!isProfileLoading && profile && hasVerifiedFace(profile)) {
             router.replace('/(tabs)' as any);
         }
     }, [isProfileLoading, profile, router]);
+
+    const status = latestSession?.status ?? profile?.faceVerificationStatus ?? 'not_started';
+    const isProcessing = status === 'processing';
+    const canRetry = status === 'retry_required' || status === 'failed';
+
+    useEffect(() => {
+        if (!isUploadingAndSubmitting && !isProcessing) {
+            setProcessingStepIndex(0);
+            return;
+        }
+
+        const interval = setInterval(() => {
+            setProcessingStepIndex((current) => (current + 1) % processingSteps.length);
+        }, 2200);
+
+        return () => clearInterval(interval);
+    }, [isProcessing, isUploadingAndSubmitting, processingSteps]);
 
     const handleCaptureSelfie = async () => {
         try {
@@ -101,9 +136,9 @@ export default function VerificationScreen() {
                 return;
             }
 
-            if (profilePhotoUrls.length < 2) {
+            if (supportedProfilePhotoUrls.length < 2) {
                 show({
-                    message: 'You need at least 2 profile photos before verification can run.',
+                    message: 'Face verification needs at least 2 JPEG or PNG profile photos. HEIC photos are not supported by Rekognition.',
                     variant: 'warning',
                 });
                 return;
@@ -112,7 +147,7 @@ export default function VerificationScreen() {
             await uploadAndSubmitAsync({
                 sessionId: session.id,
                 selfieUri,
-                profilePhotoUrls,
+                profilePhotoUrls: supportedProfilePhotoUrls,
             });
             await refetchProfile();
             show({
@@ -135,10 +170,14 @@ export default function VerificationScreen() {
         isCreatingSession ||
         isRetryingSession ||
         isUploadingAndSubmitting;
-
-    const status = latestSession?.status ?? profile?.faceVerificationStatus ?? 'not_started';
-    const isProcessing = status === 'processing';
-    const canRetry = status === 'retry_required' || status === 'failed';
+    const showProcessingOverlay = isUploadingAndSubmitting || isProcessing;
+    const progressValue = isUploadingAndSubmitting ? 0.38 : isProcessing ? 0.82 : 0;
+    const processingHeadline = isUploadingAndSubmitting
+        ? 'Uploading your selfie...'
+        : 'Verification in progress';
+    const processingSubcopy = isUploadingAndSubmitting
+        ? 'Locking in your selfie and lining everything up for the face check.'
+        : processingSteps[processingStepIndex];
 
     return (
         <SafeAreaView style={styles.container}>
@@ -159,12 +198,25 @@ export default function VerificationScreen() {
                     <Text style={styles.cardCopy}>
                         We will compare one guided selfie with your uploaded profile photos. Make sure your face is clear, centered, and well lit.
                     </Text>
+                    <Text style={styles.cardHint}>
+                        Amazon Rekognition currently accepts JPEG and PNG profile photos for this check.
+                    </Text>
 
                     <View style={styles.photoRow}>
                         {profilePhotoUrls.slice(0, 4).map((photo: string, index: number) => (
                             <Image key={`${photo}-${index}`} source={{ uri: photo }} style={styles.profileThumb} />
                         ))}
                     </View>
+                    {supportedProfilePhotoUrls.length < 2 ? (
+                        <Text style={styles.warningText}>
+                            You currently have fewer than 2 JPEG/PNG photos available for verification. Replace HEIC photos first.
+                        </Text>
+                    ) : null}
+                    {unsupportedProfilePhotoUrls.length > 0 ? (
+                        <Text style={styles.warningSubtext}>
+                            {unsupportedProfilePhotoUrls.length} of your current photos need a quick re-upload as JPEG or PNG before this check can pass.
+                        </Text>
+                    ) : null}
                 </View>
 
                 <View style={styles.card}>
@@ -232,12 +284,46 @@ export default function VerificationScreen() {
                     )}
                 </Pressable>
             </ScrollView>
+
+            <Modal visible={showProcessingOverlay} transparent animationType="fade" statusBarTranslucent>
+                <View style={styles.processingOverlay}>
+                    <LinearGradient
+                        colors={['rgba(15,13,35,0.96)', 'rgba(26,13,46,0.98)', 'rgba(15,13,35,0.96)']}
+                        style={styles.processingCard}
+                    >
+                        <View style={styles.processingBadge}>
+                            <Hourglass size={22} color="#fbbf24" weight="fill" />
+                            <Text style={styles.processingBadgeText}>
+                                {isUploadingAndSubmitting ? 'Uploading' : 'Cooking'}
+                            </Text>
+                        </View>
+
+                        <Text style={styles.processingTitle}>{processingHeadline}</Text>
+                        <Text style={styles.processingCopy}>{processingSubcopy}</Text>
+
+                        <View style={styles.progressTrack}>
+                            <View style={[styles.progressFill, { width: `${progressValue * 100}%` }]} />
+                        </View>
+
+                        <Text style={styles.processingMeta}>
+                            {isUploadingAndSubmitting
+                                ? 'Hold tight, we are packaging your selfie for the check.'
+                                : 'Sit back. We are doing the trust-and-safety thing right now.'}
+                        </Text>
+                    </LinearGradient>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
 
 function formatStatus(status: string) {
     return status.replace(/_/g, ' ');
+}
+
+function isRekognitionSupportedProfilePhoto(url: string) {
+    const sanitized = url.split('?')[0]?.toLowerCase() ?? '';
+    return sanitized.endsWith('.jpg') || sanitized.endsWith('.jpeg') || sanitized.endsWith('.png');
 }
 
 const styles = StyleSheet.create({
@@ -288,6 +374,11 @@ const styles = StyleSheet.create({
         color: '#cbd5e1',
         fontSize: 14,
         lineHeight: 22,
+    },
+    cardHint: {
+        color: '#f9a8d4',
+        fontSize: 12,
+        lineHeight: 18,
     },
     photoRow: {
         flexDirection: 'row',
@@ -353,6 +444,16 @@ const styles = StyleSheet.create({
         fontSize: 14,
         lineHeight: 21,
     },
+    warningText: {
+        color: '#fda4af',
+        fontSize: 12,
+        lineHeight: 18,
+    },
+    warningSubtext: {
+        color: '#fecdd3',
+        fontSize: 12,
+        lineHeight: 18,
+    },
     primaryButton: {
         backgroundColor: '#ec4899',
         borderRadius: 999,
@@ -368,5 +469,66 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: '800',
         fontSize: 16,
+    },
+    processingOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(4, 6, 18, 0.74)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 24,
+    },
+    processingCard: {
+        width: '100%',
+        maxWidth: 360,
+        borderRadius: 30,
+        paddingHorizontal: 24,
+        paddingVertical: 28,
+        borderWidth: 1,
+        borderColor: 'rgba(244, 114, 182, 0.22)',
+        gap: 14,
+    },
+    processingBadge: {
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 999,
+        backgroundColor: 'rgba(251, 191, 36, 0.12)',
+    },
+    processingBadgeText: {
+        color: '#fde68a',
+        fontSize: 12,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+        letterSpacing: 0.8,
+    },
+    processingTitle: {
+        color: '#fff',
+        fontSize: 24,
+        fontWeight: '800',
+        lineHeight: 30,
+    },
+    processingCopy: {
+        color: '#e9d5ff',
+        fontSize: 15,
+        lineHeight: 23,
+    },
+    processingMeta: {
+        color: '#cbd5e1',
+        fontSize: 13,
+        lineHeight: 20,
+    },
+    progressTrack: {
+        height: 10,
+        borderRadius: 999,
+        backgroundColor: 'rgba(148, 163, 184, 0.18)',
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        borderRadius: 999,
+        backgroundColor: '#f472b6',
     },
 });

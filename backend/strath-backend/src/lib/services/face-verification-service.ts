@@ -19,6 +19,8 @@ import {
     buildFaceVerificationSelfieKey,
     createFaceVerificationUploadTarget,
     extractR2ObjectKeyFromUrl,
+    getRekognitionUnsupportedImageKeys,
+    isRekognitionSupportedImageKey,
 } from "@/lib/services/face-verification-storage";
 import type {
     CreateFaceVerificationSessionInput,
@@ -203,7 +205,12 @@ export async function submitFaceVerificationSession(
         throw new Error("At least one selfie capture is required before submission.");
     }
 
-    const profileAssetKeys = Array.from(
+    const unsupportedSelfies = getRekognitionUnsupportedImageKeys(session.selfieAssetKeys);
+    if (unsupportedSelfies.length > 0) {
+        throw new Error("Verification selfies must be uploaded as JPEG or PNG images.");
+    }
+
+    const extractedProfileAssetKeys = Array.from(
         new Set(
             input.profilePhotoUrls
                 .map((url) => extractR2ObjectKeyFromUrl(url))
@@ -211,8 +218,10 @@ export async function submitFaceVerificationSession(
         ),
     );
 
+    const profileAssetKeys = extractedProfileAssetKeys.filter((key) => isRekognitionSupportedImageKey(key));
+
     if (profileAssetKeys.length < 2) {
-        throw new Error("At least two valid R2 profile photos are required for verification.");
+        throw new Error("Face verification needs at least 2 profile photos in JPEG or PNG format. Replace HEIC/WEBP photos and try again.");
     }
 
     const [updatedSession] = await db
