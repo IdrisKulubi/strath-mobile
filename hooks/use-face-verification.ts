@@ -63,7 +63,17 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-        throw new Error(payload.error || `Request failed with status ${response.status}`);
+        const detailMessage = Array.isArray(payload?.details) && payload.details.length > 0
+            ? payload.details
+                .map((detail: { path?: (string | number)[]; message?: string }) => {
+                    const field = Array.isArray(detail?.path) ? detail.path.join('.') : 'field';
+                    return detail?.message ? `${field}: ${detail.message}` : null;
+                })
+                .filter(Boolean)
+                .join(', ')
+            : null;
+
+        throw new Error(detailMessage || payload.error || `Request failed with status ${response.status}`);
     }
 
     return (payload.data ?? payload) as T;

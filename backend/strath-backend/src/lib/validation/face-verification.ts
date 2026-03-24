@@ -16,7 +16,7 @@ export const createFaceVerificationUploadTargetsSchema = z.object({
 
 export const submitFaceVerificationSessionSchema = z.object({
     sessionId: z.string().uuid(),
-    profilePhotoUrls: z.array(z.string().url()).min(2).max(4),
+    profilePhotoUrls: z.array(z.string().trim().min(1)).min(2).max(4),
 });
 
 export const retryFaceVerificationSessionSchema = z.object({
