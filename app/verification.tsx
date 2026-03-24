@@ -138,7 +138,7 @@ export default function VerificationScreen() {
 
             if (supportedProfilePhotoUrls.length < 2) {
                 show({
-                    message: 'Face verification needs at least 2 JPEG or PNG profile photos. HEIC photos are not supported by Rekognition.',
+                    message: 'Add at least 2 clear profile photos before you verify.',
                     variant: 'warning',
                 });
                 return;
@@ -151,13 +151,13 @@ export default function VerificationScreen() {
             });
             await refetchProfile();
             show({
-                message: 'Verification submitted. We are checking your selfie now.',
+                message: 'Selfie submitted. We are checking everything now.',
                 variant: 'success',
             });
         } catch (error) {
             console.error('[Verification] Failed to submit verification', error);
             show({
-                message: error instanceof Error ? error.message : 'Verification failed to start.',
+                message: getVerificationUserMessage(error),
                 variant: 'danger',
                 duration: 4500,
             });
@@ -199,7 +199,7 @@ export default function VerificationScreen() {
                         We will compare one guided selfie with your uploaded profile photos. Make sure your face is clear, centered, and well lit.
                     </Text>
                     <Text style={styles.cardHint}>
-                        Amazon Rekognition currently accepts JPEG and PNG profile photos for this check.
+                        Clear, recent photos give you the smoothest verification.
                     </Text>
 
                     <View style={styles.photoRow}>
@@ -209,12 +209,12 @@ export default function VerificationScreen() {
                     </View>
                     {supportedProfilePhotoUrls.length < 2 ? (
                         <Text style={styles.warningText}>
-                            You currently have fewer than 2 JPEG/PNG photos available for verification. Replace HEIC photos first.
+                            You need at least 2 clear profile photos to finish this step.
                         </Text>
                     ) : null}
                     {unsupportedProfilePhotoUrls.length > 0 ? (
                         <Text style={styles.warningSubtext}>
-                            {unsupportedProfilePhotoUrls.length} of your current photos need a quick re-upload as JPEG or PNG before this check can pass.
+                            Some of your current photos may need a quick re-upload before this can finish smoothly.
                         </Text>
                     ) : null}
                 </View>
@@ -257,9 +257,9 @@ export default function VerificationScreen() {
 
                     <Text style={styles.statusCopy}>
                         {isProcessing
-                            ? 'Your selfie has been submitted and is waiting for backend verification.'
+                            ? 'Your selfie is being checked right now.'
                             : canRetry
-                            ? 'This attempt needs another try. Capture a clearer selfie and submit again.'
+                            ? 'Almost there. We just need one more try with a clearer selfie.'
                             : status === 'verified'
                             ? 'Your face is verified. You can continue to the app.'
                             : 'Complete this step to unlock discovery and matchmaking.'}
@@ -307,8 +307,8 @@ export default function VerificationScreen() {
 
                         <Text style={styles.processingMeta}>
                             {isUploadingAndSubmitting
-                                ? 'Hold tight, we are packaging your selfie for the check.'
-                                : 'Sit back. We are doing the trust-and-safety thing right now.'}
+                                ? 'Hold tight, we are getting this ready for you.'
+                                : 'Stay here for a sec while we finish things up.'}
                         </Text>
                     </LinearGradient>
                 </View>
@@ -319,6 +319,42 @@ export default function VerificationScreen() {
 
 function formatStatus(status: string) {
     return status.replace(/_/g, ' ');
+}
+
+function getVerificationUserMessage(error: unknown) {
+    const fallback = 'We could not finish verification right now. Please try again.';
+
+    if (!(error instanceof Error)) {
+        return fallback;
+    }
+
+    const normalizedMessage = error.message.toLowerCase();
+
+    if (normalizedMessage.includes('at least 2') && normalizedMessage.includes('profile')) {
+        return 'Add at least 2 clear profile photos, then try again.';
+    }
+
+    if (normalizedMessage.includes('session')) {
+        return 'Something timed out in the background. Try again and we will restart it cleanly.';
+    }
+
+    if (normalizedMessage.includes('upload')) {
+        return 'Your selfie did not upload properly. Try again with a steady connection.';
+    }
+
+    if (normalizedMessage.includes('selfie')) {
+        return 'That selfie did not come through clearly. Retake it and try again.';
+    }
+
+    if (
+        normalizedMessage.includes('comparefaces') ||
+        normalizedMessage.includes('rekognition') ||
+        normalizedMessage.includes('image format')
+    ) {
+        return 'Some of your photos need a quick refresh before we can finish verification.';
+    }
+
+    return error.message || fallback;
 }
 
 function isRekognitionSupportedProfilePhoto(url: string) {
