@@ -51,6 +51,24 @@ interface UploadTarget {
     slot: 'front' | 'left' | 'right' | 'smile' | 'extra';
 }
 
+function normalizeSessionPayload(
+    payload: FaceVerificationSession | { session?: FaceVerificationSession } | null,
+) {
+    if (!payload) {
+        return null;
+    }
+
+    if ('id' in payload && typeof payload.id === 'string') {
+        return payload;
+    }
+
+    if ('session' in payload) {
+        return payload.session ?? null;
+    }
+
+    return null;
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const headers = await getAuthHeaders();
     const response = await fetch(`${API_URL}${path}`, {
@@ -80,21 +98,44 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function getLatestSession() {
-    return apiFetch<FaceVerificationSession | null>('/api/verification/face/session');
+    const payload = await apiFetch<FaceVerificationSession | { session?: FaceVerificationSession } | null>(
+        '/api/verification/face/session',
+    );
+    return normalizeSessionPayload(payload);
 }
 
 async function createSession() {
-    return apiFetch<FaceVerificationSession>('/api/verification/face/session', {
+    const payload = await apiFetch<FaceVerificationSession | { session?: FaceVerificationSession }>(
+        '/api/verification/face/session',
+        {
         method: 'POST',
         body: JSON.stringify({}),
-    });
+        },
+    );
+
+    const session = normalizeSessionPayload(payload);
+    if (!session?.id) {
+        throw new Error('Verification session was created without an id');
+    }
+
+    return session;
 }
 
 async function retrySession() {
-    return apiFetch<FaceVerificationSession>('/api/verification/face/retry', {
+    const payload = await apiFetch<FaceVerificationSession | { session?: FaceVerificationSession }>(
+        '/api/verification/face/retry',
+        {
         method: 'POST',
         body: JSON.stringify({}),
-    });
+        },
+    );
+
+    const session = normalizeSessionPayload(payload);
+    if (!session?.id) {
+        throw new Error('Verification retry did not return a valid session id');
+    }
+
+    return session;
 }
 
 async function requestUploadTargets(sessionId: string, contentType = 'image/jpeg') {
@@ -159,6 +200,10 @@ export function useFaceVerification() {
             selfieUri: string;
             profilePhotoUrls: string[];
         }) => {
+            if (!sessionId) {
+                throw new Error('Verification session is missing. Please start the verification again.');
+            }
+
             const blobResponse = await fetch(selfieUri);
             const blob = await blobResponse.blob();
             const contentType = blob.type || 'image/jpeg';

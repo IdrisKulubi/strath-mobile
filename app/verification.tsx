@@ -83,6 +83,10 @@ export default function VerificationScreen() {
                 ? await retrySessionAsync()
                 : latestSession ?? await createSessionAsync();
 
+            if (!session?.id) {
+                throw new Error('Could not create a verification session. Please try again.');
+            }
+
             if (!selfieUri) {
                 show({
                     message: 'Take a quick selfie first so we can verify your profile.',
