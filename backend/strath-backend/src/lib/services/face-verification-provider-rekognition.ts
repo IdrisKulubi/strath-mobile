@@ -1,5 +1,6 @@
 import {
     CompareFacesCommand,
+    DetectFacesCommand,
     RekognitionClient,
 } from "@aws-sdk/client-rekognition";
 
@@ -13,6 +14,11 @@ export interface RekognitionComparisonResult {
     facesDetected: number;
     qualityFlags: string[];
     rawProviderResponseRedacted: Record<string, unknown>;
+}
+
+export interface RekognitionFaceDetectionResult {
+    facesDetected: number;
+    bestFaceConfidence: number | null;
 }
 
 export async function compareFacesWithRekognition(
@@ -62,5 +68,34 @@ export async function compareFacesWithRekognition(
             unmatchedFaceCount,
             sourceFaceConfidence: response.SourceImageFace?.Confidence ?? null,
         },
+    };
+}
+
+export async function detectFacesWithRekognition(
+    imageBytes: Uint8Array,
+): Promise<RekognitionFaceDetectionResult> {
+    const response = await rekognitionClient.send(
+        new DetectFacesCommand({
+            Image: {
+                Bytes: imageBytes,
+            },
+        }),
+    );
+
+    const faceDetails = response.FaceDetails ?? [];
+
+    return {
+        facesDetected: faceDetails.length,
+        bestFaceConfidence:
+            faceDetails.reduce<number | null>((bestConfidence, face) => {
+                const nextConfidence = face.Confidence ?? null;
+                if (nextConfidence === null) {
+                    return bestConfidence;
+                }
+
+                return bestConfidence === null
+                    ? nextConfidence
+                    : Math.max(bestConfidence, nextConfidence);
+            }, null),
     };
 }

@@ -14,7 +14,10 @@ import {
     getFaceVerificationThresholdVersion,
 } from "@/lib/services/face-verification-policy";
 import { resolveFaceVerificationOutcome } from "@/lib/services/face-verification-decision";
-import { compareFacesWithRekognition } from "@/lib/services/face-verification-provider-rekognition";
+import {
+    compareFacesWithRekognition,
+    detectFacesWithRekognition,
+} from "@/lib/services/face-verification-provider-rekognition";
 import { getFaceVerificationComparisonBytes } from "@/lib/services/face-verification-storage";
 
 export async function processFaceVerificationSession(sessionId: string) {
@@ -52,6 +55,21 @@ export async function processFaceVerificationSession(sessionId: string) {
     try {
         const sourceAssetKey = session.selfieAssetKeys[0];
         const sourceBytes = await getFaceVerificationComparisonBytes(sourceAssetKey);
+        const sourceFaceDetection = await detectFacesWithRekognition(sourceBytes);
+
+        if (sourceFaceDetection.facesDetected === 0) {
+            return finalizeFaceVerificationProcessing(session.userId, session.id, {
+                status: FACE_VERIFICATION_STATUSES.RETRY_REQUIRED,
+                failureReasons: ["selfie_face_not_detected"],
+                decisionSummary: {
+                    processedAt: new Date().toISOString(),
+                    matchedPhotoCount: 0,
+                    comparedPhotoCount: 0,
+                    sourceFacesDetected: 0,
+                },
+                results: [],
+            });
+        }
 
         const comparisonResults: Array<{
             sourceAssetKey: string;
@@ -67,6 +85,25 @@ export async function processFaceVerificationSession(sessionId: string) {
         for (const targetAssetKey of session.profileAssetKeys) {
             try {
                 const targetBytes = await getFaceVerificationComparisonBytes(targetAssetKey);
+                const targetFaceDetection = await detectFacesWithRekognition(targetBytes);
+
+                if (targetFaceDetection.facesDetected === 0) {
+                    comparisonResults.push({
+                        sourceAssetKey,
+                        targetAssetKey,
+                        similarity: null,
+                        faceConfidence: sourceFaceDetection.bestFaceConfidence,
+                        facesDetected: 0,
+                        qualityFlags: ["no_face_detected"],
+                        decision: "not_matched",
+                        rawProviderResponseRedacted: {
+                            sourceFacesDetected: sourceFaceDetection.facesDetected,
+                            targetFacesDetected: 0,
+                        },
+                    });
+                    continue;
+                }
+
                 const result = await compareFacesWithRekognition(
                     sourceBytes,
                     targetBytes,
@@ -114,6 +151,7 @@ export async function processFaceVerificationSession(sessionId: string) {
             failureReasons: outcome.failureReasons,
             decisionSummary: {
                 processedAt: new Date().toISOString(),
+                sourceFacesDetected: sourceFaceDetection.facesDetected,
                 ...outcome.decisionSummary,
             },
             results: comparisonResults,
