@@ -15,7 +15,7 @@ import {
 } from "@/lib/services/face-verification-policy";
 import { resolveFaceVerificationOutcome } from "@/lib/services/face-verification-decision";
 import { compareFacesWithRekognition } from "@/lib/services/face-verification-provider-rekognition";
-import { getFaceVerificationObjectBytes } from "@/lib/services/face-verification-storage";
+import { getFaceVerificationComparisonBytes } from "@/lib/services/face-verification-storage";
 
 export async function processFaceVerificationSession(sessionId: string) {
     const session = await db.query.faceVerificationSessions.findFirst({
@@ -51,7 +51,7 @@ export async function processFaceVerificationSession(sessionId: string) {
 
     try {
         const sourceAssetKey = session.selfieAssetKeys[0];
-        const sourceBytes = await getFaceVerificationObjectBytes(sourceAssetKey);
+        const sourceBytes = await getFaceVerificationComparisonBytes(sourceAssetKey);
 
         const comparisonResults: Array<{
             sourceAssetKey: string;
@@ -66,7 +66,7 @@ export async function processFaceVerificationSession(sessionId: string) {
 
         for (const targetAssetKey of session.profileAssetKeys) {
             try {
-                const targetBytes = await getFaceVerificationObjectBytes(targetAssetKey);
+                const targetBytes = await getFaceVerificationComparisonBytes(targetAssetKey);
                 const result = await compareFacesWithRekognition(
                     sourceBytes,
                     targetBytes,
@@ -86,15 +86,17 @@ export async function processFaceVerificationSession(sessionId: string) {
                 });
             } catch (error) {
                 console.error("[FaceVerification] CompareFaces failed for target", targetAssetKey, error);
+                const providerErrorCode = getFaceVerificationProcessingErrorCode(error);
                 comparisonResults.push({
                     sourceAssetKey,
                     targetAssetKey,
                     similarity: null,
                     faceConfidence: null,
                     facesDetected: 0,
-                    qualityFlags: ["provider_error"],
+                    qualityFlags: [providerErrorCode],
                     decision: "error",
                     rawProviderResponseRedacted: {
+                        providerErrorCode,
                         providerError: error instanceof Error ? error.message : "unknown_error",
                     },
                 });
@@ -118,16 +120,58 @@ export async function processFaceVerificationSession(sessionId: string) {
         });
     } catch (error) {
         console.error("[FaceVerification] Processing failed", error);
+        const processingErrorCode = getFaceVerificationProcessingErrorCode(error);
+        const isRetryableCaptureError = RETRYABLE_PROCESSING_ERROR_CODES.has(processingErrorCode);
+
         return finalizeFaceVerificationProcessing(session.userId, session.id, {
-            status: FACE_VERIFICATION_STATUSES.MANUAL_REVIEW,
-            failureReasons: ["processing_error"],
+            status: isRetryableCaptureError
+                ? FACE_VERIFICATION_STATUSES.RETRY_REQUIRED
+                : FACE_VERIFICATION_STATUSES.MANUAL_REVIEW,
+            failureReasons: [processingErrorCode],
             decisionSummary: {
                 processedAt: new Date().toISOString(),
+                processingErrorCode,
                 processorError: error instanceof Error ? error.message : "unknown_error",
             },
             results: [],
         });
     }
+}
+
+const RETRYABLE_PROCESSING_ERROR_CODES = new Set([
+    "image_too_large",
+    "invalid_image_format",
+    "invalid_image_parameters",
+    "image_processing_failed",
+]);
+
+function getFaceVerificationProcessingErrorCode(error: unknown) {
+    if (!(error instanceof Error)) {
+        return "provider_error";
+    }
+
+    const normalizedMessage = error.message.toLowerCase();
+
+    if (
+        normalizedMessage.includes("less than or equal to 5242880") ||
+        normalizedMessage.includes("too large")
+    ) {
+        return "image_too_large";
+    }
+
+    if (normalizedMessage.includes("invalid image format")) {
+        return "invalid_image_format";
+    }
+
+    if (normalizedMessage.includes("invalid parameters")) {
+        return "invalid_image_parameters";
+    }
+
+    if (normalizedMessage.includes("input buffer") || normalizedMessage.includes("unsupported image format")) {
+        return "image_processing_failed";
+    }
+
+    return "provider_error";
 }
 
 async function finalizeFaceVerificationProcessing(

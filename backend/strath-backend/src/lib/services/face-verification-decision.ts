@@ -1,5 +1,12 @@
 import { FACE_VERIFICATION_STATUSES } from "@/lib/services/face-verification-policy";
 
+const RETRYABLE_IMAGE_ERROR_FLAGS = new Set([
+    "image_too_large",
+    "invalid_image_format",
+    "invalid_image_parameters",
+    "image_processing_failed",
+]);
+
 export interface FaceVerificationComparisonDecisionInput {
     decision: string;
     qualityFlags: string[];
@@ -26,7 +33,11 @@ export function resolveFaceVerificationOutcome(input: {
         matchedPhotoCount >= input.minimumMatchCount
             ? FACE_VERIFICATION_STATUSES.VERIFIED
             : input.comparisonResults.every((result) => result.decision === "error")
-            ? FACE_VERIFICATION_STATUSES.MANUAL_REVIEW
+            ? input.comparisonResults.every((result) =>
+                  result.qualityFlags.every((flag) => RETRYABLE_IMAGE_ERROR_FLAGS.has(flag)),
+              )
+                ? FACE_VERIFICATION_STATUSES.RETRY_REQUIRED
+                : FACE_VERIFICATION_STATUSES.MANUAL_REVIEW
             : FACE_VERIFICATION_STATUSES.RETRY_REQUIRED;
 
     return {

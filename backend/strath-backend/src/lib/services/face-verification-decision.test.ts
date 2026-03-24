@@ -52,3 +52,21 @@ test("face verification escalates to manual review when every comparison errors"
     assert.equal(result.matchedPhotoCount, 0);
     assert.deepEqual(result.failureReasons.sort(), ["insufficient_match_count", "provider_error"].sort());
 });
+
+test("face verification asks for retry when every comparison fails because of retryable image issues", () => {
+    const result = resolveFaceVerificationOutcome({
+        minimumMatchCount: 2,
+        similarityThreshold: 90,
+        comparisonResults: [
+            { decision: "error", qualityFlags: ["image_too_large"] },
+            { decision: "error", qualityFlags: ["invalid_image_parameters"] },
+        ],
+    });
+
+    assert.equal(result.finalStatus, "retry_required");
+    assert.equal(result.matchedPhotoCount, 0);
+    assert.deepEqual(
+        result.failureReasons.sort(),
+        ["image_too_large", "invalid_image_parameters", "insufficient_match_count"].sort(),
+    );
+});

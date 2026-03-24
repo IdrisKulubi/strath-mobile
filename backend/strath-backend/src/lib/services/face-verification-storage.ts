@@ -2,11 +2,20 @@ import { randomUUID } from "crypto";
 
 import { GetObjectCommand, type GetObjectCommandOutput, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import sharp from "sharp";
 
 import { R2_BUCKET_NAME, R2_PUBLIC_URL, r2 } from "@/lib/r2";
 
 const DEFAULT_PREFIX = "face-verification";
 const SIGNED_URL_EXPIRY_SECONDS = 600;
+const REKOGNITION_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const REKOGNITION_NORMALIZATION_STEPS = [
+    { maxDimension: 2200, quality: 82 },
+    { maxDimension: 1800, quality: 76 },
+    { maxDimension: 1440, quality: 70 },
+    { maxDimension: 1080, quality: 64 },
+    { maxDimension: 960, quality: 58 },
+] as const;
 
 type UploadSlot = "front" | "left" | "right" | "smile" | "extra";
 const REKOGNITION_SUPPORTED_EXTENSIONS = new Set(["jpg", "jpeg", "png"]);
@@ -72,6 +81,11 @@ export async function getFaceVerificationObjectBytes(key: string) {
     return transformBodyToUint8Array(response);
 }
 
+export async function getFaceVerificationComparisonBytes(key: string) {
+    const originalBytes = await getFaceVerificationObjectBytes(key);
+    return normalizeFaceVerificationImageBytes(originalBytes);
+}
+
 function getExtensionForContentType(contentType: string) {
     switch (contentType) {
         case "image/png":
@@ -119,4 +133,41 @@ async function transformBodyToUint8Array(response: GetObjectCommandOutput) {
     }
 
     return result;
+}
+
+async function normalizeFaceVerificationImageBytes(bytes: Uint8Array) {
+    const normalizedImage = sharp(bytes, {
+        failOn: "none",
+        limitInputPixels: false,
+    }).rotate();
+
+    let bestAttempt: Buffer | null = null;
+
+    for (const step of REKOGNITION_NORMALIZATION_STEPS) {
+        const attempt = await normalizedImage
+            .clone()
+            .resize({
+                width: step.maxDimension,
+                height: step.maxDimension,
+                fit: "inside",
+                withoutEnlargement: true,
+            })
+            .jpeg({
+                quality: step.quality,
+                mozjpeg: true,
+            })
+            .toBuffer();
+
+        bestAttempt = attempt;
+
+        if (attempt.byteLength <= REKOGNITION_MAX_IMAGE_BYTES) {
+            return new Uint8Array(attempt);
+        }
+    }
+
+    if (bestAttempt && bestAttempt.byteLength <= REKOGNITION_MAX_IMAGE_BYTES) {
+        return new Uint8Array(bestAttempt);
+    }
+
+    throw new Error("Verification image is too large to process right now.");
 }
