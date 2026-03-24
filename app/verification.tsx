@@ -79,9 +79,15 @@ export default function VerificationScreen() {
 
     const handleStartOrRetry = async () => {
         try {
-            const session = latestSession?.status === 'retry_required' || latestSession?.status === 'failed'
+            const shouldRetryLatest =
+                latestSession?.status === 'retry_required' || latestSession?.status === 'failed';
+            const canReuseLatestSession = latestSession?.status === 'pending_capture';
+
+            const session = shouldRetryLatest
                 ? await retrySessionAsync()
-                : latestSession ?? await createSessionAsync();
+                : canReuseLatestSession
+                ? latestSession
+                : await createSessionAsync();
 
             if (!session?.id) {
                 throw new Error('Could not create a verification session. Please try again.');
