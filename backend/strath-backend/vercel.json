@@ -17,7 +17,7 @@
       "schedule": "0 * * * *"
     },
     {
-      "path": "/api/cron/face-verification",
+      "path": "/api/worker/face-verification",
       "schedule": "* * * * *"
     }
   ]

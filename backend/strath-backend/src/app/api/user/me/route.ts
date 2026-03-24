@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { updateProfileSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { resetAgentContext } from "@/services/agent-context";
+import { syncProfilePhotoAssetsForUser } from "@/lib/services/profile-photo-assets";
 import { ZodError } from "zod";
 
 type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
@@ -181,6 +182,19 @@ export async function PATCH(req: NextRequest) {
                 console.error("[PATCH /api/user/me] Failed to clear wingman memory:", memoryError);
             });
         }
+
+        const verificationPhotoUrls = Array.from(
+            new Set(
+                [
+                    resultProfile.profilePhoto,
+                    ...(Array.isArray(resultProfile.photos) ? resultProfile.photos : []),
+                ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+            ),
+        );
+
+        await syncProfilePhotoAssetsForUser(session.user.id, verificationPhotoUrls).catch((photoAssetError) => {
+            console.error("[PATCH /api/user/me] Failed to sync profile photo assets:", photoAssetError);
+        });
 
         return successResponse(resultProfile);
     } catch (error: unknown) {

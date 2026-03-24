@@ -42,6 +42,20 @@ function StatusBadge({ status }: { status: string }) {
     );
 }
 
+function AlertBadge({ severity }: { severity: "info" | "warning" | "critical" }) {
+    const tones = {
+        info: "bg-sky-500/15 text-sky-200 border-sky-500/30",
+        warning: "bg-amber-500/15 text-amber-200 border-amber-500/30",
+        critical: "bg-red-500/15 text-red-200 border-red-500/30",
+    };
+
+    return (
+        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${tones[severity]}`}>
+            {severity}
+        </span>
+    );
+}
+
 export default async function AdminVerificationPage() {
     await requireAdmin();
     const overview = await getFaceVerificationAdminOverview(20);
@@ -55,16 +69,16 @@ export default async function AdminVerificationPage() {
                 </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">
                 <MetricCard
                     label="Queue Depth"
                     value={overview.totals.queueDepth}
-                    hint={`Batch size ${overview.configuration.cronBatchSize}`}
+                    hint={`Worker batch ${overview.configuration.workerBatchSize}`}
                 />
                 <MetricCard
-                    label="Stale Processing"
-                    value={overview.totals.staleProcessing}
-                    hint="Expired jobs needing cleanup"
+                    label="Pending Jobs"
+                    value={overview.totals.pendingJobs}
+                    hint={`${overview.totals.processingJobs} jobs in flight`}
                 />
                 <MetricCard
                     label="Attention Required"
@@ -78,6 +92,92 @@ export default async function AdminVerificationPage() {
                         ? `Avg ${overview.performance.avgDurationSeconds}s`
                         : "No completed runs yet"}
                 />
+                <MetricCard
+                    label="Queue Wait"
+                    value={overview.performance.avgQueueWaitSeconds ?? "-"}
+                    hint={overview.performance.oldestPendingJobCreatedAt
+                        ? `Oldest queued ${new Date(overview.performance.oldestPendingJobCreatedAt).toLocaleString()}`
+                        : "Queue is clear"}
+                />
+                <MetricCard
+                    label="Photo Audits"
+                    value={overview.totals.pendingPhotoAudits}
+                    hint={`${overview.assets.verificationReadyAssets} ready, ${overview.assets.assetsNeedingRefresh} need refresh`}
+                />
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[1.3fr,1fr]">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+                    <div className="mb-4">
+                        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+                            Ops Alerts
+                        </h2>
+                        <p className="mt-1 text-xs text-gray-500">
+                            Queue, worker, and photo-readiness signals to watch in production.
+                        </p>
+                    </div>
+
+                    {overview.alerts.length === 0 ? (
+                        <p className="text-sm text-gray-400">No active alerts right now.</p>
+                    ) : (
+                        <div className="space-y-3">
+                            {overview.alerts.map((alert) => (
+                                <div
+                                    key={alert.code}
+                                    className="rounded-xl border border-white/10 bg-black/20 p-4"
+                                >
+                                    <div className="mb-2 flex items-center gap-2">
+                                        <AlertBadge severity={alert.severity} />
+                                        <p className="text-sm font-semibold text-white">
+                                            {alert.code.replace(/_/g, " ")}
+                                        </p>
+                                    </div>
+                                    <p className="text-sm text-gray-300">{alert.message}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+                    <div className="mb-4">
+                        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+                            Worker Snapshot
+                        </h2>
+                        <p className="mt-1 text-xs text-gray-500">
+                            Current queue settings and worker throughput.
+                        </p>
+                    </div>
+
+                    <div className="space-y-3 text-sm text-gray-300">
+                        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-4 py-3">
+                            <span>Processing mode</span>
+                            <span className="font-semibold text-white">{overview.configuration.processingMode}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-4 py-3">
+                            <span>Worker concurrency</span>
+                            <span className="font-semibold text-white">{overview.configuration.workerConcurrency}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-4 py-3">
+                            <span>Compare concurrency</span>
+                            <span className="font-semibold text-white">{overview.configuration.comparisonConcurrency}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-4 py-3">
+                            <span>Jobs completed 24h</span>
+                            <span className="font-semibold text-white">{overview.performance.completedJobsLast24Hours}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-4 py-3">
+                            <span>Avg job runtime</span>
+                            <span className="font-semibold text-white">
+                                {overview.performance.avgJobRuntimeSeconds ?? "-"}s
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-4 py-3">
+                            <span>Failed jobs</span>
+                            <span className="font-semibold text-white">{overview.totals.failedJobs}</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-white/5 p-6">

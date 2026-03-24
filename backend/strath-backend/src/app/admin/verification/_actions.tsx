@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/admin-auth";
-import { processFaceVerificationSession } from "@/lib/services/face-verification-processor";
-import { markFaceVerificationSessionReviewed } from "@/lib/services/face-verification-service";
+import {
+    markFaceVerificationSessionReviewed,
+    queueFaceVerificationSessionForProcessing,
+} from "@/lib/services/face-verification-service";
 
 export async function processVerificationSessionAction(formData: FormData) {
     await requireAdmin();
@@ -14,7 +16,7 @@ export async function processVerificationSessionAction(formData: FormData) {
         throw new Error("Missing verification session id");
     }
 
-    await processFaceVerificationSession(sessionId);
+    await queueFaceVerificationSessionForProcessing(sessionId);
     revalidatePath("/admin/verification");
 }
 

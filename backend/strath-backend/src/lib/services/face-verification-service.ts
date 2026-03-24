@@ -20,8 +20,9 @@ import {
     createFaceVerificationUploadTarget,
     extractR2ObjectKeyFromUrl,
     getRekognitionUnsupportedImageKeys,
-    isRekognitionSupportedImageKey,
 } from "@/lib/services/face-verification-storage";
+import { ensureFaceVerificationSessionJob } from "@/lib/services/face-verification-queue";
+import { syncProfilePhotoAssetsForUser } from "@/lib/services/profile-photo-assets";
 import type {
     CreateFaceVerificationSessionInput,
     CreateFaceVerificationUploadTargetsInput,
@@ -218,17 +219,17 @@ export async function submitFaceVerificationSession(
         ),
     );
 
-    const profileAssetKeys = extractedProfileAssetKeys.filter((key) => isRekognitionSupportedImageKey(key));
-
-    if (profileAssetKeys.length < 2) {
-        throw new Error("Face verification needs at least 2 profile photos in JPEG or PNG format. Replace HEIC/WEBP photos and try again.");
+    if (extractedProfileAssetKeys.length < 2) {
+        throw new Error("Face verification needs at least 2 clear profile photos before you continue.");
     }
+
+    await syncProfilePhotoAssetsForUser(userId, input.profilePhotoUrls);
 
     const [updatedSession] = await db
         .update(faceVerificationSessions)
         .set({
             status: FACE_VERIFICATION_STATUSES.PROCESSING,
-            profileAssetKeys,
+            profileAssetKeys: extractedProfileAssetKeys,
             updatedAt: new Date(),
             decisionSummary: {
                 ...session.decisionSummary,
@@ -248,6 +249,8 @@ export async function submitFaceVerificationSession(
         faceVerificationRequired: true,
         faceVerificationRetryCount: Math.max(0, updatedSession.attemptNumber - 1),
     });
+
+    await ensureFaceVerificationSessionJob(updatedSession.id, userId);
 
     return {
         session: updatedSession,
@@ -272,6 +275,48 @@ export async function retryFaceVerificationSession(
     }
 
     return createFaceVerificationSession(userId, { resetActiveSession: true });
+}
+
+export async function queueFaceVerificationSessionForProcessing(sessionId: string) {
+    const session = await db.query.faceVerificationSessions.findFirst({
+        where: eq(faceVerificationSessions.id, sessionId),
+    });
+
+    if (!session) {
+        throw new Error("Verification session not found.");
+    }
+
+    if (session.status === FACE_VERIFICATION_STATUSES.VERIFIED || session.status === FACE_VERIFICATION_STATUSES.BLOCKED) {
+        throw new Error("This verification session cannot be reprocessed.");
+    }
+
+    const [updatedSession] = await db
+        .update(faceVerificationSessions)
+        .set({
+            status: FACE_VERIFICATION_STATUSES.PROCESSING,
+            completedAt: null,
+            updatedAt: new Date(),
+            decisionSummary: {
+                ...session.decisionSummary,
+                requeuedAt: new Date().toISOString(),
+                requeuedBy: "admin",
+            },
+        })
+        .where(eq(faceVerificationSessions.id, session.id))
+        .returning();
+
+    await updateProfileFaceVerificationSummary(session.userId, {
+        faceVerificationStatus: FACE_VERIFICATION_STATUSES.PROCESSING,
+        faceVerificationMethod: getFaceVerificationMethod(),
+        faceVerificationVersion: getFaceVerificationThresholdVersion(),
+        faceVerificationRequired: true,
+        faceVerificationRetryCount: Math.max(0, updatedSession.attemptNumber - 1),
+        faceVerifiedAt: null,
+    });
+
+    await ensureFaceVerificationSessionJob(updatedSession.id, session.userId);
+
+    return updatedSession;
 }
 
 export async function markFaceVerificationSessionReviewed(

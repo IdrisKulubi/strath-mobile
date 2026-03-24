@@ -11,13 +11,20 @@ import {
     sql,
 } from "drizzle-orm";
 
-import { faceVerificationSessions, profiles, user } from "@/db/schema";
+import { faceVerificationJobs, faceVerificationSessions, profilePhotoAssets, profiles, user } from "@/db/schema";
 import { db } from "@/lib/db";
 import {
     FACE_VERIFICATION_STATUSES,
+    getFaceVerificationComparisonConcurrency,
     getFaceVerificationCronBatchSize,
+    getFaceVerificationWorkerBatchSize,
+    getFaceVerificationWorkerConcurrency,
     getFaceVerificationProcessingMode,
 } from "@/lib/services/face-verification-policy";
+import {
+    FACE_VERIFICATION_JOB_STATUSES,
+    FACE_VERIFICATION_JOB_TYPES,
+} from "@/lib/services/face-verification-queue";
 
 const ATTENTION_STATUSES = [
     FACE_VERIFICATION_STATUSES.MANUAL_REVIEW,
@@ -43,10 +50,14 @@ export async function getFaceVerificationAdminOverview(limit = 20) {
         queueDepthRow,
         pendingCaptureRow,
         staleProcessingRow,
+        queueJobMetricsRow,
         statusCounts,
         recentStatusCounts,
         completionMetricsRow,
+        jobPerformanceRow,
+        photoAssetMetricsRow,
         oldestProcessingSession,
+        oldestPendingJob,
         recentAttentionSessions,
         recentProcessedSessions,
     ] = await Promise.all([
@@ -70,6 +81,15 @@ export async function getFaceVerificationAdminOverview(limit = 20) {
                     lte(faceVerificationSessions.expiresAt, now),
                 ),
             ),
+        db.execute(sql`
+            select
+                count(*) filter (where ${faceVerificationJobs.status} = ${FACE_VERIFICATION_JOB_STATUSES.PENDING})::int as pending_jobs,
+                count(*) filter (where ${faceVerificationJobs.status} = ${FACE_VERIFICATION_JOB_STATUSES.PROCESSING})::int as processing_jobs,
+                count(*) filter (where ${faceVerificationJobs.status} = ${FACE_VERIFICATION_JOB_STATUSES.FAILED})::int as failed_jobs,
+                count(*) filter (where ${faceVerificationJobs.jobType} = ${FACE_VERIFICATION_JOB_TYPES.AUDIT_PROFILE_PHOTO}
+                    and ${faceVerificationJobs.status} in (${FACE_VERIFICATION_JOB_STATUSES.PENDING}, ${FACE_VERIFICATION_JOB_STATUSES.PROCESSING}))::int as pending_photo_audits
+            from ${faceVerificationJobs}
+        `),
         db
             .select({
                 status: faceVerificationSessions.status,
@@ -101,9 +121,39 @@ export async function getFaceVerificationAdminOverview(limit = 20) {
                     gte(faceVerificationSessions.completedAt, last24Hours),
                 ),
             ),
+        db.execute(sql`
+            select
+                count(*) filter (
+                    where ${faceVerificationJobs.status} = ${FACE_VERIFICATION_JOB_STATUSES.COMPLETED}
+                    and ${faceVerificationJobs.completedAt} >= ${last24Hours}
+                )::int as completed_jobs_last_24h,
+                round(avg(
+                    extract(epoch from (${faceVerificationJobs.lockedAt} - ${faceVerificationJobs.createdAt}))
+                ))::int as avg_queue_wait_seconds,
+                round(avg(
+                    extract(epoch from (${faceVerificationJobs.completedAt} - ${faceVerificationJobs.lockedAt}))
+                ))::int as avg_job_runtime_seconds
+            from ${faceVerificationJobs}
+            where ${faceVerificationJobs.completedAt} is not null
+        `),
+        db.execute(sql`
+            select
+                count(*)::int as total_assets,
+                count(*) filter (where ${profilePhotoAssets.verificationReady} = true)::int as verification_ready_assets,
+                count(*) filter (
+                    where ${profilePhotoAssets.verificationReady} = false
+                    and ${profilePhotoAssets.lastAnalyzedAt} is not null
+                )::int as assets_needing_refresh,
+                count(*) filter (where ${profilePhotoAssets.lastAnalyzedAt} is null)::int as unanalyzed_assets
+            from ${profilePhotoAssets}
+        `),
         db.query.faceVerificationSessions.findFirst({
             where: eq(faceVerificationSessions.status, FACE_VERIFICATION_STATUSES.PROCESSING),
             orderBy: [asc(faceVerificationSessions.startedAt)],
+        }),
+        db.query.faceVerificationJobs.findFirst({
+            where: eq(faceVerificationJobs.status, FACE_VERIFICATION_JOB_STATUSES.PENDING),
+            orderBy: [asc(faceVerificationJobs.createdAt)],
         }),
         db
             .select({
@@ -159,17 +209,41 @@ export async function getFaceVerificationAdminOverview(limit = 20) {
 
     const allTimeByStatus = buildStatusCountMap(statusCounts);
     const last24HoursByStatus = buildStatusCountMap(recentStatusCounts);
+    const queueJobMetrics = (queueJobMetricsRow.rows?.[0] as {
+        pending_jobs?: number;
+        processing_jobs?: number;
+        failed_jobs?: number;
+        pending_photo_audits?: number;
+    } | undefined) ?? {};
+    const jobPerformance = (jobPerformanceRow.rows?.[0] as {
+        completed_jobs_last_24h?: number;
+        avg_queue_wait_seconds?: number | null;
+        avg_job_runtime_seconds?: number | null;
+    } | undefined) ?? {};
+    const photoAssetMetrics = (photoAssetMetricsRow.rows?.[0] as {
+        total_assets?: number;
+        verification_ready_assets?: number;
+        assets_needing_refresh?: number;
+        unanalyzed_assets?: number;
+    } | undefined) ?? {};
 
     return {
         configuration: {
             processingMode: getFaceVerificationProcessingMode(),
             cronBatchSize: getFaceVerificationCronBatchSize(),
+            workerBatchSize: getFaceVerificationWorkerBatchSize(),
+            workerConcurrency: getFaceVerificationWorkerConcurrency(),
+            comparisonConcurrency: getFaceVerificationComparisonConcurrency(),
         },
         totals: {
             totalSessions: totalSessionsRow[0]?.count ?? 0,
             queueDepth: queueDepthRow[0]?.count ?? 0,
             pendingCapture: pendingCaptureRow[0]?.count ?? 0,
             staleProcessing: staleProcessingRow[0]?.count ?? 0,
+            pendingJobs: queueJobMetrics.pending_jobs ?? 0,
+            processingJobs: queueJobMetrics.processing_jobs ?? 0,
+            failedJobs: queueJobMetrics.failed_jobs ?? 0,
+            pendingPhotoAudits: queueJobMetrics.pending_photo_audits ?? 0,
             attentionRequired:
                 (allTimeByStatus[FACE_VERIFICATION_STATUSES.MANUAL_REVIEW] ?? 0) +
                 (allTimeByStatus[FACE_VERIFICATION_STATUSES.RETRY_REQUIRED] ?? 0) +
@@ -184,6 +258,16 @@ export async function getFaceVerificationAdminOverview(limit = 20) {
             avgDurationSeconds: completionMetricsRow[0]?.avgDurationSeconds ?? null,
             maxDurationSeconds: completionMetricsRow[0]?.maxDurationSeconds ?? null,
             oldestProcessingStartedAt: oldestProcessingSession?.startedAt ?? null,
+            completedJobsLast24Hours: jobPerformance.completed_jobs_last_24h ?? 0,
+            avgQueueWaitSeconds: jobPerformance.avg_queue_wait_seconds ?? null,
+            avgJobRuntimeSeconds: jobPerformance.avg_job_runtime_seconds ?? null,
+            oldestPendingJobCreatedAt: oldestPendingJob?.createdAt ?? null,
+        },
+        assets: {
+            totalAssets: photoAssetMetrics.total_assets ?? 0,
+            verificationReadyAssets: photoAssetMetrics.verification_ready_assets ?? 0,
+            assetsNeedingRefresh: photoAssetMetrics.assets_needing_refresh ?? 0,
+            unanalyzedAssets: photoAssetMetrics.unanalyzed_assets ?? 0,
         },
         attentionSessions: recentAttentionSessions.map((session) => ({
             ...session,
@@ -205,6 +289,15 @@ export async function getFaceVerificationAdminOverview(limit = 20) {
                       )
                     : null,
         })),
+        alerts: buildFaceVerificationAlerts({
+            staleProcessing: staleProcessingRow[0]?.count ?? 0,
+            pendingJobs: queueJobMetrics.pending_jobs ?? 0,
+            failedJobs: queueJobMetrics.failed_jobs ?? 0,
+            pendingPhotoAudits: queueJobMetrics.pending_photo_audits ?? 0,
+            avgQueueWaitSeconds: jobPerformance.avg_queue_wait_seconds ?? null,
+            assetsNeedingRefresh: photoAssetMetrics.assets_needing_refresh ?? 0,
+            unanalyzedAssets: photoAssetMetrics.unanalyzed_assets ?? 0,
+        }),
         generatedAt: now.toISOString(),
     };
 }
@@ -228,4 +321,70 @@ function buildDisplayName(
 ) {
     const profileName = [firstName, lastName].filter(Boolean).join(" ").trim();
     return profileName || fallbackName || "Unknown user";
+}
+
+function buildFaceVerificationAlerts(input: {
+    staleProcessing: number;
+    pendingJobs: number;
+    failedJobs: number;
+    pendingPhotoAudits: number;
+    avgQueueWaitSeconds: number | null;
+    assetsNeedingRefresh: number;
+    unanalyzedAssets: number;
+}) {
+    const alerts: Array<{
+        severity: "info" | "warning" | "critical";
+        code: string;
+        message: string;
+    }> = [];
+
+    if (input.staleProcessing > 0) {
+        alerts.push({
+            severity: "critical",
+            code: "stale_processing",
+            message: `${input.staleProcessing} verification sessions are stuck in processing.`,
+        });
+    }
+
+    if (input.pendingJobs >= 25) {
+        alerts.push({
+            severity: "warning",
+            code: "queue_backlog",
+            message: `${input.pendingJobs} jobs are waiting in the verification queue.`,
+        });
+    }
+
+    if (input.avgQueueWaitSeconds !== null && input.avgQueueWaitSeconds >= 60) {
+        alerts.push({
+            severity: "warning",
+            code: "queue_latency",
+            message: `Average queue wait is ${input.avgQueueWaitSeconds}s. Worker capacity may need to increase.`,
+        });
+    }
+
+    if (input.failedJobs > 0) {
+        alerts.push({
+            severity: "warning",
+            code: "failed_jobs",
+            message: `${input.failedJobs} verification jobs are in a failed state and need review.`,
+        });
+    }
+
+    if (input.pendingPhotoAudits >= 20 || input.unanalyzedAssets >= 20) {
+        alerts.push({
+            severity: "info",
+            code: "photo_audit_backlog",
+            message: `${Math.max(input.pendingPhotoAudits, input.unanalyzedAssets)} profile photos are still waiting for audit coverage.`,
+        });
+    }
+
+    if (input.assetsNeedingRefresh > 0) {
+        alerts.push({
+            severity: "info",
+            code: "photos_need_refresh",
+            message: `${input.assetsNeedingRefresh} uploaded profile photos were analyzed but are not verification-ready.`,
+        });
+    }
+
+    return alerts;
 }

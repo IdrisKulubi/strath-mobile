@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Animated,
     Image,
     Modal,
     Pressable,
@@ -22,6 +23,47 @@ import { useProfile } from '@/hooks/use-profile';
 import { hasVerifiedFace } from '@/lib/profile-access';
 import { useToast } from '@/components/ui/toast';
 
+const UPLOAD_STAGES = [
+    {
+        key: 'upload',
+        badge: 'Step 1 of 2',
+        title: 'Uploading your selfie',
+        body: 'Saving your selfie and sending it in.',
+        progress: 0.3,
+    },
+    {
+        key: 'queue',
+        badge: 'Step 2 of 2',
+        title: 'Starting your check',
+        body: 'Your verification is lined up and about to run.',
+        progress: 0.5,
+    },
+] as const;
+
+const PROCESSING_STAGES = [
+    {
+        key: 'read',
+        badge: 'Step 1 of 3',
+        title: 'Reading your selfie',
+        body: 'Checking that your face is clear and easy to read.',
+        progress: 0.68,
+    },
+    {
+        key: 'match',
+        badge: 'Step 2 of 3',
+        title: 'Matching your photos',
+        body: 'Comparing your selfie with your profile photos.',
+        progress: 0.84,
+    },
+    {
+        key: 'finish',
+        badge: 'Step 3 of 3',
+        title: 'Finishing up',
+        body: 'Wrapping up the final checks now.',
+        progress: 0.96,
+    },
+] as const;
+
 export default function VerificationScreen() {
     const router = useRouter();
     const { show } = useToast();
@@ -38,28 +80,15 @@ export default function VerificationScreen() {
     } = useFaceVerification();
     const [selfieUri, setSelfieUri] = useState<string | null>(null);
     const [isContinuingToApp, setIsContinuingToApp] = useState(false);
+    const [overlayStageIndex, setOverlayStageIndex] = useState(0);
+    const [resultStateDismissed, setResultStateDismissed] = useState(false);
+    const resultScale = useState(() => new Animated.Value(0.92))[0];
+    const resultOpacity = useState(() => new Animated.Value(0))[0];
 
     const profilePhotoUrls = useMemo(
         () => (profile?.photos ?? []).filter((photo: string | undefined | null): photo is string => !!photo).slice(0, 4),
         [profile?.photos],
     );
-    const supportedProfilePhotoUrls = useMemo(
-        () => profilePhotoUrls.filter(isRekognitionSupportedProfilePhoto),
-        [profilePhotoUrls],
-    );
-    const unsupportedProfilePhotoUrls = useMemo(
-        () => profilePhotoUrls.filter((photo: string) => !isRekognitionSupportedProfilePhoto(photo)),
-        [profilePhotoUrls],
-    );
-    const processingSteps = useMemo(
-        () => [
-            'Lining up your selfie with your profile...',
-            'Doing a quick account check...',
-            'Almost there. Finishing the final pass...',
-        ],
-        [],
-    );
-    const [processingStepIndex, setProcessingStepIndex] = useState(0);
 
     useEffect(() => {
         if (!isProfileLoading && profile && hasVerifiedFace(profile)) {
@@ -70,36 +99,73 @@ export default function VerificationScreen() {
     const status = latestSession?.status ?? profile?.faceVerificationStatus ?? 'not_started';
     const isProcessing = status === 'processing';
     const canRetry = status === 'retry_required' || status === 'failed';
+    const showSuccessState = status === 'verified';
+    const showRetryState = canRetry && !resultStateDismissed;
     const retryGuidance = useMemo(
         () =>
             getVerificationRetryGuidance({
                 status,
                 failureReasons: latestSession?.failureReasons ?? [],
                 results: latestSession?.results ?? [],
-                supportedProfilePhotoCount: supportedProfilePhotoUrls.length,
-                unsupportedProfilePhotoCount: unsupportedProfilePhotoUrls.length,
+                supportedProfilePhotoCount: profilePhotoUrls.length,
+                unsupportedProfilePhotoCount: 0,
             }),
         [
             latestSession?.failureReasons,
             latestSession?.results,
             status,
-            supportedProfilePhotoUrls.length,
-            unsupportedProfilePhotoUrls.length,
+            profilePhotoUrls.length,
         ],
     );
 
     useEffect(() => {
-        if (!isUploadingAndSubmitting && !isProcessing) {
-            setProcessingStepIndex(0);
+        setResultStateDismissed(false);
+    }, [latestSession?.id, status]);
+
+    useEffect(() => {
+        if (!showSuccessState && !showRetryState) {
+            resultOpacity.setValue(0);
+            resultScale.setValue(0.92);
             return;
         }
 
+        resultOpacity.setValue(0);
+        resultScale.setValue(0.92);
+
+        Animated.parallel([
+            Animated.timing(resultOpacity, {
+                toValue: 1,
+                duration: 280,
+                useNativeDriver: true,
+            }),
+            Animated.spring(resultScale, {
+                toValue: 1,
+                friction: 7,
+                tension: 70,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    }, [resultOpacity, resultScale, showRetryState, showSuccessState]);
+
+    useEffect(() => {
+        if (!isUploadingAndSubmitting && !isProcessing) {
+            setOverlayStageIndex(0);
+            return;
+        }
+
+        const activeStages = isUploadingAndSubmitting ? UPLOAD_STAGES : PROCESSING_STAGES;
         const interval = setInterval(() => {
-            setProcessingStepIndex((current) => (current + 1) % processingSteps.length);
-        }, 2200);
+            setOverlayStageIndex((current) => {
+                if (current >= activeStages.length - 1) {
+                    return current;
+                }
+
+                return current + 1;
+            });
+        }, isUploadingAndSubmitting ? 900 : 1800);
 
         return () => clearInterval(interval);
-    }, [isProcessing, isUploadingAndSubmitting, processingSteps]);
+    }, [isProcessing, isUploadingAndSubmitting]);
 
     const handleCaptureSelfie = async () => {
         try {
@@ -154,7 +220,7 @@ export default function VerificationScreen() {
                 return;
             }
 
-            if (supportedProfilePhotoUrls.length < 2) {
+            if (profilePhotoUrls.length < 2) {
                 show({
                     message: 'Add at least 2 clear profile photos before you verify.',
                     variant: 'warning',
@@ -165,7 +231,7 @@ export default function VerificationScreen() {
             await uploadAndSubmitAsync({
                 sessionId: session.id,
                 selfieUri,
-                profilePhotoUrls: supportedProfilePhotoUrls,
+                profilePhotoUrls,
             });
             await refetchProfile();
             show({
@@ -200,114 +266,67 @@ export default function VerificationScreen() {
         isUploadingAndSubmitting ||
         isContinuingToApp;
     const showProcessingOverlay = isUploadingAndSubmitting || isProcessing;
-    const progressValue = isUploadingAndSubmitting ? 0.38 : isProcessing ? 0.82 : 0;
-    const processingHeadline = isUploadingAndSubmitting
-        ? 'Uploading your selfie...'
-        : 'Verification in progress';
-    const processingSubcopy = isUploadingAndSubmitting
-        ? 'Saving your selfie and getting everything ready.'
-        : processingSteps[processingStepIndex];
+    const activeOverlayStages = isUploadingAndSubmitting ? UPLOAD_STAGES : PROCESSING_STAGES;
+    const activeOverlayStage = activeOverlayStages[Math.min(overlayStageIndex, activeOverlayStages.length - 1)];
+    const profileSummary = profilePhotoUrls.length >= 2
+        ? `${profilePhotoUrls.length} profile photos ready`
+        : 'Add 2 profile photos to continue';
 
     return (
         <SafeAreaView style={styles.container}>
             <LinearGradient colors={['#0f0d23', '#1a0d2e', '#0f0d23']} style={StyleSheet.absoluteFill} />
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                <View style={styles.hero}>
-                    <View style={styles.iconWrap}>
-                        <ShieldCheck size={30} color="#f472b6" weight="fill" />
-                    </View>
-                    <Text style={styles.title}>Verify your face before matchmaking</Text>
-                    <Text style={styles.subtitle}>
-                        This helps us reduce catfishing, fake accounts, and low-effort bot profiles before you appear in discovery.
-                    </Text>
-                </View>
-
-                <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Profile photo check</Text>
-                    <Text style={styles.cardCopy}>
-                        We will compare one guided selfie with your uploaded profile photos. Make sure your face is clear, centered, and well lit.
-                    </Text>
-                    <Text style={styles.cardHint}>
-                        Clear, recent photos give you the smoothest verification.
-                    </Text>
-
-                    <View style={styles.photoRow}>
-                        {profilePhotoUrls.slice(0, 4).map((photo: string, index: number) => (
-                            <Image key={`${photo}-${index}`} source={{ uri: photo }} style={styles.profileThumb} />
-                        ))}
-                    </View>
-                    {supportedProfilePhotoUrls.length < 2 ? (
-                        <Text style={styles.warningText}>
-                            You need at least 2 clear profile photos to finish this step.
+                {showSuccessState ? (
+                    <Animated.View
+                        style={[
+                            styles.resultCard,
+                            styles.resultCardSuccess,
+                            {
+                                opacity: resultOpacity,
+                                transform: [{ scale: resultScale }],
+                            },
+                        ]}
+                    >
+                        <View style={[styles.resultIconWrap, styles.resultIconWrapSuccess]}>
+                            <CheckCircle size={54} color="#34d399" weight="fill" />
+                        </View>
+                        <Text style={styles.resultTitle}>You&apos;re verified</Text>
+                        <Text style={styles.resultBody}>
+                            Nice. Your profile is cleared and ready for the app.
                         </Text>
-                    ) : null}
-                    {unsupportedProfilePhotoUrls.length > 0 ? (
-                        <Text style={styles.warningSubtext}>
-                            Some of your current photos may need a quick re-upload before this can finish smoothly.
+                        <Pressable
+                            style={[styles.primaryButton, isBusy && styles.primaryButtonDisabled]}
+                            onPress={handleContinueToApp}
+                            disabled={isBusy}
+                        >
+                            {isBusy ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.primaryButtonText}>Continue to app</Text>
+                            )}
+                        </Pressable>
+                    </Animated.View>
+                ) : showRetryState ? (
+                    <Animated.View
+                        style={[
+                            styles.resultCard,
+                            styles.resultCardRetry,
+                            {
+                                opacity: resultOpacity,
+                                transform: [{ scale: resultScale }],
+                            },
+                        ]}
+                    >
+                        <View style={[styles.resultIconWrap, styles.resultIconWrapRetry]}>
+                            <WarningCircle size={52} color="#fb7185" weight="fill" />
+                        </View>
+                        <Text style={styles.resultTitle}>Verification needs another try</Text>
+                        <Text style={styles.resultBody}>
+                            {retryGuidance?.shortBody ?? 'Something was not clear enough in the last attempt.'}
                         </Text>
-                    ) : null}
-                    {unsupportedProfilePhotoUrls.length > 0 || supportedProfilePhotoUrls.length < 2 ? (
-                        <Pressable style={styles.secondaryButton} onPress={() => router.push('/edit-profile' as any)}>
-                            <Text style={styles.secondaryButtonText}>Update profile photos</Text>
-                        </Pressable>
-                    ) : null}
-                </View>
 
-                <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Selfie capture</Text>
-                    <Text style={styles.cardCopy}>
-                        Use your front camera and look straight at the screen. We can add multi-angle prompts in the next iteration, but this gets the flow live now.
-                    </Text>
-
-                    {selfieUri ? (
-                        <Image source={{ uri: selfieUri }} style={styles.selfiePreview} />
-                    ) : (
-                        <Pressable style={styles.selfiePlaceholder} onPress={handleCaptureSelfie}>
-                            <Camera size={36} color="#f9a8d4" weight="duotone" />
-                            <Text style={styles.selfiePlaceholderText}>Take selfie</Text>
-                        </Pressable>
-                    )}
-
-                    {selfieUri ? (
-                        <Pressable style={styles.secondaryButton} onPress={handleCaptureSelfie}>
-                            <Text style={styles.secondaryButtonText}>Retake selfie</Text>
-                        </Pressable>
-                    ) : null}
-                </View>
-
-                <View style={styles.statusCard}>
-                    <View style={styles.statusHeader}>
-                        {isProcessing ? (
-                            <Hourglass size={20} color="#fbbf24" weight="fill" />
-                        ) : canRetry ? (
-                            <WarningCircle size={20} color="#fb7185" weight="fill" />
-                        ) : status === 'verified' ? (
-                            <CheckCircle size={20} color="#34d399" weight="fill" />
-                        ) : (
-                            <ShieldCheck size={20} color="#93c5fd" weight="fill" />
-                        )}
-                        <Text style={styles.statusTitle}>Status: {getFriendlyStatusLabel(status)}</Text>
-                    </View>
-
-                    <Text style={styles.statusCopy}>
-                        {isProcessing
-                            ? 'Your selfie is being checked right now.'
-                            : canRetry
-                            ? retryGuidance?.body ?? 'Almost there. We just need one more try.'
-                            : status === 'verified'
-                            ? 'Your face is verified. You can continue to the app.'
-                            : 'Complete this step to unlock discovery and matchmaking.'}
-                    </Text>
-                </View>
-
-                {retryGuidance ? (
-                    <View style={styles.retryCard}>
-                        <Text style={styles.retryEyebrow}>What to fix</Text>
-                        <Text style={styles.retryTitle}>{retryGuidance.title}</Text>
-                        <Text style={styles.retryBody}>{retryGuidance.body}</Text>
-
-                        <View style={styles.retryTips}>
-                            {retryGuidance.tips.map((tip) => (
+                        <View style={styles.resultTips}>
+                            {(retryGuidance?.tips.slice(0, 2) ?? []).map((tip) => (
                                 <View key={tip} style={styles.retryTipRow}>
                                     <View style={styles.retryTipDot} />
                                     <Text style={styles.retryTipText}>{tip}</Text>
@@ -315,38 +334,106 @@ export default function VerificationScreen() {
                             ))}
                         </View>
 
-                        <View style={styles.retryActions}>
-                            {retryGuidance.showSelfieAction ? (
-                                <Pressable style={styles.retryGhostButton} onPress={handleCaptureSelfie}>
-                                    <Text style={styles.retryGhostButtonText}>Retake selfie</Text>
-                                </Pressable>
-                            ) : null}
-                            {retryGuidance.showPhotoAction ? (
-                                <Pressable style={styles.retryGhostButton} onPress={() => router.push('/edit-profile' as any)}>
-                                    <Text style={styles.retryGhostButtonText}>Update profile photos</Text>
+                        <View style={styles.resultActions}>
+                            <Pressable
+                                style={styles.primaryButton}
+                                onPress={() => setResultStateDismissed(true)}
+                            >
+                                <Text style={styles.primaryButtonText}>Try again</Text>
+                            </Pressable>
+                            {retryGuidance?.showPhotoAction ? (
+                                <Pressable
+                                    style={styles.resultSecondaryButton}
+                                    onPress={() => router.push('/edit-profile' as any)}
+                                >
+                                    <Text style={styles.resultSecondaryButtonText}>Update photos</Text>
                                 </Pressable>
                             ) : null}
                         </View>
-                    </View>
-                ) : null}
+                    </Animated.View>
+                ) : (
+                    <>
+                        <View style={styles.hero}>
+                            <View style={styles.iconWrap}>
+                                <ShieldCheck size={30} color="#f472b6" weight="fill" />
+                            </View>
+                            <Text style={styles.title}>Quick face check</Text>
+                            <Text style={styles.subtitle}>This helps keep profiles real.</Text>
+                        </View>
 
-                <Pressable
-                    style={[styles.primaryButton, (isBusy || (isProcessing && !canRetry)) && styles.primaryButtonDisabled]}
-                    onPress={status === 'verified' ? handleContinueToApp : handleStartOrRetry}
-                    disabled={isBusy || isProcessing}
-                >
-                    {isBusy ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.primaryButtonText}>
-                            {status === 'verified'
-                                ? 'Continue to app'
-                                : canRetry
-                                ? 'Retry verification'
-                                : 'Submit verification'}
-                        </Text>
-                    )}
-                </Pressable>
+                        <View style={styles.card}>
+                            <View style={styles.cardTopRow}>
+                                <Text style={styles.cardTitle}>Profile photos</Text>
+                                <Text style={styles.cardMeta}>{profileSummary}</Text>
+                            </View>
+
+                            <View style={styles.photoRow}>
+                                {profilePhotoUrls.slice(0, 4).map((photo: string, index: number) => (
+                                    <Image key={`${photo}-${index}`} source={{ uri: photo }} style={styles.profileThumb} />
+                                ))}
+                            </View>
+                            {profilePhotoUrls.length < 2 ? (
+                                <Text style={styles.warningText}>
+                                    You need at least 2 clear profile photos to finish this step.
+                                </Text>
+                            ) : null}
+                            {profilePhotoUrls.length < 2 ? (
+                                <Pressable style={styles.secondaryButton} onPress={() => router.push('/edit-profile' as any)}>
+                                    <Text style={styles.secondaryButtonText}>Update profile photos</Text>
+                                </Pressable>
+                            ) : null}
+                        </View>
+
+                        <View style={styles.card}>
+                            <View style={styles.cardTopRow}>
+                                <Text style={styles.cardTitle}>Your selfie</Text>
+                                <Text style={styles.cardMeta}>Good light. Face centered.</Text>
+                            </View>
+
+                            {selfieUri ? (
+                                <Image source={{ uri: selfieUri }} style={styles.selfiePreview} />
+                            ) : (
+                                <Pressable style={styles.selfiePlaceholder} onPress={handleCaptureSelfie}>
+                                    <Camera size={36} color="#f9a8d4" weight="duotone" />
+                                    <Text style={styles.selfiePlaceholderText}>Take a quick selfie</Text>
+                                </Pressable>
+                            )}
+
+                            {selfieUri ? (
+                                <Pressable style={styles.secondaryButton} onPress={handleCaptureSelfie}>
+                                    <Text style={styles.secondaryButtonText}>Retake selfie</Text>
+                                </Pressable>
+                            ) : null}
+                        </View>
+
+                        <View style={styles.statusCard}>
+                            <View style={styles.statusHeader}>
+                                {isProcessing ? (
+                                    <Hourglass size={20} color="#fbbf24" weight="fill" />
+                                ) : (
+                                    <ShieldCheck size={20} color="#93c5fd" weight="fill" />
+                                )}
+                                <Text style={styles.statusTitle}>Status: {getFriendlyStatusLabel(status)}</Text>
+                            </View>
+
+                            <Text style={styles.statusCopy}>
+                                {isProcessing ? 'Checking now.' : 'Take one selfie to keep moving.'}
+                            </Text>
+                        </View>
+
+                        <Pressable
+                            style={[styles.primaryButton, (isBusy || (isProcessing && !canRetry)) && styles.primaryButtonDisabled]}
+                            onPress={handleStartOrRetry}
+                            disabled={isBusy || isProcessing}
+                        >
+                            {isBusy ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.primaryButtonText}>Submit verification</Text>
+                            )}
+                        </Pressable>
+                    </>
+                )}
             </ScrollView>
 
             <Modal visible={showProcessingOverlay} transparent animationType="fade" statusBarTranslucent>
@@ -358,22 +445,53 @@ export default function VerificationScreen() {
                         <View style={styles.processingBadge}>
                             <Hourglass size={22} color="#fbbf24" weight="fill" />
                             <Text style={styles.processingBadgeText}>
-                                {isUploadingAndSubmitting ? 'Uploading' : 'Cooking'}
+                                {activeOverlayStage?.badge ?? 'Working'}
                             </Text>
                         </View>
 
-                        <Text style={styles.processingTitle}>{processingHeadline}</Text>
-                        <Text style={styles.processingCopy}>{processingSubcopy}</Text>
+                        <Text style={styles.processingTitle}>
+                            {activeOverlayStage?.title ?? 'Verification in progress'}
+                        </Text>
+                        <Text style={styles.processingCopy}>
+                            {activeOverlayStage?.body ?? 'Your verification is moving to the next step.'}
+                        </Text>
 
                         <View style={styles.progressTrack}>
-                            <View style={[styles.progressFill, { width: `${progressValue * 100}%` }]} />
+                            <View
+                                style={[
+                                    styles.progressFill,
+                                    { width: `${Math.round((activeOverlayStage?.progress ?? 0) * 100)}%` as const },
+                                ]}
+                            />
                         </View>
 
-                        <Text style={styles.processingMeta}>
-                            {isUploadingAndSubmitting
-                                ? 'Hold tight, we are getting this ready for you.'
-                                : 'Stay here for a sec while we finish things up.'}
-                        </Text>
+                        <View style={styles.processingStageRow}>
+                            {activeOverlayStages.map((stage, index) => {
+                                const cappedIndex = Math.min(overlayStageIndex, activeOverlayStages.length - 1);
+                                const isComplete = index < cappedIndex;
+                                const isActive = index === cappedIndex;
+
+                                return (
+                                    <View key={stage.key} style={styles.processingStageItem}>
+                                        <View
+                                            style={[
+                                                styles.processingStageDot,
+                                                isComplete && styles.processingStageDotComplete,
+                                                isActive && styles.processingStageDotActive,
+                                            ]}
+                                        />
+                                        <Text
+                                            style={[
+                                                styles.processingStageLabel,
+                                                isActive && styles.processingStageLabelActive,
+                                            ]}
+                                        >
+                                            {index + 1}
+                                        </Text>
+                                    </View>
+                                );
+                            })}
+                        </View>
                     </LinearGradient>
                 </View>
             </Modal>
@@ -454,6 +572,7 @@ function getVerificationRetryGuidance(input: {
     if (photoIssueDetected && selfieIssueDetected) {
         return {
             title: 'A quick photo refresh should help',
+            shortBody: 'Refresh your selfie and profile photos, then try again.',
             body: 'A fresh selfie plus a quick update to your profile photos should give this the best chance of passing.',
             tips: [
                 'Use at least 2 clear solo photos where your face is easy to see.',
@@ -467,6 +586,7 @@ function getVerificationRetryGuidance(input: {
     if (photoIssueDetected) {
         return {
             title: 'Your profile photos need a quick update',
+            shortBody: 'Swap in clearer photos, then try again.',
             body: 'At least one of your current photos is too hard to verify. Swap in clearer photos and try again.',
             tips: [
                 'Use at least 2 recent photos where your face is front and center.',
@@ -480,6 +600,7 @@ function getVerificationRetryGuidance(input: {
     if (selfieIssueDetected) {
         return {
             title: 'Your selfie needs another go',
+            shortBody: 'Take a fresh selfie with your full face in frame.',
             body: 'We could not clearly read the selfie from the last attempt. Take a fresh one and keep your full face in frame.',
             tips: [
                 'Use soft, even lighting and hold the phone steady.',
@@ -493,6 +614,7 @@ function getVerificationRetryGuidance(input: {
     if (onlyMatchIssue) {
         return {
             title: 'We need a closer match',
+            shortBody: 'Try a fresh selfie and check your profile photos.',
             body: 'Try a fresh selfie and make sure your profile photos still look like you right now.',
             tips: [
                 'Use recent profile photos with a clear view of your face.',
@@ -505,6 +627,7 @@ function getVerificationRetryGuidance(input: {
 
     return {
         title: 'One more try should do it',
+        shortBody: 'Refresh your selfie or photos, then try again.',
         body: 'Something in the last attempt was not clear enough. Refresh your selfie or photos, then try again.',
         tips: [
             'Make sure your face is easy to see in both your selfie and profile photos.',
@@ -521,6 +644,7 @@ const PHOTO_RELATED_REASON_CODES = new Set([
     'invalid_image_parameters',
     'image_too_large',
     'image_processing_failed',
+    'insufficient_usable_profile_photos',
 ]);
 
 const PHOTO_RELATED_QUALITY_FLAGS = new Set([
@@ -529,12 +653,9 @@ const PHOTO_RELATED_QUALITY_FLAGS = new Set([
     'invalid_image_parameters',
     'image_too_large',
     'image_processing_failed',
+    'multiple_faces_detected',
+    'multiple_target_faces',
 ]);
-
-function isRekognitionSupportedProfilePhoto(url: string) {
-    const sanitized = url.split('?')[0]?.toLowerCase() ?? '';
-    return sanitized.endsWith('.jpg') || sanitized.endsWith('.jpeg') || sanitized.endsWith('.png');
-}
 
 const styles = StyleSheet.create({
     container: {
@@ -580,6 +701,17 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '700',
     },
+    cardTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    cardMeta: {
+        color: '#f9a8d4',
+        fontSize: 12,
+        fontWeight: '700',
+    },
     cardCopy: {
         color: '#cbd5e1',
         fontSize: 14,
@@ -612,7 +744,7 @@ const styles = StyleSheet.create({
     },
     selfiePlaceholderText: {
         color: '#f9a8d4',
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '700',
     },
     selfiePreview: {
@@ -651,8 +783,8 @@ const styles = StyleSheet.create({
     },
     statusCopy: {
         color: '#cbd5e1',
-        fontSize: 14,
-        lineHeight: 21,
+        fontSize: 15,
+        lineHeight: 22,
     },
     warningText: {
         color: '#fda4af',
@@ -687,7 +819,7 @@ const styles = StyleSheet.create({
     retryBody: {
         color: '#e9d5ff',
         fontSize: 14,
-        lineHeight: 22,
+        lineHeight: 20,
     },
     retryTips: {
         gap: 10,
@@ -726,6 +858,72 @@ const styles = StyleSheet.create({
     retryGhostButtonText: {
         color: '#fbcfe8',
         fontSize: 13,
+        fontWeight: '700',
+    },
+    resultCard: {
+        minHeight: 520,
+        borderRadius: 30,
+        paddingHorizontal: 24,
+        paddingVertical: 30,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 18,
+        borderWidth: 1,
+    },
+    resultCardSuccess: {
+        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+        borderColor: 'rgba(52, 211, 153, 0.22)',
+    },
+    resultCardRetry: {
+        backgroundColor: 'rgba(251, 113, 133, 0.08)',
+        borderColor: 'rgba(251, 113, 133, 0.22)',
+    },
+    resultIconWrap: {
+        width: 104,
+        height: 104,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    resultIconWrapSuccess: {
+        backgroundColor: 'rgba(52, 211, 153, 0.12)',
+    },
+    resultIconWrapRetry: {
+        backgroundColor: 'rgba(251, 113, 133, 0.12)',
+    },
+    resultTitle: {
+        color: '#fff',
+        fontSize: 28,
+        fontWeight: '800',
+        textAlign: 'center',
+    },
+    resultBody: {
+        color: '#cbd5e1',
+        fontSize: 15,
+        lineHeight: 23,
+        textAlign: 'center',
+        maxWidth: 320,
+    },
+    resultTips: {
+        width: '100%',
+        gap: 10,
+        paddingTop: 6,
+    },
+    resultActions: {
+        width: '100%',
+        gap: 12,
+        paddingTop: 8,
+    },
+    resultSecondaryButton: {
+        borderRadius: 999,
+        paddingVertical: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(148, 163, 184, 0.16)',
+    },
+    resultSecondaryButtonText: {
+        color: '#e2e8f0',
+        fontSize: 15,
         fontWeight: '700',
     },
     primaryButton: {
@@ -793,6 +991,42 @@ const styles = StyleSheet.create({
         color: '#cbd5e1',
         fontSize: 13,
         lineHeight: 20,
+    },
+    processingStageRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 18,
+        paddingTop: 4,
+    },
+    processingStageItem: {
+        alignItems: 'center',
+        gap: 8,
+    },
+    processingStageDot: {
+        width: 12,
+        height: 12,
+        borderRadius: 999,
+        backgroundColor: 'rgba(148, 163, 184, 0.24)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.12)',
+    },
+    processingStageDotActive: {
+        backgroundColor: '#f472b6',
+        borderColor: '#f9a8d4',
+        transform: [{ scale: 1.12 }],
+    },
+    processingStageDotComplete: {
+        backgroundColor: '#34d399',
+        borderColor: '#86efac',
+    },
+    processingStageLabel: {
+        color: '#94a3b8',
+        fontSize: 11,
+        fontWeight: '700',
+    },
+    processingStageLabelActive: {
+        color: '#fff',
     },
     progressTrack: {
         height: 10,

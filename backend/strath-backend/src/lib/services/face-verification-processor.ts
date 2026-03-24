@@ -9,6 +9,8 @@ import { db } from "@/lib/db";
 import {
     FACE_VERIFICATION_STATUSES,
     getFaceVerificationAutoPassSimilarity,
+    getFaceVerificationComparisonConcurrency,
+    getFaceVerificationMaxProfileComparisons,
     getFaceVerificationMethod,
     getFaceVerificationMinimumMatchCount,
     getFaceVerificationThresholdVersion,
@@ -19,6 +21,7 @@ import {
     detectFacesWithRekognition,
 } from "@/lib/services/face-verification-provider-rekognition";
 import { getFaceVerificationComparisonBytes } from "@/lib/services/face-verification-storage";
+import { getProfilePhotoAssetsByKeys } from "@/lib/services/profile-photo-assets";
 
 export async function processFaceVerificationSession(sessionId: string) {
     const session = await db.query.faceVerificationSessions.findFirst({
@@ -51,6 +54,7 @@ export async function processFaceVerificationSession(sessionId: string) {
 
     const similarityThreshold = getFaceVerificationAutoPassSimilarity();
     const minimumMatchCount = getFaceVerificationMinimumMatchCount();
+    const comparisonConcurrency = getFaceVerificationComparisonConcurrency();
 
     try {
         const sourceAssetKey = session.selfieAssetKeys[0];
@@ -71,6 +75,30 @@ export async function processFaceVerificationSession(sessionId: string) {
             });
         }
 
+        const profilePhotoAssetRows = await getProfilePhotoAssetsByKeys(session.profileAssetKeys);
+        const targetAssetKeys = selectTargetAssetKeysForVerification(
+            session.profileAssetKeys,
+            profilePhotoAssetRows,
+        );
+
+        if (targetAssetKeys.length < 2) {
+            return finalizeFaceVerificationProcessing(session.userId, session.id, {
+                status: FACE_VERIFICATION_STATUSES.RETRY_REQUIRED,
+                failureReasons: ["insufficient_usable_profile_photos"],
+                decisionSummary: {
+                    processedAt: new Date().toISOString(),
+                    matchedPhotoCount: 0,
+                    comparedPhotoCount: 0,
+                    sourceFacesDetected: sourceFaceDetection.facesDetected,
+                    candidateProfilePhotoCount: session.profileAssetKeys.length,
+                    usableProfilePhotoCount: targetAssetKeys.length,
+                },
+                results: [],
+            });
+        }
+
+        const photoAssetMap = new Map(profilePhotoAssetRows.map((asset) => [asset.objectKey, asset]));
+
         const comparisonResults: Array<{
             sourceAssetKey: string;
             targetAssetKey: string;
@@ -82,63 +110,107 @@ export async function processFaceVerificationSession(sessionId: string) {
             rawProviderResponseRedacted: Record<string, unknown>;
         }> = [];
 
-        for (const targetAssetKey of session.profileAssetKeys) {
-            try {
-                const targetBytes = await getFaceVerificationComparisonBytes(targetAssetKey);
-                const targetFaceDetection = await detectFacesWithRekognition(targetBytes);
+        const targetResults = await runWithConcurrency(
+            targetAssetKeys,
+            comparisonConcurrency,
+            async (targetAssetKey) => {
+                try {
+                    const assetMetadata = photoAssetMap.get(targetAssetKey);
 
-                if (targetFaceDetection.facesDetected === 0) {
-                    comparisonResults.push({
+                    if (assetMetadata?.faceCount === 0) {
+                        return {
+                            sourceAssetKey,
+                            targetAssetKey,
+                            similarity: null,
+                            faceConfidence: sourceFaceDetection.bestFaceConfidence,
+                            facesDetected: 0,
+                            qualityFlags: ["no_face_detected"],
+                            decision: "not_matched",
+                            rawProviderResponseRedacted: {
+                                sourceFacesDetected: sourceFaceDetection.facesDetected,
+                                targetFacesDetected: 0,
+                                fromAssetMetadata: true,
+                            },
+                        };
+                    }
+
+                    if (assetMetadata?.faceCount && assetMetadata.faceCount > 1) {
+                        return {
+                            sourceAssetKey,
+                            targetAssetKey,
+                            similarity: null,
+                            faceConfidence: sourceFaceDetection.bestFaceConfidence,
+                            facesDetected: assetMetadata.faceCount,
+                            qualityFlags: ["multiple_target_faces"],
+                            decision: "not_matched",
+                            rawProviderResponseRedacted: {
+                                sourceFacesDetected: sourceFaceDetection.facesDetected,
+                                targetFacesDetected: assetMetadata.faceCount,
+                                fromAssetMetadata: true,
+                            },
+                        };
+                    }
+
+                    const targetBytes = await getFaceVerificationComparisonBytes(targetAssetKey);
+                    const targetFacesDetected = assetMetadata?.faceCount ?? null;
+
+                    if (targetFacesDetected === null) {
+                        const targetFaceDetection = await detectFacesWithRekognition(targetBytes);
+                        if (targetFaceDetection.facesDetected === 0) {
+                            return {
+                                sourceAssetKey,
+                                targetAssetKey,
+                                similarity: null,
+                                faceConfidence: sourceFaceDetection.bestFaceConfidence,
+                                facesDetected: 0,
+                                qualityFlags: ["no_face_detected"],
+                                decision: "not_matched",
+                                rawProviderResponseRedacted: {
+                                    sourceFacesDetected: sourceFaceDetection.facesDetected,
+                                    targetFacesDetected: 0,
+                                },
+                            };
+                        }
+                    }
+
+                    const result = await compareFacesWithRekognition(
+                        sourceBytes,
+                        targetBytes,
+                        similarityThreshold,
+                    );
+
+                    return {
+                        sourceAssetKey,
+                        targetAssetKey,
+                        similarity: result.similarity,
+                        faceConfidence: result.faceConfidence,
+                        facesDetected: result.facesDetected,
+                        qualityFlags: result.qualityFlags,
+                        decision:
+                            (result.similarity ?? 0) >= similarityThreshold ? "matched" : "not_matched",
+                        rawProviderResponseRedacted: result.rawProviderResponseRedacted,
+                    };
+                } catch (error) {
+                    console.error("[FaceVerification] CompareFaces failed for target", targetAssetKey, error);
+                    const providerErrorCode = getFaceVerificationProcessingErrorCode(error);
+                    return {
                         sourceAssetKey,
                         targetAssetKey,
                         similarity: null,
-                        faceConfidence: sourceFaceDetection.bestFaceConfidence,
+                        faceConfidence: null,
                         facesDetected: 0,
-                        qualityFlags: ["no_face_detected"],
-                        decision: "not_matched",
+                        qualityFlags: [providerErrorCode],
+                        decision: "error",
                         rawProviderResponseRedacted: {
-                            sourceFacesDetected: sourceFaceDetection.facesDetected,
-                            targetFacesDetected: 0,
+                            providerErrorCode,
+                            providerError: error instanceof Error ? error.message : "unknown_error",
                         },
-                    });
-                    continue;
+                    };
                 }
+            },
+        );
 
-                const result = await compareFacesWithRekognition(
-                    sourceBytes,
-                    targetBytes,
-                    similarityThreshold,
-                );
-
-                comparisonResults.push({
-                    sourceAssetKey,
-                    targetAssetKey,
-                    similarity: result.similarity,
-                    faceConfidence: result.faceConfidence,
-                    facesDetected: result.facesDetected,
-                    qualityFlags: result.qualityFlags,
-                    decision:
-                        (result.similarity ?? 0) >= similarityThreshold ? "matched" : "not_matched",
-                    rawProviderResponseRedacted: result.rawProviderResponseRedacted,
-                });
-            } catch (error) {
-                console.error("[FaceVerification] CompareFaces failed for target", targetAssetKey, error);
-                const providerErrorCode = getFaceVerificationProcessingErrorCode(error);
-                comparisonResults.push({
-                    sourceAssetKey,
-                    targetAssetKey,
-                    similarity: null,
-                    faceConfidence: null,
-                    facesDetected: 0,
-                    qualityFlags: [providerErrorCode],
-                    decision: "error",
-                    rawProviderResponseRedacted: {
-                        providerErrorCode,
-                        providerError: error instanceof Error ? error.message : "unknown_error",
-                    },
-                });
-            }
-        }
+        comparisonResults.push(...targetResults);
 
         const outcome = resolveFaceVerificationOutcome({
             comparisonResults,
@@ -152,6 +224,8 @@ export async function processFaceVerificationSession(sessionId: string) {
             decisionSummary: {
                 processedAt: new Date().toISOString(),
                 sourceFacesDetected: sourceFaceDetection.facesDetected,
+                candidateProfilePhotoCount: session.profileAssetKeys.length,
+                usableProfilePhotoCount: targetAssetKeys.length,
                 ...outcome.decisionSummary,
             },
             results: comparisonResults,
@@ -174,6 +248,77 @@ export async function processFaceVerificationSession(sessionId: string) {
             results: [],
         });
     }
+}
+
+function selectTargetAssetKeysForVerification(
+    requestedKeys: string[],
+    assets: Array<{
+        objectKey: string;
+        verificationReady: boolean;
+        faceCount: number;
+        lastAnalyzedAt: Date | null;
+    }>,
+) {
+    const assetMap = new Map(assets.map((asset) => [asset.objectKey, asset]));
+    const sortedKeys = [...requestedKeys].sort((leftKey, rightKey) => {
+        const left = assetMap.get(leftKey);
+        const right = assetMap.get(rightKey);
+        const leftScore = buildProfileAssetPriority(left);
+        const rightScore = buildProfileAssetPriority(right);
+        return rightScore - leftScore;
+    });
+
+    return sortedKeys.slice(0, getFaceVerificationMaxProfileComparisons());
+}
+
+function buildProfileAssetPriority(
+    asset:
+        | {
+              verificationReady: boolean;
+              faceCount: number;
+              lastAnalyzedAt: Date | null;
+          }
+        | undefined,
+) {
+    if (!asset) {
+        return 10;
+    }
+
+    if (asset.verificationReady) {
+        return 100 + (asset.lastAnalyzedAt ? asset.lastAnalyzedAt.getTime() / 1_000_000_000_000 : 0);
+    }
+
+    if (asset.faceCount === 1) {
+        return 80;
+    }
+
+    if (asset.faceCount > 1) {
+        return 20;
+    }
+
+    return 5;
+}
+
+async function runWithConcurrency<TInput, TOutput>(
+    items: TInput[],
+    concurrency: number,
+    worker: (item: TInput, index: number) => Promise<TOutput>,
+) {
+    const safeConcurrency = Math.max(1, Math.min(concurrency, items.length || 1));
+    const results = new Array<TOutput>(items.length);
+    let nextIndex = 0;
+
+    await Promise.all(
+        Array.from({ length: safeConcurrency }, async () => {
+            while (nextIndex < items.length) {
+                const currentIndex = nextIndex;
+                nextIndex += 1;
+                results[currentIndex] = await worker(items[currentIndex], currentIndex);
+            }
+        }),
+    );
+
+    return results;
 }
 
 const RETRYABLE_PROCESSING_ERROR_CODES = new Set([

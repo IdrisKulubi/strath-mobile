@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 
 import { errorResponse, successResponse } from "@/lib/api-response";
 import { requireAdminApiSession } from "@/lib/security";
-import { processFaceVerificationSession } from "@/lib/services/face-verification-processor";
+import { queueFaceVerificationSessionForProcessing } from "@/lib/services/face-verification-service";
 
 type RouteContext = {
     params: Promise<{
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
         }
 
         const { sessionId } = await context.params;
-        const updatedSession = await processFaceVerificationSession(sessionId);
+        const updatedSession = await queueFaceVerificationSessionForProcessing(sessionId);
 
         return successResponse(updatedSession);
     } catch (error) {

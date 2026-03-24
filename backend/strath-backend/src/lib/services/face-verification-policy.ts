@@ -4,7 +4,15 @@ const DEFAULT_THRESHOLD_VERSION = "comparefaces_v1";
 const DEFAULT_AUTOPASS_SIMILARITY = 90;
 const DEFAULT_MIN_MATCH_COUNT = 2;
 const DEFAULT_PROCESSING_MODE = "async";
-const DEFAULT_CRON_BATCH_SIZE = 10;
+const DEFAULT_CRON_BATCH_SIZE = 20;
+const DEFAULT_WORKER_BATCH_SIZE = 20;
+const DEFAULT_WORKER_CONCURRENCY = 4;
+const DEFAULT_COMPARISON_CONCURRENCY = 2;
+const DEFAULT_MAX_PROFILE_COMPARISONS = 3;
+const DEFAULT_JOB_LEASE_SECONDS = 120;
+const DEFAULT_JOB_MAX_ATTEMPTS = 5;
+const DEFAULT_JOB_RETRY_DELAY_SECONDS = 15;
+const DEFAULT_PHOTO_AUDIT_VERSION = "profile_photo_audit_v1";
 
 export const FACE_VERIFICATION_STATUSES = {
     NOT_STARTED: "not_started",
@@ -52,6 +60,45 @@ export function getFaceVerificationProcessingMode() {
 export function getFaceVerificationCronBatchSize() {
     const value = Number(process.env.FACE_VERIFICATION_CRON_BATCH_SIZE ?? DEFAULT_CRON_BATCH_SIZE);
     return Number.isFinite(value) && value >= 1 ? Math.min(Math.floor(value), 100) : DEFAULT_CRON_BATCH_SIZE;
+}
+
+export function getFaceVerificationWorkerBatchSize() {
+    const value = Number(process.env.FACE_VERIFICATION_WORKER_BATCH_SIZE ?? DEFAULT_WORKER_BATCH_SIZE);
+    return Number.isFinite(value) && value >= 1 ? Math.min(Math.floor(value), 100) : DEFAULT_WORKER_BATCH_SIZE;
+}
+
+export function getFaceVerificationWorkerConcurrency() {
+    const value = Number(process.env.FACE_VERIFICATION_WORKER_CONCURRENCY ?? DEFAULT_WORKER_CONCURRENCY);
+    return Number.isFinite(value) && value >= 1 ? Math.min(Math.floor(value), 10) : DEFAULT_WORKER_CONCURRENCY;
+}
+
+export function getFaceVerificationComparisonConcurrency() {
+    const value = Number(process.env.FACE_VERIFICATION_COMPARISON_CONCURRENCY ?? DEFAULT_COMPARISON_CONCURRENCY);
+    return Number.isFinite(value) && value >= 1 ? Math.min(Math.floor(value), 5) : DEFAULT_COMPARISON_CONCURRENCY;
+}
+
+export function getFaceVerificationMaxProfileComparisons() {
+    const value = Number(process.env.FACE_VERIFICATION_MAX_PROFILE_COMPARISONS ?? DEFAULT_MAX_PROFILE_COMPARISONS);
+    return Number.isFinite(value) && value >= 2 ? Math.min(Math.floor(value), 6) : DEFAULT_MAX_PROFILE_COMPARISONS;
+}
+
+export function getFaceVerificationJobLeaseSeconds() {
+    const value = Number(process.env.FACE_VERIFICATION_JOB_LEASE_SECONDS ?? DEFAULT_JOB_LEASE_SECONDS);
+    return Number.isFinite(value) && value >= 30 ? Math.min(Math.floor(value), 600) : DEFAULT_JOB_LEASE_SECONDS;
+}
+
+export function getFaceVerificationJobMaxAttempts() {
+    const value = Number(process.env.FACE_VERIFICATION_JOB_MAX_ATTEMPTS ?? DEFAULT_JOB_MAX_ATTEMPTS);
+    return Number.isFinite(value) && value >= 1 ? Math.min(Math.floor(value), 20) : DEFAULT_JOB_MAX_ATTEMPTS;
+}
+
+export function getFaceVerificationJobRetryDelaySeconds() {
+    const value = Number(process.env.FACE_VERIFICATION_JOB_RETRY_DELAY_SECONDS ?? DEFAULT_JOB_RETRY_DELAY_SECONDS);
+    return Number.isFinite(value) && value >= 5 ? Math.min(Math.floor(value), 600) : DEFAULT_JOB_RETRY_DELAY_SECONDS;
+}
+
+export function getFaceVerificationPhotoAuditVersion() {
+    return process.env.FACE_VERIFICATION_PHOTO_AUDIT_VERSION?.trim() || DEFAULT_PHOTO_AUDIT_VERSION;
 }
 
 export function getFaceVerificationMethod() {

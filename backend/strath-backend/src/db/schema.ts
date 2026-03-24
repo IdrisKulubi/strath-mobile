@@ -258,6 +258,7 @@ export const faceVerificationSessions = pgTable("face_verification_sessions", {
 }, (table) => ({
     userIdx: index("face_verification_sessions_user_idx").on(table.userId),
     statusIdx: index("face_verification_sessions_status_idx").on(table.status),
+    queueIdx: index("face_verification_sessions_queue_idx").on(table.status, table.updatedAt),
     userAttemptIdx: uniqueIndex("face_verification_sessions_user_attempt_idx").on(table.userId, table.attemptNumber),
 }));
 
@@ -278,6 +279,64 @@ export const faceVerificationResults = pgTable("face_verification_results", {
 }, (table) => ({
     sessionIdx: index("face_verification_results_session_idx").on(table.sessionId),
     decisionIdx: index("face_verification_results_decision_idx").on(table.decision),
+}));
+
+export const profilePhotoAssets = pgTable("profile_photo_assets", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+    objectKey: text("object_key").notNull(),
+    publicUrl: text("public_url").notNull(),
+    contentType: text("content_type"),
+    normalizedFormat: text("normalized_format"),
+    fileSizeBytes: integer("file_size_bytes"),
+    width: integer("width"),
+    height: integer("height"),
+    faceCount: integer("face_count").default(0).notNull(),
+    qualityFlags: jsonb("quality_flags").$type<string[]>().default([]).notNull(),
+    verificationFormatSupported: boolean("verification_format_supported").default(false).notNull(),
+    verificationReady: boolean("verification_ready").default(false).notNull(),
+    analysisVersion: text("analysis_version"),
+    analysisError: text("analysis_error"),
+    lastAnalyzedAt: timestamp("last_analyzed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+}, (table) => ({
+    userIdx: index("profile_photo_assets_user_idx").on(table.userId),
+    objectKeyIdx: uniqueIndex("profile_photo_assets_object_key_idx").on(table.objectKey),
+    readyIdx: index("profile_photo_assets_ready_idx").on(table.verificationReady, table.lastAnalyzedAt),
+}));
+
+export const faceVerificationJobs = pgTable("face_verification_jobs", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    jobType: text("job_type").notNull(),
+    status: text("status").default("pending").notNull(),
+    userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").references(() => faceVerificationSessions.id, { onDelete: "cascade" }),
+    assetKey: text("asset_key"),
+    priority: integer("priority").default(100).notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    maxAttempts: integer("max_attempts").default(5).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().default({}).notNull(),
+    availableAt: timestamp("available_at").defaultNow().notNull(),
+    lockedAt: timestamp("locked_at"),
+    leaseExpiresAt: timestamp("lease_expires_at"),
+    claimedBy: text("claimed_by"),
+    lastError: text("last_error"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+}, (table) => ({
+    statusAvailableIdx: index("face_verification_jobs_status_available_idx").on(
+        table.status,
+        table.availableAt,
+        table.priority,
+        table.createdAt,
+    ),
+    sessionIdx: index("face_verification_jobs_session_idx").on(table.sessionId),
+    assetIdx: index("face_verification_jobs_asset_idx").on(table.assetKey),
+    workerIdx: index("face_verification_jobs_worker_idx").on(table.status, table.leaseExpiresAt),
 }));
 
 // Swipes/Likes
@@ -710,6 +769,8 @@ export const userRelations = relations(user, ({ one, many }) => ({
     mutualMatchesA: many(mutualMatches, { relationName: "mutualMatchUserA" }),
     mutualMatchesB: many(mutualMatches, { relationName: "mutualMatchUserB" }),
     faceVerificationSessions: many(faceVerificationSessions),
+    faceVerificationJobs: many(faceVerificationJobs),
+    profilePhotoAssets: many(profilePhotoAssets),
     sessions: many(session),
     accounts: many(account),
 }));
@@ -779,11 +840,30 @@ export const faceVerificationSessionsRelations = relations(faceVerificationSessi
         references: [user.id],
     }),
     results: many(faceVerificationResults),
+    jobs: many(faceVerificationJobs),
 }));
 
 export const faceVerificationResultsRelations = relations(faceVerificationResults, ({ one }) => ({
     session: one(faceVerificationSessions, {
         fields: [faceVerificationResults.sessionId],
+        references: [faceVerificationSessions.id],
+    }),
+}));
+
+export const profilePhotoAssetsRelations = relations(profilePhotoAssets, ({ one }) => ({
+    user: one(user, {
+        fields: [profilePhotoAssets.userId],
+        references: [user.id],
+    }),
+}));
+
+export const faceVerificationJobsRelations = relations(faceVerificationJobs, ({ one }) => ({
+    user: one(user, {
+        fields: [faceVerificationJobs.userId],
+        references: [user.id],
+    }),
+    session: one(faceVerificationSessions, {
+        fields: [faceVerificationJobs.sessionId],
         references: [faceVerificationSessions.id],
     }),
 }));
@@ -1645,6 +1725,10 @@ export type FaceVerificationSession = typeof faceVerificationSessions.$inferSele
 export type NewFaceVerificationSession = typeof faceVerificationSessions.$inferInsert;
 export type FaceVerificationResult = typeof faceVerificationResults.$inferSelect;
 export type NewFaceVerificationResult = typeof faceVerificationResults.$inferInsert;
+export type ProfilePhotoAsset = typeof profilePhotoAssets.$inferSelect;
+export type NewProfilePhotoAsset = typeof profilePhotoAssets.$inferInsert;
+export type FaceVerificationJob = typeof faceVerificationJobs.$inferSelect;
+export type NewFaceVerificationJob = typeof faceVerificationJobs.$inferInsert;
 export type StudySession = typeof studySessions.$inferSelect;
 export type NewStudySession = typeof studySessions.$inferInsert;
 export type WingmanLink = typeof wingmanLinks.$inferSelect;
