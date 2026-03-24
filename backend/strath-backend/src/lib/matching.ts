@@ -2,8 +2,10 @@ import { db } from "./db";
 import { profiles, swipes, blocks } from "../db/schema";
 import { eq, and, notInArray, inArray } from "drizzle-orm";
 import { getTargetGenders, isReciprocalGenderMatch } from "./gender-preferences";
+import { FACE_VERIFICATION_STATUSES } from "@/lib/services/face-verification-policy";
 
-export async function getRecommendations(userId: string, limit: number = 20, offset: number = 0, vibe: string = 'all') {
+export async function getRecommendations(userId: string, limit: number = 20, offset: number = 0, _vibe: string = 'all') {
+    void _vibe;
     // 1. Get current user profile
     const currentUserProfile = await db.query.profiles.findFirst({
         where: eq(profiles.userId, userId),
@@ -54,6 +56,7 @@ export async function getRecommendations(userId: string, limit: number = 20, off
             notInArray(profiles.userId, excludedIds),
             eq(profiles.isVisible, true),
             eq(profiles.profileCompleted, true),
+            eq(profiles.faceVerificationStatus, FACE_VERIFICATION_STATUSES.VERIFIED),
             // Simple filter: just match by gender
             targetGenders.length > 0 
                 ? inArray(profiles.gender, targetGenders)

@@ -296,7 +296,7 @@ export function OnboardingFlow({ user, existingProfile }: OnboardingFlowProps) {
       const data = await response.json();
       if (data.success) {
         toast.success("Profile created! 🎉", "Welcome to Strathspace!");
-        router.push("/app/discover");
+        router.push("/verification");
       } else {
         toast.error("Failed to save", data.message || "Something went wrong");
         setError(data.message || "Failed to save profile");

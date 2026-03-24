@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-helpers';
+import { isVerificationRequiredError, parseApiError } from '@/lib/api-errors';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -28,7 +29,7 @@ export interface DailyMatchesResponse {
 }
 
 export function useDailyMatches() {
-    return useQuery({
+    const query = useQuery({
         queryKey: ['candidatePairs', 'daily'],
         queryFn: async (): Promise<DailyMatchesResponse> => {
             const token = await getAuthToken();
@@ -36,7 +37,9 @@ export function useDailyMatches() {
             const res = await fetch(`${API_URL}/api/home/daily-matches`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            if (!res.ok) throw new Error(`Failed to fetch daily matches (${res.status})`);
+            if (!res.ok) {
+                throw await parseApiError(res, `Failed to fetch daily matches (${res.status})`);
+            }
             const json = await res.json();
             return {
                 matches: json?.data?.matches ?? [],
@@ -55,6 +58,11 @@ export function useDailyMatches() {
             return msUntilExpiry;
         },
     });
+
+    return {
+        ...query,
+        verificationRequired: isVerificationRequiredError(query.error),
+    };
 }
 
 const ALREADY_RESPONDED_MSG = 'You have already responded to this pair';
@@ -74,8 +82,7 @@ export function useRespondToDailyPair() {
                 body: JSON.stringify({ decision: payload.decision }),
             });
             if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err?.error ?? `Failed to respond to pair (${res.status})`);
+                throw await parseApiError(res, `Failed to respond to pair (${res.status})`);
             }
             return payload;
         },

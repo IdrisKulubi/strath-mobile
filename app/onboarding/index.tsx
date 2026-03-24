@@ -322,8 +322,8 @@ export default function OnboardingScreen() {
 
             console.log('[Onboarding] Profile saved successfully!');
 
-            // Navigate to Home (daily matches)
-            router.replace('/(tabs)');
+            // Continue into the face verification checkpoint before matchmaking access.
+            router.replace('/verification' as any);
         } catch (error: any) {
             console.error('[Onboarding] Error:', error.message || error);
             setSubmitError(error.message || 'Failed to save your profile. Please try again.');

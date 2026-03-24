@@ -12,6 +12,7 @@ import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
+import { isVerificationRequiredError } from '@/lib/api-errors';
 import {
     DailyMatch,
     useDailyMatches,
@@ -53,9 +54,11 @@ export default function HomeScreen() {
         data: matchesData,
         isLoading,
         isRefetching,
+        error,
         refetch,
+        verificationRequired,
     } = useDailyMatches();
-    const matches = matchesData?.matches ?? [];
+    const matches = useMemo(() => matchesData?.matches ?? [], [matchesData]);
     const nextPairsAvailableAt = matchesData?.nextPairsAvailableAt;
     const respondToPair = useRespondToDailyPair();
     const [refreshing, setRefreshing] = useState(false);
@@ -66,6 +69,12 @@ export default function HomeScreen() {
             setHasSeenMatchesToday(true);
         }
     }, [matches.length]);
+
+    useEffect(() => {
+        if (verificationRequired || isVerificationRequiredError(error)) {
+            router.replace('/verification');
+        }
+    }, [error, router, verificationRequired]);
 
     const allActioned = hasSeenMatchesToday && matches.length === 0 && !isLoading && !isRefetching;
 
@@ -102,7 +111,7 @@ export default function HomeScreen() {
                 },
             }
         );
-    }, [respondToPair]);
+    }, [respondToPair, toast]);
 
     const handlePass = useCallback((match: DailyMatch) => {
         respondToPair.mutate(
@@ -119,7 +128,7 @@ export default function HomeScreen() {
                 },
             }
         );
-    }, [respondToPair]);
+    }, [respondToPair, toast]);
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -140,9 +149,9 @@ export default function HomeScreen() {
                 ) : matches.length > 0 ? (
                     <DailyMatchesList
                         matches={matches}
-                        onOpenToMeet={handleOpenToMeet}
-                        onPass={handlePass}
-                        onViewProfile={(match) => {
+                onOpenToMeet={handleOpenToMeet}
+                onPass={handlePass}
+                onViewProfile={(match) => {
                             setInfoSheet({ visible: true, type: 'view_profile', firstName: match.firstName, match });
                         }}
                     />

@@ -1,16 +1,39 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { useTheme } from '@/hooks/use-theme';
 import { useNotificationCounts, formatBadgeCount } from '@/hooks/use-notification-counts';
+import { useProfile } from '@/hooks/use-profile';
+import { getProfileRoute } from '@/lib/profile-access';
 
 export default function TabLayout() {
   const { colors } = useTheme();
   const { unreadMessages, datesAttention } = useNotificationCounts();
+  const { data: profile, isLoading } = useProfile();
   const datesBadge = datesAttention ?? 0;
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: colors.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  const nextRoute = getProfileRoute(profile ?? null);
+  if (nextRoute !== '/(tabs)') {
+    return <Redirect href={nextRoute as any} />;
+  }
 
   return (
     <Tabs

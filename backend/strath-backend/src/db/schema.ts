@@ -214,6 +214,12 @@ export const profiles = pgTable("profiles", {
     // ============================================
     aiConsentGranted: boolean("ai_consent_granted").default(false).notNull(),
     aiConsentUpdatedAt: timestamp("ai_consent_updated_at"),
+    faceVerificationStatus: text("face_verification_status").default("not_started").notNull(),
+    faceVerifiedAt: timestamp("face_verified_at"),
+    faceVerificationMethod: text("face_verification_method"),
+    faceVerificationVersion: text("face_verification_version"),
+    faceVerificationRequired: boolean("face_verification_required").default(true).notNull(),
+    faceVerificationRetryCount: integer("face_verification_retry_count").default(0).notNull(),
     personalitySummary: text("personality_summary"), // AI-generated natural language summary
     embedding: vector("embedding", { dimension: 3072 }), // pgvector embedding for semantic search
     embeddingUpdatedAt: timestamp("embedding_updated_at"), // Track when embedding was last generated
@@ -226,9 +232,52 @@ export const profiles = pgTable("profiles", {
     usernameIdx: index("profile_username_idx").on(table.username),
     anonymousIdx: index("profile_anonymous_idx").on(table.anonymous),
     aiConsentIdx: index("profile_ai_consent_idx").on(table.aiConsentGranted),
+    faceVerificationStatusIdx: index("profile_face_verification_status_idx").on(table.faceVerificationStatus),
     educationIdx: index("profile_education_idx").on(table.education),
     smokingIdx: index("profile_smoking_idx").on(table.smoking),
     politicsIdx: index("profile_politics_idx").on(table.politics),
+}));
+
+export const faceVerificationSessions = pgTable("face_verification_sessions", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+    status: text("status").default("pending_capture").notNull(),
+    attemptNumber: integer("attempt_number").default(1).notNull(),
+    selfieAssetKeys: jsonb("selfie_asset_keys").$type<string[]>().default([]).notNull(),
+    profileAssetKeys: jsonb("profile_asset_keys").$type<string[]>().default([]).notNull(),
+    thresholdConfigVersion: text("threshold_config_version").default("comparefaces_v1").notNull(),
+    decisionSummary: jsonb("decision_summary").$type<Record<string, unknown>>().default({}).notNull(),
+    failureReasons: jsonb("failure_reasons").$type<string[]>().default([]).notNull(),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+}, (table) => ({
+    userIdx: index("face_verification_sessions_user_idx").on(table.userId),
+    statusIdx: index("face_verification_sessions_status_idx").on(table.status),
+    userAttemptIdx: uniqueIndex("face_verification_sessions_user_attempt_idx").on(table.userId, table.attemptNumber),
+}));
+
+export const faceVerificationResults = pgTable("face_verification_results", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+        .notNull()
+        .references(() => faceVerificationSessions.id, { onDelete: "cascade" }),
+    sourceAssetKey: text("source_asset_key").notNull(),
+    targetAssetKey: text("target_asset_key").notNull(),
+    similarity: integer("similarity"),
+    faceConfidence: integer("face_confidence"),
+    qualityFlags: jsonb("quality_flags").$type<string[]>().default([]).notNull(),
+    facesDetected: integer("faces_detected").default(0).notNull(),
+    decision: text("decision").notNull(),
+    rawProviderResponseRedacted: jsonb("raw_provider_response_redacted").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    sessionIdx: index("face_verification_results_session_idx").on(table.sessionId),
+    decisionIdx: index("face_verification_results_decision_idx").on(table.decision),
 }));
 
 // Swipes/Likes
@@ -660,6 +709,7 @@ export const userRelations = relations(user, ({ one, many }) => ({
     candidatePairsB: many(candidatePairs, { relationName: "candidatePairUserB" }),
     mutualMatchesA: many(mutualMatches, { relationName: "mutualMatchUserA" }),
     mutualMatchesB: many(mutualMatches, { relationName: "mutualMatchUserB" }),
+    faceVerificationSessions: many(faceVerificationSessions),
     sessions: many(session),
     accounts: many(account),
 }));
@@ -720,6 +770,21 @@ export const profilesRelations = relations(profiles, ({ one }) => ({
     user: one(user, {
         fields: [profiles.userId],
         references: [user.id],
+    }),
+}));
+
+export const faceVerificationSessionsRelations = relations(faceVerificationSessions, ({ one, many }) => ({
+    user: one(user, {
+        fields: [faceVerificationSessions.userId],
+        references: [user.id],
+    }),
+    results: many(faceVerificationResults),
+}));
+
+export const faceVerificationResultsRelations = relations(faceVerificationResults, ({ one }) => ({
+    session: one(faceVerificationSessions, {
+        fields: [faceVerificationResults.sessionId],
+        references: [faceVerificationSessions.id],
     }),
 }));
 
@@ -1576,6 +1641,10 @@ export type NewVibeCheck = typeof vibeChecks.$inferInsert;
 export type PulsePost = typeof pulsePosts.$inferSelect;
 export type NewPulsePost = typeof pulsePosts.$inferInsert;
 export type PulseReaction = typeof pulseReactions.$inferSelect;
+export type FaceVerificationSession = typeof faceVerificationSessions.$inferSelect;
+export type NewFaceVerificationSession = typeof faceVerificationSessions.$inferInsert;
+export type FaceVerificationResult = typeof faceVerificationResults.$inferSelect;
+export type NewFaceVerificationResult = typeof faceVerificationResults.$inferInsert;
 export type StudySession = typeof studySessions.$inferSelect;
 export type NewStudySession = typeof studySessions.$inferInsert;
 export type WingmanLink = typeof wingmanLinks.$inferSelect;

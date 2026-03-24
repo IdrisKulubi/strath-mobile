@@ -11,6 +11,8 @@ import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 import { redis } from "@/lib/redis";
 import { ensureMissionForMatch } from "@/lib/services/mission-service";
+import { getSessionWithBearerFallback } from "@/lib/security";
+import { requireMatchmakingAccess } from "@/lib/services/profile-access";
 
 async function logPulseEvent(type: string, message: string, data?: any) {
     try {
@@ -30,35 +32,16 @@ async function logPulseEvent(type: string, message: string, data?: any) {
 
 export async function POST(req: NextRequest) {
     try {
-        let session = await auth.api.getSession({ headers: req.headers });
-
-        // Fallback: Manual token check for Bearer token auth (mobile clients)
-        if (!session) {
-            const authHeader = req.headers.get('authorization');
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                const token = authHeader.split(' ')[1];
-                // Import session table dynamically to avoid circular deps
-                const { session: sessionTable } = await import("@/db/schema");
-
-                const dbSession = await db.query.session.findFirst({
-                    where: eq(sessionTable.token, token),
-                    with: { user: true }
-                });
-
-                if (dbSession) {
-                    const now = new Date();
-                    if (dbSession.expiresAt > now) {
-                        session = {
-                            session: dbSession,
-                            user: dbSession.user
-                        } as any;
-                    }
-                }
-            }
-        }
+        const session = await getSessionWithBearerFallback(req);
 
         if (!session) {
             return errorResponse(new Error("Unauthorized"), 401);
+        }
+
+        try {
+            await requireMatchmakingAccess(session.user.id);
+        } catch (accessError) {
+            return errorResponse(accessError, accessError instanceof Error && accessError.message === "Profile not found" ? 404 : 403);
         }
 
         const body = await req.json();

@@ -14,9 +14,13 @@ export interface UserProfileDetail {
     currentUserDecision: 'pending' | 'open_to_meet' | 'passed';
     bio?: string;
     aboutMe?: string;
+    interests?: string[];
+    personalityTags?: string[];
     photos?: string[];
     wingmanQuotes?: { text: string; authorLabel?: string }[];
     lastName?: string;
+    course?: string;
+    university?: string;
     yearOfStudy?: number;
     gender?: string;
     lookingFor?: string;

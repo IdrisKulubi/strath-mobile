@@ -73,3 +73,25 @@ This is the backend for the StrathSpace 2.0 mobile app, built with Next.js App R
 - `src/db`: Drizzle schema and config.
 - `src/lib`: Utility functions (auth, db, matching, pusher, validation).
 - `src/scripts`: Database scripts (seed).
+
+## Face Verification Operations
+
+Face verification is configured to run in async-first mode in production.
+
+- User submit requests only queue work through `POST /api/verification/face/submit`.
+- Scheduled processing runs through `GET /api/cron/face-verification`.
+- Vercel cron is configured in [vercel.json](C:\Users\Idris Kulubi\Desktop\sidequests\active\smobile\strath-mobile\backend\strath-backend\vercel.json) to call the processor every minute.
+
+Required environment variables:
+
+- `CRON_SECRET`: shared secret for cron-triggered routes.
+- `FACE_VERIFICATION_PROCESSING_MODE=async`: keeps submit lightweight and lets cron own processing.
+- `FACE_VERIFICATION_CRON_BATCH_SIZE=10`: controls how many queued sessions are processed per cron run.
+
+For local debugging only, you can temporarily set `FACE_VERIFICATION_PROCESSING_MODE=inline` to process a submission immediately inside the request.
+
+Admin/ops visibility:
+
+- `GET /api/admin/verification/overview`
+- Returns queue depth, stale processing count, status breakdowns, last-24h completion metrics, attention-required sessions, and recent processed sessions.
+- Requires an admin session or admin bearer token.

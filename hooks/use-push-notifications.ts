@@ -27,7 +27,7 @@ function getProjectId(): string | undefined {
 
 // ─── Toast variant per notification type ─────────────────────────────────────
 
-type ToastVariant = 'default' | 'accent' | 'warning' | 'destructive';
+type ToastVariant = 'default' | 'accent' | 'warning' | 'danger';
 
 function toastVariantFor(type?: AppNotificationType): ToastVariant {
     switch (type) {
@@ -43,7 +43,7 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
 
         case NOTIFICATION_TYPES.DATE_REQUEST_DECLINED:
         case NOTIFICATION_TYPES.DATE_CANCELLED:
-            return 'destructive';
+            return 'danger';
 
         default:
             return 'default';

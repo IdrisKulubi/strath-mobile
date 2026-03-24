@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { getAuthToken, clearSession } from '@/lib/auth-helpers';
 import { useTheme } from '@/hooks/use-theme';
+import { getProfileRoute } from '@/lib/profile-access';
 
 export default function Index() {
     const { data: session, isPending } = useSession();
@@ -54,14 +55,8 @@ export default function Index() {
 
             if (res.ok) {
                 const responseData = await res.json();
-                // Check both fields just in case
-                const isComplete = responseData.data?.isComplete || responseData.data?.profileCompleted;
-
-                if (isComplete) {
-                    router.replace('/(tabs)');
-                } else {
-                    router.replace('/onboarding' as any);
-                }
+                const nextRoute = getProfileRoute(responseData.data ?? null);
+                router.replace(nextRoute as any);
             } else if (res.status === 401) {
                 // Session is invalid/expired - clear and go to login
                 console.log('[Index] Unauthorized - clearing session and redirecting to login');

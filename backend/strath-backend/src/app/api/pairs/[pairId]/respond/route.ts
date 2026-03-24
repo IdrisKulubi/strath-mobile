@@ -8,6 +8,7 @@ import { profiles, user as userTable } from "@/db/schema";
 import { db } from "@/lib/db";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
+import { requireMatchmakingAccess } from "@/lib/services/profile-access";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,12 @@ export async function POST(
         const session = await getSessionWithFallback(req);
         if (!session?.user?.id) {
             return errorResponse(new Error("Unauthorized"), 401);
+        }
+
+        try {
+            await requireMatchmakingAccess(session.user.id);
+        } catch (accessError) {
+            return errorResponse(accessError, accessError instanceof Error && accessError.message === "Profile not found" ? 404 : 403);
         }
 
         const { pairId } = await params;
