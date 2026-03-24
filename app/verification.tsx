@@ -37,6 +37,7 @@ export default function VerificationScreen() {
         isUploadingAndSubmitting,
     } = useFaceVerification();
     const [selfieUri, setSelfieUri] = useState<string | null>(null);
+    const [isContinuingToApp, setIsContinuingToApp] = useState(false);
 
     const profilePhotoUrls = useMemo(
         () => (profile?.photos ?? []).filter((photo: string | undefined | null): photo is string => !!photo).slice(0, 4),
@@ -62,7 +63,7 @@ export default function VerificationScreen() {
 
     useEffect(() => {
         if (!isProfileLoading && profile && hasVerifiedFace(profile)) {
-            router.replace('/(tabs)' as any);
+            router.replace('/' as any);
         }
     }, [isProfileLoading, profile, router]);
 
@@ -181,12 +182,23 @@ export default function VerificationScreen() {
         }
     };
 
+    const handleContinueToApp = async () => {
+        try {
+            setIsContinuingToApp(true);
+            await refetchProfile();
+            router.replace('/' as any);
+        } finally {
+            setIsContinuingToApp(false);
+        }
+    };
+
     const isBusy =
         isProfileLoading ||
         isSessionLoading ||
         isCreatingSession ||
         isRetryingSession ||
-        isUploadingAndSubmitting;
+        isUploadingAndSubmitting ||
+        isContinuingToApp;
     const showProcessingOverlay = isUploadingAndSubmitting || isProcessing;
     const progressValue = isUploadingAndSubmitting ? 0.38 : isProcessing ? 0.82 : 0;
     const processingHeadline = isUploadingAndSubmitting
@@ -320,7 +332,7 @@ export default function VerificationScreen() {
 
                 <Pressable
                     style={[styles.primaryButton, (isBusy || (isProcessing && !canRetry)) && styles.primaryButtonDisabled]}
-                    onPress={status === 'verified' ? () => router.replace('/(tabs)' as any) : handleStartOrRetry}
+                    onPress={status === 'verified' ? handleContinueToApp : handleStartOrRetry}
                     disabled={isBusy || isProcessing}
                 >
                     {isBusy ? (
