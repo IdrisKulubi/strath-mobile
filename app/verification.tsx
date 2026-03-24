@@ -52,9 +52,9 @@ export default function VerificationScreen() {
     );
     const processingSteps = useMemo(
         () => [
-            'Checking your selfie vibe against your profile pics...',
-            'Filtering out fake-energy and bot behavior...',
-            'Almost there. Giving your account the green-light treatment...',
+            'Lining up your selfie with your profile...',
+            'Doing a quick account check...',
+            'Almost there. Finishing the final pass...',
         ],
         [],
     );
@@ -69,6 +69,23 @@ export default function VerificationScreen() {
     const status = latestSession?.status ?? profile?.faceVerificationStatus ?? 'not_started';
     const isProcessing = status === 'processing';
     const canRetry = status === 'retry_required' || status === 'failed';
+    const retryGuidance = useMemo(
+        () =>
+            getVerificationRetryGuidance({
+                status,
+                failureReasons: latestSession?.failureReasons ?? [],
+                results: latestSession?.results ?? [],
+                supportedProfilePhotoCount: supportedProfilePhotoUrls.length,
+                unsupportedProfilePhotoCount: unsupportedProfilePhotoUrls.length,
+            }),
+        [
+            latestSession?.failureReasons,
+            latestSession?.results,
+            status,
+            supportedProfilePhotoUrls.length,
+            unsupportedProfilePhotoUrls.length,
+        ],
+    );
 
     useEffect(() => {
         if (!isUploadingAndSubmitting && !isProcessing) {
@@ -176,7 +193,7 @@ export default function VerificationScreen() {
         ? 'Uploading your selfie...'
         : 'Verification in progress';
     const processingSubcopy = isUploadingAndSubmitting
-        ? 'Locking in your selfie and lining everything up for the face check.'
+        ? 'Saving your selfie and getting everything ready.'
         : processingSteps[processingStepIndex];
 
     return (
@@ -217,6 +234,11 @@ export default function VerificationScreen() {
                             Some of your current photos may need a quick re-upload before this can finish smoothly.
                         </Text>
                     ) : null}
+                    {unsupportedProfilePhotoUrls.length > 0 || supportedProfilePhotoUrls.length < 2 ? (
+                        <Pressable style={styles.secondaryButton} onPress={() => router.push('/edit-profile' as any)}>
+                            <Text style={styles.secondaryButtonText}>Update profile photos</Text>
+                        </Pressable>
+                    ) : null}
                 </View>
 
                 <View style={styles.card}>
@@ -252,19 +274,49 @@ export default function VerificationScreen() {
                         ) : (
                             <ShieldCheck size={20} color="#93c5fd" weight="fill" />
                         )}
-                        <Text style={styles.statusTitle}>Status: {formatStatus(status)}</Text>
+                        <Text style={styles.statusTitle}>Status: {getFriendlyStatusLabel(status)}</Text>
                     </View>
 
                     <Text style={styles.statusCopy}>
                         {isProcessing
                             ? 'Your selfie is being checked right now.'
                             : canRetry
-                            ? 'Almost there. We just need one more try with a clearer selfie.'
+                            ? retryGuidance?.body ?? 'Almost there. We just need one more try.'
                             : status === 'verified'
                             ? 'Your face is verified. You can continue to the app.'
                             : 'Complete this step to unlock discovery and matchmaking.'}
                     </Text>
                 </View>
+
+                {retryGuidance ? (
+                    <View style={styles.retryCard}>
+                        <Text style={styles.retryEyebrow}>What to fix</Text>
+                        <Text style={styles.retryTitle}>{retryGuidance.title}</Text>
+                        <Text style={styles.retryBody}>{retryGuidance.body}</Text>
+
+                        <View style={styles.retryTips}>
+                            {retryGuidance.tips.map((tip) => (
+                                <View key={tip} style={styles.retryTipRow}>
+                                    <View style={styles.retryTipDot} />
+                                    <Text style={styles.retryTipText}>{tip}</Text>
+                                </View>
+                            ))}
+                        </View>
+
+                        <View style={styles.retryActions}>
+                            {retryGuidance.showSelfieAction ? (
+                                <Pressable style={styles.retryGhostButton} onPress={handleCaptureSelfie}>
+                                    <Text style={styles.retryGhostButtonText}>Retake selfie</Text>
+                                </Pressable>
+                            ) : null}
+                            {retryGuidance.showPhotoAction ? (
+                                <Pressable style={styles.retryGhostButton} onPress={() => router.push('/edit-profile' as any)}>
+                                    <Text style={styles.retryGhostButtonText}>Update profile photos</Text>
+                                </Pressable>
+                            ) : null}
+                        </View>
+                    </View>
+                ) : null}
 
                 <Pressable
                     style={[styles.primaryButton, (isBusy || (isProcessing && !canRetry)) && styles.primaryButtonDisabled]}
@@ -317,10 +369,6 @@ export default function VerificationScreen() {
     );
 }
 
-function formatStatus(status: string) {
-    return status.replace(/_/g, ' ');
-}
-
 function getVerificationUserMessage(error: unknown) {
     const fallback = 'We could not finish verification right now. Please try again.';
 
@@ -356,6 +404,120 @@ function getVerificationUserMessage(error: unknown) {
 
     return error.message || fallback;
 }
+
+function getFriendlyStatusLabel(status: string) {
+    switch (status) {
+        case 'retry_required':
+            return 'Needs another try';
+        case 'manual_review':
+            return 'Under review';
+        case 'not_started':
+            return 'Not started';
+        default:
+            return status.replace(/_/g, ' ');
+    }
+}
+
+function getVerificationRetryGuidance(input: {
+    status: string;
+    failureReasons: string[];
+    results: { qualityFlags: string[] }[];
+    supportedProfilePhotoCount: number;
+    unsupportedProfilePhotoCount: number;
+}) {
+    if (input.status !== 'retry_required' && input.status !== 'failed') {
+        return null;
+    }
+
+    const selfieIssueDetected = input.failureReasons.includes('selfie_face_not_detected');
+    const photoIssueDetected =
+        input.supportedProfilePhotoCount < 2 ||
+        input.unsupportedProfilePhotoCount > 0 ||
+        input.failureReasons.some((reason) => PHOTO_RELATED_REASON_CODES.has(reason)) ||
+        input.results.some((result) => result.qualityFlags.some((flag) => PHOTO_RELATED_QUALITY_FLAGS.has(flag)));
+    const onlyMatchIssue =
+        input.failureReasons.length > 0 &&
+        input.failureReasons.every((reason) => reason === 'insufficient_match_count');
+
+    if (photoIssueDetected && selfieIssueDetected) {
+        return {
+            title: 'A quick photo refresh should help',
+            body: 'A fresh selfie plus a quick update to your profile photos should give this the best chance of passing.',
+            tips: [
+                'Use at least 2 clear solo photos where your face is easy to see.',
+                'Retake your selfie in good light with your full face in frame.',
+            ],
+            showSelfieAction: true,
+            showPhotoAction: true,
+        };
+    }
+
+    if (photoIssueDetected) {
+        return {
+            title: 'Your profile photos need a quick update',
+            body: 'At least one of your current photos is too hard to verify. Swap in clearer photos and try again.',
+            tips: [
+                'Use at least 2 recent photos where your face is front and center.',
+                'Avoid group shots, heavy filters, and photos where your face is partly covered.',
+            ],
+            showSelfieAction: false,
+            showPhotoAction: true,
+        };
+    }
+
+    if (selfieIssueDetected) {
+        return {
+            title: 'Your selfie needs another go',
+            body: 'We could not clearly read the selfie from the last attempt. Take a fresh one and keep your full face in frame.',
+            tips: [
+                'Use soft, even lighting and hold the phone steady.',
+                'Look straight at the camera and avoid sunglasses, masks, or strong filters.',
+            ],
+            showSelfieAction: true,
+            showPhotoAction: false,
+        };
+    }
+
+    if (onlyMatchIssue) {
+        return {
+            title: 'We need a closer match',
+            body: 'Try a fresh selfie and make sure your profile photos still look like you right now.',
+            tips: [
+                'Use recent profile photos with a clear view of your face.',
+                'Retake your selfie in good light and keep your face centered.',
+            ],
+            showSelfieAction: true,
+            showPhotoAction: true,
+        };
+    }
+
+    return {
+        title: 'One more try should do it',
+        body: 'Something in the last attempt was not clear enough. Refresh your selfie or photos, then try again.',
+        tips: [
+            'Make sure your face is easy to see in both your selfie and profile photos.',
+            'Use clear lighting and avoid blurry or heavily edited images.',
+        ],
+        showSelfieAction: true,
+        showPhotoAction: true,
+    };
+}
+
+const PHOTO_RELATED_REASON_CODES = new Set([
+    'no_face_detected',
+    'invalid_image_format',
+    'invalid_image_parameters',
+    'image_too_large',
+    'image_processing_failed',
+]);
+
+const PHOTO_RELATED_QUALITY_FLAGS = new Set([
+    'no_face_detected',
+    'invalid_image_format',
+    'invalid_image_parameters',
+    'image_too_large',
+    'image_processing_failed',
+]);
 
 function isRekognitionSupportedProfilePhoto(url: string) {
     const sanitized = url.split('?')[0]?.toLowerCase() ?? '';
@@ -489,6 +651,70 @@ const styles = StyleSheet.create({
         color: '#fecdd3',
         fontSize: 12,
         lineHeight: 18,
+    },
+    retryCard: {
+        backgroundColor: 'rgba(76, 29, 149, 0.24)',
+        borderRadius: 22,
+        padding: 18,
+        borderWidth: 1,
+        borderColor: 'rgba(196, 181, 253, 0.18)',
+        gap: 12,
+    },
+    retryEyebrow: {
+        color: '#c4b5fd',
+        fontSize: 11,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+        letterSpacing: 0.8,
+    },
+    retryTitle: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: '800',
+    },
+    retryBody: {
+        color: '#e9d5ff',
+        fontSize: 14,
+        lineHeight: 22,
+    },
+    retryTips: {
+        gap: 10,
+    },
+    retryTipRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 10,
+    },
+    retryTipDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 999,
+        backgroundColor: '#f472b6',
+        marginTop: 6,
+    },
+    retryTipText: {
+        flex: 1,
+        color: '#f5d0fe',
+        fontSize: 13,
+        lineHeight: 20,
+    },
+    retryActions: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    retryGhostButton: {
+        paddingHorizontal: 16,
+        paddingVertical: 11,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: 'rgba(244, 114, 182, 0.3)',
+        backgroundColor: 'rgba(244, 114, 182, 0.08)',
+    },
+    retryGhostButtonText: {
+        color: '#fbcfe8',
+        fontSize: 13,
+        fontWeight: '700',
     },
     primaryButton: {
         backgroundColor: '#ec4899',
