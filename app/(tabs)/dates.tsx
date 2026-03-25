@@ -12,6 +12,7 @@ import { EmptyDates } from '@/components/dates/empty-dates';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DateMatchModal } from '@/components/date-match/date-match-modal';
 import { useProfile } from '@/hooks/use-profile';
+import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 
 type Section = 'mutual' | 'call_pending' | 'being_arranged' | 'upcoming' | 'history';
 
@@ -112,6 +113,7 @@ export default function DatesScreen() {
     };
 
     return (
+        <TabSwipeView route="/(tabs)/dates">
         <ScreenGradient edges={['top']} style={styles.container}>
             <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
@@ -204,6 +206,7 @@ export default function DatesScreen() {
                 onClose={() => setMatchModalVisible(false)}
             />
         </ScreenGradient>
+        </TabSwipeView>
     );
 }
 

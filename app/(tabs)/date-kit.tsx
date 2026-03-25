@@ -10,6 +10,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { DateKitHero } from '@/components/date-kit/date-kit-hero';
 import { DateKitSectionCard } from '@/components/date-kit/date-kit-section-card';
 import { DateKitTipPill } from '@/components/date-kit/date-kit-tip-pill';
+import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 
 type DateKitFilter = 'all' | 'flow' | 'confidence' | 'starters';
 
@@ -148,6 +149,7 @@ export default function DateKitScreen() {
     };
 
     return (
+        <TabSwipeView route="/(tabs)/date-kit">
         <ScreenGradient edges={['top']} style={styles.container}>
             <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
@@ -283,6 +285,7 @@ export default function DateKitScreen() {
                 </Animated.View>
             </ScrollView>
         </ScreenGradient>
+        </TabSwipeView>
     );
 }
 
