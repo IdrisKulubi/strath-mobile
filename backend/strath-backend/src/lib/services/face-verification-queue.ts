@@ -122,15 +122,7 @@ export async function claimFaceVerificationJobs(limit: number, workerId: string)
         returning *
     `);
 
-    return ((result.rows ?? []) as FaceVerificationJob[]).map((job) => ({
-        ...job,
-        createdAt: new Date(job.createdAt),
-        updatedAt: new Date(job.updatedAt),
-        availableAt: new Date(job.availableAt),
-        lockedAt: job.lockedAt ? new Date(job.lockedAt) : null,
-        leaseExpiresAt: job.leaseExpiresAt ? new Date(job.leaseExpiresAt) : null,
-        completedAt: job.completedAt ? new Date(job.completedAt) : null,
-    }));
+    return (result.rows ?? []).map(normalizeFaceVerificationJobRow);
 }
 
 export async function completeFaceVerificationJob(jobId: string) {
@@ -247,4 +239,51 @@ export async function getRetryableFaceVerificationJobCounts() {
               failed_count?: number;
           }
         | undefined) ?? {};
+}
+
+function normalizeFaceVerificationJobRow(row: Record<string, unknown>): FaceVerificationJob {
+    return {
+        id: String(row.id),
+        jobType: String(row.job_type ?? row.jobType ?? ""),
+        status: String(row.status ?? ""),
+        userId: toNullableString(row.user_id ?? row.userId),
+        sessionId: toNullableString(row.session_id ?? row.sessionId) as FaceVerificationJob["sessionId"],
+        assetKey: toNullableString(row.asset_key ?? row.assetKey),
+        priority: Number(row.priority ?? 0),
+        attempts: Number(row.attempts ?? 0),
+        maxAttempts: Number(row.max_attempts ?? row.maxAttempts ?? 0),
+        payload: isRecord(row.payload) ? row.payload : {},
+        availableAt: toDate(row.available_at ?? row.availableAt),
+        lockedAt: toNullableDate(row.locked_at ?? row.lockedAt),
+        leaseExpiresAt: toNullableDate(row.lease_expires_at ?? row.leaseExpiresAt),
+        claimedBy: toNullableString(row.claimed_by ?? row.claimedBy),
+        lastError: toNullableString(row.last_error ?? row.lastError),
+        completedAt: toNullableDate(row.completed_at ?? row.completedAt),
+        createdAt: toDate(row.created_at ?? row.createdAt),
+        updatedAt: toDate(row.updated_at ?? row.updatedAt),
+    };
+}
+
+function toDate(value: unknown) {
+    return value instanceof Date ? value : new Date(String(value));
+}
+
+function toNullableDate(value: unknown) {
+    if (!value) {
+        return null;
+    }
+
+    return value instanceof Date ? value : new Date(String(value));
+}
+
+function toNullableString(value: unknown) {
+    if (value === null || value === undefined || value === "") {
+        return null;
+    }
+
+    return String(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
