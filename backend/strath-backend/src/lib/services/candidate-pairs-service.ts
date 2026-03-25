@@ -294,42 +294,19 @@ async function getMatchedUserIds(userId: string) {
 
 function buildBoostedCompatibilityScore(
     baseScore: number,
-    currentProfile: typeof profiles.$inferSelect,
-    candidateProfile: typeof profiles.$inferSelect,
-    candidateUserLastActive?: Date | null,
+    _currentProfile: typeof profiles.$inferSelect,
+    _candidateProfile: typeof profiles.$inferSelect,
+    _candidateUserLastActive?: Date | null,
 ) {
-    let score = baseScore;
-
-    if (currentProfile.university && candidateProfile.university && currentProfile.university === candidateProfile.university) {
-        score += 6;
-    }
-
-    if (candidateUserLastActive) {
-        const daysSinceActive = (Date.now() - candidateUserLastActive.getTime()) / (1000 * 60 * 60 * 24);
-        if (daysSinceActive <= 2) score += 4;
-        else if (daysSinceActive <= 7) score += 2;
-    }
-
-    return Math.max(0, Math.min(100, Math.round(score)));
+    return Math.max(0, Math.min(100, Math.round(baseScore)));
 }
 
 function buildReasons(
     baseReasons: string[],
-    currentProfile: typeof profiles.$inferSelect,
-    candidateProfile: typeof profiles.$inferSelect,
+    _currentProfile: typeof profiles.$inferSelect,
+    _candidateProfile: typeof profiles.$inferSelect,
 ): string[] {
-    const reasons = [...baseReasons];
-
-    if (
-        currentProfile.university &&
-        candidateProfile.university &&
-        currentProfile.university === candidateProfile.university &&
-        !reasons.includes("Same university")
-    ) {
-        reasons.unshift("Same university");
-    }
-
-    return Array.from(new Set(reasons)).slice(0, 4);
+    return Array.from(new Set(baseReasons)).slice(0, 4);
 }
 
 /** When we last showed this user a batch of pairs (createdAt). Used for cooldown.
