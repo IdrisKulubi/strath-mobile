@@ -66,9 +66,14 @@ export async function requireAdminApiSession(req: NextRequest) {
 
 export function isAuthorizedCronRequest(req: NextRequest) {
     const cronSecret = process.env.CRON_SECRET;
+    const vercelCronHeader = req.headers.get("x-vercel-cron");
+
+    if (vercelCronHeader === "1") {
+        return true;
+    }
 
     if (!cronSecret) {
-        return process.env.NODE_ENV !== "production" && req.headers.get("x-vercel-cron") === "1";
+        return process.env.NODE_ENV !== "production";
     }
 
     const authHeader = req.headers.get("authorization") ?? "";

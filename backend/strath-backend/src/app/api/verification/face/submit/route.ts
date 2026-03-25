@@ -19,7 +19,19 @@ export async function POST(req: NextRequest) {
         const result = await submitFaceVerificationSession(session.user.id, input);
 
         if (getFaceVerificationProcessingMode() === "async") {
-            void triggerFaceVerificationWorker(req);
+            const workerTriggered = await triggerFaceVerificationWorker(req);
+
+            if (!workerTriggered && process.env.NODE_ENV !== "production") {
+                const processedSession = await processFaceVerificationSession(result.session.id);
+
+                return successResponse({
+                    ...result,
+                    queued: false,
+                    workerFallback: "inline_dev",
+                    session: processedSession ?? result.session,
+                });
+            }
+
             return successResponse({
                 ...result,
                 queued: true,
@@ -41,19 +53,22 @@ export async function POST(req: NextRequest) {
 async function triggerFaceVerificationWorker(req: NextRequest) {
     const cronSecret = process.env.CRON_SECRET?.trim();
     if (!cronSecret) {
-        return;
+        return false;
     }
 
     try {
         const workerUrl = new URL("/api/worker/face-verification?limit=1", req.nextUrl.origin);
-        await fetch(workerUrl, {
+        const response = await fetch(workerUrl, {
             method: "POST",
             headers: {
                 Authorization: `Bearer ${cronSecret}`,
             },
             cache: "no-store",
         });
+
+        return response.ok;
     } catch (error) {
         console.error("[FaceVerification] Failed to trigger worker after submit", error);
+        return false;
     }
 }
