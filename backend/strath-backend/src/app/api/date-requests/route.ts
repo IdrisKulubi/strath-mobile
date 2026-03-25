@@ -9,6 +9,7 @@ import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
+import { requireMatchmakingAccess } from "@/lib/services/profile-access";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,12 @@ export async function POST(req: NextRequest) {
         const session = await getSessionWithFallback(req);
         if (!session?.user?.id) {
             return errorResponse(new Error("Unauthorized"), 401);
+        }
+
+        try {
+            await requireMatchmakingAccess(session.user.id);
+        } catch (accessError) {
+            return errorResponse(accessError, accessError instanceof Error && accessError.message === "Profile not found" ? 404 : 403);
         }
 
         const body = await req.json();
@@ -114,7 +121,7 @@ export async function POST(req: NextRequest) {
         if (toUser?.pushToken) {
             await sendPushNotification(toUser.pushToken, {
                 title: "New date invite 💜",
-                body: `${fromName} wants to go on a date with you!`,
+                body: `${fromName} wants to go on a date with you`,
                 data: {
                     type: NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED,
                     fromUserId: session.user.id,

@@ -10,12 +10,20 @@ import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 
 interface ProfileViewCtaProps {
-    onAskForDate: () => void;
-    requestSent?: boolean;
+    onOpenToMeet: () => void;
+    onPass?: () => void;
     disabled?: boolean;
+    completed?: boolean;
+    label?: string;
 }
 
-export function ProfileViewCta({ onAskForDate, requestSent = false, disabled = false }: ProfileViewCtaProps) {
+export function ProfileViewCta({
+    onOpenToMeet,
+    onPass,
+    disabled = false,
+    completed = false,
+    label = 'Open to Meet',
+}: ProfileViewCtaProps) {
     const { colors, isDark } = useTheme();
     const scale = useSharedValue(1);
 
@@ -24,13 +32,13 @@ export function ProfileViewCta({ onAskForDate, requestSent = false, disabled = f
     }));
 
     const handlePress = useCallback(() => {
-        if (disabled || requestSent) return;
+        if (disabled || completed) return;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         scale.value = withSpring(0.94, { damping: 10, stiffness: 300 }, () => {
             scale.value = withSpring(1);
         });
-        onAskForDate();
-    }, [disabled, requestSent, onAskForDate, scale]);
+        onOpenToMeet();
+    }, [completed, disabled, onOpenToMeet, scale]);
 
     return (
         <View
@@ -45,20 +53,27 @@ export function ProfileViewCta({ onAskForDate, requestSent = false, disabled = f
             <Animated.View style={[styles.btnWrap, animStyle]}>
                 <Pressable
                     onPress={handlePress}
-                    disabled={disabled || requestSent}
+                    disabled={disabled || completed}
                     style={[
                         styles.btn,
-                        requestSent
+                        completed
                             ? styles.btnSent
                             : { backgroundColor: colors.primary },
-                        (disabled || requestSent) && styles.btnDisabled,
+                        (disabled || completed) && styles.btnDisabled,
                     ]}
                 >
                     <Text style={styles.btnText}>
-                        {requestSent ? '✓ Invite Sent' : 'Send Date Invite 💜'}
+                        {completed ? 'Decision Saved ✓' : label}
                     </Text>
                 </Pressable>
             </Animated.View>
+            {onPass && !completed && !disabled && (
+                <Pressable onPress={onPass} style={styles.passWrap}>
+                    <Text style={[styles.passText, { color: colors.mutedForeground }]}>
+                        Pass
+                    </Text>
+                </Pressable>
+            )}
         </View>
     );
 }
@@ -72,6 +87,15 @@ const styles = StyleSheet.create({
     },
     btnWrap: {
         width: '100%',
+    },
+    passWrap: {
+        alignItems: 'center',
+        paddingVertical: 12,
+        marginTop: 4,
+    },
+    passText: {
+        fontSize: 14,
+        fontWeight: '600',
     },
     btn: {
         borderRadius: 16,

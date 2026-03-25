@@ -13,12 +13,12 @@ import { NavigationDarkTheme, NavigationLightTheme } from '@/constants/theme';
 import { queryClient } from '@/lib/react-query';
 import { ThemeProvider, useThemeContext } from '@/context/theme-context';
 import { ToastProvider } from '@/components/ui/toast';
-import SplashScreen from '@/components/splash-screen';
+import { LaunchExperience } from '@/components/intro/launch-experience';
 import { NoInternetScreen } from '@/components/no-internet-screen';
 import { useNetwork } from '@/hooks/use-network';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
+import { hasCompletedIntroSlides } from '@/lib/intro-storage';
 
-// Prevent the native splash screen from auto-hiding
 ExpoSplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
@@ -29,7 +29,6 @@ function RootLayoutNav() {
   const { theme } = useThemeContext();
   const { isConnected, isLoading, refresh } = useNetwork();
 
-  // Show no internet screen if not connected (and not still loading initial check)
   if (!isLoading && !isConnected) {
     return (
       <NavThemeProvider value={theme === 'dark' ? NavigationDarkTheme : NavigationLightTheme}>
@@ -41,12 +40,13 @@ function RootLayoutNav() {
 
   return (
     <NavThemeProvider value={theme === 'dark' ? NavigationDarkTheme : NavigationLightTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
+        <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="chat/[matchId]" />
         <Stack.Screen name="onboarding" />
+        <Stack.Screen name="verification" />
         <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Modal' }} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="edit-profile" />
@@ -67,36 +67,45 @@ function NotificationsBootstrap() {
 }
 
 export default function RootLayout() {
-  const [appIsReady, setAppIsReady] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
+  const [bootstrap, setBootstrap] = useState<{ isNewUserIntro: boolean } | null>(null);
+  const [showLaunch, setShowLaunch] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function prepare() {
       try {
-        // Pre-load any resources or data here
-        await new Promise(resolve => setTimeout(resolve, 500));
+        const [, slidesDone] = await Promise.all([
+          new Promise<void>((resolve) => setTimeout(resolve, 350)),
+          hasCompletedIntroSlides(),
+        ]);
+        if (!cancelled) {
+          setBootstrap({ isNewUserIntro: !slidesDone });
+        }
       } catch (e) {
         console.warn(e);
+        if (!cancelled) {
+          setBootstrap({ isNewUserIntro: true });
+        }
       } finally {
-        setAppIsReady(true);
-        // Hide the native splash screen
-        await ExpoSplashScreen.hideAsync();
+        if (!cancelled) {
+          await ExpoSplashScreen.hideAsync();
+        }
       }
     }
 
     prepare();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const handleSplashFinish = useCallback(() => {
-    setShowSplash(false);
+  const handleLaunchComplete = useCallback(() => {
+    setShowLaunch(false);
   }, []);
 
-  if (!appIsReady) {
+  if (!bootstrap) {
     return null;
-  }
-
-  if (showSplash) {
-    return <SplashScreen onFinish={handleSplashFinish} />;
   }
 
   return (
@@ -105,8 +114,17 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
             <ToastProvider>
-              <NotificationsBootstrap />
-              <RootLayoutNav />
+              {showLaunch ? (
+                <LaunchExperience
+                  isNewUserIntro={bootstrap.isNewUserIntro}
+                  onComplete={handleLaunchComplete}
+                />
+              ) : (
+                <>
+                  <NotificationsBootstrap />
+                  <RootLayoutNav />
+                </>
+              )}
             </ToastProvider>
           </ThemeProvider>
         </QueryClientProvider>

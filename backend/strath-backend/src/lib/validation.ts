@@ -31,6 +31,7 @@ export const updateProfileSchema = z.object({
     anonymousAvatar: z.string().nullable().optional(),
     isComplete: z.boolean().nullable().optional(),
     profileCompleted: z.boolean().nullable().optional(),
+    aiConsentGranted: z.boolean().nullable().optional(),
     profilePhoto: z.string().nullable().optional(),
     // New enhanced onboarding fields
     qualities: z.array(z.string()).nullable().optional(),
@@ -72,6 +73,15 @@ export const dateRequestCreateSchema = z.object({
 
 export const dateRequestRespondSchema = z.object({
     action: z.enum(["accept", "decline"]),
+});
+
+export const pairRespondSchema = z.object({
+    decision: z.enum(["open_to_meet", "passed"]),
+});
+
+export const pairGenerationSchema = z.object({
+    userId: z.string().optional(),
+    limit: z.number().int().min(1).max(1000).optional(),
 });
 
 export const dateFeedbackSchema = z.object({

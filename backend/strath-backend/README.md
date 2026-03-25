@@ -73,3 +73,35 @@ This is the backend for the StrathSpace 2.0 mobile app, built with Next.js App R
 - `src/db`: Drizzle schema and config.
 - `src/lib`: Utility functions (auth, db, matching, pusher, validation).
 - `src/scripts`: Database scripts (seed).
+
+## Face Verification Operations
+
+Face verification is configured to run in async-first mode in production.
+
+- User submit requests queue work through `POST /api/verification/face/submit`.
+- The queue worker runs through `GET /api/worker/face-verification`.
+- Vercel cron is configured in [vercel.json](C:\Users\Idris Kulubi\Desktop\sidequests\active\smobile\strath-mobile\backend\strath-backend\vercel.json) to call the worker directly every minute.
+- `GET /api/cron/face-verification` remains available as a compatibility and recovery trigger, but it now simply drains queued jobs.
+- Profile photo uploads are pre-audited into verification-ready metadata so repeated verification attempts can reuse face/readiness information.
+
+Required environment variables:
+
+- `CRON_SECRET`: shared secret for cron-triggered routes.
+- `FACE_VERIFICATION_PROCESSING_MODE=async`: keeps submit lightweight and lets cron own processing.
+- `FACE_VERIFICATION_CRON_BATCH_SIZE=20`: launch-ready compatibility batch size for the cron recovery route.
+- `FACE_VERIFICATION_WORKER_BATCH_SIZE=20`: recommended launch claim size per worker run.
+- `FACE_VERIFICATION_WORKER_CONCURRENCY=4`: recommended launch parallel jobs per worker.
+- `FACE_VERIFICATION_COMPARISON_CONCURRENCY=2`: controls parallel profile-photo comparisons inside one session.
+- `FACE_VERIFICATION_MAX_PROFILE_COMPARISONS=3`: limits how many profile photos we compare per attempt.
+- `FACE_VERIFICATION_JOB_LEASE_SECONDS=120`: recommended lease window for launch traffic.
+- `FACE_VERIFICATION_JOB_MAX_ATTEMPTS=5`: max retries before a job is marked failed.
+- `FACE_VERIFICATION_JOB_RETRY_DELAY_SECONDS=15`: recommended base backoff between retries.
+- `FACE_VERIFICATION_PHOTO_AUDIT_VERSION=profile_photo_audit_v1`: version tag for precomputed photo metadata.
+
+For local debugging only, you can temporarily set `FACE_VERIFICATION_PROCESSING_MODE=inline` to process a submission immediately inside the request.
+
+Admin/ops visibility:
+
+- `GET /api/admin/verification/overview`
+- Returns queue depth, worker throughput, queue wait times, photo-audit readiness metrics, ops alerts, status breakdowns, attention-required sessions, and recent processed sessions.
+- Requires an admin session or admin bearer token.

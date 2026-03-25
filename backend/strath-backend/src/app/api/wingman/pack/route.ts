@@ -17,6 +17,7 @@ import { agentSearch } from "@/services/agent-search";
 import { rankCandidates } from "@/services/ranking-service";
 import { generateQuickExplanations } from "@/services/explanation-service";
 import { getAgentContext } from "@/services/agent-context";
+import { AI_CONSENT_REQUIRED_MESSAGE, hasAiConsent } from "@/lib/ai-consent";
 
 export const dynamic = "force-dynamic";
 
@@ -159,6 +160,10 @@ export async function GET(req: NextRequest) {
         const session = await getSession(req);
         if (!session?.user?.id) return errorResponse("Unauthorized", 401);
         const userId = session.user.id;
+
+        if (!(await hasAiConsent(userId))) {
+            return errorResponse(AI_CONSENT_REQUIRED_MESSAGE, 403);
+        }
 
         const reg = await db.execute(sql`select to_regclass('public.wingman_links') as t`);
         const tableName = (reg.rows?.[0] as { t?: string | null } | undefined)?.t ?? null;

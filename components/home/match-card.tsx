@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -21,13 +22,30 @@ import { MatchReasons } from './match-reasons';
 interface MatchCardProps {
     match: DailyMatch;
     index: number;
-    onAskForDate: (match: DailyMatch) => void;
-    onSkip: (userId: string) => void;
+    onOpenToMeet: (match: DailyMatch) => void;
+    onPass: (match: DailyMatch) => void;
+    onViewProfile?: (match: DailyMatch) => void;
 }
 
-export function MatchCard({ match, index, onAskForDate, onSkip }: MatchCardProps) {
+function buildIdentityLine(match: DailyMatch) {
+    const parts = [match.course, match.university].filter(Boolean);
+    if (parts.length === 0) return 'Curated for you today';
+    if (parts.length === 1) return parts[0] as string;
+    return `${parts[0]} • ${parts[1]}`;
+}
+
+function buildExpiryText(expiresAt: string) {
+    const remainingMs = new Date(expiresAt).getTime() - Date.now();
+    const remainingHours = Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60)));
+    if (remainingHours <= 1) return 'Resets in under 1 hour';
+    return `Resets in ${remainingHours} hours`;
+}
+
+export function MatchCard({ match, index, onOpenToMeet, onPass, onViewProfile }: MatchCardProps) {
     const { colors, isDark } = useTheme();
     const router = useRouter();
+    const identityLine = buildIdentityLine(match);
+    const expiryText = buildExpiryText(match.expiresAt);
 
     const askScale = useSharedValue(1);
     const skipScale = useSharedValue(1);
@@ -42,24 +60,31 @@ export function MatchCard({ match, index, onAskForDate, onSkip }: MatchCardProps
         viewScale.value = withSpring(0.96, { damping: 10, stiffness: 300 }, () => {
             viewScale.value = withSpring(1);
         });
-        router.push(`/profile/${match.userId}`);
-    }, [match.userId, router, viewScale]);
+        if (onViewProfile) {
+            onViewProfile(match);
+        } else {
+            router.push({
+                pathname: '/profile/[userId]',
+                params: { userId: match.userId, pairId: match.pairId },
+            });
+        }
+    }, [match, onViewProfile, router, viewScale]);
 
-    const handleAskForDate = useCallback(() => {
+    const handleOpenToMeet = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         askScale.value = withSpring(0.94, { damping: 10, stiffness: 300 }, () => {
             askScale.value = withSpring(1);
         });
-        onAskForDate(match);
-    }, [match, onAskForDate, askScale]);
+        onOpenToMeet(match);
+    }, [match, onOpenToMeet, askScale]);
 
-    const handleSkip = useCallback(() => {
+    const handlePass = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         skipScale.value = withTiming(0.94, { duration: 80 }, () => {
             skipScale.value = withSpring(1);
         });
-        onSkip(match.userId);
-    }, [match.userId, onSkip, skipScale]);
+        onPass(match);
+    }, [match, onPass, skipScale]);
 
     return (
         <Animated.View
@@ -69,11 +94,10 @@ export function MatchCard({ match, index, onAskForDate, onSkip }: MatchCardProps
                 styles.card,
                 {
                     backgroundColor: isDark ? colors.card : '#fff',
-                    borderColor: colors.border,
+                    shadowColor: isDark ? '#000' : '#160b28',
                 },
             ]}
         >
-            {/* Photo */}
             <Pressable onPress={handleViewProfile} style={styles.photoWrap}>
                 {match.profilePhoto ? (
                     <CachedImage
@@ -86,28 +110,31 @@ export function MatchCard({ match, index, onAskForDate, onSkip }: MatchCardProps
                         <Ionicons name="person-circle-outline" size={72} color={colors.mutedForeground} />
                     </View>
                 )}
-                {/* Gradient overlay at bottom of photo */}
-                <View style={styles.photoOverlay} />
-                {/* Name + age on photo */}
-                <View style={styles.photoNameWrap}>
-                    <Text style={styles.photoName}>
-                        {match.firstName}, {match.age}
-                    </Text>
-                    {match.course && (
-                        <Text style={styles.photoCourse}>{match.course}</Text>
-                    )}
+                <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.75)']}
+                    style={styles.photoGradient}
+                    pointerEvents="none"
+                />
+                <View style={styles.photoMetaRow}>
+                    <View style={styles.photoNameWrap}>
+                        <Text style={styles.photoName}>
+                            {match.firstName}, {match.age}
+                        </Text>
+                        <Text style={styles.photoCourse}>{identityLine}</Text>
+                    </View>
+                    <View style={styles.scoreBadge}>
+                        <Text style={styles.scoreBadgeValue}>{match.compatibilityScore}%</Text>
+                        <Text style={styles.scoreBadgeLabel}>Vibe Match</Text>
+                    </View>
                 </View>
             </Pressable>
 
-            {/* Body */}
             <View style={styles.body}>
-                {/* Compatibility bar */}
                 <CompatibilityBar score={match.compatibilityScore} animationDelay={index * 80 + 200} />
-
-                {/* Why you match */}
                 <MatchReasons reasons={match.reasons} />
-
-                {/* CTAs */}
+                <Text style={[styles.refreshText, { color: colors.mutedForeground }]}>
+                    {expiryText}
+                </Text>
                 <View style={styles.ctaRow}>
                     <Animated.View style={[styles.ctaViewWrap, viewAnimStyle]}>
                         <Pressable
@@ -115,8 +142,8 @@ export function MatchCard({ match, index, onAskForDate, onSkip }: MatchCardProps
                             style={[
                                 styles.ctaView,
                                 {
-                                    borderColor: colors.border,
-                                    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                                    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)',
+                                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)',
                                 },
                             ]}
                         >
@@ -126,28 +153,45 @@ export function MatchCard({ match, index, onAskForDate, onSkip }: MatchCardProps
                         </Pressable>
                     </Animated.View>
 
-                    {match.requestSent ? (
-                        <View style={[styles.ctaAsk, styles.ctaAskSent]}>
-                            <Ionicons name="checkmark-circle" size={16} color="#fff" />
-                            <Text style={styles.ctaAskText}>Request Sent</Text>
-                        </View>
-                    ) : (
-                        <Animated.View style={[styles.ctaAskWrap, askAnimStyle]}>
-                            <Pressable onPress={handleAskForDate} style={styles.ctaAsk}>
-                                <Text style={styles.ctaAskText}>Send Date Invite</Text>
-                            </Pressable>
-                        </Animated.View>
-                    )}
+                    <Animated.View style={[styles.ctaAskWrap, askAnimStyle]}>
+                        <Pressable
+                            onPress={match.currentUserDecision === 'pending' ? handleOpenToMeet : undefined}
+                            disabled={match.currentUserDecision !== 'pending'}
+                            style={[
+                                styles.ctaAsk,
+                                match.currentUserDecision === 'open_to_meet' && styles.ctaAskSent,
+                            ]}
+                        >
+                            {match.currentUserDecision === 'open_to_meet' ? (
+                                <View style={[styles.ctaAskInner, styles.ctaAskSentInner]}>
+                                    <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                                    <Text style={styles.ctaAskText}>Decision Saved</Text>
+                                </View>
+                            ) : (
+                                <LinearGradient
+                                    colors={['#ec4899', '#e91e8c']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={StyleSheet.absoluteFill}
+                                >
+                                    <View style={styles.ctaAskInner}>
+                                        <Text style={styles.ctaAskText}>Open to Meet</Text>
+                                    </View>
+                                </LinearGradient>
+                            )}
+                        </Pressable>
+                    </Animated.View>
                 </View>
 
-                {/* Skip */}
-                <Animated.View style={[styles.skipWrap, skipAnimStyle]}>
-                    <Pressable onPress={handleSkip} style={styles.skipBtn}>
-                        <Text style={[styles.skipText, { color: colors.mutedForeground }]}>
-                            Skip
-                        </Text>
-                    </Pressable>
-                </Animated.View>
+                {match.currentUserDecision === 'pending' && (
+                    <Animated.View style={[styles.skipWrap, skipAnimStyle]}>
+                        <Pressable onPress={handlePass} style={styles.skipBtn}>
+                            <Text style={[styles.skipText, { color: colors.mutedForeground }]}>
+                                Pass
+                            </Text>
+                        </Pressable>
+                    </Animated.View>
+                )}
             </View>
         </Animated.View>
     );
@@ -155,15 +199,25 @@ export function MatchCard({ match, index, onAskForDate, onSkip }: MatchCardProps
 
 const styles = StyleSheet.create({
     card: {
-        borderRadius: 20,
-        borderWidth: 1,
+        borderRadius: 28,
         overflow: 'hidden',
         marginHorizontal: 16,
-        marginBottom: 16,
+        marginBottom: 20,
+        shadowOpacity: 0.12,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 10 },
+        elevation: 6,
     },
     photoWrap: {
-        height: 220,
+        height: 320,
         position: 'relative',
+    },
+    photoGradient: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: 120,
     },
     photo: {
         width: '100%',
@@ -173,92 +227,126 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    photoOverlay: {
+    photoMetaRow: {
         position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 80,
-        backgroundColor: 'rgba(0,0,0,0.35)',
+        left: 16,
+        right: 16,
+        bottom: 16,
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        justifyContent: 'space-between',
+        gap: 12,
     },
     photoNameWrap: {
-        position: 'absolute',
-        bottom: 12,
-        left: 14,
-        gap: 2,
+        flex: 1,
+        gap: 4,
     },
     photoName: {
         color: '#fff',
-        fontSize: 20,
-        fontWeight: '700',
+        fontSize: 31,
+        fontWeight: '800',
+        letterSpacing: -0.8,
+        lineHeight: 34,
         textShadowColor: 'rgba(0,0,0,0.5)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 3,
     },
     photoCourse: {
-        color: 'rgba(255,255,255,0.85)',
-        fontSize: 13,
-        fontWeight: '500',
+        color: 'rgba(255,255,255,0.9)',
+        fontSize: 14,
+        fontWeight: '600',
         textShadowColor: 'rgba(0,0,0,0.4)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 2,
     },
+    scoreBadge: {
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.16)',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        minWidth: 86,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    scoreBadgeValue: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: '800',
+        lineHeight: 20,
+    },
+    scoreBadgeLabel: {
+        color: 'rgba(255,255,255,0.88)',
+        fontSize: 11,
+        fontWeight: '600',
+        textTransform: 'lowercase',
+    },
     body: {
-        padding: 16,
-        gap: 12,
+        paddingHorizontal: 18,
+        paddingTop: 18,
+        paddingBottom: 16,
+        gap: 16,
+    },
+    refreshText: {
+        fontSize: 12,
+        fontWeight: '500',
     },
     ctaRow: {
         flexDirection: 'row',
-        gap: 10,
+        gap: 12,
         marginTop: 2,
     },
     ctaViewWrap: {
         flex: 1,
     },
     ctaView: {
-        borderRadius: 14,
+        borderRadius: 18,
         borderWidth: 1,
-        paddingVertical: 13,
+        paddingVertical: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 46,
+        minHeight: 56,
     },
     ctaViewText: {
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 15,
+        fontWeight: '700',
     },
     ctaAskWrap: {
         flex: 1,
     },
     ctaAsk: {
         flex: 1,
-        backgroundColor: '#e91e8c',
-        borderRadius: 14,
-        paddingVertical: 13,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'row',
-        gap: 6,
-        minHeight: 46,
+        borderRadius: 18,
+        overflow: 'hidden',
+        minHeight: 56,
+        position: 'relative',
     },
     ctaAskSent: {
         backgroundColor: '#10b981',
+    },
+    ctaAskInner: {
         flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 56,
+    },
+    ctaAskSentInner: {
+        flexDirection: 'row',
+        gap: 8,
     },
     ctaAskText: {
         color: '#fff',
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '700',
     },
     skipWrap: {
         alignItems: 'center',
     },
     skipBtn: {
-        paddingVertical: 6,
+        paddingVertical: 4,
         paddingHorizontal: 16,
     },
     skipText: {
-        fontSize: 13,
-        fontWeight: '500',
+        fontSize: 14,
+        fontWeight: '600',
     },
 });

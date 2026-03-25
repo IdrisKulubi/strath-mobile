@@ -9,6 +9,7 @@ import type {
     WingmanPackResponse,
     WingmanStatusResponse,
 } from "@/types/wingman";
+import { AI_CONSENT_REQUIRED_MESSAGE } from "@/lib/ai-consent";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://www.strathspace.com";
 
@@ -50,18 +51,25 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     return (json?.data ?? json) as T;
 }
 
-export function useWingmanStatus() {
+export function useWingmanStatus(enabled: boolean = true) {
     return useQuery<WingmanStatusResponse>({
         queryKey: wingmanKeys.status(),
         queryFn: () => apiFetch<WingmanStatusResponse>("/api/wingman/status"),
+        enabled,
         staleTime: 15 * 1000,
     });
 }
 
-export function useStartWingmanRound() {
+export function useStartWingmanRound(enabled: boolean = true) {
     const queryClient = useQueryClient();
     return useMutation<WingmanLinkResponse, Error>({
-        mutationFn: () => apiFetch<WingmanLinkResponse>("/api/wingman/link", { method: "POST" }),
+        mutationFn: () => {
+            if (!enabled) {
+                throw new Error(AI_CONSENT_REQUIRED_MESSAGE);
+            }
+
+            return apiFetch<WingmanLinkResponse>("/api/wingman/link", { method: "POST" });
+        },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: wingmanKeys.status() });
             queryClient.invalidateQueries({ queryKey: wingmanKeys.history() });
@@ -69,10 +77,11 @@ export function useStartWingmanRound() {
     });
 }
 
-export function useWingmanHistory(limit: number = 5) {
+export function useWingmanHistory(limit: number = 5, enabled: boolean = true) {
     return useQuery<WingmanHistoryResponse>({
         queryKey: wingmanKeys.history(),
         queryFn: () => apiFetch<WingmanHistoryResponse>(`/api/wingman/history?limit=${limit}`),
+        enabled,
         staleTime: 60 * 1000,
     });
 }

@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-helpers';
+import { isVerificationRequiredError, parseApiError } from '@/lib/api-errors';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export interface DailyMatch {
+    pairId: string;
     userId: string;
     firstName: string;
     age: number;
@@ -15,121 +17,112 @@ export interface DailyMatch {
     personalityTags?: string[];
     course?: string;
     university?: string;
-    /** Whether the current user has already sent a date request to this match */
-    requestSent?: boolean;
-    /** Whether the current user has skipped this match today */
-    skipped?: boolean;
+    currentUserDecision: 'pending' | 'open_to_meet' | 'passed';
+    status: 'active' | 'mutual' | 'closed' | 'expired';
+    expiresAt: string;
+    expiresInMs: number;
 }
 
-// ---------------------------------------------------------------------------
-// Mock data — replace with real API calls once backend endpoints are live
-// ---------------------------------------------------------------------------
-
-const MOCK_DAILY_MATCHES: DailyMatch[] = [
-    {
-        userId: 'match-user-1',
-        firstName: 'Amara',
-        age: 22,
-        profilePhoto: undefined,
-        compatibilityScore: 86,
-        reasons: ['Afrobeats', 'Late-night conversations', 'Startup culture'],
-        bio: 'CS student who loves building things and good music. Looking for someone to explore the city with.',
-        interests: ['Tech', 'Music', 'Art', 'Travel'],
-        personalityTags: ['Night owl', 'Ambivert', 'Deep talks'],
-        course: 'Computer Science',
-        university: 'Strathmore University',
-    },
-    {
-        userId: 'match-user-2',
-        firstName: 'Jordan',
-        age: 23,
-        profilePhoto: undefined,
-        compatibilityScore: 79,
-        reasons: ['Tech & startups', 'Introvert energy', 'Film lover'],
-        bio: 'Finance student by day, film buff by night. Always up for a good conversation over coffee.',
-        interests: ['Film', 'Finance', 'Books', 'Gaming'],
-        personalityTags: ['Early bird', 'Introvert', 'Light banter'],
-        course: 'Finance',
-        university: 'Strathmore University',
-    },
-    {
-        userId: 'match-user-3',
-        firstName: 'Zara',
-        age: 21,
-        profilePhoto: undefined,
-        compatibilityScore: 74,
-        reasons: ['Fitness goals', 'Spontaneous plans', 'Food adventures'],
-        bio: 'Marketing student with a passion for fitness and trying new restaurants. Let\'s go on an adventure.',
-        interests: ['Fitness', 'Food', 'Travel', 'Fashion'],
-        personalityTags: ['Early bird', 'Extrovert', 'Spontaneous'],
-        course: 'Marketing',
-        university: 'Strathmore University',
-    },
-    {
-        userId: 'match-user-4',
-        firstName: 'Kai',
-        age: 24,
-        profilePhoto: undefined,
-        compatibilityScore: 71,
-        reasons: ['Creative energy', 'Music taste', 'Chill vibes'],
-        bio: 'Design student who loves creating things. Big on music, art, and finding hidden gems in Nairobi.',
-        interests: ['Art', 'Music', 'Design', 'Gaming'],
-        personalityTags: ['Night owl', 'Ambivert', 'Deep talks'],
-        course: 'Design',
-        university: 'Strathmore University',
-    },
-];
-
-// ---------------------------------------------------------------------------
-// Hooks
-// ---------------------------------------------------------------------------
+export interface DailyMatchesResponse {
+    matches: DailyMatch[];
+    nextPairsAvailableAt?: string;
+}
 
 export function useDailyMatches() {
-    return useQuery({
-        queryKey: ['matches', 'daily'],
-        queryFn: async (): Promise<DailyMatch[]> => {
+    const query = useQuery({
+        queryKey: ['candidatePairs', 'daily'],
+        queryFn: async (): Promise<DailyMatchesResponse> => {
             const token = await getAuthToken();
-            if (!token) return [];
-            const res = await fetch(`${API_URL}/api/matches/daily`, {
+            if (!token) return { matches: [] };
+            const res = await fetch(`${API_URL}/api/home/daily-matches`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            if (!res.ok) throw new Error(`Failed to fetch daily matches (${res.status})`);
+            if (!res.ok) {
+                throw await parseApiError(res, `Failed to fetch daily matches (${res.status})`);
+            }
             const json = await res.json();
-            const matches = json?.data?.matches ?? [];
-            return matches;
+            return {
+                matches: json?.data?.matches ?? [],
+                nextPairsAvailableAt: json?.data?.nextPairsAvailableAt,
+            };
         },
-        staleTime: 5 * 60 * 1000, // 5 minutes — matches are daily, no need to refetch often
+        staleTime: 60 * 1000, // 1 minute — ensures fresh pairs after expiry, pull-to-refresh always refetches
+        // Auto-refetch when the soonest displayed match expires so cards disappear without pull-to-refresh
+        refetchInterval: (query) => {
+            const matches = query.state.data?.matches ?? [];
+            if (matches.length === 0) return false;
+            const now = Date.now();
+            const soonestMs = Math.min(...matches.map((m) => new Date(m.expiresAt).getTime()));
+            const msUntilExpiry = soonestMs - now;
+            if (msUntilExpiry <= 0) return 1000; // already expired, refetch in 1s
+            return msUntilExpiry;
+        },
     });
+
+    return {
+        ...query,
+        verificationRequired: isVerificationRequiredError(query.error),
+    };
 }
 
-export function useSkipMatch() {
+const ALREADY_RESPONDED_MSG = 'You have already responded to this pair';
+
+export function useRespondToDailyPair() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async (userId: string) => {
+        mutationFn: async (payload: { pairId: string; decision: 'open_to_meet' | 'passed' }) => {
             const token = await getAuthToken();
             if (!token) throw new Error('Not authenticated');
-            const res = await fetch(`${API_URL}/api/matches/daily/${userId}/skip`, {
+            const res = await fetch(`${API_URL}/api/pairs/${payload.pairId}/respond`, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ decision: payload.decision }),
             });
-            if (!res.ok) throw new Error(`Failed to skip match (${res.status})`);
-            return { userId };
+            if (!res.ok) {
+                throw await parseApiError(res, `Failed to respond to pair (${res.status})`);
+            }
+            return payload;
         },
-        onSuccess: ({ userId }) => {
-            queryClient.setQueryData<DailyMatch[]>(['matches', 'daily'], (prev) =>
-                prev ? prev.filter((m) => m.userId !== userId) : prev
-            );
+        onSuccess: ({ pairId, decision }) => {
+            if (decision === 'passed') {
+                queryClient.setQueryData<DailyMatchesResponse>(['candidatePairs', 'daily'], (prev) =>
+                    prev ? { ...prev, matches: prev.matches.filter((m) => m.pairId !== pairId) } : prev
+                );
+            } else {
+                queryClient.setQueryData<DailyMatchesResponse>(['candidatePairs', 'daily'], (prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              matches: prev.matches.map((m) =>
+                                  m.pairId === pairId ? { ...m, currentUserDecision: 'open_to_meet' as const } : m
+                              ),
+                          }
+                        : prev
+                );
+            }
+            queryClient.invalidateQueries({ queryKey: ['candidatePairs', 'daily'] });
+            queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
+            queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+        },
+        onError: (error, { pairId, decision }) => {
+            if (
+                error?.message?.includes(ALREADY_RESPONDED_MSG) &&
+                decision === 'open_to_meet'
+            ) {
+                queryClient.setQueryData<DailyMatchesResponse>(['candidatePairs', 'daily'], (prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              matches: prev.matches.map((m) =>
+                                  m.pairId === pairId ? { ...m, currentUserDecision: 'open_to_meet' as const } : m
+                              ),
+                          }
+                        : prev
+                );
+            }
         },
     });
-}
-
-export function useMarkRequestSent() {
-    const queryClient = useQueryClient();
-    return (userId: string) => {
-        queryClient.setQueryData<DailyMatch[]>(['matches', 'daily'], (prev) =>
-            prev
-                ? prev.map((m) => (m.userId === userId ? { ...m, requestSent: true } : m))
-                : prev
-        );
-    };
 }

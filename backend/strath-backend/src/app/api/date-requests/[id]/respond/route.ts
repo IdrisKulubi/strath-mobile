@@ -103,8 +103,8 @@ export async function PATCH(
             const fromUser = await db.query.user.findFirst({ where: eq(userTable.id, request.fromUserId) });
             if (fromUser?.pushToken) {
                 await sendPushNotification(fromUser.pushToken, {
-                    title: "Date invite accepted! 💜",
-                    body: `${toName} said yes! Time to set up your date.`,
+                    title: "Date invite accepted 💜",
+                    body: `${toName} said yes! Time to set up your date`,
                     data: { type: NOTIFICATION_TYPES.DATE_REQUEST_ACCEPTED, toUserId: request.toUserId, toName, requestId },
                 });
             }
@@ -113,7 +113,7 @@ export async function PATCH(
             if (fromUser?.pushToken) {
                 await sendPushNotification(fromUser.pushToken, {
                     title: "Date invite declined",
-                    body: "Someone passed this time.",
+                    body: "Someone passed this time",
                     data: { type: NOTIFICATION_TYPES.DATE_REQUEST_DECLINED, toUserId: request.toUserId, requestId },
                 });
             }

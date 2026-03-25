@@ -12,14 +12,13 @@ import { and, eq, lt } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { studySessions } from "@/db/schema";
 import { successResponse, errorResponse } from "@/lib/api-response";
+import { isAuthorizedCronRequest } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-    // Validate cron secret
-    const authHeader = req.headers.get("authorization");
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return errorResponse("Unauthorized", 401);
+    if (!isAuthorizedCronRequest(req)) {
+        return errorResponse(new Error("Unauthorized"), 401);
     }
 
     try {

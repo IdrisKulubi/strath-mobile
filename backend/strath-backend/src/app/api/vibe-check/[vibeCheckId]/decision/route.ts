@@ -93,15 +93,15 @@ export async function POST(
                         // Both said yes → notify both, status moves to "being arranged"
                         if (u1?.pushToken) {
                             await sendPushNotification(u1.pushToken, {
-                                title: "The vibe is real! 🎉",
-                                body: `You and ${u2Name} both want to meet. StrathSpace will reach out soon.`,
+                                title: "The vibe is real 🎉",
+                                body: `You and ${u2Name} both want to meet`,
                                 data: { type: NOTIFICATION_TYPES.DATE_SCHEDULED },
                             });
                         }
                         if (u2?.pushToken) {
                             await sendPushNotification(u2.pushToken, {
-                                title: "The vibe is real! 🎉",
-                                body: `You and ${u1Name} both want to meet. StrathSpace will reach out soon.`,
+                                title: "The vibe is real 🎉",
+                                body: `You and ${u1Name} both want to meet`,
                                 data: { type: NOTIFICATION_TYPES.DATE_SCHEDULED },
                             });
                         }
@@ -118,7 +118,7 @@ export async function POST(
                             if (partnerUser?.pushToken) {
                                 await sendPushNotification(partnerUser.pushToken, {
                                     title: "No worries 👋",
-                                    body: `${thisUserName} decided to pass this time.`,
+                                    body: `${thisUserName} decided to pass this time`,
                                     data: { type: NOTIFICATION_TYPES.DATE_CANCELLED },
                                 });
                             }

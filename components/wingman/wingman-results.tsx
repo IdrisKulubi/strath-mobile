@@ -70,12 +70,12 @@ function WingmanEmptyState() {
             </View>
 
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                Your AI Wingman
+                Your AI Wingman 🪽
             </Text>
 
             <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
                 Describe your vibe and I&apos;ll find your people.{'\n'}
-                Use text or voice — just be you.
+                Text or voice — just be you ✨
             </Text>
 
             <View style={styles.tipsContainer}>
@@ -182,7 +182,7 @@ function NoResults() {
         <Animated.View entering={FadeIn} style={styles.errorContainer}>
             <Text style={{ fontSize: 32 }}>🫣</Text>
             <Text style={[styles.errorText, { color: colors.foreground }]}>
-                No one matched exactly.
+                No one matched exactly 🫣
             </Text>
             <Text style={[styles.errorDetail, { color: colors.mutedForeground }]}>
                 Here&apos;s who came close.

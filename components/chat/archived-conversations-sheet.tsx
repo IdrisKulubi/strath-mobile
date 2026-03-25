@@ -192,10 +192,10 @@ export function ArchivedConversationsSheet({
                 <Archive size={48} color={isDark ? '#64748b' : '#9ca3af'} />
             </View>
             <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                No archived conversations
+                Nothing archived yet 📦
             </Text>
             <Text style={[styles.emptySubtitle, { color: isDark ? '#64748b' : '#9ca3af' }]}>
-                Swipe left on a conversation to archive it
+                Archived chats will appear here when you archive them
             </Text>
         </View>
     );

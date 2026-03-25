@@ -1,16 +1,39 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { useTheme } from '@/hooks/use-theme';
 import { useNotificationCounts, formatBadgeCount } from '@/hooks/use-notification-counts';
+import { useProfile } from '@/hooks/use-profile';
+import { getProfileRoute } from '@/lib/profile-access';
 
 export default function TabLayout() {
   const { colors } = useTheme();
-  const { unreadMessages, incomingRequests } = useNotificationCounts();
-  const datesBadge = incomingRequests ?? 0;
+  const { unreadMessages, datesAttention } = useNotificationCounts();
+  const { data: profile, isLoading } = useProfile();
+  const datesBadge = datesAttention ?? 0;
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: colors.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  const nextRoute = getProfileRoute(profile ?? null);
+  if (nextRoute !== '/(tabs)') {
+    return <Redirect href={nextRoute as any} />;
+  }
 
   return (
     <Tabs
@@ -44,14 +67,6 @@ export default function TabLayout() {
           borderRadius: 9,
         },
       }}>
-      {/* Home — daily matches (default tab) */}
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "heart" : "heart-outline"} color={color} />,
-        }}
-      />
       <Tabs.Screen
         name="profile"
         options={{
@@ -68,10 +83,24 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "home" : "home-outline"} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="pulse"
         options={{
           title: 'Wingman',
           tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "people" : "people-outline"} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="date-kit"
+        options={{
+          title: 'Date Kit',
+          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "reader" : "reader-outline"} color={color} />,
         }}
       />
       {/* Hidden routes — accessible but not shown in tab bar */}

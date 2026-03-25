@@ -4,7 +4,7 @@
 
 **App Name:** Strathspace (or "Campus Community" if dating concerns arise)
 **Category:** Social Networking (NOT Dating)
-**Demo Account:** demo@strathspace.com / AppleReview2026!
+**Sign-In Options:** Sign in with Apple / Continue with Google
 
 ---
 
@@ -30,21 +30,18 @@
 
 ---
 
-## ✅ Step 2: Demo Account Setup
+## ✅ Step 2: Sign-In Verification
 
-**KEEP THE DEMO ACCOUNT!** Apple reviewers need it.
-
-### 2.1 Verify Demo Login Works
+### 2.1 Verify Sign In with Apple Works
 - [ ] Open the app
-- [ ] Tap "Demo Login (For Review)"
-- [ ] Should log in as demo@strathspace.com
+- [ ] Tap "Sign in with Apple"
+- [ ] Complete authentication successfully
 - [ ] Verify profile loads correctly
 
-### 2.2 Demo Account Credentials (for App Store Connect)
-```
-Email: demo@strathspace.com
-Password: AppleReview2026!
-```
+### 2.2 Verify Google Sign-In Works
+- [ ] Tap "Continue with Google"
+- [ ] Complete authentication successfully
+- [ ] Verify profile loads correctly
 
 ---
 
@@ -169,21 +166,18 @@ Initial release of Strathspace - Your Campus Community Hub!
 
 ## ✅ Step 6: Review Information
 
-### 6.1 Demo Account (REQUIRED)
+### 6.1 Authentication Access
 In App Store Connect → App Review Information:
 - [ ] Sign-In Required: **YES**
-- [ ] Demo Account Username: `demo@strathspace.com`
-- [ ] Demo Account Password: `AppleReview2026!`
+- [ ] Notes explain that reviewers can sign in with Apple or Google
 
 ### 6.2 Notes for Reviewer
 ```
 Thank you for reviewing Strathspace!
 
-DEMO ACCOUNT:
-Email: demo@strathspace.com
-Password: AppleReview2026!
-
-Tap "Demo Login (For Review)" on the login screen to access the app.
+LOGIN:
+- Use "Sign in with Apple" on the login screen, or
+- Use "Continue with Google" if preferred
 
 ABOUT THE APP:
 Strathspace is a campus community app exclusively for Strathmore University students in Kenya. It helps students:
@@ -192,7 +186,7 @@ Strathspace is a campus community app exclusively for Strathmore University stud
 - Connect with fellow students
 - Build their campus network
 
-The app requires university email verification for regular sign-up, but the demo account allows full access for review purposes.
+The app requires authentication before use. Core in-app experiences include Home, Find, Dates, Wingman, and Profile/Settings.
 
 If you have any questions, please contact: [your-email@domain.com]
 ```
@@ -208,7 +202,7 @@ If you have any questions, please contact: [your-email@domain.com]
 ## ✅ Step 7: Final Checks Before Submission
 
 ### Code & Functionality
-- [ ] Demo login works on production API
+- [ ] Sign in with Apple works on production API
 - [ ] Google Sign-In works (or is properly hidden)
 - [ ] All screens load without crashes
 - [ ] Events display correctly
@@ -237,7 +231,7 @@ If you have any questions, please contact: [your-email@domain.com]
 2. Click on the build you want to submit
 3. Fill in all required metadata
 4. Add screenshots for all required sizes
-5. Complete the Review Information section with demo credentials
+5. Complete the Review Information section with authentication notes
 6. Click "Submit for Review"
 
 ---
@@ -256,7 +250,7 @@ If you have any questions, please contact: [your-email@domain.com]
 2. **Guideline 5.1.1 - Data Collection:** Must have privacy policy (add to strathspace.com/privacy)
 3. **Guideline 2.1 - Crashes:** Test thoroughly before submission
 4. **Guideline 4.2 - Minimum Functionality:** Ensure all features work (events, opportunities, chat)
-5. **Guideline 5.6 - Developer Code of Conduct:** Demo account must work for reviewers
+5. **Guideline 5.6 - Developer Code of Conduct:** reviewer access instructions must match the shipped app
 
 ---
 

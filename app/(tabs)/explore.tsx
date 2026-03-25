@@ -13,7 +13,9 @@ import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useAiConsent } from '@/hooks/use-ai-consent';
 import { WingmanSearchBar, WingmanResults, VoiceRecordingOverlay, WingmanMatchDetail, ConnectionSentPopup, DropNotification, WeeklyDrop, WeeklyDropStrip, SearchHistory } from '@/components/wingman';
+import { AiConsentCard } from '@/components/ai/ai-consent-card';
 import { isDailyLimitError } from '@/components/wingman/wingman-error-utils';
 import { useAgent, AgentMatch } from '@/hooks/use-agent';
 import { useVoiceInput } from '@/hooks/use-voice-input';
@@ -26,11 +28,12 @@ export default function ExploreScreen() {
   const router = useRouter();
   const { colors, colorScheme } = useTheme();
   useProfile(); // Pre-fetch profile for later use
+  const { hasAiConsent, grantAiConsent, isAiConsentUpdating } = useAiConsent();
   const scrollRef = useRef<ScrollView>(null);
 
   // ===== Wingman (AI Agent) state =====
   const agent = useAgent();
-  const weeklyDrop = useWeeklyDrop();
+  const weeklyDrop = useWeeklyDrop(hasAiConsent);
   const voice = useVoiceInput();
   const { transcript, clearTranscript, error: voiceError } = voice;
   const [selectedMatch, setSelectedMatch] = React.useState<AgentMatch | null>(null);
@@ -214,6 +217,39 @@ export default function ExploreScreen() {
     setSelectedMatch(mappedMatch);
   }, []);
 
+  const handleAllowAi = useCallback(async () => {
+    try {
+      await grantAiConsent();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update AI consent';
+      Alert.alert('AI Features', message);
+    }
+  }, [grantAiConsent]);
+
+  if (!hasAiConsent) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+          <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
+          <View style={styles.header}>
+            <View style={styles.headerTitleRow}>
+              <Text style={[styles.headerTitle, { color: colors.foreground }]}>Find</Text>
+            </View>
+          </View>
+          <View style={styles.consentContainer}>
+            <AiConsentCard
+              title="Allow AI for Find"
+              description="Find uses Google Gemini to understand your prompts, optional voice search, and weekly AI-powered recommendations."
+              isLoading={isAiConsentUpdating}
+              onAllow={handleAllowAi}
+              onOpenPrivacy={() => router.push('/legal?section=privacy')}
+            />
+          </View>
+        </SafeAreaView>
+      </GestureHandlerRootView>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -370,6 +406,11 @@ const styles = StyleSheet.create({
   wingmanContainer: {
     flex: 1,
     position: 'relative',
+  },
+  consentContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   wingmanScroll: {
     flex: 1,

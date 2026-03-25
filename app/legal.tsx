@@ -53,7 +53,7 @@ We typically respond within 24-48 hours.`
     privacy: {
         title: 'Privacy Policy',
         content: `StrathSpace Privacy Policy
-Last Updated: January 2026
+Last Updated: March 2026
 
 1. Information We Collect
 ━━━━━━━━━━━━━━━━━━━━━━━
@@ -62,11 +62,13 @@ We collect information you provide directly:
 • Profile information (bio, interests, preferences)
 • Communications (messages with other users)
 • Usage data (how you interact with the app)
+• If you enable AI features: Wingman prompts, optional voice recordings for transcription, Wingman review responses from friends, and relevant profile details used for AI matching
 
 2. How We Use Your Information
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • To provide and improve our services
 • To match you with compatible users
+• To power optional AI features like Wingman search, weekly AI recommendations, voice transcription, and Wingman packs
 • To communicate with you about your account
 • To ensure safety and prevent abuse
 • To comply with legal obligations
@@ -77,46 +79,64 @@ We do NOT sell your personal information.
 We may share information:
 • With other users (your public profile)
 • With service providers (hosting, analytics)
+• With Google LLC / Google Gemini when you explicitly allow AI features in the app
 • When required by law
 • To protect safety and rights
 
-4. Your Choices
+4. AI Features And Consent
+━━━━━━━━━━━━━━━━━━━━━━
+• AI features are optional and require your permission before we send data to Google Gemini
+• Data sent may include typed Wingman prompts, optional voice recordings, relevant profile details, and Wingman review responses used to generate matches or summaries
+• You can turn AI features off at any time in Settings
+• Turning AI off stops new AI processing for your account
+
+5. Your Choices
 ━━━━━━━━━━━━━━
 • Edit or delete your profile anytime
 • Control your visibility settings
 • Block or report users
 • Request data deletion
 • Opt out of notifications
+• Withdraw AI consent in Settings
 
-5. Data Security
+6. Data Security
 ━━━━━━━━━━━━━━━
 • Encrypted data transmission (HTTPS)
 • Secure password storage
 • Regular security audits
 • Limited employee access
 
-6. Data Retention
+7. Data Retention
 ━━━━━━━━━━━━━━━
 • Active accounts: data retained while active
 • Deleted accounts: data removed within 30 days
 • Messages: deleted when match is removed
 • Logs: retained for 90 days
+• AI permission records are retained to respect your privacy choices and support compliance
 
-7. University Data
+8. University Data
 ━━━━━━━━━━━━━━━━
 • We verify  email addresses
 • We do not access university academic records
 • We operate independently from the university
 
-8. Age Requirement
+9. Third-Party Services
+━━━━━━━━━━━━━━━━━━━━━━
+• Google Sign-In: authentication
+• Google LLC / Google Gemini: optional AI search understanding, voice transcription, and AI-generated recommendations
+• Vercel: hosting and infrastructure
+• Cloudinary/UploadThing: image storage
+• These providers are required to protect shared data with safeguards that are at least equivalent to our own
+
+10. Age Requirement
 ━━━━━━━━━━━━━━━━
 You must be 18 or older to use StrathSpace.
 
-9. Contact Us
+11. Contact Us
 ━━━━━━━━━━━━
 Privacy concerns: privacy@strathspace.com
 
-10. Changes to Policy
+12. Changes to Policy
 ━━━━━━━━━━━━━━━━━━
 We'll notify you of significant changes via email or in-app notification.`
     },

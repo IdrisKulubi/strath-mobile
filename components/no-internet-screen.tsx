@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, StyleSheet, Pressable, Platform, Linking } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,8 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import Animated, { 
-    FadeIn, 
+import Animated, {
+    FadeIn,
     FadeInDown,
     useSharedValue,
     useAnimatedStyle,
@@ -15,19 +15,20 @@ import Animated, {
     withTiming,
     withSequence,
 } from 'react-native-reanimated';
-import { useEffect } from 'react';
 
 interface NoInternetScreenProps {
     onRetry?: () => void;
 }
 
+const H_PAD = 24;
+const CONTENT_MAX = 400;
+
 export function NoInternetScreen({ onRetry }: NoInternetScreenProps) {
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-    
-    // Pulse animation for the WiFi icon
+
     const pulse = useSharedValue(1);
-    
+
     useEffect(() => {
         pulse.value = withRepeat(
             withSequence(
@@ -38,19 +39,17 @@ export function NoInternetScreen({ onRetry }: NoInternetScreenProps) {
             true
         );
     }, [pulse]);
-    
+
     const pulseStyle = useAnimatedStyle(() => ({
         transform: [{ scale: pulse.value }],
     }));
 
     const openSettings = async () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        
+
         if (Platform.OS === 'ios') {
-            // Opens iOS Settings app (WiFi settings)
             await Linking.openURL('App-Prefs:WIFI');
         } else {
-            // Opens Android WiFi settings
             await Linking.sendIntent('android.settings.WIFI_SETTINGS');
         }
     };
@@ -61,89 +60,69 @@ export function NoInternetScreen({ onRetry }: NoInternetScreenProps) {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            <View style={styles.content}>
-                {/* Animated WiFi Icon */}
-                <Animated.View 
-                    entering={FadeIn.duration(500)}
-                    style={[styles.iconContainer, pulseStyle]}
-                >
-                    <LinearGradient
-                        colors={isDark ? ['#3d2459', '#2d1b47'] : ['#F3F4F6', '#E5E7EB']}
-                        style={styles.iconBackground}
-                    >
-                        <Ionicons 
-                            name="wifi-outline" 
-                            size={80} 
-                            color={isDark ? '#6B7280' : '#9CA3AF'} 
-                        />
-                        <View style={styles.slashOverlay}>
-                            <View style={[styles.slash, { backgroundColor: colors.destructive }]} />
-                        </View>
-                    </LinearGradient>
-                </Animated.View>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right', 'bottom']}>
+            <View style={styles.main}>
+                <View style={styles.content}>
+                    <Animated.View entering={FadeIn.duration(500)} style={[styles.iconContainer, pulseStyle]}>
+                        <LinearGradient
+                            colors={isDark ? ['#3d2459', '#2d1b47'] : ['#F3F4F6', '#E5E7EB']}
+                            style={styles.iconBackground}
+                        >
+                            <Ionicons
+                                name="wifi-outline"
+                                size={80}
+                                color={isDark ? '#6B7280' : '#9CA3AF'}
+                            />
+                            <View style={styles.slashOverlay}>
+                                <View style={[styles.slash, { backgroundColor: colors.destructive }]} />
+                            </View>
+                        </LinearGradient>
+                    </Animated.View>
 
-                {/* Title */}
-                <Animated.View entering={FadeInDown.delay(200).duration(500)}>
-                    <Text style={[styles.title, { color: colors.foreground }]}>
-                        No Internet Connection
-                    </Text>
-                </Animated.View>
+                    <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.titleBlock}>
+                        <Text style={[styles.title, { color: colors.foreground }]}>No Internet Connection</Text>
+                    </Animated.View>
 
-                {/* Description */}
-                <Animated.View entering={FadeInDown.delay(300).duration(500)}>
-                    <Text style={[styles.description, { color: colors.mutedForeground }]}>
-                        Your phone is not connected to the internet. To connect, turn off Airplane Mode or connect to a Wi-Fi network.
-                    </Text>
-                </Animated.View>
-
-                {/* Buttons */}
-                <Animated.View 
-                    entering={FadeInDown.delay(400).duration(500)}
-                    style={styles.buttonsContainer}
-                >
-                    {/* Go to Settings Button */}
-                    <Pressable
-                        onPress={openSettings}
-                        style={({ pressed }) => [
-                            styles.settingsButton,
-                            { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F3F4F6' },
-                            pressed && styles.buttonPressed
-                        ]}
-                    >
-                        <Text style={[styles.settingsButtonText, { color: colors.primary }]}>
-                            Go to Settings
+                    <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.descBlock}>
+                        <Text style={[styles.description, { color: colors.mutedForeground }]}>
+                            Your phone is not connected to the internet. To connect, turn off Airplane Mode or connect to a
+                            Wi-Fi network.
                         </Text>
-                    </Pressable>
+                    </Animated.View>
 
-                    {/* Retry Button */}
-                    {onRetry && (
+                    <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.buttonsContainer}>
                         <Pressable
-                            onPress={handleRetry}
+                            onPress={openSettings}
                             style={({ pressed }) => [
-                                styles.retryButton,
-                                pressed && styles.buttonPressed
+                                styles.settingsButton,
+                                { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F3F4F6' },
+                                pressed && styles.buttonPressed,
                             ]}
                         >
-                            <Ionicons name="refresh" size={18} color={colors.mutedForeground} />
-                            <Text style={[styles.retryButtonText, { color: colors.mutedForeground }]}>
-                                Try Again
-                            </Text>
+                            <Text style={[styles.settingsButtonText, { color: colors.primary }]}>Go to Settings</Text>
                         </Pressable>
-                    )}
-                </Animated.View>
+
+                        {onRetry ? (
+                            <Pressable
+                                onPress={handleRetry}
+                                style={({ pressed }) => [styles.retryButton, pressed && styles.buttonPressed]}
+                            >
+                                <Ionicons name="refresh" size={18} color={colors.mutedForeground} />
+                                <Text style={[styles.retryButtonText, { color: colors.mutedForeground }]}>Try Again</Text>
+                            </Pressable>
+                        ) : null}
+                    </Animated.View>
+                </View>
             </View>
 
-            {/* Bottom hint */}
-            <Animated.View 
-                entering={FadeIn.delay(600).duration(500)}
-                style={styles.bottomHint}
-            >
-                <Ionicons name="information-circle-outline" size={16} color={colors.mutedForeground} />
-                <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-                    Make sure Wi-Fi or mobile data is turned on
-                </Text>
-            </Animated.View>
+            <View style={styles.footer}>
+                <Animated.View entering={FadeIn.delay(600).duration(500)} style={styles.bottomHint}>
+                    <Ionicons name="information-circle-outline" size={16} color={colors.mutedForeground} />
+                    <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                        Make sure Wi-Fi or mobile data is turned on
+                    </Text>
+                </Animated.View>
+            </View>
         </SafeAreaView>
     );
 }
@@ -151,20 +130,26 @@ export function NoInternetScreen({ onRetry }: NoInternetScreenProps) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    main: {
+        flex: 1,
         justifyContent: 'center',
-        alignItems: 'center',
+        minHeight: 0,
     },
     content: {
+        width: '100%',
+        maxWidth: CONTENT_MAX,
+        alignSelf: 'center',
         alignItems: 'center',
-        paddingHorizontal: 40,
+        paddingHorizontal: H_PAD,
     },
     iconContainer: {
-        marginBottom: 32,
+        marginBottom: 22,
     },
     iconBackground: {
-        width: 160,
-        height: 160,
-        borderRadius: 80,
+        width: 140,
+        height: 140,
+        borderRadius: 70,
         justifyContent: 'center',
         alignItems: 'center',
         position: 'relative',
@@ -178,58 +163,76 @@ const styles = StyleSheet.create({
     },
     slash: {
         width: 4,
-        height: 100,
+        height: 88,
         borderRadius: 2,
         transform: [{ rotate: '45deg' }],
     },
+    titleBlock: {
+        width: '100%',
+        marginBottom: 10,
+    },
     title: {
-        fontSize: 26,
+        fontSize: 24,
         fontWeight: '700',
         textAlign: 'center',
-        marginBottom: 12,
+        letterSpacing: -0.3,
+    },
+    descBlock: {
+        width: '100%',
+        marginBottom: 26,
     },
     description: {
-        fontSize: 16,
+        fontSize: 15,
         textAlign: 'center',
-        lineHeight: 24,
-        marginBottom: 32,
+        lineHeight: 22,
     },
     buttonsContainer: {
         width: '100%',
-        gap: 16,
+        alignItems: 'stretch',
     },
     settingsButton: {
-        paddingVertical: 16,
-        paddingHorizontal: 32,
+        paddingVertical: 14,
+        paddingHorizontal: 24,
         borderRadius: 14,
         alignItems: 'center',
     },
     settingsButtonText: {
-        fontSize: 17,
+        fontSize: 16,
         fontWeight: '600',
     },
     retryButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 12,
-        gap: 8,
+        paddingVertical: 14,
+        marginTop: 4,
     },
     retryButtonText: {
         fontSize: 15,
         fontWeight: '500',
+        marginLeft: 8,
     },
     buttonPressed: {
         opacity: 0.7,
     },
+    footer: {
+        paddingHorizontal: H_PAD,
+        paddingTop: 12,
+        paddingBottom: 8,
+        alignItems: 'center',
+    },
     bottomHint: {
-        position: 'absolute',
-        bottom: 40,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        justifyContent: 'center',
+        width: '100%',
+        maxWidth: CONTENT_MAX,
+        gap: 8,
     },
     hintText: {
-        fontSize: 13,
+        fontSize: 12,
+        lineHeight: 17,
+        flexShrink: 1,
+        textAlign: 'center',
     },
 });

@@ -22,7 +22,6 @@ import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { AgentMatch } from '@/hooks/use-agent';
 import { BlockReportModal } from '@/components/discover/block-report-modal';
-import { DateRequestSheet } from '@/components/date-request/date-request-sheet';
 import { X, ChatCircle, GraduationCap, Sparkle, UserCircle, CaretLeft } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -65,7 +64,6 @@ export function WingmanMatchDetail({
     const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
     const [showFullProfile, setShowFullProfile] = useState(false);
     const [blockReportMode, setBlockReportMode] = useState<'block' | 'report' | null>(null);
-    const [showDateRequest, setShowDateRequest] = useState(false);
     const translateY = useSharedValue(0);
 
     const photos = useMemo(() => {
@@ -436,17 +434,6 @@ export function WingmanMatchDetail({
                             </ScrollView>
 
                             <View style={[styles.footer, { borderTopColor: colors.border }]}>
-                                {/* Primary CTA: Ask for a Date */}
-                                <Pressable
-                                    onPress={() => {
-                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                        setShowDateRequest(true);
-                                    }}
-                                    style={styles.askDateButton}
-                                >
-                                    <Text style={styles.askDateButtonText}>Ask for a Date 💜</Text>
-                                </Pressable>
-
                                 <View style={styles.footerRow}>
                                     <Pressable
                                         onPress={handleConnect}
@@ -603,17 +590,6 @@ export function WingmanMatchDetail({
                         setBlockReportMode(null);
                     }}
                     onSwitchMode={() => setBlockReportMode(blockReportMode === 'block' ? 'report' : 'block')}
-                />
-            )}
-
-            {/* Date Request Sheet */}
-            {match && (
-                <DateRequestSheet
-                    visible={showDateRequest}
-                    toUserId={match.profile.userId}
-                    toUserName={match.profile.firstName || 'them'}
-                    onClose={() => setShowDateRequest(false)}
-                    onSuccess={() => setShowDateRequest(false)}
                 />
             )}
 

@@ -35,17 +35,14 @@ export function CompatibilityBar({ score, animationDelay = 0 }: CompatibilityBar
 
     return (
         <View style={styles.container}>
-            <View style={[styles.track, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}>
-                <Animated.View
-                    style={[
-                        styles.fill,
-                        fillStyle,
-                        { backgroundColor: colors.primary },
-                    ]}
-                />
+            <Text style={[styles.label, { color: colors.foreground }]}>
+                {score}% Vibe Match
+            </Text>
+            <View style={[styles.track, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)' }]}>
+                <Animated.View style={[styles.fill, fillStyle, { backgroundColor: '#e91e8c' }]} />
             </View>
-            <Text style={[styles.scoreText, { color: colors.primary }]}>
-                {score}%
+            <Text style={[styles.helper, { color: colors.mutedForeground }]}>
+                A strong curated fit for today
             </Text>
         </View>
     );
@@ -53,24 +50,23 @@ export function CompatibilityBar({ score, animationDelay = 0 }: CompatibilityBar
 
 const styles = StyleSheet.create({
     container: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
+        gap: 8,
+    },
+    label: {
+        fontSize: 15,
+        fontWeight: '700',
     },
     track: {
-        flex: 1,
-        height: 6,
-        borderRadius: 3,
+        height: 10,
+        borderRadius: 999,
         overflow: 'hidden',
     },
     fill: {
         height: '100%',
-        borderRadius: 3,
+        borderRadius: 999,
     },
-    scoreText: {
-        fontSize: 14,
-        fontWeight: '700',
-        minWidth: 38,
-        textAlign: 'right',
+    helper: {
+        fontSize: 12,
+        fontWeight: '500',
     },
 });

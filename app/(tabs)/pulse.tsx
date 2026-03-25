@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  Alert,
   ActivityIndicator,
   ScrollView,
   Share,
@@ -22,12 +23,14 @@ import {
 
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
+import { useAiConsent } from '@/hooks/use-ai-consent';
 import {
   useStartWingmanRound,
   useWingmanHistory,
   useWingmanPack,
   useWingmanStatus,
 } from '@/hooks/use-wingman';
+import { AiConsentCard } from '@/components/ai/ai-consent-card';
 import type { AgentMatch } from '@/hooks/use-agent';
 import { WingmanMatchCard, WingmanMatchDetail } from '@/components/wingman';
 import { clearSession, getAuthToken } from '@/lib/auth-helpers';
@@ -84,13 +87,14 @@ export default function WingmanTabScreen() {
   const router = useRouter();
   const { colors, colorScheme } = useTheme();
   const isDark = colorScheme === 'dark';
+  const { hasAiConsent, grantAiConsent, isAiConsentUpdating } = useAiConsent();
 
-  const status = useWingmanStatus();
-  const history = useWingmanHistory(5);
-  const startRound = useStartWingmanRound();
+  const status = useWingmanStatus(hasAiConsent);
+  const history = useWingmanHistory(5, hasAiConsent);
+  const startRound = useStartWingmanRound(hasAiConsent);
 
   const [packEnabled, setPackEnabled] = useState(false);
-  const pack = useWingmanPack(packEnabled);
+  const pack = useWingmanPack(hasAiConsent && packEnabled);
 
   const [selectedMatch, setSelectedMatch] = useState<AgentMatch | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -195,6 +199,31 @@ export default function WingmanTabScreen() {
     },
     [],
   );
+
+  const handleAllowAi = useCallback(async () => {
+    try {
+      await grantAiConsent();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update AI consent';
+      Alert.alert('AI Features', message);
+    }
+  }, [grantAiConsent]);
+
+  if (!hasAiConsent) {
+    return (
+      <ScreenGradient edges={['top']} style={s.root}>
+        <View style={s.consentWrap}>
+          <AiConsentCard
+            title="Allow AI for Wingman"
+            description="Wingman uses Google Gemini to build match suggestions from your prompts, optional voice input, and Wingman review data."
+            isLoading={isAiConsentUpdating}
+            onAllow={handleAllowAi}
+            onOpenPrivacy={() => router.push('/legal?section=privacy')}
+          />
+        </View>
+      </ScreenGradient>
+    );
+  }
 
   // ─── Loading ──────────────────────────────────────────────────────────────
 
@@ -573,6 +602,7 @@ export default function WingmanTabScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   root: { flex: 1 },
+  consentWrap: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
   scroll: { paddingHorizontal: 16, paddingTop: 8 },
   centered: {
     flex: 1,

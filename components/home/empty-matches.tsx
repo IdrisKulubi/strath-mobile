@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
@@ -11,6 +11,13 @@ function getSecondsUntilMidnight(): number {
     return Math.floor((midnight.getTime() - now.getTime()) / 1000);
 }
 
+function getSecondsUntil(targetIso: string): number {
+    const target = new Date(targetIso);
+    const now = Date.now();
+    const diff = Math.floor((target.getTime() - now) / 1000);
+    return Math.max(0, diff);
+}
+
 function formatCountdown(seconds: number): string {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -21,19 +28,38 @@ function formatCountdown(seconds: number): string {
 interface EmptyMatchesProps {
     /** When true, shows the "refreshes tomorrow" countdown. When false, shows "no matches yet" state. */
     allActioned?: boolean;
+    /** ISO timestamp when next pairs will be available (e.g. after cooldown). When set, countdown uses this instead of midnight. */
+    nextPairsAvailableAt?: string;
+    /** Called when countdown reaches 0 so the parent can refetch new pairs. */
+    onCountdownEnd?: () => void;
 }
 
-export function EmptyMatches({ allActioned = false }: EmptyMatchesProps) {
+export function EmptyMatches({ allActioned = false, nextPairsAvailableAt, onCountdownEnd }: EmptyMatchesProps) {
     const { colors, isDark } = useTheme();
-    const [secondsLeft, setSecondsLeft] = useState(getSecondsUntilMidnight);
+    const getSeconds = useCallback(
+        () => (nextPairsAvailableAt ? getSecondsUntil(nextPairsAvailableAt) : getSecondsUntilMidnight()),
+        [nextPairsAvailableAt]
+    );
+    const [secondsLeft, setSecondsLeft] = useState(getSeconds);
+    const hasFiredCountdownEnd = useRef(false);
+
+    useEffect(() => {
+        setSecondsLeft(getSeconds());
+        hasFiredCountdownEnd.current = false;
+    }, [getSeconds]);
 
     useEffect(() => {
         if (!allActioned) return;
         const interval = setInterval(() => {
-            setSecondsLeft(getSecondsUntilMidnight());
+            const next = getSeconds();
+            setSecondsLeft(next);
+            if (next <= 0 && onCountdownEnd && !hasFiredCountdownEnd.current) {
+                hasFiredCountdownEnd.current = true;
+                onCountdownEnd();
+            }
         }, 1000);
         return () => clearInterval(interval);
-    }, [allActioned]);
+    }, [allActioned, getSeconds, onCountdownEnd]);
 
     return (
         <View style={styles.container}>
@@ -44,14 +70,14 @@ export function EmptyMatches({ allActioned = false }: EmptyMatchesProps) {
             {allActioned ? (
                 <>
                     <Text style={[styles.title, { color: colors.foreground }]}>
-                        You've seen everyone for today
+                        Cooking up your next matches🫣
                     </Text>
                     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                        New matches refresh tomorrow
+                        Fresh set drops once done— we&apos;ve got you ✨
                     </Text>
                     <View style={[styles.countdownWrap, { backgroundColor: isDark ? colors.card : '#f5f5f5', borderColor: colors.border }]}>
                         <Text style={[styles.countdownLabel, { color: colors.mutedForeground }]}>
-                            Refreshes in
+                            Resets in
                         </Text>
                         <Text style={[styles.countdown, { color: colors.primary }]}>
                             {formatCountdown(secondsLeft)}
@@ -61,10 +87,10 @@ export function EmptyMatches({ allActioned = false }: EmptyMatchesProps) {
             ) : (
                 <>
                     <Text style={[styles.title, { color: colors.foreground }]}>
-                        No matches yet
+                        Cooking up your next matches🫣
                     </Text>
                     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                        Complete your profile to get your first daily matches
+                        Fresh set drops tomorrow — we&apos;ve got you ✨
                     </Text>
                 </>
             )}
@@ -102,10 +128,12 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         borderWidth: 1,
         paddingHorizontal: 24,
-        paddingVertical: 14,
+        paddingVertical: 18,
         alignItems: 'center',
-        gap: 4,
+        justifyContent: 'center',
+        gap: 6,
         marginTop: 8,
+        minHeight: 72,
     },
     countdownLabel: {
         fontSize: 12,
@@ -117,6 +145,7 @@ const styles = StyleSheet.create({
         fontSize: 28,
         fontWeight: '700',
         letterSpacing: 2,
+        lineHeight: 36,
         fontVariant: ['tabular-nums'],
     },
 });

@@ -15,10 +15,10 @@ import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
-import { ConfirmedMatch, ARRANGEMENT_STATUS_LABELS, VIBE_EMOJIS, VIBE_LABELS } from '@/hooks/use-date-requests';
+import { MutualDate, ARRANGEMENT_STATUS_LABELS } from '@/hooks/use-date-requests';
 
 interface ConfirmedMatchCardProps {
-    match: ConfirmedMatch;
+    match: MutualDate;
     index: number;
 }
 
@@ -38,11 +38,14 @@ function PulseDot({ color }: { color: string }) {
     return <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }, style]} />;
 }
 
-const ARRANGEMENT_COLORS: Record<ConfirmedMatch['arrangementStatus'], string> = {
+const ARRANGEMENT_COLORS: Record<MutualDate['arrangementStatus'], string> = {
+    mutual: '#e91e8c',
     call_pending: '#f59e0b',
-    call_done: '#3b82f6',
     being_arranged: '#e91e8c',
-    date_confirmed: '#10b981',
+    upcoming: '#10b981',
+    completed: '#10b981',
+    cancelled: '#6b7280',
+    expired: '#6b7280',
 };
 
 export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
@@ -57,10 +60,10 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
 
     const handleStartCall = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        if (match.callMatchId) {
-            router.push(`/vibe-check/${match.callMatchId}`);
+        if (match.legacyMatchId) {
+            router.push(`/vibe-check/${match.legacyMatchId}`);
         }
-    }, [match.callMatchId, router]);
+    }, [match.legacyMatchId, router]);
 
     return (
         <Animated.View
@@ -76,7 +79,9 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
             {/* Match badge */}
             <View style={[styles.matchBadge, { backgroundColor: isDark ? 'rgba(233,30,140,0.12)' : 'rgba(233,30,140,0.08)' }]}>
                 <Ionicons name="heart" size={12} color={colors.primary} />
-                <Text style={[styles.matchBadgeText, { color: colors.primary }]}>Date Match</Text>
+                <Text style={[styles.matchBadgeText, { color: colors.primary }]}>
+                    {match.arrangementStatus === 'mutual' ? 'Mutual Match' : 'Date Match'}
+                </Text>
             </View>
 
             {/* Header */}
@@ -101,7 +106,7 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                         </View>
                     )}
                     <Text style={[styles.vibeText, { color: colors.mutedForeground }]}>
-                        {VIBE_EMOJIS[match.vibe]} {VIBE_LABELS[match.vibe]}
+                        Curated for both of you
                     </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
@@ -128,7 +133,7 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
             </View>
 
             {/* Scheduled date details — shown when date is confirmed */}
-            {match.arrangementStatus === 'date_confirmed' && (match.venueName || match.scheduledAt) && (
+            {match.arrangementStatus === 'upcoming' && (match.venueName || match.scheduledAt) && (
                 <View style={[styles.scheduledBlock, { backgroundColor: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)', borderColor: 'rgba(16,185,129,0.25)' }]}>
                     <Ionicons name="calendar" size={16} color="#10b981" />
                     {match.venueName && (
@@ -148,16 +153,34 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
             {match.arrangementStatus === 'call_pending' && (
                 <View style={styles.callSection}>
                     <Text style={[styles.callHint, { color: colors.mutedForeground }]}>
-                        Before you meet, take a quick 3-minute call to confirm the vibe.
+                        Before you meet, take a quick 3-minute call to reduce awkwardness and confirm the vibe.
                     </Text>
                     <Pressable
                         onPress={handleStartCall}
-                        disabled={!match.callMatchId}
-                        style={[styles.callBtn, { backgroundColor: colors.primary, opacity: match.callMatchId ? 1 : 0.6 }]}
+                        disabled={!match.legacyMatchId}
+                        style={[styles.callBtn, { backgroundColor: colors.primary, opacity: match.legacyMatchId ? 1 : 0.6 }]}
                     >
                         <Ionicons name="call-outline" size={16} color="#fff" />
-                        <Text style={styles.callBtnText}>Start 3-min call</Text>
+                        <Text style={styles.callBtnText}>Start 3-Minute Call</Text>
                     </Pressable>
+                </View>
+            )}
+
+            {match.arrangementStatus === 'being_arranged' && (
+                <View style={[styles.scheduledBlock, { backgroundColor: isDark ? 'rgba(233,30,140,0.08)' : 'rgba(233,30,140,0.06)', borderColor: 'rgba(233,30,140,0.25)' }]}>
+                    <Ionicons name="sparkles" size={16} color={colors.primary} />
+                    <Text style={[styles.scheduledText, { color: colors.foreground }]}>
+                        Our team will reach out soon.
+                    </Text>
+                </View>
+            )}
+
+            {match.arrangementStatus === 'mutual' && (
+                <View style={[styles.scheduledBlock, { backgroundColor: isDark ? 'rgba(233,30,140,0.08)' : 'rgba(233,30,140,0.06)', borderColor: 'rgba(233,30,140,0.25)' }]}>
+                    <Ionicons name="sparkles" size={16} color={colors.primary} />
+                    <Text style={[styles.scheduledText, { color: colors.foreground }]}>
+                        Mutual interest unlocked. Start your 3-minute call when you're ready.
+                    </Text>
                 </View>
             )}
         </Animated.View>

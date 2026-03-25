@@ -5,44 +5,34 @@ import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 
 interface EmptyDatesProps {
-    section: 'requests' | 'upcoming' | 'past' | 'incoming' | 'sent' | 'confirmed' | 'history';
+    section: 'mutual' | 'call_pending' | 'being_arranged' | 'upcoming' | 'history';
 }
 
 const CONFIG: Record<EmptyDatesProps['section'], { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; subtitle: string }> = {
-    requests: {
+    mutual: {
         icon: 'heart-outline',
-        title: 'No invites yet',
-        subtitle: 'When someone invites you on a date, it will show up here.',
+        title: 'No mutuals yet 💕',
+        subtitle: "When you both say yes, they'll show up here.",
     },
-    incoming: {
-        icon: 'heart-outline',
-        title: 'No invites right now',
-        subtitle: 'When someone invites you on a date, you\'ll see them here.',
+    call_pending: {
+        icon: 'call-outline',
+        title: 'No vibe checks waiting 📞',
+        subtitle: "Quick 3-min calls will show up here when you're both a match.",
     },
-    sent: {
-        icon: 'paper-plane-outline',
-        title: 'No invites sent yet',
-        subtitle: 'Send a date invite from the Home screen to get started.',
-    },
-    confirmed: {
-        icon: 'checkmark-circle-outline',
-        title: 'No confirmed matches yet',
-        subtitle: 'Once both of you accept, your match will appear here and we\'ll arrange the date.',
-    },
-    history: {
-        icon: 'time-outline',
-        title: 'No history yet',
-        subtitle: 'Your completed and past dates will appear here.',
+    being_arranged: {
+        icon: 'sparkles-outline',
+        title: 'Nothing in the works yet ✨',
+        subtitle: "When plans start getting made, you'll see them here.",
     },
     upcoming: {
         icon: 'calendar-outline',
-        title: 'No upcoming dates',
-        subtitle: 'Accept an invite and our team will set everything up for you.',
+        title: 'No dates planned yet 📅',
+        subtitle: 'Scheduled plans will appear here.',
     },
-    past: {
+    history: {
         icon: 'time-outline',
-        title: 'No past dates yet',
-        subtitle: 'Your date history will appear here once you have been on a date.',
+        title: 'No date history yet 📖',
+        subtitle: 'Your future stories start here.',
     },
 };
 

@@ -30,7 +30,7 @@ export function DropNotification({ visible, onOpen, onDismiss }: DropNotificatio
         >
             <Pressable onPress={onOpen} style={styles.leftRow} hitSlop={6}>
                 <Sparkle size={16} color={colors.primary} weight="fill" />
-                <Text style={[styles.message, { color: colors.foreground }]}>Your weekly matches are here! 🎯</Text>
+                <Text style={[styles.message, { color: colors.foreground }]}>Your weekly matches are here 🎯</Text>
             </Pressable>
 
             <View style={styles.actions}>

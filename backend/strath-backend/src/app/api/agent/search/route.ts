@@ -11,9 +11,12 @@ import { generateQuickExplanations, generateResultCommentary } from "@/services/
 import { getAgentContext, recordQuery, saveAgentMessage } from "@/services/agent-context";
 import { getAgentSearchQuota, trackAgentSearchUsage } from "@/lib/agent-search-limit";
 import { evaluateAgentQueryGuardrails } from "@/lib/agent-guardrails";
+import { AI_CONSENT_REQUIRED_MESSAGE, hasAiConsent } from "@/lib/ai-consent";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30; // Vercel timeout
+
+type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
 
 function buildRefinementHints(query: string, vibe?: string): string[] {
     const baseHints = [
@@ -52,7 +55,7 @@ function buildRefinementHints(query: string, vibe?: string): string[] {
 // Response: { commentary, matches: [{ profile, explanation, scores }], meta }
 
 async function getSessionWithFallback(req: NextRequest) {
-    let session = await auth.api.getSession({ headers: req.headers });
+    let session: AuthSession = await auth.api.getSession({ headers: req.headers });
 
     if (!session) {
         const authHeader = req.headers.get("authorization");
@@ -64,7 +67,7 @@ async function getSessionWithFallback(req: NextRequest) {
                 with: { user: true },
             });
             if (dbSession && dbSession.expiresAt > new Date()) {
-                session = { session: dbSession, user: dbSession.user } as any;
+                session = { session: dbSession, user: dbSession.user } as unknown as AuthSession;
             }
         }
     }
@@ -80,6 +83,10 @@ export async function POST(request: NextRequest) {
         const session = await getSessionWithFallback(request);
         if (!session?.user?.id) {
             return errorResponse("Unauthorized", 401);
+        }
+
+        if (!(await hasAiConsent(session.user.id))) {
+            return errorResponse(AI_CONSENT_REQUIRED_MESSAGE, 403);
         }
 
         step = "parse_body";
@@ -359,6 +366,10 @@ export async function GET(request: NextRequest) {
  * Strip sensitive/heavy fields from profile before sending to client.
  */
 function sanitizeProfile(profile: Record<string, unknown>) {
-    const { embedding, embeddingUpdatedAt, isVisible, profileCompleted, ...clean } = profile as any;
+    const clean = { ...profile };
+    delete clean.embedding;
+    delete clean.embeddingUpdatedAt;
+    delete clean.isVisible;
+    delete clean.profileCompleted;
     return clean;
 }

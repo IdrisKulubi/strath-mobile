@@ -31,6 +31,7 @@ export interface NotificationPayload {
     type?: AppNotificationType;
 
     // IDs for deep-linking
+    pairId?: string;
     matchId?: string;       // used for call / chat routes
     userId?: string;        // sender profile
     dateId?: string;        // used for feedback_prompt

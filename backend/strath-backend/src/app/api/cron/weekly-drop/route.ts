@@ -9,6 +9,8 @@ import { rankCandidates } from "@/services/ranking-service";
 import { generateQuickExplanations } from "@/services/explanation-service";
 import { getAgentContext } from "@/services/agent-context";
 import { sendPushNotification } from "@/lib/notifications";
+import { hasAiConsent } from "@/lib/ai-consent";
+import { isAuthorizedCronRequest } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -19,20 +21,6 @@ type DropCandidate = {
     reasons: string[];
     starters: string[];
 };
-
-function isAuthorizedCron(req: NextRequest) {
-    const cronSecret = process.env.CRON_SECRET;
-    const authHeader = req.headers.get("authorization") || "";
-    const bearer = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
-    const xCronSecret = req.headers.get("x-cron-secret");
-    const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-
-    if (!cronSecret) {
-        return isVercelCron;
-    }
-
-    return bearer === cronSecret || xCronSecret === cronSecret || isVercelCron;
-}
 
 function getNairobiNow() {
     return new Date(new Date().toLocaleString("en-US", { timeZone: "Africa/Nairobi" }));
@@ -68,7 +56,7 @@ function buildQueryFromLearnedPrefs(learnedPreferences: Record<string, number> |
 
 export async function GET(request: NextRequest) {
     try {
-        if (!isAuthorizedCron(request)) {
+        if (!isAuthorizedCronRequest(request)) {
             return errorResponse("Unauthorized cron request", 401);
         }
 
@@ -109,6 +97,10 @@ export async function GET(request: NextRequest) {
 
         for (const activeUser of activeUsers) {
             try {
+                if (!(await hasAiConsent(activeUser.id))) {
+                    continue;
+                }
+
                 const ctx = await getAgentContext(activeUser.id);
                 const query = buildQueryFromLearnedPrefs(ctx.learnedPreferences);
 

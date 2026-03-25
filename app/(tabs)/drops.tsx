@@ -4,7 +4,9 @@ import { ScrollView, StyleSheet, View, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
+import { useAiConsent } from '@/hooks/use-ai-consent';
 import { useWeeklyDrop, WeeklyDropMatch } from '@/hooks/use-weekly-drop';
+import { AiConsentCard } from '@/components/ai/ai-consent-card';
 import { ConnectionSentPopup, WeeklyDrop } from '@/components/wingman';
 import { useAgent } from '@/hooks/use-agent';
 import * as Haptics from 'expo-haptics';
@@ -12,7 +14,8 @@ import * as Haptics from 'expo-haptics';
 export default function DropsTabScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const weeklyDrop = useWeeklyDrop();
+  const { hasAiConsent, grantAiConsent, isAiConsentUpdating } = useAiConsent();
+  const weeklyDrop = useWeeklyDrop(hasAiConsent);
   const agent = useAgent();
   const [connectionSentFor, setConnectionSentFor] = React.useState<string | null>(null);
   const [sentConnectionsByUserId, setSentConnectionsByUserId] = React.useState<Record<string, true>>({});
@@ -72,6 +75,36 @@ export default function DropsTabScreen() {
     }
   }, [agent, router, sentConnectionsByUserId]);
 
+  const handleAllowAi = useCallback(async () => {
+    try {
+      await grantAiConsent();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update AI consent';
+      Alert.alert('AI Features', message);
+    }
+  }, [grantAiConsent]);
+
+  if (!hasAiConsent) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: colors.foreground }]}>Weekly Drops</Text>
+          </View>
+          <View style={styles.consentWrap}>
+            <AiConsentCard
+              title="Allow AI for Weekly Drops"
+              description="Weekly Drops are generated with Google Gemini using your profile and Wingman preferences."
+              isLoading={isAiConsentUpdating}
+              onAllow={handleAllowAi}
+              onOpenPrivacy={() => router.push('/legal?section=privacy')}
+            />
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -87,8 +120,8 @@ export default function DropsTabScreen() {
           </View>
         ) : !hasDropData ? (
           <View style={[styles.stateCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No weekly drop yet</Text>
-            <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>Your next curated drop will appear here once generated.</Text>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No weekly drop yet 📬</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>Your next curated drop will appear here — we're on it ✨</Text>
             <Pressable style={[styles.primaryButton, { backgroundColor: colors.primary }]} onPress={() => router.push('/(tabs)/explore')}>
               <Text style={[styles.primaryButtonText, { color: colors.primaryForeground }]}>Go to Find</Text>
             </Pressable>
@@ -130,6 +163,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   title: { fontSize: 26, fontWeight: '800', lineHeight: 32, paddingTop: 1 },
+  consentWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+  },
   stateCard: {
     marginHorizontal: 16,
     borderWidth: 1,

@@ -149,10 +149,10 @@ export function DateMatchModal({
                     {/* Headline */}
                     <View style={styles.textBlock}>
                         <Text style={[styles.headline, { color: colors.foreground }]}>
-                            It's a Date Match! 💜
+                            You both said yes 👀
                         </Text>
                         <Text style={[styles.subline, { color: colors.mutedForeground }]}>
-                            You and {theirFirstName} both said yes
+                            Looks like you're both open to meeting
                         </Text>
 
                         {compatibilityScore !== undefined && (
@@ -188,13 +188,13 @@ export function DateMatchModal({
                                 onPress={handleStartCall}
                                 style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
                             >
-                                <Text style={styles.primaryBtnText}>Start 3-min call</Text>
+                                <Text style={styles.primaryBtnText}>Start 3-Minute Call</Text>
                             </Pressable>
                         </Animated.View>
 
                         <Pressable onPress={handleSkip} style={styles.skipBtn}>
                             <Text style={[styles.skipText, { color: colors.mutedForeground }]}>
-                                Skip for now
+                                Do it later
                             </Text>
                         </Pressable>
                     </View>

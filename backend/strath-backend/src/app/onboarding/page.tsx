@@ -1,16 +1,8 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
-import { profiles } from "@/db/schema";
-import { eq } from "drizzle-orm";
 import { OnboardingFlow } from "@/components/web/onboarding/onboarding-flow";
-
-async function getProfile(userId: string) {
-  return db.query.profiles.findFirst({
-    where: eq(profiles.userId, userId),
-  });
-}
+import { getProfileAccessState } from "@/lib/services/profile-access";
 
 export default async function OnboardingPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -19,10 +11,15 @@ export default async function OnboardingPage() {
     redirect("/login");
   }
 
-  // Check if already completed onboarding
-  const profile = await getProfile(session.user.id);
-  if (profile?.profileCompleted) {
-    redirect("/app/discover");
+  const accessState = await getProfileAccessState(session.user.id);
+  const profile = accessState.profile;
+
+  if (accessState.hasCompletedProfile) {
+    if (accessState.hasVerifiedFace) {
+      redirect("/app/discover");
+    }
+
+    redirect("/verification");
   }
 
   return <OnboardingFlow user={session.user} existingProfile={profile ?? null} />;

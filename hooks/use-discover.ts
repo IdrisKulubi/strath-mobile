@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Image } from 'react-native';
 import { z } from 'zod';
 import { getAuthToken } from '@/lib/auth-helpers';
+import { VerificationRequiredError, isVerificationRequiredError, parseApiError } from '@/lib/api-errors';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -68,7 +69,7 @@ async function fetchProfiles(offset: number = 0, limit: number = 10, vibe: strin
     });
 
     if (!response.ok) {
-        throw new Error('Failed to fetch profiles');
+        throw await parseApiError(response, 'Failed to fetch profiles');
     }
 
     const result = await response.json();
@@ -95,7 +96,7 @@ async function swipeProfile(targetUserId: string, action: 'like' | 'pass'): Prom
     });
 
     if (!response.ok) {
-        throw new Error('Failed to record swipe');
+        throw await parseApiError(response, 'Failed to record swipe');
     }
 
     const result = await response.json();
@@ -256,5 +257,7 @@ export function useDiscover(vibe: string = 'all') {
         canUndo: swipeHistory.length > 0,
         isEmpty: !isLoading && allProfiles.length === 0,
         isComplete: !hasNextPage && currentIndex >= allProfiles.length,
+        verificationRequired: isVerificationRequiredError(error),
+        VerificationRequiredError,
     };
 }

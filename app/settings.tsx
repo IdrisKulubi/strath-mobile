@@ -4,16 +4,69 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
+import { useAiConsent } from '@/hooks/use-ai-consent';
 import { authClient } from '@/lib/auth-client';
 import { getAuthToken } from '@/lib/auth-helpers';
+import { AI_CONSENT_DISCLOSURE, AI_PROVIDER_NAME } from '@/lib/ai-consent';
 import * as SecureStore from 'expo-secure-store';
 
 export default function SettingsScreen() {
     const router = useRouter();
     const { colors, isDark, toggleTheme } = useTheme();
     const { data: profile } = useProfile();
+    const { hasAiConsent, grantAiConsent, revokeAiConsent, isAiConsentUpdating } = useAiConsent();
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleAiConsentToggle = (nextValue: boolean) => {
+        if (isAiConsentUpdating) return;
+
+        if (nextValue) {
+            Alert.alert(
+                `Enable ${AI_PROVIDER_NAME}`,
+                AI_CONSENT_DISCLOSURE.join('\n\n'),
+                [
+                    { text: 'Not now', style: 'cancel' },
+                    {
+                        text: 'Allow',
+                        onPress: async () => {
+                            try {
+                                await grantAiConsent();
+                            } catch (error) {
+                                Alert.alert(
+                                    'AI Features',
+                                    error instanceof Error ? error.message : 'Failed to enable AI features.',
+                                );
+                            }
+                        },
+                    },
+                ],
+            );
+            return;
+        }
+
+        Alert.alert(
+            'Turn Off AI Features',
+            'Wingman AI search, voice transcription, and weekly AI-generated drops will stop until you turn AI back on.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Turn Off',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await revokeAiConsent();
+                        } catch (error) {
+                            Alert.alert(
+                                'AI Features',
+                                error instanceof Error ? error.message : 'Failed to turn off AI features.',
+                            );
+                        }
+                    },
+                },
+            ],
+        );
+    };
 
     const handleOpenNotificationSettings = async () => {
         try {
@@ -280,6 +333,25 @@ export default function SettingsScreen() {
                         description="Manage notification preferences in your system settings"
                         icon="notifications-outline"
                         onPress={handleOpenNotificationSettings}
+                    />
+                </SettingCard>
+
+                <SettingCard title="AI Features">
+                    <SettingItem
+                        label="Allow Wingman AI"
+                        type="switch"
+                        value={hasAiConsent}
+                        onValueChange={handleAiConsentToggle}
+                        icon="sparkles-outline"
+                        description={`Lets StrathSpace share your Wingman prompts, optional voice recordings, and relevant profile data with ${AI_PROVIDER_NAME}.`}
+                    />
+                    <View style={[styles.separator, { backgroundColor: colors.border }]} />
+                    <SettingItem
+                        label="Review AI Privacy Details"
+                        type="link"
+                        icon="shield-checkmark-outline"
+                        onPress={() => router.push('/legal?section=privacy')}
+                        value={hasAiConsent ? 'Allowed' : 'Off'}
                     />
                 </SettingCard>
 

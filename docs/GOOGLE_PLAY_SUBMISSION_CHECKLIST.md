@@ -35,7 +35,7 @@
    - **Free or Paid:** Free
 3. **Set up your app (Finish all tasks):**
    - [ ] Privacy Policy: `https://www.strathspace.com/privacy`
-   - [ ] App Access: Use the demo account (`demo@strathspace.com` / `AppleReview2026!`)
+   - [ ] App Access: Document the current production sign-in methods (`Sign in with Apple` and `Continue with Google`)
    - [ ] Content Rating: Complete the questionnaire.
    - [ ] Target Audience and Content: Select age-appropriate audience (13+ or 18+).
    - [ ] News Apps: Select "No".

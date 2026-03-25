@@ -38,6 +38,14 @@ export interface Profile {
     anonymousAvatar?: string;
     readReceiptsEnabled?: boolean;
     showActiveStatus?: boolean;
+    aiConsentGranted?: boolean;
+    aiConsentUpdatedAt?: string | null;
+    faceVerificationStatus?: 'not_started' | 'pending_capture' | 'processing' | 'verified' | 'retry_required' | 'manual_review' | 'failed' | 'blocked';
+    faceVerifiedAt?: string | null;
+    faceVerificationMethod?: string | null;
+    faceVerificationVersion?: string | null;
+    faceVerificationRequired?: boolean;
+    faceVerificationRetryCount?: number;
     // New enhanced profile fields
     qualities?: string[];
     prompts?: { promptId: string; response: string }[];
@@ -156,6 +164,7 @@ export function useProfile() {
     return {
         ...query,
         updateProfile: mutation.mutate,
+        updateProfileAsync: mutation.mutateAsync,
         isUpdating: mutation.isPending,
     };
 }

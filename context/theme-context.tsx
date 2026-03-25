@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useColorScheme as useSystemColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme as useNativewindColorScheme } from 'nativewind';
@@ -14,40 +14,49 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+function themeFromSystem(system: string | null | undefined): Theme {
+    return system === 'dark' ? 'dark' : 'light';
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const systemScheme = useSystemColorScheme();
     const { setColorScheme } = useNativewindColorScheme();
-    const [theme, setThemeState] = useState<Theme>(systemScheme === 'dark' ? 'dark' : 'light');
-    const [isLoaded, setIsLoaded] = useState(false);
+    const [theme, setThemeState] = useState<Theme>(() => themeFromSystem(systemScheme));
 
     useEffect(() => {
-        // Load saved theme preference
+        setColorScheme(theme);
+    }, [theme, setColorScheme]);
+
+    useEffect(() => {
+        let cancelled = false;
         AsyncStorage.getItem('user-theme').then((savedTheme) => {
+            if (cancelled) return;
             if (savedTheme === 'dark' || savedTheme === 'light') {
                 setThemeState(savedTheme);
                 setColorScheme(savedTheme);
-            } else if (systemScheme) {
-                setThemeState(systemScheme);
-                setColorScheme(systemScheme);
+            } else {
+                const t = themeFromSystem(systemScheme);
+                setThemeState(t);
+                setColorScheme(t);
             }
-            setIsLoaded(true);
         });
-    }, []);
+        return () => {
+            cancelled = true;
+        };
+    }, [systemScheme, setColorScheme]);
 
-    const setTheme = (newTheme: Theme) => {
-        setThemeState(newTheme);
-        setColorScheme(newTheme);
-        AsyncStorage.setItem('user-theme', newTheme);
-    };
+    const setTheme = useCallback(
+        (newTheme: Theme) => {
+            setThemeState(newTheme);
+            setColorScheme(newTheme);
+            AsyncStorage.setItem('user-theme', newTheme);
+        },
+        [setColorScheme]
+    );
 
-    const toggleTheme = () => {
+    const toggleTheme = useCallback(() => {
         setTheme(theme === 'dark' ? 'light' : 'dark');
-    };
-
-
-    if (!isLoaded) {
-        return null; // Or a splash screen
-    }
+    }, [theme, setTheme]);
 
     return (
         <ThemeContext.Provider value={{ theme, isDark: theme === 'dark', toggleTheme, setTheme }}>

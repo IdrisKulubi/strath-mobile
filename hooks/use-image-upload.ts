@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getAuthToken } from '@/lib/auth-helpers';
+import { normalizeImageForUpload } from '@/lib/image-normalization';
 
 export const useImageUpload = () => {
     const [isUploading, setIsUploading] = useState(false);
@@ -9,10 +10,11 @@ export const useImageUpload = () => {
         setIsUploading(true);
         setError(null);
         try {
+            const normalizedImage = await normalizeImageForUpload(uri);
+
             // 1. Get presigned URL
-            const filename = uri.split('/').pop() || 'image.jpg';
-            const match = /\.(\w+)$/.exec(filename);
-            const type = match ? `image/${match[1]}` : `image/jpeg`;
+            const filename = normalizedImage.filename;
+            const type = normalizedImage.contentType;
 
             // Get session token for authorization
             const token = await getAuthToken();
@@ -42,7 +44,7 @@ export const useImageUpload = () => {
 
             // 2. Upload to R2
             console.log("[useImageUpload] Step 3: Reading local file blob...");
-            const response = await fetch(uri);
+            const response = await fetch(normalizedImage.uri);
             const blob = await response.blob();
             console.log("[useImageUpload] Step 4: Uploading to R2...", signedUrl.substring(0, 50) + "...");
 

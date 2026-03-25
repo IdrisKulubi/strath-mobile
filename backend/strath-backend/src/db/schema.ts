@@ -1,4 +1,4 @@
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import {
     timestamp,
     pgTable,
@@ -8,6 +8,7 @@ import {
     uuid,
     json,
     index,
+    uniqueIndex,
     customType,
     jsonb,
 } from "drizzle-orm/pg-core";
@@ -211,6 +212,14 @@ export const profiles = pgTable("profiles", {
     // ============================================
     // AGENTIC AI FIELDS
     // ============================================
+    aiConsentGranted: boolean("ai_consent_granted").default(false).notNull(),
+    aiConsentUpdatedAt: timestamp("ai_consent_updated_at"),
+    faceVerificationStatus: text("face_verification_status").default("not_started").notNull(),
+    faceVerifiedAt: timestamp("face_verified_at"),
+    faceVerificationMethod: text("face_verification_method"),
+    faceVerificationVersion: text("face_verification_version"),
+    faceVerificationRequired: boolean("face_verification_required").default(true).notNull(),
+    faceVerificationRetryCount: integer("face_verification_retry_count").default(0).notNull(),
     personalitySummary: text("personality_summary"), // AI-generated natural language summary
     embedding: vector("embedding", { dimension: 3072 }), // pgvector embedding for semantic search
     embeddingUpdatedAt: timestamp("embedding_updated_at"), // Track when embedding was last generated
@@ -222,9 +231,112 @@ export const profiles = pgTable("profiles", {
     completedIdx: index("profile_completed_idx").on(table.profileCompleted),
     usernameIdx: index("profile_username_idx").on(table.username),
     anonymousIdx: index("profile_anonymous_idx").on(table.anonymous),
+    aiConsentIdx: index("profile_ai_consent_idx").on(table.aiConsentGranted),
+    faceVerificationStatusIdx: index("profile_face_verification_status_idx").on(table.faceVerificationStatus),
     educationIdx: index("profile_education_idx").on(table.education),
     smokingIdx: index("profile_smoking_idx").on(table.smoking),
     politicsIdx: index("profile_politics_idx").on(table.politics),
+}));
+
+export const faceVerificationSessions = pgTable("face_verification_sessions", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+    status: text("status").default("pending_capture").notNull(),
+    attemptNumber: integer("attempt_number").default(1).notNull(),
+    selfieAssetKeys: jsonb("selfie_asset_keys").$type<string[]>().default([]).notNull(),
+    profileAssetKeys: jsonb("profile_asset_keys").$type<string[]>().default([]).notNull(),
+    thresholdConfigVersion: text("threshold_config_version").default("comparefaces_v1").notNull(),
+    decisionSummary: jsonb("decision_summary").$type<Record<string, unknown>>().default({}).notNull(),
+    failureReasons: jsonb("failure_reasons").$type<string[]>().default([]).notNull(),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+}, (table) => ({
+    userIdx: index("face_verification_sessions_user_idx").on(table.userId),
+    statusIdx: index("face_verification_sessions_status_idx").on(table.status),
+    queueIdx: index("face_verification_sessions_queue_idx").on(table.status, table.updatedAt),
+    userAttemptIdx: uniqueIndex("face_verification_sessions_user_attempt_idx").on(table.userId, table.attemptNumber),
+}));
+
+export const faceVerificationResults = pgTable("face_verification_results", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+        .notNull()
+        .references(() => faceVerificationSessions.id, { onDelete: "cascade" }),
+    sourceAssetKey: text("source_asset_key").notNull(),
+    targetAssetKey: text("target_asset_key").notNull(),
+    similarity: integer("similarity"),
+    faceConfidence: integer("face_confidence"),
+    qualityFlags: jsonb("quality_flags").$type<string[]>().default([]).notNull(),
+    facesDetected: integer("faces_detected").default(0).notNull(),
+    decision: text("decision").notNull(),
+    rawProviderResponseRedacted: jsonb("raw_provider_response_redacted").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    sessionIdx: index("face_verification_results_session_idx").on(table.sessionId),
+    decisionIdx: index("face_verification_results_decision_idx").on(table.decision),
+}));
+
+export const profilePhotoAssets = pgTable("profile_photo_assets", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+    objectKey: text("object_key").notNull(),
+    publicUrl: text("public_url").notNull(),
+    contentType: text("content_type"),
+    normalizedFormat: text("normalized_format"),
+    fileSizeBytes: integer("file_size_bytes"),
+    width: integer("width"),
+    height: integer("height"),
+    faceCount: integer("face_count").default(0).notNull(),
+    qualityFlags: jsonb("quality_flags").$type<string[]>().default([]).notNull(),
+    verificationFormatSupported: boolean("verification_format_supported").default(false).notNull(),
+    verificationReady: boolean("verification_ready").default(false).notNull(),
+    analysisVersion: text("analysis_version"),
+    analysisError: text("analysis_error"),
+    lastAnalyzedAt: timestamp("last_analyzed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+}, (table) => ({
+    userIdx: index("profile_photo_assets_user_idx").on(table.userId),
+    objectKeyIdx: uniqueIndex("profile_photo_assets_object_key_idx").on(table.objectKey),
+    readyIdx: index("profile_photo_assets_ready_idx").on(table.verificationReady, table.lastAnalyzedAt),
+}));
+
+export const faceVerificationJobs = pgTable("face_verification_jobs", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    jobType: text("job_type").notNull(),
+    status: text("status").default("pending").notNull(),
+    userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").references(() => faceVerificationSessions.id, { onDelete: "cascade" }),
+    assetKey: text("asset_key"),
+    priority: integer("priority").default(100).notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    maxAttempts: integer("max_attempts").default(5).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().default({}).notNull(),
+    availableAt: timestamp("available_at").defaultNow().notNull(),
+    lockedAt: timestamp("locked_at"),
+    leaseExpiresAt: timestamp("lease_expires_at"),
+    claimedBy: text("claimed_by"),
+    lastError: text("last_error"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+}, (table) => ({
+    statusAvailableIdx: index("face_verification_jobs_status_available_idx").on(
+        table.status,
+        table.availableAt,
+        table.priority,
+        table.createdAt,
+    ),
+    sessionIdx: index("face_verification_jobs_session_idx").on(table.sessionId),
+    assetIdx: index("face_verification_jobs_asset_idx").on(table.assetKey),
+    workerIdx: index("face_verification_jobs_worker_idx").on(table.status, table.leaseExpiresAt),
 }));
 
 // Swipes/Likes
@@ -298,14 +410,79 @@ export const dateRequests = pgTable(
     })
 );
 
+export const candidatePairs = pgTable(
+    "candidate_pairs",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userAId: text("user_a_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        userBId: text("user_b_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        compatibilityScore: integer("compatibility_score").notNull(),
+        matchReasons: jsonb("match_reasons").$type<string[]>().default([]).notNull(),
+        shownToAAt: timestamp("shown_to_a_at").defaultNow().notNull(),
+        shownToBAt: timestamp("shown_to_b_at").defaultNow().notNull(),
+        aDecision: text("a_decision")
+            .$type<"pending" | "open_to_meet" | "passed">()
+            .default("pending")
+            .notNull(),
+        bDecision: text("b_decision")
+            .$type<"pending" | "open_to_meet" | "passed">()
+            .default("pending")
+            .notNull(),
+        status: text("status")
+            .$type<"active" | "mutual" | "closed" | "expired">()
+            .default("active")
+            .notNull(),
+        expiresAt: timestamp("expires_at").notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        uniquePairIdx: uniqueIndex("candidate_pairs_unique_pair_status_idx").on(table.userAId, table.userBId, table.status),
+        userAIdx: index("candidate_pairs_user_a_idx").on(table.userAId),
+        userBIdx: index("candidate_pairs_user_b_idx").on(table.userBId),
+        statusIdx: index("candidate_pairs_status_idx").on(table.status),
+        expiresIdx: index("candidate_pairs_expires_idx").on(table.expiresAt),
+        activeExposureAIdx: index("candidate_pairs_active_exposure_a_idx").on(table.userAId, table.status, table.expiresAt),
+        activeExposureBIdx: index("candidate_pairs_active_exposure_b_idx").on(table.userBId, table.status, table.expiresAt),
+    })
+);
+
+export const candidatePairHistory = pgTable(
+    "candidate_pair_history",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        pairId: uuid("pair_id")
+            .notNull()
+            .references(() => candidatePairs.id, { onDelete: "cascade" }),
+        actorUserId: text("actor_user_id").references(() => user.id, { onDelete: "set null" }),
+        fromStatus: text("from_status").$type<"active" | "mutual" | "closed" | "expired">(),
+        toStatus: text("to_status").$type<"active" | "mutual" | "closed" | "expired">(),
+        eventType: text("event_type")
+            .$type<"generated" | "responded" | "mutual" | "closed" | "expired" | "bridged_to_match" | "bridged_to_date">()
+            .notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        pairIdx: index("candidate_pair_history_pair_idx").on(table.pairId),
+        actorIdx: index("candidate_pair_history_actor_idx").on(table.actorUserId),
+        eventIdx: index("candidate_pair_history_event_idx").on(table.eventType),
+    })
+);
+
 // Date matches — created when a date request is accepted (both sides agreed)
 export const dateMatches = pgTable(
     "date_matches",
     {
         id: uuid("id").defaultRandom().primaryKey(),
         requestId: uuid("request_id")
-            .notNull()
             .references(() => dateRequests.id, { onDelete: "cascade" }),
+        candidatePairId: uuid("candidate_pair_id")
+            .references(() => candidatePairs.id, { onDelete: "set null" }),
         userAId: text("user_a_id")
             .notNull()
             .references(() => user.id, { onDelete: "cascade" }),
@@ -329,6 +506,7 @@ export const dateMatches = pgTable(
     },
     (table) => ({
         requestIdx: index("date_match_request_idx").on(table.requestId),
+        candidatePairIdx: index("date_match_candidate_pair_idx").on(table.candidatePairId),
         usersIdx: index("date_match_users_idx").on(table.userAId, table.userBId),
     })
 );
@@ -379,6 +557,41 @@ export const matches = pgTable(
     (table) => ({
         userIdx: index("match_users_idx").on(table.user1Id, table.user2Id),
         lastMessageIdx: index("last_message_idx").on(table.lastMessageAt),
+    })
+);
+
+export const mutualMatches = pgTable(
+    "mutual_matches",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        candidatePairId: uuid("candidate_pair_id")
+            .notNull()
+            .references(() => candidatePairs.id, { onDelete: "cascade" }),
+        userAId: text("user_a_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        userBId: text("user_b_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        status: text("status")
+            .$type<"mutual" | "call_pending" | "being_arranged" | "upcoming" | "completed" | "cancelled" | "expired">()
+            .default("mutual")
+            .notNull(),
+        legacyMatchId: text("legacy_match_id").references(() => matches.id, { onDelete: "set null" }),
+        legacyDateMatchId: uuid("legacy_date_match_id").references(() => dateMatches.id, { onDelete: "set null" }),
+        venueName: text("venue_name"),
+        venueAddress: text("venue_address"),
+        scheduledAt: timestamp("scheduled_at"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        candidatePairUniqueIdx: uniqueIndex("mutual_matches_candidate_pair_unique_idx").on(table.candidatePairId),
+        userAIdx: index("mutual_matches_user_a_idx").on(table.userAId),
+        userBIdx: index("mutual_matches_user_b_idx").on(table.userBId),
+        statusIdx: index("mutual_matches_status_idx").on(table.status),
+        legacyMatchIdx: index("mutual_matches_legacy_match_idx").on(table.legacyMatchId),
+        legacyDateMatchIdx: index("mutual_matches_legacy_date_match_idx").on(table.legacyDateMatchId),
     })
 );
 
@@ -551,6 +764,13 @@ export const userRelations = relations(user, ({ one, many }) => ({
     reports: many(reports, { relationName: "userReports" }),
     blockedUsers: many(blocks, { relationName: "blockerRelation" }),
     blockedBy: many(blocks, { relationName: "blockedRelation" }),
+    candidatePairsA: many(candidatePairs, { relationName: "candidatePairUserA" }),
+    candidatePairsB: many(candidatePairs, { relationName: "candidatePairUserB" }),
+    mutualMatchesA: many(mutualMatches, { relationName: "mutualMatchUserA" }),
+    mutualMatchesB: many(mutualMatches, { relationName: "mutualMatchUserB" }),
+    faceVerificationSessions: many(faceVerificationSessions),
+    faceVerificationJobs: many(faceVerificationJobs),
+    profilePhotoAssets: many(profilePhotoAssets),
     sessions: many(session),
     accounts: many(account),
 }));
@@ -611,6 +831,40 @@ export const profilesRelations = relations(profiles, ({ one }) => ({
     user: one(user, {
         fields: [profiles.userId],
         references: [user.id],
+    }),
+}));
+
+export const faceVerificationSessionsRelations = relations(faceVerificationSessions, ({ one, many }) => ({
+    user: one(user, {
+        fields: [faceVerificationSessions.userId],
+        references: [user.id],
+    }),
+    results: many(faceVerificationResults),
+    jobs: many(faceVerificationJobs),
+}));
+
+export const faceVerificationResultsRelations = relations(faceVerificationResults, ({ one }) => ({
+    session: one(faceVerificationSessions, {
+        fields: [faceVerificationResults.sessionId],
+        references: [faceVerificationSessions.id],
+    }),
+}));
+
+export const profilePhotoAssetsRelations = relations(profilePhotoAssets, ({ one }) => ({
+    user: one(user, {
+        fields: [profilePhotoAssets.userId],
+        references: [user.id],
+    }),
+}));
+
+export const faceVerificationJobsRelations = relations(faceVerificationJobs, ({ one }) => ({
+    user: one(user, {
+        fields: [faceVerificationJobs.userId],
+        references: [user.id],
+    }),
+    session: one(faceVerificationSessions, {
+        fields: [faceVerificationJobs.sessionId],
+        references: [faceVerificationSessions.id],
     }),
 }));
 
@@ -1167,7 +1421,7 @@ export const wingmanPacks = pgTable("wingman_packs", {
 
     compiledSummary: jsonb("compiled_summary").$type<Record<string, unknown>>().default({}),
     wingmanPrompt: text("wingman_prompt").notNull(),
-    matchData: jsonb("match_data").$type<any[]>().default([]),
+    matchData: jsonb("match_data").$type<Array<Record<string, unknown>>>().default([]),
 
     generatedAt: timestamp("generated_at").defaultNow().notNull(),
     openedAt: timestamp("opened_at"),
@@ -1378,6 +1632,52 @@ export const hypeInviteLinksRelations = relations(hypeInviteLinks, ({ one }) => 
     }),
 }));
 
+export const candidatePairsRelations = relations(candidatePairs, ({ one, many }) => ({
+    userA: one(user, {
+        fields: [candidatePairs.userAId],
+        references: [user.id],
+        relationName: "candidatePairUserA",
+    }),
+    userB: one(user, {
+        fields: [candidatePairs.userBId],
+        references: [user.id],
+        relationName: "candidatePairUserB",
+    }),
+    history: many(candidatePairHistory),
+}));
+
+export const candidatePairHistoryRelations = relations(candidatePairHistory, ({ one }) => ({
+    pair: one(candidatePairs, {
+        fields: [candidatePairHistory.pairId],
+        references: [candidatePairs.id],
+    }),
+    actor: one(user, {
+        fields: [candidatePairHistory.actorUserId],
+        references: [user.id],
+    }),
+}));
+
+export const mutualMatchesRelations = relations(mutualMatches, ({ one }) => ({
+    candidatePair: one(candidatePairs, {
+        fields: [mutualMatches.candidatePairId],
+        references: [candidatePairs.id],
+    }),
+    userA: one(user, {
+        fields: [mutualMatches.userAId],
+        references: [user.id],
+        relationName: "mutualMatchUserA",
+    }),
+    userB: one(user, {
+        fields: [mutualMatches.userBId],
+        references: [user.id],
+        relationName: "mutualMatchUserB",
+    }),
+    legacyDateMatch: one(dateMatches, {
+        fields: [mutualMatches.legacyDateMatchId],
+        references: [dateMatches.id],
+    }),
+}));
+
 export const blindDatesRelations = relations(blindDates, ({ one }) => ({
     user1: one(user, {
         fields: [blindDates.user1Id],
@@ -1407,6 +1707,11 @@ export const agentAnalyticsRelations = relations(agentAnalytics, ({ one }) => ({
 // ============================================
 export type AgentContext = typeof agentContext.$inferSelect;
 export type NewAgentContext = typeof agentContext.$inferInsert;
+export type CandidatePair = typeof candidatePairs.$inferSelect;
+export type NewCandidatePair = typeof candidatePairs.$inferInsert;
+export type CandidatePairHistory = typeof candidatePairHistory.$inferSelect;
+export type MutualMatch = typeof mutualMatches.$inferSelect;
+export type NewMutualMatch = typeof mutualMatches.$inferInsert;
 export type WeeklyDrop = typeof weeklyDrops.$inferSelect;
 export type NewWeeklyDrop = typeof weeklyDrops.$inferInsert;
 export type MatchMission = typeof matchMissions.$inferSelect;
@@ -1416,6 +1721,14 @@ export type NewVibeCheck = typeof vibeChecks.$inferInsert;
 export type PulsePost = typeof pulsePosts.$inferSelect;
 export type NewPulsePost = typeof pulsePosts.$inferInsert;
 export type PulseReaction = typeof pulseReactions.$inferSelect;
+export type FaceVerificationSession = typeof faceVerificationSessions.$inferSelect;
+export type NewFaceVerificationSession = typeof faceVerificationSessions.$inferInsert;
+export type FaceVerificationResult = typeof faceVerificationResults.$inferSelect;
+export type NewFaceVerificationResult = typeof faceVerificationResults.$inferInsert;
+export type ProfilePhotoAsset = typeof profilePhotoAssets.$inferSelect;
+export type NewProfilePhotoAsset = typeof profilePhotoAssets.$inferInsert;
+export type FaceVerificationJob = typeof faceVerificationJobs.$inferSelect;
+export type NewFaceVerificationJob = typeof faceVerificationJobs.$inferInsert;
 export type StudySession = typeof studySessions.$inferSelect;
 export type NewStudySession = typeof studySessions.$inferInsert;
 export type WingmanLink = typeof wingmanLinks.$inferSelect;
