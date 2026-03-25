@@ -23,6 +23,7 @@ import { GoogleLogo } from '@/components/icons/google-logo';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { signIn } from '@/lib/auth-client';
+import { clearSession } from '@/lib/auth-helpers';
 import { useTheme } from '@/hooks/use-theme';
 
 const CTA_H = 50;
@@ -30,6 +31,7 @@ const CTA_H = 50;
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [appleLoading, setAppleLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
   const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
   const router = useRouter();
   const toast = useToast();
@@ -130,6 +132,58 @@ export default function LoginScreen() {
     }
   };
 
+  const handleDemoAuth = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDemoLoading(true);
+    try {
+      await clearSession();
+
+      const SecureStore = await import('expo-secure-store');
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://www.strathspace.com';
+      const response = await fetch(`${apiUrl}/api/auth/demo`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Demo auth failed (${response.status})`);
+      }
+
+      const data = await response.json();
+      const sessionToken = data?.data?.token;
+      const sessionUser = data?.data?.user;
+
+      if (!sessionToken || !sessionUser?.id) {
+        throw new Error('Demo auth did not return a session');
+      }
+
+      const sessionData = {
+        session: {
+          token: sessionToken,
+          userId: sessionUser.id,
+          expiresAt: data?.data?.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+        user: sessionUser,
+      };
+
+      await SecureStore.setItemAsync('strathspace_session', JSON.stringify(sessionData));
+      await SecureStore.setItemAsync('strathspace_session_token', sessionToken);
+
+      toast.show({ message: 'Signed in as demo', variant: 'success' });
+      router.replace('/');
+    } catch (error) {
+      console.error('Demo auth error:', error);
+      toast.show({
+        message: 'Demo sign in failed. The demo session may need to be reseeded.',
+        variant: 'danger',
+      });
+    } finally {
+      setDemoLoading(false);
+    }
+  };
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
@@ -210,8 +264,8 @@ export default function LoginScreen() {
 
               <Pressable
                 onPress={handleGoogleAuth}
-                disabled={loading || appleLoading}
-                style={({ pressed }) => [styles.googleBtn, pressed && !loading && !appleLoading && styles.pressedBtn]}
+                disabled={loading || appleLoading || demoLoading}
+                style={({ pressed }) => [styles.googleBtn, pressed && !loading && !appleLoading && !demoLoading && styles.pressedBtn]}
               >
                 <LinearGradient
                   colors={['#ff4fa8', '#e91e8c', '#c61c77']}
@@ -231,6 +285,36 @@ export default function LoginScreen() {
                     </View>
                   )}
                 </LinearGradient>
+              </Pressable>
+
+              <Pressable
+                onPress={handleDemoAuth}
+                disabled={loading || appleLoading || demoLoading}
+                style={({ pressed }) => [
+                  styles.demoBtn,
+                  {
+                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(233,30,140,0.14)',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(233,30,140,0.05)',
+                    opacity: pressed && !loading && !appleLoading && !demoLoading ? 0.72 : 1,
+                  },
+                ]}
+              >
+                {demoLoading ? (
+                  <ActivityIndicator color={colors.primary} size="small" />
+                ) : (
+                  <View style={styles.demoBtnInner}>
+                    <View style={[styles.demoIconBadge, { backgroundColor: isDark ? 'rgba(233,30,140,0.18)' : 'rgba(233,30,140,0.1)' }]}>
+                      <Ionicons name="flask-outline" size={18} color={colors.primary} />
+                    </View>
+                    <View style={styles.demoTextWrap}>
+                      <Text style={[styles.demoLabelPrimary, { color: colors.foreground }]}>Continue as Demo</Text>
+                      <Text style={[styles.demoLabelSecondary, { color: colors.mutedForeground }]}>
+                        Preview seeded matches and dates
+                      </Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={18} color={colors.primary} />
+                  </View>
+                )}
               </Pressable>
 
               {appleAuthAvailable && (
@@ -278,7 +362,7 @@ export default function LoginScreen() {
 
             <Pressable
               onPress={handleGoogleAuth}
-              disabled={loading || appleLoading}
+              disabled={loading || appleLoading || demoLoading}
               style={({ pressed }) => [styles.signInRow, pressed && { opacity: 0.65 }]}
             >
               <Text style={[styles.signInMuted, { color: colors.mutedForeground }]}>
@@ -490,6 +574,39 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.25,
     textAlign: 'center',
+  },
+  demoBtn: {
+    width: '100%',
+    minHeight: CTA_H,
+    borderRadius: 16,
+    borderWidth: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  demoBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  demoIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  demoTextWrap: {
+    flex: 1,
+    gap: 1,
+  },
+  demoLabelPrimary: {
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  demoLabelSecondary: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   termsWrap: {
     width: '100%',
