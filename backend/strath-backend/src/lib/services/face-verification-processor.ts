@@ -259,44 +259,14 @@ function selectTargetAssetKeysForVerification(
         lastAnalyzedAt: Date | null;
     }>,
 ) {
-    const assetMap = new Map(assets.map((asset) => [asset.objectKey, asset]));
-    const sortedKeys = [...requestedKeys].sort((leftKey, rightKey) => {
-        const left = assetMap.get(leftKey);
-        const right = assetMap.get(rightKey);
-        const leftScore = buildProfileAssetPriority(left);
-        const rightScore = buildProfileAssetPriority(right);
-        return rightScore - leftScore;
+    const knownKeys = new Set(assets.map((asset) => asset.objectKey));
+    const uniqueRequestedKeys = Array.from(new Set(requestedKeys));
+
+    const orderedKeys = uniqueRequestedKeys.filter((key) => {
+        return knownKeys.size === 0 || knownKeys.has(key);
     });
 
-    return sortedKeys.slice(0, getFaceVerificationMaxProfileComparisons());
-}
-
-function buildProfileAssetPriority(
-    asset:
-        | {
-              verificationReady: boolean;
-              faceCount: number;
-              lastAnalyzedAt: Date | null;
-          }
-        | undefined,
-) {
-    if (!asset) {
-        return 10;
-    }
-
-    if (asset.verificationReady) {
-        return 100 + (asset.lastAnalyzedAt ? asset.lastAnalyzedAt.getTime() / 1_000_000_000_000 : 0);
-    }
-
-    if (asset.faceCount === 1) {
-        return 80;
-    }
-
-    if (asset.faceCount > 1) {
-        return 20;
-    }
-
-    return 5;
+    return orderedKeys.slice(0, getFaceVerificationMaxProfileComparisons());
 }
 
 async function runWithConcurrency<TInput, TOutput>(

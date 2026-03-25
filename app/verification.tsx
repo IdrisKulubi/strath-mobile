@@ -202,11 +202,23 @@ export default function VerificationScreen() {
                 latestSession?.status === 'retry_required' || latestSession?.status === 'failed';
             const canReuseLatestSession = latestSession?.status === 'pending_capture';
 
-            const session = shouldRetryLatest
-                ? await retrySessionAsync()
-                : canReuseLatestSession
-                ? latestSession
-                : await createSessionAsync();
+            let session = null;
+
+            if (shouldRetryLatest) {
+                try {
+                    session = await retrySessionAsync();
+                } catch (error) {
+                    if (!isCannotRetrySessionError(error)) {
+                        throw error;
+                    }
+
+                    session = await createSessionAsync();
+                }
+            } else if (canReuseLatestSession) {
+                session = latestSession;
+            } else {
+                session = await createSessionAsync();
+            }
 
             if (!session?.id) {
                 throw new Error('Could not create a verification session. Please try again.');
@@ -512,6 +524,10 @@ function getVerificationUserMessage(error: unknown) {
         return 'Add at least 2 clear profile photos, then try again.';
     }
 
+    if (normalizedMessage.includes('cannot be retried')) {
+        return 'That attempt has closed out, so we started a fresh check for you. Try again once more.';
+    }
+
     if (normalizedMessage.includes('session')) {
         return 'Something timed out in the background. Try again and we will restart it cleanly.';
     }
@@ -560,11 +576,18 @@ function getVerificationRetryGuidance(input: {
     }
 
     const selfieIssueDetected = input.failureReasons.includes('selfie_face_not_detected');
+    const photoRelatedReasonCount = input.failureReasons.filter((reason) =>
+        PHOTO_RELATED_REASON_CODES.has(reason),
+    ).length;
+    const photoRelatedResultCount = input.results.filter((result) =>
+        result.qualityFlags.some((flag) => PHOTO_RELATED_QUALITY_FLAGS.has(flag)),
+    ).length;
     const photoIssueDetected =
         input.supportedProfilePhotoCount < 2 ||
         input.unsupportedProfilePhotoCount > 0 ||
-        input.failureReasons.some((reason) => PHOTO_RELATED_REASON_CODES.has(reason)) ||
-        input.results.some((result) => result.qualityFlags.some((flag) => PHOTO_RELATED_QUALITY_FLAGS.has(flag)));
+        input.failureReasons.includes('insufficient_usable_profile_photos') ||
+        photoRelatedReasonCount >= 2 ||
+        photoRelatedResultCount >= 2;
     const onlyMatchIssue =
         input.failureReasons.length > 0 &&
         input.failureReasons.every((reason) => reason === 'insufficient_match_count');
@@ -627,15 +650,19 @@ function getVerificationRetryGuidance(input: {
 
     return {
         title: 'One more try should do it',
-        shortBody: 'Refresh your selfie or photos, then try again.',
-        body: 'Something in the last attempt was not clear enough. Refresh your selfie or photos, then try again.',
+        shortBody: 'Try one more selfie and we will check it again.',
+        body: 'Something in the last attempt was not clear enough. Try a fresh selfie and we will run it again.',
         tips: [
-            'Make sure your face is easy to see in both your selfie and profile photos.',
-            'Use clear lighting and avoid blurry or heavily edited images.',
+            'Use clear lighting and keep your face centered in frame.',
+            'Take off anything covering your face and hold the phone steady.',
         ],
         showSelfieAction: true,
-        showPhotoAction: true,
+        showPhotoAction: false,
     };
+}
+
+function isCannotRetrySessionError(error: unknown) {
+    return error instanceof Error && error.message.toLowerCase().includes('cannot be retried');
 }
 
 const PHOTO_RELATED_REASON_CODES = new Set([
