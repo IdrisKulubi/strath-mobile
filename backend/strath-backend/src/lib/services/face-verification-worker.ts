@@ -10,6 +10,7 @@ import {
 } from "@/lib/services/face-verification-policy";
 import { processFaceVerificationSession } from "@/lib/services/face-verification-processor";
 import { auditProfilePhotoAsset } from "@/lib/services/profile-photo-assets";
+import { markFaceVerificationSessionReviewed } from "@/lib/services/face-verification-service";
 
 export async function processFaceVerificationJobBatch(input?: {
     batchSize?: number;
@@ -73,6 +74,31 @@ export async function processFaceVerificationJobBatch(input?: {
 
                 throw new Error(`Unsupported face verification job type: ${job.jobType}`);
             } catch (error) {
+                console.error("[FaceVerificationWorker] Job failed", {
+                    jobId: job.id,
+                    jobType: job.jobType,
+                    sessionId: job.sessionId,
+                    assetKey: job.assetKey,
+                    error,
+                });
+
+                if (job.jobType === FACE_VERIFICATION_JOB_TYPES.PROCESS_SESSION && job.sessionId) {
+                    await markFaceVerificationSessionReviewed(
+                        job.sessionId,
+                        "manual_review",
+                        "queue_processing_failed",
+                    );
+                    await completeFaceVerificationJob(job.id);
+
+                    return {
+                        jobId: job.id,
+                        jobType: job.jobType,
+                        status: "manual_review",
+                        sessionId: job.sessionId,
+                        error: error instanceof Error ? error.message : "unknown_error",
+                    };
+                }
+
                 await rescheduleFaceVerificationJob(job, error);
 
                 return {
