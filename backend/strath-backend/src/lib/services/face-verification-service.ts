@@ -284,7 +284,7 @@ export async function retryFaceVerificationSession(
     }
 
     if (!canRetryFaceVerification(latestSession.status, latestSession.attemptNumber)) {
-        return latestSession;
+        return createFaceVerificationSession(userId, { resetActiveSession: false });
     }
 
     return createFaceVerificationSession(userId, { resetActiveSession: true });

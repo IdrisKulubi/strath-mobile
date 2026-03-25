@@ -220,6 +220,10 @@ export default function VerificationScreen() {
                 session = await createSessionAsync();
             }
 
+            if (session?.status && session.status !== 'pending_capture') {
+                session = await createSessionAsync();
+            }
+
             if (!session?.id) {
                 throw new Error('Could not create a verification session. Please try again.');
             }
