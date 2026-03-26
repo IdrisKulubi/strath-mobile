@@ -93,6 +93,8 @@ const styles = StyleSheet.create({
     },
     emoji: {
         fontSize: 22,
+        lineHeight: 28,
+        paddingTop: 1,
     },
     label: {
         fontSize: 15,

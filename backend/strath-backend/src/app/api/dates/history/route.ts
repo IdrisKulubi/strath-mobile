@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { dateMatches, profiles } from "@/db/schema";
-import { eq, or, desc } from "drizzle-orm";
+import { dateFeedback, dateMatches, profiles } from "@/db/schema";
+import { eq, or, desc, and } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
 
@@ -39,11 +39,18 @@ export async function GET(req: NextRequest) {
                     where: eq(profiles.userId, otherUserId),
                     with: { user: true },
                 });
+                const myFeedback = await db.query.dateFeedback.findFirst({
+                    where: and(
+                        eq(dateFeedback.dateMatchId, dm.id),
+                        eq(dateFeedback.userId, session.user.id)
+                    ),
+                });
 
                 return {
                     id: dm.id,
                     matchId: dm.id,
                     status: dm.status as "pending_setup" | "scheduled" | "attended" | "cancelled" | "expired",
+                    hasFeedback: myFeedback?.userId === session.user.id,
                     venueName: dm.venueName ?? undefined,
                     venueAddress: dm.venueAddress ?? undefined,
                     scheduledAt: dm.scheduledAt?.toISOString() ?? undefined,

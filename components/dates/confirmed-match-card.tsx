@@ -52,6 +52,12 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
     const { colors, isDark } = useTheme();
     const router = useRouter();
     const statusColor = ARRANGEMENT_COLORS[match.arrangementStatus];
+    const formattedScheduledAt = match.scheduledAt
+        ? new Intl.DateTimeFormat(undefined, {
+            dateStyle: 'full',
+            timeStyle: 'short',
+        }).format(new Date(match.scheduledAt))
+        : null;
 
     const handleViewProfile = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -143,7 +149,7 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                     )}
                     {match.scheduledAt && (
                         <Text style={[styles.scheduledTime, { color: colors.mutedForeground }]}>
-                            {new Date(match.scheduledAt).toLocaleDateString(undefined, { dateStyle: 'full', timeStyle: 'short' })}
+                            {formattedScheduledAt}
                         </Text>
                     )}
                 </View>

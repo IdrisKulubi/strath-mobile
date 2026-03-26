@@ -149,7 +149,7 @@ export function DateMatchModal({
                     {/* Headline */}
                     <View style={styles.textBlock}>
                         <Text style={[styles.headline, { color: colors.foreground }]}>
-                            You both said yes 👀
+                            It's a match
                         </Text>
                         <Text style={[styles.subline, { color: colors.mutedForeground }]}>
                             Looks like you're both open to meeting
@@ -252,6 +252,8 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         textAlign: 'center',
         letterSpacing: -0.3,
+        lineHeight: 32,
+        paddingBottom: 2,
     },
     subline: {
         fontSize: 16,

@@ -30,6 +30,7 @@ export interface ScheduledDate {
     id: string;
     matchId?: string;
     status: 'pending_setup' | 'scheduled' | 'attended' | 'cancelled' | 'expired';
+    hasFeedback?: boolean;
     venueName?: string;
     venueAddress?: string;
     scheduledAt?: string;

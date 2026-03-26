@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     View,
     StyleSheet,
@@ -22,7 +22,7 @@ import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
-import { useDateFeedback, MeetAgain } from '@/hooks/use-date-feedback';
+import { useDateFeedback, useDateFeedbackStatus, MeetAgain } from '@/hooks/use-date-feedback';
 import { StarRating } from '@/components/feedback/star-rating';
 import { MeetAgainSelector } from '@/components/feedback/meet-again-selector';
 import { FeedbackTextInput } from '@/components/feedback/feedback-text-input';
@@ -39,6 +39,7 @@ export default function FeedbackScreen() {
     const [submitted, setSubmitted] = useState(false);
 
     const { mutateAsync: submitFeedback, isPending } = useDateFeedback();
+    const { data: feedbackStatus } = useDateFeedbackStatus(dateId);
 
     const submitBtnScale = useSharedValue(1);
     const submitAnimStyle = useAnimatedStyle(() => ({
@@ -46,6 +47,12 @@ export default function FeedbackScreen() {
     }));
 
     const canSubmit = rating > 0 && meetAgain !== null && !isPending;
+
+    useEffect(() => {
+        if (feedbackStatus?.hasSubmitted) {
+            setSubmitted(true);
+        }
+    }, [feedbackStatus?.hasSubmitted]);
 
     const handleSubmit = useCallback(async () => {
         if (!canSubmit || !meetAgain) return;
@@ -62,7 +69,11 @@ export default function FeedbackScreen() {
             });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setSubmitted(true);
-        } catch {
+        } catch (error) {
+            if (error instanceof Error && error.message.includes('already submitted feedback')) {
+                setSubmitted(true);
+                return;
+            }
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         }
     }, [canSubmit, meetAgain, dateId, rating, textFeedback, submitFeedback, submitBtnScale]);
@@ -231,6 +242,8 @@ const styles = StyleSheet.create({
         fontSize: 26,
         fontWeight: '800',
         letterSpacing: -0.3,
+        lineHeight: 32,
+        paddingBottom: 2,
     },
     subtitle: {
         fontSize: 16,
@@ -290,6 +303,8 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         textAlign: 'center',
         letterSpacing: -0.3,
+        lineHeight: 30,
+        paddingBottom: 2,
     },
     thankYouSub: {
         fontSize: 15,

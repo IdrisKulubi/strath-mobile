@@ -10,6 +10,38 @@ import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 export const dynamic = "force-dynamic";
 
 /**
+ * GET /api/date-feedback?dateId=...
+ * Check whether the current user has already submitted feedback for a date
+ */
+export async function GET(req: NextRequest) {
+    try {
+        const session = await getSessionWithFallback(req);
+        if (!session?.user?.id) {
+            return errorResponse(new Error("Unauthorized"), 401);
+        }
+
+        const dateId = req.nextUrl.searchParams.get("dateId");
+        if (!dateId) {
+            return errorResponse(new Error("dateId is required"), 400);
+        }
+
+        const existing = await db.query.dateFeedback.findFirst({
+            where: and(
+                eq(dateFeedback.dateMatchId, dateId),
+                eq(dateFeedback.userId, session.user.id)
+            ),
+        });
+
+        return successResponse({
+            hasSubmitted: !!existing,
+        });
+    } catch (error) {
+        console.error("[date-feedback][GET] Error:", error);
+        return errorResponse(error);
+    }
+}
+
+/**
  * POST /api/date-feedback
  * Submit post-date feedback (rating, meet_again, optional text)
  */
