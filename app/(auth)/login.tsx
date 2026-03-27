@@ -287,6 +287,7 @@ export default function LoginScreen() {
                 </LinearGradient>
               </Pressable>
 
+              {/*
               <Pressable
                 onPress={handleDemoAuth}
                 disabled={loading || appleLoading || demoLoading}
@@ -316,6 +317,7 @@ export default function LoginScreen() {
                   </View>
                 )}
               </Pressable>
+              */}
 
               {appleAuthAvailable && (
                 <View style={styles.appleWrap}>

@@ -17,7 +17,9 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
+import { useToast } from '@/components/ui/toast';
 import { useTheme } from '@/hooks/use-theme';
+import { useStartMutualMatchCall } from '@/hooks/use-date-requests';
 import { MatchPhotosAnimation } from './match-photos-animation';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -45,6 +47,8 @@ export function DateMatchModal({
 }: DateMatchModalProps) {
     const { colors, isDark } = useTheme();
     const router = useRouter();
+    const toast = useToast();
+    const { mutateAsync: startMutualMatchCall, isPending: isStartingCall } = useStartMutualMatchCall();
 
     const opacity = useSharedValue(0);
     const contentY = useSharedValue(40);
@@ -87,13 +91,38 @@ export function DateMatchModal({
         btnScale.value = withSpring(0.94, { damping: 10, stiffness: 300 }, () => {
             btnScale.value = withSpring(1);
         });
-        onClose();
-        if (callMatchId) {
-            router.push(`/vibe-check/${callMatchId}`);
-        } else {
-            router.push('/(tabs)/dates');
-        }
-    }, [callMatchId, onClose, router, btnScale]);
+
+        const start = async () => {
+            try {
+                if (matchId && !callMatchId) {
+                    const result = await startMutualMatchCall(matchId);
+                    if (result.partnerAvailability === 'online') {
+                        toast.show({ message: 'They look online. Starting your vibe check now.', variant: 'success' });
+                    } else if (result.notificationSent) {
+                        toast.show({ message: 'They are not online right now. We sent them a call notification.', variant: 'default' });
+                    } else {
+                        toast.show({ message: 'They are offline right now. You can still start and try again later.', variant: 'warning' });
+                    }
+
+                    onClose();
+                    router.push(`/vibe-check/${result.matchId}`);
+                    return;
+                }
+
+                if (!callMatchId) {
+                    throw new Error('Call is not ready yet');
+                }
+
+                onClose();
+                router.push(`/vibe-check/${callMatchId}`);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Unable to start the call right now';
+                toast.show({ message, variant: 'danger' });
+            }
+        };
+
+        start();
+    }, [btnScale, callMatchId, matchId, onClose, router, startMutualMatchCall, toast]);
 
     const handleSkip = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -186,6 +215,7 @@ export function DateMatchModal({
                         <Animated.View style={btnAnimStyle}>
                             <Pressable
                                 onPress={handleStartCall}
+                                disabled={isStartingCall}
                                 style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
                             >
                                 <Text style={styles.primaryBtnText}>Start 3-Minute Call</Text>
