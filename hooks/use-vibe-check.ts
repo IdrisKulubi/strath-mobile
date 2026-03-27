@@ -191,6 +191,7 @@ export function useVibeCheck(matchId: string, activeVibeCheckId?: string) {
         vibeCheckStatus: statusQuery.data,
         isStatusLoading: statusQuery.isLoading,
         hasActiveVibeCheck: statusQuery.data?.exists ?? false,
+        refetchStatus: statusQuery.refetch,
 
         // Result polling
         vibeCheckResult: resultQuery.data,

@@ -81,6 +81,10 @@ export default function DatesScreen() {
     }));
 
     const mutualBadge = sections.mutual.length > 0 ? sections.mutual.length : null;
+    const callBadge = sections.call_pending.length > 0 ? sections.call_pending.length : null;
+    const arrangingBadge = sections.being_arranged.length > 0 ? sections.being_arranged.length : null;
+    const upcomingBadge = sections.upcoming.length > 0 ? sections.upcoming.length : null;
+    const historyBadge = history.length > 0 ? history.length : null;
     const celebratedMatch = sections.mutual[0];
 
     const renderContent = () => {
@@ -156,20 +160,34 @@ export default function DatesScreen() {
                                 >
                                     {section.label}
                                 </Text>
-                                {section.key === 'mutual' && mutualBadge ? (
+                                {(
+                                    (section.key === 'mutual' && mutualBadge)
+                                    || (section.key === 'call_pending' && callBadge)
+                                    || (section.key === 'being_arranged' && arrangingBadge)
+                                    || (section.key === 'upcoming' && upcomingBadge)
+                                    || (section.key === 'history' && historyBadge)
+                                ) ? (
                                     <View
                                         style={[
                                             styles.badge,
-                                            { backgroundColor: activeSection === 'mutual' ? '#fff' : colors.primary },
+                                            { backgroundColor: activeSection === section.key ? '#fff' : colors.primary },
                                         ]}
                                     >
                                         <Text
                                             style={[
                                                 styles.badgeText,
-                                                { color: activeSection === 'mutual' ? colors.primary : '#fff' },
+                                                { color: activeSection === section.key ? colors.primary : '#fff' },
                                             ]}
                                         >
-                                            {mutualBadge}
+                                            {section.key === 'mutual'
+                                                ? mutualBadge
+                                                : section.key === 'call_pending'
+                                                    ? callBadge
+                                                    : section.key === 'being_arranged'
+                                                        ? arrangingBadge
+                                                        : section.key === 'upcoming'
+                                                            ? upcomingBadge
+                                                            : historyBadge}
                                         </Text>
                                     </View>
                                 ) : null}

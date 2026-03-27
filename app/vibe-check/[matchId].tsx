@@ -83,6 +83,7 @@ export default function VibeCheckCallScreen() {
     const {
         vibeCheckStatus,
         isStatusLoading,
+        refetchStatus,
         joinVibeCheckAsync,
         isJoining,
         endCall,
@@ -98,6 +99,7 @@ export default function VibeCheckCallScreen() {
     const inviteTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const startTimeRef = useRef<number | null>(null);
     const autoJoinTriggeredRef = useRef(false);
+    const inviteExpiryHandledRef = useRef(false);
 
     const { data: matchesData } = useMatches();
     const currentMatch = matchesData?.matches?.find((m) => m.id === matchId);
@@ -160,6 +162,7 @@ export default function VibeCheckCallScreen() {
 
         if (!inviteExpiresAt || vibeCheckStatus?.status !== "pending") {
             setInviteSecondsLeft(0);
+            inviteExpiryHandledRef.current = false;
             return;
         }
 
@@ -172,6 +175,30 @@ export default function VibeCheckCallScreen() {
 
         return () => stopInviteTimer();
     }, [inviteExpiresAt, stopInviteTimer, vibeCheckStatus?.status]);
+
+    useEffect(() => {
+        if (vibeCheckStatus?.status !== "pending" || inviteSecondsLeft > 0 || inviteExpiryHandledRef.current) {
+            return;
+        }
+
+        inviteExpiryHandledRef.current = true;
+
+        const handleInviteExpiry = async () => {
+            const latest = await refetchStatus().catch(() => null);
+            const latestStatus = latest?.data?.status;
+
+            if (latestStatus === "active") {
+                inviteExpiryHandledRef.current = false;
+                return;
+            }
+
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            toast.show({ message: "They did not join within 1 minute.", variant: "warning" });
+            router.replace("/(tabs)/dates");
+        };
+
+        handleInviteExpiry();
+    }, [inviteSecondsLeft, refetchStatus, router, toast, vibeCheckStatus?.status]);
 
     useEffect(() => {
         const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
