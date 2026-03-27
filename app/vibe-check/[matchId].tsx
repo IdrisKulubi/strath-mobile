@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     View,
     StyleSheet,
@@ -19,24 +19,22 @@ import Animated, {
 } from "react-native-reanimated";
 import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
+import { Microphone, PhoneDisconnect, ArrowSquareOut, Lightbulb } from "phosphor-react-native";
+
 import { Text } from "@/components/ui/text";
+import { useToast } from "@/components/ui/toast";
 import { useTheme } from "@/hooks/use-theme";
 import { useVibeCheck, type VibeCheckSession } from "@/hooks/use-vibe-check";
 import { useMatches } from "@/hooks/use-matches";
 import { VibeCheckDecision } from "@/components/vibe-check/vibe-check-decision";
-import { Microphone, PhoneDisconnect, ArrowSquareOut, Lightbulb } from "phosphor-react-native";
 
-const CALL_DURATION_SECONDS = 180; // 3 minutes
-
-// ─── Timer helpers ─────────────────────────────────────────────────────────
+const CALL_DURATION_SECONDS = 180;
 
 function formatTime(secs: number): string {
     const m = Math.floor(secs / 60).toString().padStart(2, "0");
     const s = (secs % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
 }
-
-// ─── Pulsing mic animation ─────────────────────────────────────────────────
 
 function PulsingMic({ color }: { color: string }) {
     const scale = useSharedValue(1);
@@ -58,7 +56,7 @@ function PulsingMic({ color }: { color: string }) {
             cancelAnimation(scale);
             cancelAnimation(opacity);
         };
-    }, [scale, opacity]);
+    }, [opacity, scale]);
 
     const animStyle = useAnimatedStyle(() => ({
         transform: [{ scale: scale.value }],
@@ -74,48 +72,45 @@ function PulsingMic({ color }: { color: string }) {
     );
 }
 
-// ─── Screen ────────────────────────────────────────────────────────────────
-
 export default function VibeCheckCallScreen() {
-    const { matchId } = useLocalSearchParams<{ matchId: string }>();
-    const { colors, isDark } = useTheme();
+    const { matchId, mode } = useLocalSearchParams<{ matchId: string; mode?: string }>();
     const router = useRouter();
+    const toast = useToast();
+    const { colors, isDark } = useTheme();
 
-    // Fetch/create vibe check session
-    const { createVibeCheck, isCreating, createdSession } = useVibeCheck(matchId ?? "");
+    const callerMode = mode === "caller";
 
-    // Session state — resolved once created or retrieved
+    const {
+        vibeCheckStatus,
+        isStatusLoading,
+        joinVibeCheckAsync,
+        isJoining,
+        endCall,
+    } = useVibeCheck(matchId ?? "");
+
     const [session, setSession] = useState<VibeCheckSession | null>(null);
     const [callStarted, setCallStarted] = useState(false);
     const [showDecision, setShowDecision] = useState(false);
-
-    // Timer
     const [secondsLeft, setSecondsLeft] = useState(CALL_DURATION_SECONDS);
-    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const startTimeRef = useRef<number | null>(null);
+    const [inviteSecondsLeft, setInviteSecondsLeft] = useState(0);
 
-    // Get partner name from matches
+    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const inviteTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const startTimeRef = useRef<number | null>(null);
+    const autoJoinTriggeredRef = useRef(false);
+
     const { data: matchesData } = useMatches();
     const currentMatch = matchesData?.matches?.find((m) => m.id === matchId);
     const partnerFirstName = currentMatch?.partner?.name?.split(" ")[0] ?? null;
     const partnerPhoto = currentMatch?.partner?.image ?? null;
 
-    const { endCall } = useVibeCheck(matchId ?? "", session?.id);
+    const inviteExpiresAt = useMemo(() => {
+        if (!vibeCheckStatus?.scheduledAt) {
+            return null;
+        }
+        return new Date(vibeCheckStatus.scheduledAt);
+    }, [vibeCheckStatus?.scheduledAt]);
 
-    // ── On mount: create/retrieve session ────────────────────────────────────
-    useEffect(() => {
-        if (!matchId) return;
-        createVibeCheck(matchId, {
-            onSuccess: (s) => setSession(s),
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [matchId]);
-
-    useEffect(() => {
-        if (createdSession) setSession(createdSession);
-    }, [createdSession]);
-
-    // ── Timer logic ───────────────────────────────────────────────────────────
     const startTimer = useCallback(() => {
         startTimeRef.current = Date.now();
         timerRef.current = setInterval(() => {
@@ -126,10 +121,10 @@ export default function VibeCheckCallScreen() {
             if (remaining === 0) {
                 if (timerRef.current) clearInterval(timerRef.current);
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                handleTimeUp();
+                stopCallAndShowDecision(CALL_DURATION_SECONDS);
             }
         }, 1000);
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, []);
 
     const stopTimer = useCallback(() => {
         if (timerRef.current) {
@@ -138,15 +133,49 @@ export default function VibeCheckCallScreen() {
         }
     }, []);
 
-    useEffect(() => {
-        return () => stopTimer();
-    }, [stopTimer]);
+    const stopInviteTimer = useCallback(() => {
+        if (inviteTimerRef.current) {
+            clearInterval(inviteTimerRef.current);
+            inviteTimerRef.current = null;
+        }
+    }, []);
 
-    // ── Handle app going to background (call in progress) ─────────────────────
+    const stopCallAndShowDecision = useCallback((durationSeconds: number) => {
+        stopTimer();
+        if (session?.id) {
+            endCall({ vibeCheckId: session.id, durationSeconds });
+        }
+        setShowDecision(true);
+    }, [endCall, session?.id, stopTimer]);
+
+    useEffect(() => {
+        return () => {
+            stopTimer();
+            stopInviteTimer();
+        };
+    }, [stopInviteTimer, stopTimer]);
+
+    useEffect(() => {
+        stopInviteTimer();
+
+        if (!inviteExpiresAt || vibeCheckStatus?.status !== "pending") {
+            setInviteSecondsLeft(0);
+            return;
+        }
+
+        const syncInviteSeconds = () => {
+            setInviteSecondsLeft(Math.max(0, Math.ceil((inviteExpiresAt.getTime() - Date.now()) / 1000)));
+        };
+
+        syncInviteSeconds();
+        inviteTimerRef.current = setInterval(syncInviteSeconds, 1000);
+
+        return () => stopInviteTimer();
+    }, [inviteExpiresAt, stopInviteTimer, vibeCheckStatus?.status]);
+
     useEffect(() => {
         const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
             if (state === "active" && callStarted && startTimeRef.current) {
-                // Re-sync timer when returning from background
                 const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
                 setSecondsLeft(Math.max(0, CALL_DURATION_SECONDS - elapsed));
             }
@@ -154,16 +183,11 @@ export default function VibeCheckCallScreen() {
         return () => sub.remove();
     }, [callStarted]);
 
-    // ── Open Daily.co room in browser ─────────────────────────────────────────
-    const handleOpenCall = useCallback(async () => {
-        if (!session) return;
-
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-        // Build room URL with participant token
-        const callUrl = `${session.roomUrl}?t=${session.token}`;
-
+    const openCall = useCallback(async (joinedSession: VibeCheckSession) => {
+        const callUrl = `${joinedSession.roomUrl}?t=${joinedSession.token}`;
+        setSession(joinedSession);
         setCallStarted(true);
+        setSecondsLeft(CALL_DURATION_SECONDS);
         startTimer();
 
         await WebBrowser.openBrowserAsync(callUrl, {
@@ -172,115 +196,156 @@ export default function VibeCheckCallScreen() {
             enableBarCollapsing: true,
         });
 
-        // User closed the browser — stop timer
         stopTimer();
-    }, [session, startTimer, stopTimer, isDark]);
+    }, [isDark, startTimer, stopTimer]);
 
-    // ── End call manually ─────────────────────────────────────────────────────
+    const handleJoinCall = useCallback(async () => {
+        if (!vibeCheckStatus?.vibeCheckId) {
+            toast.show({ message: "Call is not ready yet.", variant: "danger" });
+            return;
+        }
+
+        try {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            const joined = await joinVibeCheckAsync(vibeCheckStatus.vibeCheckId);
+            await openCall(joined);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Unable to join the call";
+            toast.show({ message, variant: "danger" });
+            if (message.toLowerCase().includes("expired")) {
+                router.replace("/(tabs)/dates");
+            }
+        }
+    }, [joinVibeCheckAsync, openCall, router, toast, vibeCheckStatus?.vibeCheckId]);
+
+    useEffect(() => {
+        if (!callerMode) {
+            return;
+        }
+
+        if (vibeCheckStatus?.status === "active" && vibeCheckStatus.vibeCheckId && !autoJoinTriggeredRef.current && !callStarted) {
+            autoJoinTriggeredRef.current = true;
+            handleJoinCall();
+        }
+    }, [callStarted, callerMode, handleJoinCall, vibeCheckStatus?.status, vibeCheckStatus?.vibeCheckId]);
+
+    useEffect(() => {
+        if (vibeCheckStatus?.status === "expired") {
+            toast.show({ message: "They did not join within 1 minute.", variant: "warning" });
+            router.replace("/(tabs)/dates");
+        }
+    }, [router, toast, vibeCheckStatus?.status]);
+
     const handleEndCall = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        stopTimer();
+        const elapsed = CALL_DURATION_SECONDS - secondsLeft;
+        stopCallAndShowDecision(elapsed);
+    }, [secondsLeft, stopCallAndShowDecision]);
 
-        if (session?.id) {
-            const elapsed = CALL_DURATION_SECONDS - secondsLeft;
-            endCall({ vibeCheckId: session.id, durationSeconds: elapsed });
-        }
-
-        setShowDecision(true);
-    }, [session, secondsLeft, endCall, stopTimer]);
-
-    function handleTimeUp() {
-        stopTimer();
-        if (session?.id) {
-            endCall({ vibeCheckId: session.id, durationSeconds: CALL_DURATION_SECONDS });
-        }
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        setShowDecision(true);
-    }
-
-    // ── Timer colour: green → yellow → red ────────────────────────────────────
-    const timerColor =
-        secondsLeft > 60 ? "#10b981" : secondsLeft > 30 ? "#f97316" : "#f43f5e";
-
-    // ── Loading state ─────────────────────────────────────────────────────────
-    if (isCreating || !session) {
+    if (showDecision && session) {
         return (
-            <SafeAreaView
-                style={[styles.root, { backgroundColor: isDark ? "#0f0d23" : "#f8fafc" }]}
-            >
-                <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
-                <View style={styles.center}>
-                    <PulsingMic color="#8b5cf6" />
-                    <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
-                        Setting up your vibe check…
-                    </Text>
-                </View>
-            </SafeAreaView>
-        );
-    }
-
-    // ── Decision screen ───────────────────────────────────────────────────────
-    if (showDecision) {
-        return (
-            <SafeAreaView
-                style={[styles.root, { backgroundColor: isDark ? "#0f0d23" : "#f8fafc" }]}
-            >
+            <SafeAreaView style={[styles.root, { backgroundColor: isDark ? "#0f0d23" : "#f8fafc" }]}>
                 <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
                 <VibeCheckDecision
                     vibeCheckId={session.id}
                     matchId={matchId ?? ""}
                     partnerFirstName={partnerFirstName}
                     partnerPhoto={partnerPhoto}
-                    onClose={() => router.push('/(tabs)/dates')}
+                    onClose={() => router.push("/(tabs)/dates")}
                 />
             </SafeAreaView>
         );
     }
 
-    // ── Main call screen ──────────────────────────────────────────────────────
+    if (isStatusLoading || !matchId) {
+        return (
+            <SafeAreaView style={[styles.root, { backgroundColor: isDark ? "#0f0d23" : "#f8fafc" }]}>
+                <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+                <View style={styles.center}>
+                    <PulsingMic color="#8b5cf6" />
+                    <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
+                        Checking call status…
+                    </Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (!vibeCheckStatus?.exists || !vibeCheckStatus?.vibeCheckId) {
+        return (
+            <SafeAreaView style={[styles.root, { backgroundColor: isDark ? "#0f0d23" : "#f8fafc" }]}>
+                <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+                <View style={styles.center}>
+                    <PulsingMic color="#8b5cf6" />
+                    <Text style={[styles.preCallTitle, { color: colors.foreground }]}>
+                        No active call invite
+                    </Text>
+                    <Text style={[styles.preCallSub, { color: colors.mutedForeground }]}>
+                        Start from the Dates screen when both of you are online.
+                    </Text>
+                </View>
+                <View style={styles.actions}>
+                    <TouchableOpacity onPress={() => router.replace("/(tabs)/dates")} style={styles.backButton}>
+                        <Text style={[styles.backText, { color: colors.mutedForeground }]}>Back to Dates</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    const timerColor =
+        secondsLeft > 60 ? "#10b981" : secondsLeft > 30 ? "#f97316" : "#f43f5e";
+
+    const waitingForPartner = vibeCheckStatus.status === "pending" && callerMode;
+    const incomingInvite = vibeCheckStatus.status === "pending" && !callerMode;
+
     return (
-        <SafeAreaView
-            style={[styles.root, { backgroundColor: isDark ? "#0f0d23" : "#f8fafc" }]}
-        >
+        <SafeAreaView style={[styles.root, { backgroundColor: isDark ? "#0f0d23" : "#f8fafc" }]}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-            {/* Header */}
             <View style={styles.header}>
-                <Text style={[styles.headerLabel, { color: colors.mutedForeground }]}>
-                    Vibe Check
-                </Text>
+                <Text style={[styles.headerLabel, { color: colors.mutedForeground }]}>Vibe Check</Text>
                 {partnerFirstName && (
-                    <Text style={[styles.partnerName, { color: colors.foreground }]}>
-                        with {partnerFirstName}
-                    </Text>
+                    <Text style={[styles.partnerName, { color: colors.foreground }]}>with {partnerFirstName}</Text>
                 )}
             </View>
 
-            {/* Pulsing mic */}
             <View style={styles.center}>
                 <PulsingMic color={callStarted ? timerColor : "#8b5cf6"} />
 
-                {/* Timer */}
-                {callStarted && (
-                    <Text style={[styles.timer, { color: timerColor }]}>
-                        {formatTime(secondsLeft)}
-                    </Text>
-                )}
-
-                {!callStarted && (
+                {callStarted ? (
+                    <Text style={[styles.timer, { color: timerColor }]}>{formatTime(secondsLeft)}</Text>
+                ) : waitingForPartner ? (
                     <>
                         <Text style={[styles.preCallTitle, { color: colors.foreground }]}>
-                            Before you meet, take a quick 3-minute call
+                            Waiting for {partnerFirstName ?? "them"} to join
                         </Text>
                         <Text style={[styles.preCallSub, { color: colors.mutedForeground }]}>
-                            Reduce awkwardness and confirm the vibe.{'\n'}Anonymous • Audio only
+                            They have 1 minute to join the call.{'\n'}Invite expires in {inviteSecondsLeft}s.
+                        </Text>
+                    </>
+                ) : incomingInvite ? (
+                    <>
+                        <Text style={[styles.preCallTitle, { color: colors.foreground }]}>
+                            {partnerFirstName ?? "Someone"} wants to start your 3-minute call
+                        </Text>
+                        <Text style={[styles.preCallSub, { color: colors.mutedForeground }]}>
+                            Join within 1 minute to confirm the vibe before the date.
+                        </Text>
+                    </>
+                ) : (
+                    <>
+                        <Text style={[styles.preCallTitle, { color: colors.foreground }]}>
+                            Your call is ready
+                        </Text>
+                        <Text style={[styles.preCallSub, { color: colors.mutedForeground }]}>
+                            Join now to start the 3-minute vibe check.
                         </Text>
                     </>
                 )}
             </View>
 
-            {/* Topic card */}
-            {session.suggestedTopic && (
+            {session?.suggestedTopic && (
                 <View
                     style={[
                         styles.topicCard,
@@ -304,31 +369,41 @@ export default function VibeCheckCallScreen() {
                 </View>
             )}
 
-            {/* Actions */}
             <View style={styles.actions}>
-                {!callStarted ? (
+                {!callStarted && incomingInvite && (
                     <TouchableOpacity
-                        style={styles.startButton}
-                        onPress={handleOpenCall}
+                        style={[styles.startButton, isJoining && styles.disabledButton]}
+                        onPress={handleJoinCall}
                         activeOpacity={0.85}
+                        disabled={isJoining}
                     >
                         <ArrowSquareOut size={18} weight="fill" color="#ffffff" />
-                        <Text style={styles.startButtonText}>Start 3-Minute Call</Text>
+                        <Text style={styles.startButtonText}>Join 3-Minute Call</Text>
                     </TouchableOpacity>
-                ) : (
+                )}
+
+                {!callStarted && vibeCheckStatus.status === "active" && (
                     <TouchableOpacity
-                        style={styles.endButton}
-                        onPress={handleEndCall}
+                        style={[styles.startButton, isJoining && styles.disabledButton]}
+                        onPress={handleJoinCall}
                         activeOpacity={0.85}
+                        disabled={isJoining}
                     >
+                        <ArrowSquareOut size={18} weight="fill" color="#ffffff" />
+                        <Text style={styles.startButtonText}>Enter Call</Text>
+                    </TouchableOpacity>
+                )}
+
+                {callStarted && (
+                    <TouchableOpacity style={styles.endButton} onPress={handleEndCall} activeOpacity={0.85}>
                         <PhoneDisconnect size={18} weight="fill" color="#ffffff" />
                         <Text style={styles.endButtonText}>End Call</Text>
                     </TouchableOpacity>
                 )}
 
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <TouchableOpacity onPress={() => router.replace("/(tabs)/dates")} style={styles.backButton}>
                     <Text style={[styles.backText, { color: colors.mutedForeground }]}>
-                        Cancel
+                        {waitingForPartner ? "Leave waiting room" : "Back to Dates"}
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -383,10 +458,6 @@ const styles = StyleSheet.create({
         letterSpacing: 2,
         fontVariant: ["tabular-nums"],
     },
-    subtitle: {
-        fontSize: 14,
-        textAlign: "center",
-    },
     preCallTitle: {
         fontSize: 18,
         fontWeight: "700",
@@ -436,6 +507,9 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
         gap: 10,
+    },
+    disabledButton: {
+        opacity: 0.65,
     },
     startButtonText: {
         color: "#ffffff",

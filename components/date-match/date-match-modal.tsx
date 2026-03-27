@@ -105,7 +105,7 @@ export function DateMatchModal({
                     }
 
                     onClose();
-                    router.push(`/vibe-check/${result.matchId}`);
+                    router.push(`/vibe-check/${result.matchId}?mode=caller`);
                     return;
                 }
 
@@ -114,7 +114,7 @@ export function DateMatchModal({
                 }
 
                 onClose();
-                router.push(`/vibe-check/${callMatchId}`);
+                router.push(`/vibe-check/${callMatchId}?mode=caller`);
             } catch (error) {
                 const message = error instanceof Error ? error.message : 'Unable to start the call right now';
                 toast.show({ message, variant: 'danger' });

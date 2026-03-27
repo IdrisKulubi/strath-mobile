@@ -8,19 +8,22 @@ import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
 type PartnerAvailability = "online" | "recently_active" | "offline";
 
-function getPartnerAvailability(lastActive: Date | null | undefined): PartnerAvailability {
-    if (!lastActive) {
+function getPartnerAvailability(
+    isOnline: boolean | null | undefined,
+    lastActive: Date | null | undefined,
+): PartnerAvailability {
+    if (!isOnline || !lastActive) {
         return "offline";
     }
 
     const diffMs = Date.now() - lastActive.getTime();
     const diffMinutes = diffMs / (1000 * 60);
 
-    if (diffMinutes <= 5) {
+    if (diffMinutes <= 1) {
         return "online";
     }
 
-    if (diffMinutes <= 60) {
+    if (diffMinutes <= 5) {
         return "recently_active";
     }
 
@@ -68,6 +71,17 @@ export async function startCallForMutualMatch(mutualMatchId: string, userId: str
         throw new Error("This match is not ready for a call");
     }
 
+    const partnerUserId = mutualMatch.userAId === userId ? mutualMatch.userBId : mutualMatch.userAId;
+    const [starter, partner] = await Promise.all([
+        db.query.user.findFirst({ where: eq(userTable.id, userId) }),
+        db.query.user.findFirst({ where: eq(userTable.id, partnerUserId) }),
+    ]);
+
+    const partnerAvailability = getPartnerAvailability(partner?.isOnline, partner?.lastActive);
+    if (partnerAvailability !== "online") {
+        throw new Error("They are not online right now. Try again when they are active.");
+    }
+
     const legacyMatch = mutualMatch.legacyMatchId
         ? await db.query.matches.findFirst({ where: eq(matches.id, mutualMatch.legacyMatchId) })
         : await ensureLegacyMatch(mutualMatch.userAId, mutualMatch.userBId);
@@ -88,13 +102,6 @@ export async function startCallForMutualMatch(mutualMatchId: string, userId: str
 
     const vibeCheck = await createOrGetVibeCheck(legacyMatch.id, userId);
 
-    const partnerUserId = mutualMatch.userAId === userId ? mutualMatch.userBId : mutualMatch.userAId;
-    const [starter, partner] = await Promise.all([
-        db.query.user.findFirst({ where: eq(userTable.id, userId) }),
-        db.query.user.findFirst({ where: eq(userTable.id, partnerUserId) }),
-    ]);
-
-    const partnerAvailability = getPartnerAvailability(partner?.lastActive);
     let notificationSent = false;
 
     if (partner?.pushToken) {
@@ -106,6 +113,7 @@ export async function startCallForMutualMatch(mutualMatchId: string, userId: str
                 matchId: legacyMatch.id,
                 pairId: mutualMatch.candidatePairId,
                 mutualMatchId: mutualMatch.id,
+                route: `/vibe-check/${legacyMatch.id}?mode=recipient`,
             },
         });
         notificationSent = true;

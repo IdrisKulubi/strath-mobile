@@ -73,7 +73,7 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
         const start = async () => {
             try {
                 if (match.arrangementStatus !== 'mutual' && match.legacyMatchId) {
-                    router.push(`/vibe-check/${match.legacyMatchId}`);
+                    router.push(`/vibe-check/${match.legacyMatchId}?mode=caller`);
                     return;
                 }
 
@@ -86,7 +86,7 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                     toast.show({ message: 'They are offline right now. Try again in a bit.', variant: 'warning' });
                 }
 
-                router.push(`/vibe-check/${result.matchId}`);
+                router.push(`/vibe-check/${result.matchId}?mode=caller`);
             } catch (error) {
                 const message = error instanceof Error ? error.message : 'Unable to start the call right now';
                 toast.show({ message, variant: 'danger' });

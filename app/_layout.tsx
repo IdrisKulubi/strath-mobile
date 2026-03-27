@@ -17,6 +17,7 @@ import { LaunchExperience } from '@/components/intro/launch-experience';
 import { NoInternetScreen } from '@/components/no-internet-screen';
 import { useNetwork } from '@/hooks/use-network';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
+import { usePresenceHeartbeat } from '@/hooks/use-presence-heartbeat';
 import { hasCompletedIntroSlides } from '@/lib/intro-storage';
 
 ExpoSplashScreen.preventAutoHideAsync();
@@ -63,6 +64,7 @@ function RootLayoutNav() {
 
 function NotificationsBootstrap() {
   usePushNotifications();
+  usePresenceHeartbeat();
   return null;
 }
 

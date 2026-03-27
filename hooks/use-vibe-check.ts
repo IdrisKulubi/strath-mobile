@@ -15,6 +15,7 @@ export interface VibeCheckSession {
     status: "pending" | "active" | "completed" | "expired";
     bothAgreedToMeet: boolean;
     isUser1: boolean;
+    expiresAt?: string | null;
 }
 
 export interface VibeCheckStatus {
@@ -24,6 +25,7 @@ export interface VibeCheckStatus {
     bothAgreedToMeet?: boolean;
     userDecision?: "meet" | "pass" | null;
     partnerDecided?: boolean;
+    scheduledAt?: string | null;
 }
 
 export interface VibeCheckResult {
@@ -74,7 +76,10 @@ async function joinVibeCheckAPI(vibeCheckId: string): Promise<VibeCheckSession> 
         method: "POST",
         headers,
     });
-    if (!res.ok) throw new Error("Failed to join vibe check");
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to join vibe check");
+    }
     const json = await res.json();
     return json.data ?? json;
 }
@@ -134,6 +139,10 @@ export function useVibeCheck(matchId: string, activeVibeCheckId?: string) {
         queryFn: () => getVibeCheckStatusAPI(matchId),
         enabled: !!matchId,
         staleTime: 30 * 1000,
+        refetchInterval: (query) => {
+            const status = query.state.data?.status;
+            return status === 'pending' || status === 'active' ? 2000 : false;
+        },
     });
 
     // ── Result polling (after a call, poll until partner decides) ────────────
@@ -189,10 +198,12 @@ export function useVibeCheck(matchId: string, activeVibeCheckId?: string) {
 
         // Mutations
         createVibeCheck: createMutation.mutate,
+        createVibeCheckAsync: createMutation.mutateAsync,
         isCreating: createMutation.isPending,
         createdSession: createMutation.data,
 
         joinVibeCheck: joinMutation.mutate,
+        joinVibeCheckAsync: joinMutation.mutateAsync,
         isJoining: joinMutation.isPending,
         joinedSession: joinMutation.data,
 
