@@ -8,6 +8,7 @@ import {
     ScrollView,
     KeyboardAvoidingView,
     Platform,
+    ActivityIndicator,
 } from 'react-native';
 import Animated, {
     useSharedValue,
@@ -19,16 +20,21 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Calendar, User, MagnifyingGlass, CheckCircle } from 'phosphor-react-native';
+import { Calendar, User, MagnifyingGlass, CheckCircle, MapPin } from 'phosphor-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Phone } from 'phosphor-react-native';
 import { AsYouType, parsePhoneNumberFromString } from 'libphonenumber-js';
+import * as Location from 'expo-location';
 
 interface TheEssentialsProps {
     data: {
         firstName: string;
         lastName: string;
         phoneNumber: string;
+        currentLocation: string;
+        locationLatitude: string;
+        locationLongitude: string;
+        locationPermissionStatus: 'granted' | 'denied' | 'undetermined' | 'unknown';
         age: number;
         zodiacSign: string;
         gender: string;
@@ -137,18 +143,20 @@ const ChipSelector = ({
 
 export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
     const hasPrefilledName = (data.firstName || '').trim().length >= 2 && (data.lastName || '').trim().length >= 2;
-    const [step, setStep] = useState(hasPrefilledName ? 1 : 0); // 0: name, 1: phone, 2: birthday, 3: gender, 4: looking for
+    const [step, setStep] = useState(hasPrefilledName ? 1 : 0); // 0: name, 1: phone, 2: birthday, 3: gender, 4: looking for, 5: location
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [birthday, setBirthday] = useState<Date | null>(null);
     const [firstName, setFirstName] = useState(data.firstName || '');
     const [lastName, setLastName] = useState(data.lastName || '');
     const [phoneNumber, setPhoneNumber] = useState(data.phoneNumber || '');
     const [phoneError, setPhoneError] = useState('');
+    const [isRequestingLocation, setIsRequestingLocation] = useState(false);
+    const [locationError, setLocationError] = useState('');
 
     const progressWidth = useSharedValue(0);
 
     useEffect(() => {
-        progressWidth.value = withSpring(((step + 1) / 5) * 100, { damping: 15 });
+        progressWidth.value = withSpring(((step + 1) / 6) * 100, { damping: 15 });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [step]);
 
@@ -255,7 +263,92 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
     const handleLookingForSelect = (lookingFor: string) => {
         onUpdate({ lookingFor });
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        setTimeout(onNext, 500);
+        setTimeout(() => setStep(5), 300);
+    };
+
+    const formatLocationLabel = (placemark?: Location.LocationGeocodedAddress | null) => {
+        if (!placemark) {
+            return '';
+        }
+
+        const parts = [
+            placemark.name,
+            placemark.street,
+            placemark.district,
+            placemark.city,
+            placemark.region,
+            placemark.country,
+        ]
+            .map((value) => value?.trim())
+            .filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index);
+
+        return parts.join(', ');
+    };
+
+    const handleLocationPermission = async () => {
+        setIsRequestingLocation(true);
+        setLocationError('');
+
+        try {
+            const permission = await Location.requestForegroundPermissionsAsync();
+
+            if (permission.status !== 'granted') {
+                onUpdate({
+                    currentLocation: '',
+                    locationLatitude: '',
+                    locationLongitude: '',
+                    locationPermissionStatus: permission.status,
+                });
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                setLocationError('Location access was skipped. You can still continue and add it later from your profile.');
+                return;
+            }
+
+            const currentPosition = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+            });
+            const reverseResults = await Location.reverseGeocodeAsync({
+                latitude: currentPosition.coords.latitude,
+                longitude: currentPosition.coords.longitude,
+            });
+
+            const readableLocation =
+                formatLocationLabel(reverseResults[0]) ||
+                `${currentPosition.coords.latitude.toFixed(5)}, ${currentPosition.coords.longitude.toFixed(5)}`;
+
+            onUpdate({
+                currentLocation: readableLocation,
+                locationLatitude: String(currentPosition.coords.latitude),
+                locationLongitude: String(currentPosition.coords.longitude),
+                locationPermissionStatus: permission.status,
+            });
+
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setTimeout(onNext, 250);
+        } catch (error) {
+            console.error('[TheEssentials] Failed to capture location:', error);
+            onUpdate({
+                currentLocation: '',
+                locationLatitude: '',
+                locationLongitude: '',
+                locationPermissionStatus: 'denied',
+            });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            setLocationError('We could not fetch your location right now. You can continue and update it later from your profile.');
+        } finally {
+            setIsRequestingLocation(false);
+        }
+    };
+
+    const handleSkipLocation = () => {
+        onUpdate({
+            currentLocation: '',
+            locationLatitude: '',
+            locationLongitude: '',
+            locationPermissionStatus: data.locationPermissionStatus === 'granted' ? 'granted' : 'denied',
+        });
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onNext();
     };
 
     const genderOptions = [
@@ -507,6 +600,65 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                         />
                     </Animated.View>
                 )}
+
+                {step === 5 && (
+                    <Animated.View entering={SlideInRight.springify()} style={styles.stepContainer}>
+                        <View style={styles.iconContainer}>
+                            <MapPin size={32} color="#ec4899" weight="fill" />
+                        </View>
+                        <Text style={styles.stepTitle}>Use your current location?</Text>
+                        <Text style={styles.stepSubtitle}>
+                            We use your phone location to place you more accurately and help the app show the right people and date context near you.
+                        </Text>
+
+                        <View style={styles.locationCard}>
+                            <Text style={styles.locationCardTitle}>Why we ask</Text>
+                            <Text style={styles.locationCardText}>
+                                Allowing location gives us your real area from the phone instead of relying on a manual text field.
+                            </Text>
+                            <Text style={styles.locationCardText}>
+                                If you do not want to share it now, you can continue and update it later in your profile.
+                            </Text>
+                            {!!data.currentLocation && (
+                                <Text style={styles.locationPreview}>
+                                    Current pick: {data.currentLocation}
+                                </Text>
+                            )}
+                        </View>
+
+                        {!!locationError && (
+                            <Text style={styles.phoneErrorText}>{locationError}</Text>
+                        )}
+
+                        <TouchableOpacity
+                            onPress={handleLocationPermission}
+                            disabled={isRequestingLocation}
+                            activeOpacity={0.8}
+                        >
+                            <LinearGradient
+                                colors={['#ec4899', '#f43f5e']}
+                                style={styles.continueButton}
+                            >
+                                {isRequestingLocation ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={styles.continueButtonText}>
+                                        Allow location access
+                                    </Text>
+                                )}
+                            </LinearGradient>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={handleSkipLocation}
+                            disabled={isRequestingLocation}
+                            style={styles.secondaryButton}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.secondaryButtonText}>Continue without location</Text>
+                        </TouchableOpacity>
+                    </Animated.View>
+                )}
             </ScrollView>
         </KeyboardAvoidingView>
     );
@@ -636,6 +788,31 @@ const styles = StyleSheet.create({
     inputContainer: {
         marginBottom: 16,
     },
+    locationCard: {
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.12)',
+        gap: 10,
+    },
+    locationCardTitle: {
+        color: '#fff',
+        fontSize: 17,
+        fontWeight: '700',
+    },
+    locationCardText: {
+        color: '#cbd5e1',
+        fontSize: 15,
+        lineHeight: 22,
+    },
+    locationPreview: {
+        color: '#f9a8d4',
+        fontSize: 14,
+        lineHeight: 20,
+        marginTop: 4,
+    },
     errorBanner: {
         backgroundColor: 'rgba(239, 68, 68, 0.15)',
         padding: 16,
@@ -677,5 +854,15 @@ const styles = StyleSheet.create({
     },
     chipTextSelected: {
         color: '#fff',
+    },
+    secondaryButton: {
+        alignItems: 'center',
+        paddingVertical: 16,
+        marginTop: 12,
+    },
+    secondaryButtonText: {
+        color: '#cbd5e1',
+        fontSize: 15,
+        fontWeight: '600',
     },
 });

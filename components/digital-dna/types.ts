@@ -3,6 +3,10 @@ export interface OnboardingData {
     firstName: string;
     lastName: string;
     phoneNumber: string;
+    currentLocation: string;
+    locationLatitude: string;
+    locationLongitude: string;
+    locationPermissionStatus: 'granted' | 'denied' | 'undetermined' | 'unknown';
     university: string;
     course: string;
     yearOfStudy: string;

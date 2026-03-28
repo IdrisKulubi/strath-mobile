@@ -4,7 +4,7 @@ import { ScheduleDateForm } from "./_actions";
 const VIBE_EMOJIS: Record<string, string> = {
     coffee: "☕",
     walk: "🚶",
-    dinner: "🍽️",
+    dinner: "🍽",
     hangout: "🎮",
 };
 
@@ -18,41 +18,38 @@ export default async function PendingDatesPage() {
         <div className="p-8">
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-white">Arranging</h1>
-                <p className="text-sm text-gray-400 mt-1">
+                <p className="mt-1 text-sm text-gray-400">
                     {rows.length} pair{rows.length !== 1 ? "s" : ""} agreed to meet and need a manual setup
                 </p>
             </div>
 
             {rows.length === 0 ? (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-16 text-center text-gray-500">
-                    All clear — no agreed pairs waiting for setup
+                <div className="rounded-xl border border-white/10 bg-white/5 p-16 text-center text-gray-500">
+                    All clear - no agreed pairs waiting for setup
                 </div>
             ) : (
                 <div className="space-y-4">
                     {rows.map((dm) => (
-                        <div key={dm.id} className="bg-white/5 border border-white/10 rounded-xl p-5">
-                            {/* Header */}
-                            <div className="flex items-start justify-between gap-4 mb-4">
+                        <div key={dm.id} className="rounded-xl border border-white/10 bg-white/5 p-5">
+                            <div className="mb-4 flex items-start justify-between gap-4">
                                 <div className="flex items-center gap-4">
-                                    {/* User A */}
                                     <div className="text-center">
-                                        <div className="w-10 h-10 rounded-full bg-purple-600/30 flex items-center justify-center text-sm font-bold text-purple-300 mb-1">
+                                        <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-purple-600/30 text-sm font-bold text-purple-300">
                                             {dm.userA.firstName.charAt(0)}
                                         </div>
                                         <p className="text-xs font-medium text-white">{dm.userA.firstName}</p>
                                     </div>
                                     <div className="text-lg">{VIBE_EMOJIS[dm.vibe] ?? "📅"}</div>
-                                    {/* User B */}
                                     <div className="text-center">
-                                        <div className="w-10 h-10 rounded-full bg-pink-600/30 flex items-center justify-center text-sm font-bold text-pink-300 mb-1">
+                                        <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-pink-600/30 text-sm font-bold text-pink-300">
                                             {dm.userB.firstName.charAt(0)}
                                         </div>
                                         <p className="text-xs font-medium text-white">{dm.userB.firstName}</p>
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <span className="text-xs text-gray-500 capitalize">{dm.vibe}</span>
-                                    <p className="text-xs text-gray-600 mt-0.5">
+                                    <span className="text-xs capitalize text-gray-500">{dm.vibe}</span>
+                                    <p className="mt-0.5 text-xs text-gray-600">
                                         {new Date(dm.createdAt).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}
                                     </p>
                                 </div>
@@ -62,21 +59,21 @@ export default async function PendingDatesPage() {
                                 Both people finished the call and agreed to meet. Pick a saved location and time to move them to Upcoming.
                             </div>
 
-                            {/* Contact info */}
-                            <div className="grid grid-cols-2 gap-3 mb-4 text-xs text-gray-400">
-                                <div className="bg-white/5 rounded-lg p-3">
-                                    <p className="font-medium text-gray-300 mb-1">{dm.userA.firstName}</p>
-                                    {dm.userA.phone && <p>📞 {dm.userA.phone}</p>}
-                                    {dm.userA.email && <p className="truncate">✉ {dm.userA.email}</p>}
+                            <div className="mb-4 grid grid-cols-2 gap-3 text-xs text-gray-400">
+                                <div className="rounded-lg bg-white/5 p-3">
+                                    <p className="mb-1 font-medium text-gray-300">{dm.userA.firstName}</p>
+                                    {dm.userA.phone && <p>Phone: {dm.userA.phone}</p>}
+                                    {dm.userA.email && <p className="truncate">Email: {dm.userA.email}</p>}
+                                    {dm.userA.location && <p className="mt-1 text-[11px] text-gray-500">Location: {dm.userA.location}</p>}
                                 </div>
-                                <div className="bg-white/5 rounded-lg p-3">
-                                    <p className="font-medium text-gray-300 mb-1">{dm.userB.firstName}</p>
-                                    {dm.userB.phone && <p>📞 {dm.userB.phone}</p>}
-                                    {dm.userB.email && <p className="truncate">✉ {dm.userB.email}</p>}
+                                <div className="rounded-lg bg-white/5 p-3">
+                                    <p className="mb-1 font-medium text-gray-300">{dm.userB.firstName}</p>
+                                    {dm.userB.phone && <p>Phone: {dm.userB.phone}</p>}
+                                    {dm.userB.email && <p className="truncate">Email: {dm.userB.email}</p>}
+                                    {dm.userB.location && <p className="mt-1 text-[11px] text-gray-500">Location: {dm.userB.location}</p>}
                                 </div>
                             </div>
 
-                            {/* Schedule form */}
                             <ScheduleDateForm matchId={dm.id} locations={locations} />
                         </div>
                     ))}

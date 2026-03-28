@@ -132,6 +132,15 @@ export async function PATCH(req: NextRequest) {
         if (shouldUpdateAiConsent) {
             (filteredData as Record<string, unknown>).aiConsentUpdatedAt = new Date();
         }
+        const shouldUpdateLocation = [
+            "currentLocation",
+            "locationLatitude",
+            "locationLongitude",
+            "locationPermissionStatus",
+        ].some((key) => Object.prototype.hasOwnProperty.call(filteredData, key));
+        if (shouldUpdateLocation) {
+            (filteredData as Record<string, unknown>).locationUpdatedAt = new Date();
+        }
         console.log('[PATCH /api/user/me] Filtered data keys:', Object.keys(filteredData));
 
         // Check if profile exists

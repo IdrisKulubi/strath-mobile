@@ -23,6 +23,11 @@ export interface Profile {
     snapchat?: string;
     profilePhoto?: string;
     phoneNumber?: string;
+    currentLocation?: string;
+    locationLatitude?: string;
+    locationLongitude?: string;
+    locationPermissionStatus?: 'granted' | 'denied' | 'undetermined' | 'unknown';
+    locationUpdatedAt?: string | null;
     firstName: string;
     lastName: string;
     drinkingPreference?: string;

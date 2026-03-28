@@ -24,7 +24,8 @@
         "NSCameraUsageDescription": "Strathspace uses your camera to take profile photos. For example, you can capture a new selfie to add to your dating profile so other students can see what you look like.",
         "NSPhotoLibraryUsageDescription": "Strathspace accesses your photo library to let you choose existing photos for your profile. For example, you can select up to 6 photos to showcase your personality and interests to potential matches.",
         "NSPhotoLibraryAddUsageDescription": "Strathspace saves photos to your library when you choose to download images from chat conversations. For example, you can save a photo that a match shared with you.",
-        "NSMicrophoneUsageDescription": "Strathspace needs microphone access so you can use voice search to find matches."
+        "NSMicrophoneUsageDescription": "Strathspace needs microphone access so you can use voice search to find matches.",
+        "NSLocationWhenInUseUsageDescription": "Strathspace uses your location while you use the app so we can save your real area during onboarding and show more relevant nearby dating activity."
       }
     },
     "android": {
@@ -37,6 +38,10 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -60,6 +65,7 @@
       "expo-secure-store",
       "expo-web-browser",
       "@react-native-community/datetimepicker",
+      "expo-location",
       "expo-font",
       "expo-apple-authentication"
     ],

@@ -99,11 +99,15 @@ export async function getAdminDateRequests(statusFilter?: string) {
                     firstName: fromProfile?.firstName ?? fromProfile?.user?.name?.split(" ")[0] ?? "Unknown",
                     profilePhoto: fromProfile?.profilePhoto ?? fromProfile?.user?.image,
                     email: fromProfile?.user?.email,
+                    phone: fromProfile?.phoneNumber ?? fromProfile?.user?.phoneNumber,
+                    location: fromProfile?.currentLocation,
                 },
                 toUser: {
                     firstName: toProfile?.firstName ?? toProfile?.user?.name?.split(" ")[0] ?? "Unknown",
                     profilePhoto: toProfile?.profilePhoto ?? toProfile?.user?.image,
                     email: toProfile?.user?.email,
+                    phone: toProfile?.phoneNumber ?? toProfile?.user?.phoneNumber,
+                    location: toProfile?.currentLocation,
                 },
             };
         })
@@ -139,15 +143,17 @@ export async function getAdminPendingDates() {
                     id: dm.userAId,
                     firstName: profileA?.firstName ?? profileA?.user?.name?.split(" ")[0] ?? "Unknown",
                     profilePhoto: profileA?.profilePhoto ?? profileA?.user?.image,
-                    phone: profileA?.user?.phoneNumber,
+                    phone: profileA?.phoneNumber ?? profileA?.user?.phoneNumber,
                     email: profileA?.user?.email,
+                    location: profileA?.currentLocation,
                 },
                 userB: {
                     id: dm.userBId,
                     firstName: profileB?.firstName ?? profileB?.user?.name?.split(" ")[0] ?? "Unknown",
                     profilePhoto: profileB?.profilePhoto ?? profileB?.user?.image,
-                    phone: profileB?.user?.phoneNumber,
+                    phone: profileB?.phoneNumber ?? profileB?.user?.phoneNumber,
                     email: profileB?.user?.email,
+                    location: profileB?.currentLocation,
                 },
             };
         })
