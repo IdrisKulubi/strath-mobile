@@ -94,7 +94,7 @@ export default function VibeCheckCallScreen() {
     const [callStarted, setCallStarted] = useState(false);
     const [showDecision, setShowDecision] = useState(false);
     const [secondsLeft, setSecondsLeft] = useState(CALL_DURATION_SECONDS);
-    const [inviteSecondsLeft, setInviteSecondsLeft] = useState(0);
+    const [inviteSecondsLeft, setInviteSecondsLeft] = useState<number | null>(null);
 
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const inviteTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -162,7 +162,7 @@ export default function VibeCheckCallScreen() {
         stopInviteTimer();
 
         if (!inviteExpiresAt || vibeCheckStatus?.status !== "pending") {
-            setInviteSecondsLeft(0);
+            setInviteSecondsLeft(null);
             inviteExpiryHandledRef.current = false;
             return;
         }
@@ -178,7 +178,13 @@ export default function VibeCheckCallScreen() {
     }, [inviteExpiresAt, stopInviteTimer, vibeCheckStatus?.status]);
 
     useEffect(() => {
-        if (vibeCheckStatus?.status !== "pending" || inviteSecondsLeft > 0 || inviteExpiryHandledRef.current) {
+        if (
+            vibeCheckStatus?.status !== "pending"
+            || !inviteExpiresAt
+            || inviteSecondsLeft === null
+            || inviteSecondsLeft > 0
+            || inviteExpiryHandledRef.current
+        ) {
             return;
         }
 
@@ -199,7 +205,7 @@ export default function VibeCheckCallScreen() {
         };
 
         handleInviteExpiry();
-    }, [inviteSecondsLeft, refetchStatus, router, toast, vibeCheckStatus?.status]);
+    }, [inviteExpiresAt, inviteSecondsLeft, refetchStatus, router, toast, vibeCheckStatus?.status]);
 
     useEffect(() => {
         const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
@@ -349,7 +355,7 @@ export default function VibeCheckCallScreen() {
                             Waiting for {partnerFirstName ?? "them"} to join
                         </Text>
                         <Text style={[styles.preCallSub, { color: colors.mutedForeground }]}>
-                            They have {INVITE_WINDOW_SECONDS} seconds to join the call.{'\n'}Invite expires in {inviteSecondsLeft}s.
+                            They have {INVITE_WINDOW_SECONDS} seconds to join the call.{'\n'}Invite expires in {inviteSecondsLeft ?? INVITE_WINDOW_SECONDS}s.
                         </Text>
                     </>
                 ) : incomingInvite ? (
