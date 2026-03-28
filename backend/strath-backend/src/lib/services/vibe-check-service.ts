@@ -7,12 +7,18 @@
 import { and, eq, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { matches, mutualMatches, profiles, vibeChecks } from "@/db/schema";
-import { createVibeCheckRoom, deleteVibeCheckRoom } from "./daily-service";
+import {
+    createVibeCheckRoom,
+    deleteVibeCheckRoom,
+    refreshParticipantToken,
+    ROOM_TTL_SECONDS,
+} from "./daily-service";
 
 // ---- Constants ----
 
 const CALL_DURATION_MS = 3 * 60 * 1000; // 3 minutes
 const INVITE_WINDOW_MS = 90 * 1000; // 90 seconds
+const ROOM_TTL_MS = ROOM_TTL_SECONDS * 1000;
 
 /** One conversation topic is randomly selected per call */
 const CONVERSATION_TOPICS: string[] = [
@@ -111,14 +117,29 @@ function isInviteExpired(row: { status?: unknown; scheduledAt?: unknown }) {
     return new Date(String(row.scheduledAt)).getTime() <= Date.now();
 }
 
-async function expirePendingVibeCheck(check: typeof vibeChecks.$inferSelect) {
-    if (!isInviteExpired(check)) {
+function isRoomExpired(row: { status?: unknown; createdAt?: unknown; endedAt?: unknown }) {
+    if (row.status === "completed" || row.status === "cancelled" || row.status === "expired") {
+        return false;
+    }
+
+    if (!row.createdAt) {
+        return false;
+    }
+
+    return new Date(String(row.createdAt)).getTime() + ROOM_TTL_MS <= Date.now();
+}
+
+async function expireStaleVibeCheck(check: typeof vibeChecks.$inferSelect) {
+    if (!isInviteExpired(check) && !isRoomExpired(check)) {
         return false;
     }
 
     await db
         .update(vibeChecks)
-        .set({ status: "expired" })
+        .set({
+            status: "expired",
+            endedAt: check.endedAt ?? new Date(),
+        })
         .where(eq(vibeChecks.id, check.id));
 
     await db
@@ -164,13 +185,21 @@ export async function createOrGetVibeCheck(
     });
 
     if (existing) {
-        if (await expirePendingVibeCheck(existing)) {
+        if (await expireStaleVibeCheck(existing)) {
             return createOrGetVibeCheck(matchId, userId);
         }
 
-        // Refresh a token for this participant
-        const { refreshParticipantToken } = await import("./daily-service");
-        const token = await refreshParticipantToken(existing.roomName);
+        // If the Daily room was already deleted, expire this record and recreate it.
+        let token: string;
+        try {
+            token = await refreshParticipantToken(existing.roomName);
+        } catch (error) {
+            if (error instanceof Error && error.message.includes("404")) {
+                await expireStaleVibeCheck(existing);
+                return createOrGetVibeCheck(matchId, userId);
+            }
+            throw error;
+        }
         return formatSession(existing as Record<string, unknown>, isUser1, token);
     }
 
@@ -220,7 +249,7 @@ export async function joinVibeCheck(
     });
 
     if (!check) throw new Error("Vibe check not found.");
-    if (await expirePendingVibeCheck(check)) {
+    if (await expireStaleVibeCheck(check)) {
         throw new Error("This call invite expired.");
     }
     if (check.status === "expired" || check.status === "cancelled") {
@@ -242,8 +271,16 @@ export async function joinVibeCheck(
             .where(eq(vibeChecks.id, vibeCheckId));
     }
 
-    const { refreshParticipantToken } = await import("./daily-service");
-    const token = await refreshParticipantToken(check.roomName);
+    let token: string;
+    try {
+        token = await refreshParticipantToken(check.roomName);
+    } catch (error) {
+        if (error instanceof Error && error.message.includes("404")) {
+            await expireStaleVibeCheck(check);
+            throw new Error("This call is no longer available. Please start a new one.");
+        }
+        throw error;
+    }
 
     const refreshed = { ...check, status: "active" as const, startedAt: new Date() };
     return formatSession(refreshed as Record<string, unknown>, isUser1, token);
@@ -355,7 +392,7 @@ export async function getVibeCheckStatus(
 
     if (!check) return null;
 
-    await expirePendingVibeCheck(check);
+    await expireStaleVibeCheck(check);
 
     const freshCheck = await db.query.vibeChecks.findFirst({
         where: eq(vibeChecks.id, check.id),
