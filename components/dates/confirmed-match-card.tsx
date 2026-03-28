@@ -13,9 +13,10 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
+import { useToast } from '@/components/ui/toast';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
-import { MutualDate, ARRANGEMENT_STATUS_LABELS } from '@/hooks/use-date-requests';
+import { MutualDate, ARRANGEMENT_STATUS_LABELS, useStartMutualMatchCall } from '@/hooks/use-date-requests';
 
 interface ConfirmedMatchCardProps {
     match: MutualDate;
@@ -51,7 +52,15 @@ const ARRANGEMENT_COLORS: Record<MutualDate['arrangementStatus'], string> = {
 export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
     const { colors, isDark } = useTheme();
     const router = useRouter();
+    const toast = useToast();
+    const { mutateAsync: startMutualMatchCall, isPending: isStartingCall } = useStartMutualMatchCall();
     const statusColor = ARRANGEMENT_COLORS[match.arrangementStatus];
+    const formattedScheduledAt = match.scheduledAt
+        ? new Intl.DateTimeFormat(undefined, {
+            dateStyle: 'full',
+            timeStyle: 'short',
+        }).format(new Date(match.scheduledAt))
+        : null;
 
     const handleViewProfile = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -60,10 +69,32 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
 
     const handleStartCall = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        if (match.legacyMatchId) {
-            router.push(`/vibe-check/${match.legacyMatchId}`);
-        }
-    }, [match.legacyMatchId, router]);
+
+        const start = async () => {
+            try {
+                if (match.arrangementStatus !== 'mutual' && match.legacyMatchId) {
+                    router.push(`/vibe-check/${match.legacyMatchId}?mode=caller`);
+                    return;
+                }
+
+                const result = await startMutualMatchCall(match.id);
+                if (result.partnerAvailability === 'online') {
+                    toast.show({ message: 'They look online. Starting your vibe check now.', variant: 'success' });
+                } else if (result.notificationSent) {
+                    toast.show({ message: 'They are not online right now. We sent them a call notification.', variant: 'default' });
+                } else {
+                    toast.show({ message: 'They are offline right now. Try again in a bit.', variant: 'warning' });
+                }
+
+                router.push(`/vibe-check/${result.matchId}?mode=caller`);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Unable to start the call right now';
+                toast.show({ message, variant: 'danger' });
+            }
+        };
+
+        start();
+    }, [match.arrangementStatus, match.id, match.legacyMatchId, router, startMutualMatchCall, toast]);
 
     return (
         <Animated.View
@@ -143,7 +174,7 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                     )}
                     {match.scheduledAt && (
                         <Text style={[styles.scheduledTime, { color: colors.mutedForeground }]}>
-                            {new Date(match.scheduledAt).toLocaleDateString(undefined, { dateStyle: 'full', timeStyle: 'short' })}
+                            {formattedScheduledAt}
                         </Text>
                     )}
                 </View>
@@ -157,8 +188,8 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                     </Text>
                     <Pressable
                         onPress={handleStartCall}
-                        disabled={!match.legacyMatchId}
-                        style={[styles.callBtn, { backgroundColor: colors.primary, opacity: match.legacyMatchId ? 1 : 0.6 }]}
+                        disabled={isStartingCall}
+                        style={[styles.callBtn, { backgroundColor: colors.primary, opacity: isStartingCall ? 0.6 : 1 }]}
                     >
                         <Ionicons name="call-outline" size={16} color="#fff" />
                         <Text style={styles.callBtnText}>Start 3-Minute Call</Text>
@@ -176,11 +207,21 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
             )}
 
             {match.arrangementStatus === 'mutual' && (
-                <View style={[styles.scheduledBlock, { backgroundColor: isDark ? 'rgba(233,30,140,0.08)' : 'rgba(233,30,140,0.06)', borderColor: 'rgba(233,30,140,0.25)' }]}>
-                    <Ionicons name="sparkles" size={16} color={colors.primary} />
-                    <Text style={[styles.scheduledText, { color: colors.foreground }]}>
-                        Mutual interest unlocked. Start your 3-minute call when you're ready.
-                    </Text>
+                <View style={[styles.callSection, { backgroundColor: isDark ? 'rgba(233,30,140,0.08)' : 'rgba(233,30,140,0.06)', borderColor: 'rgba(233,30,140,0.25)', borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 }]}>
+                    <View style={styles.mutualHintRow}>
+                        <Ionicons name="sparkles" size={16} color={colors.primary} />
+                        <Text style={[styles.scheduledText, { color: colors.foreground, flex: 1 }]}>
+                            Mutual interest unlocked. Start your 3-minute call when you're ready.
+                        </Text>
+                    </View>
+                    <Pressable
+                        onPress={handleStartCall}
+                        disabled={isStartingCall}
+                        style={[styles.callBtn, { backgroundColor: colors.primary, opacity: isStartingCall ? 0.6 : 1 }]}
+                    >
+                        <Ionicons name="call-outline" size={16} color="#fff" />
+                        <Text style={styles.callBtnText}>Start 3-Minute Call</Text>
+                    </Pressable>
                 </View>
             )}
         </Animated.View>
@@ -293,6 +334,11 @@ const styles = StyleSheet.create({
     },
     callSection: {
         gap: 10,
+    },
+    mutualHintRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
     },
     callHint: {
         fontSize: 13,

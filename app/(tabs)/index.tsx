@@ -23,6 +23,7 @@ import { DailyMatchesList } from '@/components/home/daily-matches-list';
 import { EmptyMatches } from '@/components/home/empty-matches';
 import { useToast } from '@/components/ui/toast';
 import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/decision-info-sheet';
+import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 
 function HomeSkeleton() {
     return (
@@ -131,6 +132,7 @@ export default function HomeScreen() {
     }, [respondToPair, toast]);
 
     return (
+        <TabSwipeView route="/(tabs)">
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
             <ScrollView
@@ -188,6 +190,7 @@ export default function HomeScreen() {
                 }}
             />
         </SafeAreaView>
+        </TabSwipeView>
     );
 }
 

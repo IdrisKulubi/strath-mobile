@@ -14,7 +14,7 @@ const DAILY_API_BASE = "https://api.daily.co/v1";
 const DAILY_API_KEY = process.env.DAILY_API_KEY ?? "";
 
 /** How long (seconds) a room stays available after creation */
-const ROOM_TTL_SECONDS = 5 * 60; // 5 min (3 min call + 2 min buffer)
+export const ROOM_TTL_SECONDS = 5 * 60; // 5 min (3 min call + 2 min buffer)
 
 /** Max call duration enforced server-side by Daily.co */
 const MAX_CALL_DURATION_SECONDS = 3 * 60; // 3 minutes

@@ -6,12 +6,19 @@
 
 import { and, eq, or } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { matches, profiles, vibeChecks } from "@/db/schema";
-import { createVibeCheckRoom, deleteVibeCheckRoom } from "./daily-service";
+import { matches, mutualMatches, profiles, vibeChecks } from "@/db/schema";
+import {
+    createVibeCheckRoom,
+    deleteVibeCheckRoom,
+    refreshParticipantToken,
+    ROOM_TTL_SECONDS,
+} from "./daily-service";
 
 // ---- Constants ----
 
 const CALL_DURATION_MS = 3 * 60 * 1000; // 3 minutes
+const INVITE_WINDOW_MS = 90 * 1000; // 90 seconds
+const ROOM_TTL_MS = ROOM_TTL_SECONDS * 1000;
 
 /** One conversation topic is randomly selected per call */
 const CONVERSATION_TOPICS: string[] = [
@@ -50,6 +57,7 @@ export interface VibeCheckSession {
     bothAgreedToMeet: boolean;
     /** Which slot this user occupies — used to return the right token */
     isUser1: boolean;
+    expiresAt: Date | null;
 }
 
 // ---- Helpers ----
@@ -93,7 +101,57 @@ function formatSession(
         user2Decision: (row.user2Decision as "meet" | "pass" | null) ?? null,
         bothAgreedToMeet: Boolean(row.bothAgreedToMeet),
         isUser1,
+        expiresAt: row.scheduledAt ? new Date(String(row.scheduledAt)) : null,
     };
+}
+
+function isInviteExpired(row: { status?: unknown; scheduledAt?: unknown }) {
+    if (row.status !== "pending") {
+        return false;
+    }
+
+    if (!row.scheduledAt) {
+        return false;
+    }
+
+    return new Date(String(row.scheduledAt)).getTime() <= Date.now();
+}
+
+function isRoomExpired(row: { status?: unknown; createdAt?: unknown; endedAt?: unknown }) {
+    if (row.status === "completed" || row.status === "cancelled" || row.status === "expired") {
+        return false;
+    }
+
+    if (!row.createdAt) {
+        return false;
+    }
+
+    return new Date(String(row.createdAt)).getTime() + ROOM_TTL_MS <= Date.now();
+}
+
+async function expireStaleVibeCheck(check: typeof vibeChecks.$inferSelect) {
+    if (!isInviteExpired(check) && !isRoomExpired(check)) {
+        return false;
+    }
+
+    await db
+        .update(vibeChecks)
+        .set({
+            status: "expired",
+            endedAt: check.endedAt ?? new Date(),
+        })
+        .where(eq(vibeChecks.id, check.id));
+
+    await db
+        .update(mutualMatches)
+        .set({ status: "mutual", updatedAt: new Date() })
+        .where(eq(mutualMatches.legacyMatchId, check.matchId));
+
+    deleteVibeCheckRoom(check.roomName).catch(() => {
+        // Let the room expire naturally if cleanup fails
+    });
+
+    return true;
 }
 
 // ---- Public API ----
@@ -127,9 +185,21 @@ export async function createOrGetVibeCheck(
     });
 
     if (existing) {
-        // Refresh a token for this participant
-        const { refreshParticipantToken } = await import("./daily-service");
-        const token = await refreshParticipantToken(existing.roomName);
+        if (await expireStaleVibeCheck(existing)) {
+            return createOrGetVibeCheck(matchId, userId);
+        }
+
+        // If the Daily room was already deleted, expire this record and recreate it.
+        let token: string;
+        try {
+            token = await refreshParticipantToken(existing.roomName);
+        } catch (error) {
+            if (error instanceof Error && error.message.includes("404")) {
+                await expireStaleVibeCheck(existing);
+                return createOrGetVibeCheck(matchId, userId);
+            }
+            throw error;
+        }
         return formatSession(existing as Record<string, unknown>, isUser1, token);
     }
 
@@ -153,6 +223,7 @@ export async function createOrGetVibeCheck(
             user2Id: match.user2Id,
             suggestedTopic: topic,
             status: "pending",
+            scheduledAt: new Date(Date.now() + INVITE_WINDOW_MS),
             // Temporarily store tokens in suggestedTopic-adjacent fields.
             // We overload the roomUrl to carry token info via query params
             // for simplicity; a production system would use a transient KV store.
@@ -178,6 +249,9 @@ export async function joinVibeCheck(
     });
 
     if (!check) throw new Error("Vibe check not found.");
+    if (await expireStaleVibeCheck(check)) {
+        throw new Error("This call invite expired.");
+    }
     if (check.status === "expired" || check.status === "cancelled") {
         throw new Error("This vibe check has ended.");
     }
@@ -197,8 +271,16 @@ export async function joinVibeCheck(
             .where(eq(vibeChecks.id, vibeCheckId));
     }
 
-    const { refreshParticipantToken } = await import("./daily-service");
-    const token = await refreshParticipantToken(check.roomName);
+    let token: string;
+    try {
+        token = await refreshParticipantToken(check.roomName);
+    } catch (error) {
+        if (error instanceof Error && error.message.includes("404")) {
+            await expireStaleVibeCheck(check);
+            throw new Error("This call is no longer available. Please start a new one.");
+        }
+        throw error;
+    }
 
     const refreshed = { ...check, status: "active" as const, startedAt: new Date() };
     return formatSession(refreshed as Record<string, unknown>, isUser1, token);
@@ -300,6 +382,7 @@ export async function getVibeCheckStatus(
     bothAgreedToMeet: boolean;
     userDecision: "meet" | "pass" | null;
     partnerDecided: boolean;
+    scheduledAt: string | null;
 } | null> {
     const check = await db.query.vibeChecks.findFirst({
         where: eq(vibeChecks.matchId, matchId),
@@ -309,21 +392,29 @@ export async function getVibeCheckStatus(
 
     if (!check) return null;
 
-    const isUser1 = check.user1Id === userId;
-    const isUser2 = check.user2Id === userId;
+    await expireStaleVibeCheck(check);
+
+    const freshCheck = await db.query.vibeChecks.findFirst({
+        where: eq(vibeChecks.id, check.id),
+    });
+    if (!freshCheck) return null;
+
+    const isUser1 = freshCheck.user1Id === userId;
+    const isUser2 = freshCheck.user2Id === userId;
     if (!isUser1 && !isUser2) return null;
 
-    const userDecision = isUser1 ? check.user1Decision : check.user2Decision;
-    const partnerDecision = isUser1 ? check.user2Decision : check.user1Decision;
+    const userDecision = isUser1 ? freshCheck.user1Decision : freshCheck.user2Decision;
+    const partnerDecision = isUser1 ? freshCheck.user2Decision : freshCheck.user1Decision;
 
     return {
-        vibeCheckId: check.id,
-        status: check.status as VibeCheckSession["status"],
-        bothAgreedToMeet: check.bothAgreedToMeet ?? false,
+        vibeCheckId: freshCheck.id,
+        status: freshCheck.status as VibeCheckSession["status"],
+        bothAgreedToMeet: freshCheck.bothAgreedToMeet ?? false,
         userDecision: (userDecision as "meet" | "pass" | null) ?? null,
         partnerDecided: partnerDecision !== null && partnerDecision !== undefined,
+        scheduledAt: freshCheck.scheduledAt?.toISOString() ?? null,
     };
 }
 
 // Re-export the call duration so routes and the client can share it
-export { CALL_DURATION_MS, CONVERSATION_TOPICS };
+export { CALL_DURATION_MS, CONVERSATION_TOPICS, INVITE_WINDOW_MS };

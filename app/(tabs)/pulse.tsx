@@ -34,6 +34,7 @@ import { AiConsentCard } from '@/components/ai/ai-consent-card';
 import type { AgentMatch } from '@/hooks/use-agent';
 import { WingmanMatchCard, WingmanMatchDetail } from '@/components/wingman';
 import { clearSession, getAuthToken } from '@/lib/auth-helpers';
+import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 
 // ─── Progress dots ────────────────────────────────────────────────────────────
 function ProgressDots({
@@ -211,6 +212,7 @@ export default function WingmanTabScreen() {
 
   if (!hasAiConsent) {
     return (
+      <TabSwipeView route="/(tabs)/pulse">
       <ScreenGradient edges={['top']} style={s.root}>
         <View style={s.consentWrap}>
           <AiConsentCard
@@ -222,6 +224,7 @@ export default function WingmanTabScreen() {
           />
         </View>
       </ScreenGradient>
+      </TabSwipeView>
     );
   }
 
@@ -229,11 +232,13 @@ export default function WingmanTabScreen() {
 
   if (status.isLoading) {
     return (
+      <TabSwipeView route="/(tabs)/pulse">
       <ScreenGradient edges={['top']} style={s.root}>
         <View style={s.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </ScreenGradient>
+      </TabSwipeView>
     );
   }
 
@@ -245,6 +250,7 @@ export default function WingmanTabScreen() {
     const isNotEnabled = /not enabled|migrations|501|failed to load wingman status/i.test(message);
 
     return (
+      <TabSwipeView route="/(tabs)/pulse">
       <ScreenGradient edges={['top']} style={s.root}>
         <View style={s.centered}>
           <Text style={[s.errorTitle, { color: colors.foreground }]}>Couldn&apos;t load Wingman</Text>
@@ -274,12 +280,14 @@ export default function WingmanTabScreen() {
           )}
         </View>
       </ScreenGradient>
+      </TabSwipeView>
     );
   }
 
   // ─── Main render ──────────────────────────────────────────────────────────
 
   return (
+    <TabSwipeView route="/(tabs)/pulse">
     <ScreenGradient edges={['top']} style={s.root}>
       <ScrollView
         contentContainerStyle={s.scroll}
@@ -596,6 +604,7 @@ export default function WingmanTabScreen() {
         onConnect={handleConnectFromDetail}
       />
     </ScreenGradient>
+    </TabSwipeView>
   );
 }
 

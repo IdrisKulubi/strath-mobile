@@ -3,6 +3,7 @@ import { profiles, swipes, blocks } from "../db/schema";
 import { eq, and, notInArray, inArray } from "drizzle-orm";
 import { getTargetGenders, isReciprocalGenderMatch } from "./gender-preferences";
 import { FACE_VERIFICATION_STATUSES } from "@/lib/services/face-verification-policy";
+import { scoreProfilePair } from "@/lib/services/match-ranking";
 
 export async function getRecommendations(userId: string, limit: number = 20, offset: number = 0, _vibe: string = 'all') {
     void _vibe;
@@ -70,7 +71,7 @@ export async function getRecommendations(userId: string, limit: number = 20, off
     
     console.log('[Matching] Candidates found:', candidates.length);
 
-    // 4. Reciprocal preference filter + simple scoring
+    // 4. Reciprocal preference filter + shared ranking
     const reciprocalCandidates = candidates.filter((candidate) =>
         isReciprocalGenderMatch(
             currentUserProfile.gender,
@@ -82,24 +83,12 @@ export async function getRecommendations(userId: string, limit: number = 20, off
     console.log('[Matching] Reciprocal candidates:', reciprocalCandidates.length);
 
     const scoredCandidates = reciprocalCandidates.map((candidate) => {
-        let score = 0;
-
-        // Same university bonus
-        if (candidate.university && currentUserProfile.university && candidate.university === currentUserProfile.university) {
-            score += 10;
-        }
-
-        // Recent activity bonus
-        const lastActive = candidate.lastActive ? new Date(candidate.lastActive).getTime() : 0;
-        const oneDay = 24 * 60 * 60 * 1000;
-        if (Date.now() - lastActive < oneDay) {
-            score += 5;
-        }
-
-        // Add some randomness to keep it fresh
-        score += Math.random() * 5;
-
-        return { ...candidate, score };
+        const ranking = scoreProfilePair(currentUserProfile, candidate);
+        return {
+            ...candidate,
+            score: ranking.score,
+            matchReasons: ranking.reasons,
+        };
     });
 
     // 5. Sort by score and return paginated

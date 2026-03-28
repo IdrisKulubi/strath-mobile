@@ -53,7 +53,6 @@ export async function processFaceVerificationSession(sessionId: string) {
     }
 
     const similarityThreshold = getFaceVerificationAutoPassSimilarity();
-    const minimumMatchCount = getFaceVerificationMinimumMatchCount();
     const comparisonConcurrency = getFaceVerificationComparisonConcurrency();
 
     try {
@@ -80,6 +79,7 @@ export async function processFaceVerificationSession(sessionId: string) {
             session.profileAssetKeys,
             profilePhotoAssetRows,
         );
+        const minimumMatchCount = getRequiredMatchCount(targetAssetKeys.length);
 
         if (targetAssetKeys.length < 2) {
             return finalizeFaceVerificationProcessing(session.userId, session.id, {
@@ -129,23 +129,6 @@ export async function processFaceVerificationSession(sessionId: string) {
                             rawProviderResponseRedacted: {
                                 sourceFacesDetected: sourceFaceDetection.facesDetected,
                                 targetFacesDetected: 0,
-                                fromAssetMetadata: true,
-                            },
-                        };
-                    }
-
-                    if (assetMetadata?.faceCount && assetMetadata.faceCount > 1) {
-                        return {
-                            sourceAssetKey,
-                            targetAssetKey,
-                            similarity: null,
-                            faceConfidence: sourceFaceDetection.bestFaceConfidence,
-                            facesDetected: assetMetadata.faceCount,
-                            qualityFlags: ["multiple_target_faces"],
-                            decision: "not_matched",
-                            rawProviderResponseRedacted: {
-                                sourceFacesDetected: sourceFaceDetection.facesDetected,
-                                targetFacesDetected: assetMetadata.faceCount,
                                 fromAssetMetadata: true,
                             },
                         };
@@ -267,6 +250,16 @@ function selectTargetAssetKeysForVerification(
     });
 
     return orderedKeys.slice(0, getFaceVerificationMaxProfileComparisons());
+}
+
+function getRequiredMatchCount(targetAssetCount: number) {
+    const configuredMinimum = getFaceVerificationMinimumMatchCount();
+
+    if (targetAssetCount <= 2) {
+        return 1;
+    }
+
+    return Math.min(configuredMinimum, targetAssetCount);
 }
 
 async function runWithConcurrency<TInput, TOutput>(

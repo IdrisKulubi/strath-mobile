@@ -4,6 +4,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import { useRouter } from 'expo-router';
+
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
@@ -54,7 +55,7 @@ export function HistoryCard({ date, index }: HistoryCardProps) {
     const { colors, isDark } = useTheme();
     const router = useRouter();
     const config = STATUS_CONFIG[date.status] ?? STATUS_CONFIG.expired;
-    const showFeedback = date.status === 'attended';
+    const showFeedback = date.status === 'attended' && !date.hasFeedback;
 
     return (
         <Animated.View
@@ -107,9 +108,17 @@ export function HistoryCard({ date, index }: HistoryCardProps) {
                     style={[styles.feedbackBtn, { borderTopColor: colors.border }]}
                 >
                     <Text style={[styles.feedbackBtnText, { color: colors.primary }]}>
-                        Leave feedback →
+                        Leave feedback
                     </Text>
                 </Pressable>
+            )}
+
+            {date.status === 'attended' && date.hasFeedback && (
+                <View style={[styles.feedbackBtn, { borderTopColor: colors.border }]}>
+                    <Text style={[styles.feedbackBtnText, { color: colors.mutedForeground }]}>
+                        Feedback submitted
+                    </Text>
+                </View>
             )}
         </Animated.View>
     );

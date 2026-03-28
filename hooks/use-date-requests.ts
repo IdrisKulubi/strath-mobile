@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-helpers';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -30,6 +30,7 @@ export interface ScheduledDate {
     id: string;
     matchId?: string;
     status: 'pending_setup' | 'scheduled' | 'attended' | 'cancelled' | 'expired';
+    hasFeedback?: boolean;
     venueName?: string;
     venueAddress?: string;
     scheduledAt?: string;
@@ -38,6 +39,14 @@ export interface ScheduledDate {
         firstName: string;
         profilePhoto?: string;
     };
+}
+
+export interface StartCallResult {
+    mutualMatchId: string;
+    matchId: string;
+    vibeCheckId: string;
+    partnerAvailability: 'online' | 'recently_active' | 'offline';
+    notificationSent: boolean;
 }
 
 export function useMutualMatches() {
@@ -72,6 +81,38 @@ export function useDateHistory() {
             return json?.data ?? [];
         },
         staleTime: 60_000,
+    });
+}
+
+export function useStartMutualMatchCall() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (mutualMatchId: string): Promise<StartCallResult> => {
+            const token = await getAuthToken();
+            if (!token) {
+                throw new Error('Not authenticated');
+            }
+
+            const res = await fetch(`${API_URL}/api/mutual-matches/${mutualMatchId}/start-call`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(json?.error ?? `Failed to start call (${res.status})`);
+            }
+
+            return json?.data as StartCallResult;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
+            queryClient.invalidateQueries({ queryKey: ['matches'] });
+        },
     });
 }
 

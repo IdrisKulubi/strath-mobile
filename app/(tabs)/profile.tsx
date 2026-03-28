@@ -3,9 +3,7 @@ import {
     View,
     StyleSheet,
     ScrollView,
-    Dimensions,
 } from 'react-native';
-import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useMyHype } from '@/hooks/use-hype';
@@ -36,8 +34,7 @@ import {
     Globe,
     Church,
 } from 'phosphor-react-native';
-
-const { width } = Dimensions.get('window');
+import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 
 function calculateCompletion(profile: any): number {
     if (!profile) return 0;
@@ -134,6 +131,7 @@ export default function ProfileScreen() {
         }));
 
     return (
+        <TabSwipeView route="/(tabs)/profile">
         <View style={[styles.container, { backgroundColor: isDark ? '#1a0d2e' : colors.background }]}>
             {isDark && (
                 <LinearGradient
@@ -352,6 +350,7 @@ export default function ProfileScreen() {
                 <ProfileActionBar onEditPress={() => handlePress('/edit-profile')} />
             </ScrollView>
         </View>
+        </TabSwipeView>
     );
 }
 

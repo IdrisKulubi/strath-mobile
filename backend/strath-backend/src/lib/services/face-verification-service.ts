@@ -267,11 +267,24 @@ export async function retryFaceVerificationSession(
         : await getLatestFaceVerificationSession(userId);
 
     if (!latestSession) {
-        throw new Error("No verification session found to retry.");
+        return createFaceVerificationSession(userId, { resetActiveSession: false });
+    }
+
+    if (isFaceVerificationActiveStatus(latestSession.status)) {
+        if (isFaceVerificationExpired(latestSession.expiresAt)) {
+            await expireActiveFaceVerificationSession(latestSession.id, latestSession.status);
+            return createFaceVerificationSession(userId, { resetActiveSession: false });
+        }
+
+        return latestSession;
+    }
+
+    if (latestSession.status === FACE_VERIFICATION_STATUSES.VERIFIED || latestSession.status === FACE_VERIFICATION_STATUSES.BLOCKED) {
+        return latestSession;
     }
 
     if (!canRetryFaceVerification(latestSession.status, latestSession.attemptNumber)) {
-        throw new Error("This verification session cannot be retried.");
+        return createFaceVerificationSession(userId, { resetActiveSession: false });
     }
 
     return createFaceVerificationSession(userId, { resetActiveSession: true });
