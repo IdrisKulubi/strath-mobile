@@ -29,6 +29,7 @@ import { useMatches } from "@/hooks/use-matches";
 import { VibeCheckDecision } from "@/components/vibe-check/vibe-check-decision";
 
 const CALL_DURATION_SECONDS = 180;
+const INVITE_WINDOW_SECONDS = 90;
 
 function formatTime(secs: number): string {
     const m = Math.floor(secs / 60).toString().padStart(2, "0");
@@ -193,7 +194,7 @@ export default function VibeCheckCallScreen() {
             }
 
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            toast.show({ message: "They did not join within 1 minute.", variant: "warning" });
+            toast.show({ message: "They did not join within 90 seconds.", variant: "warning" });
             router.replace("/(tabs)/dates");
         };
 
@@ -258,7 +259,7 @@ export default function VibeCheckCallScreen() {
 
     useEffect(() => {
         if (vibeCheckStatus?.status === "expired") {
-            toast.show({ message: "They did not join within 1 minute.", variant: "warning" });
+            toast.show({ message: "They did not join within 90 seconds.", variant: "warning" });
             router.replace("/(tabs)/dates");
         }
     }, [router, toast, vibeCheckStatus?.status]);
@@ -348,7 +349,7 @@ export default function VibeCheckCallScreen() {
                             Waiting for {partnerFirstName ?? "them"} to join
                         </Text>
                         <Text style={[styles.preCallSub, { color: colors.mutedForeground }]}>
-                            They have 1 minute to join the call.{'\n'}Invite expires in {inviteSecondsLeft}s.
+                            They have {INVITE_WINDOW_SECONDS} seconds to join the call.{'\n'}Invite expires in {inviteSecondsLeft}s.
                         </Text>
                     </>
                 ) : incomingInvite ? (
@@ -357,7 +358,7 @@ export default function VibeCheckCallScreen() {
                             {partnerFirstName ?? "Someone"} wants to start your 3-minute call
                         </Text>
                         <Text style={[styles.preCallSub, { color: colors.mutedForeground }]}>
-                            Join within 1 minute to confirm the vibe before the date.
+                            Join within {INVITE_WINDOW_SECONDS} seconds to confirm the vibe before the date.
                         </Text>
                     </>
                 ) : (

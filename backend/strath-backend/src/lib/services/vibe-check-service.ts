@@ -12,7 +12,7 @@ import { createVibeCheckRoom, deleteVibeCheckRoom } from "./daily-service";
 // ---- Constants ----
 
 const CALL_DURATION_MS = 3 * 60 * 1000; // 3 minutes
-const INVITE_WINDOW_MS = 60 * 1000; // 1 minute
+const INVITE_WINDOW_MS = 90 * 1000; // 90 seconds
 
 /** One conversation topic is randomly selected per call */
 const CONVERSATION_TOPICS: string[] = [

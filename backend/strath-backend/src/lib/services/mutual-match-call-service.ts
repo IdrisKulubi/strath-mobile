@@ -78,9 +78,6 @@ export async function startCallForMutualMatch(mutualMatchId: string, userId: str
     ]);
 
     const partnerAvailability = getPartnerAvailability(partner?.isOnline, partner?.lastActive);
-    if (partnerAvailability !== "online") {
-        throw new Error("They are not online right now. Try again when they are active.");
-    }
 
     const legacyMatch = mutualMatch.legacyMatchId
         ? await db.query.matches.findFirst({ where: eq(matches.id, mutualMatch.legacyMatchId) })
