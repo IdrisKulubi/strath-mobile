@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     View,
     StyleSheet,
@@ -27,6 +27,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { useVibeCheck, type VibeCheckSession } from "@/hooks/use-vibe-check";
 import { useMatches } from "@/hooks/use-matches";
 import { VibeCheckDecision } from "@/components/vibe-check/vibe-check-decision";
+import { useWaitingRoomHaptics } from "@/components/vibe-check/use-waiting-room-haptics";
 
 const CALL_DURATION_SECONDS = 180;
 const INVITE_WINDOW_SECONDS = 90;
@@ -98,6 +99,7 @@ export default function VibeCheckCallScreen() {
 
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const inviteTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const inviteExpiryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const startTimeRef = useRef<number | null>(null);
     const autoJoinTriggeredRef = useRef(false);
     const inviteExpiryHandledRef = useRef(false);
@@ -106,13 +108,6 @@ export default function VibeCheckCallScreen() {
     const currentMatch = matchesData?.matches?.find((m) => m.id === matchId);
     const partnerFirstName = currentMatch?.partner?.name?.split(" ")[0] ?? null;
     const partnerPhoto = currentMatch?.partner?.image ?? null;
-
-    const inviteExpiresAt = useMemo(() => {
-        if (!vibeCheckStatus?.scheduledAt) {
-            return null;
-        }
-        return new Date(vibeCheckStatus.scheduledAt);
-    }, [vibeCheckStatus?.scheduledAt]);
 
     const startTimer = useCallback(() => {
         startTimeRef.current = Date.now();
@@ -143,6 +138,26 @@ export default function VibeCheckCallScreen() {
         }
     }, []);
 
+    const stopInviteExpiryTimeout = useCallback(() => {
+        if (inviteExpiryTimeoutRef.current) {
+            clearTimeout(inviteExpiryTimeoutRef.current);
+            inviteExpiryTimeoutRef.current = null;
+        }
+    }, []);
+
+    const handleInviteExpiry = useCallback(() => {
+        if (inviteExpiryHandledRef.current) {
+            return;
+        }
+
+        inviteExpiryHandledRef.current = true;
+        stopInviteTimer();
+        setInviteSecondsLeft(0);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        toast.show({ message: "They did not join within 90 seconds.", variant: "warning" });
+        router.replace("/(tabs)/dates");
+    }, [router, stopInviteTimer, toast]);
+
     const stopCallAndShowDecision = useCallback((durationSeconds: number) => {
         stopTimer();
         if (session?.id) {
@@ -155,57 +170,36 @@ export default function VibeCheckCallScreen() {
         return () => {
             stopTimer();
             stopInviteTimer();
+            stopInviteExpiryTimeout();
         };
-    }, [stopInviteTimer, stopTimer]);
+    }, [stopInviteExpiryTimeout, stopInviteTimer, stopTimer]);
 
     useEffect(() => {
         stopInviteTimer();
+        stopInviteExpiryTimeout();
 
-        if (!inviteExpiresAt || vibeCheckStatus?.status !== "pending") {
+        if (vibeCheckStatus?.status !== "pending") {
             setInviteSecondsLeft(null);
             inviteExpiryHandledRef.current = false;
             return;
         }
 
+        const deadlineMs = Date.now() + INVITE_WINDOW_SECONDS * 1000;
+
         const syncInviteSeconds = () => {
-            setInviteSecondsLeft(Math.max(0, Math.ceil((inviteExpiresAt.getTime() - Date.now()) / 1000)));
+            const remainingSeconds = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
+            setInviteSecondsLeft(remainingSeconds);
         };
 
         syncInviteSeconds();
         inviteTimerRef.current = setInterval(syncInviteSeconds, 1000);
+        inviteExpiryTimeoutRef.current = setTimeout(handleInviteExpiry, INVITE_WINDOW_SECONDS * 1000);
 
-        return () => stopInviteTimer();
-    }, [inviteExpiresAt, stopInviteTimer, vibeCheckStatus?.status]);
-
-    useEffect(() => {
-        if (
-            vibeCheckStatus?.status !== "pending"
-            || !inviteExpiresAt
-            || inviteSecondsLeft === null
-            || inviteSecondsLeft > 0
-            || inviteExpiryHandledRef.current
-        ) {
-            return;
-        }
-
-        inviteExpiryHandledRef.current = true;
-
-        const handleInviteExpiry = async () => {
-            const latest = await refetchStatus().catch(() => null);
-            const latestStatus = latest?.data?.status;
-
-            if (latestStatus === "active") {
-                inviteExpiryHandledRef.current = false;
-                return;
-            }
-
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            toast.show({ message: "They did not join within 90 seconds.", variant: "warning" });
-            router.replace("/(tabs)/dates");
+        return () => {
+            stopInviteTimer();
+            stopInviteExpiryTimeout();
         };
-
-        handleInviteExpiry();
-    }, [inviteExpiresAt, inviteSecondsLeft, refetchStatus, router, toast, vibeCheckStatus?.status]);
+    }, [handleInviteExpiry, stopInviteExpiryTimeout, stopInviteTimer, vibeCheckStatus?.status]);
 
     useEffect(() => {
         const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
@@ -275,6 +269,20 @@ export default function VibeCheckCallScreen() {
         const elapsed = CALL_DURATION_SECONDS - secondsLeft;
         stopCallAndShowDecision(elapsed);
     }, [secondsLeft, stopCallAndShowDecision]);
+
+    const handleLeaveWaitingRoom = useCallback(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        router.replace("/(tabs)/dates");
+    }, [router]);
+
+    const isInWaitingRoom =
+        !(showDecision && session) &&
+        Boolean(matchId) &&
+        !isStatusLoading &&
+        Boolean(vibeCheckStatus?.exists && vibeCheckStatus?.vibeCheckId) &&
+        vibeCheckStatus?.status === "pending";
+
+    useWaitingRoomHaptics(isInWaitingRoom);
 
     if (showDecision && session) {
         return (
@@ -435,11 +443,11 @@ export default function VibeCheckCallScreen() {
                     </TouchableOpacity>
                 )}
 
-                <TouchableOpacity onPress={() => router.replace("/(tabs)/dates")} style={styles.backButton}>
-                    <Text style={[styles.backText, { color: colors.mutedForeground }]}>
-                        {waitingForPartner ? "Leave waiting room" : "Back to Dates"}
-                    </Text>
-                </TouchableOpacity>
+                    <TouchableOpacity onPress={handleLeaveWaitingRoom} style={styles.backButton}>
+                        <Text style={[styles.backText, { color: colors.mutedForeground }]}>
+                            {waitingForPartner ? "Leave waiting room" : "Back to Dates"}
+                        </Text>
+                    </TouchableOpacity>
             </View>
         </SafeAreaView>
     );

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Pressable, Platform, Linking } from 'react-native';
+import { View, StyleSheet, Pressable, Platform, Linking, ScrollView, useWindowDimensions } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,12 +20,17 @@ interface NoInternetScreenProps {
     onRetry?: () => void;
 }
 
-const H_PAD = 24;
+const H_PAD = 28;
 const CONTENT_MAX = 400;
+const FOOTER_TOP_GAP = 32;
 
 export function NoInternetScreen({ onRetry }: NoInternetScreenProps) {
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const insets = useSafeAreaInsets();
+    const { height: windowHeight } = useWindowDimensions();
+
+    const scrollMinHeight = Math.max(0, windowHeight - insets.top - Math.max(insets.bottom, 8));
 
     const pulse = useSharedValue(1);
 
@@ -60,8 +65,18 @@ export function NoInternetScreen({ onRetry }: NoInternetScreenProps) {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right', 'bottom']}>
-            <View style={styles.main}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+            <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    { paddingBottom: Math.max(insets.bottom, 20) },
+                ]}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+            >
+                <View style={[styles.centerColumn, { minHeight: scrollMinHeight }]}>
                 <View style={styles.content}>
                     <Animated.View entering={FadeIn.duration(500)} style={[styles.iconContainer, pulseStyle]}>
                         <LinearGradient
@@ -105,24 +120,38 @@ export function NoInternetScreen({ onRetry }: NoInternetScreenProps) {
                         {onRetry ? (
                             <Pressable
                                 onPress={handleRetry}
-                                style={({ pressed }) => [styles.retryButton, pressed && styles.buttonPressed]}
+                                style={({ pressed }) => [
+                                    styles.retryButton,
+                                    {
+                                        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+                                        backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FAFAFA',
+                                    },
+                                    pressed && styles.buttonPressed,
+                                ]}
                             >
-                                <Ionicons name="refresh" size={18} color={colors.mutedForeground} />
-                                <Text style={[styles.retryButtonText, { color: colors.mutedForeground }]}>Try Again</Text>
+                                <View style={styles.retryRow}>
+                                    <View style={styles.retryIconBox}>
+                                        <Ionicons name="refresh" size={17} color={colors.mutedForeground} />
+                                    </View>
+                                    <Text style={[styles.retryButtonText, { color: colors.mutedForeground }]}>
+                                        Try Again
+                                    </Text>
+                                </View>
                             </Pressable>
                         ) : null}
                     </Animated.View>
-                </View>
-            </View>
 
-            <View style={styles.footer}>
-                <Animated.View entering={FadeIn.delay(600).duration(500)} style={styles.bottomHint}>
-                    <Ionicons name="information-circle-outline" size={16} color={colors.mutedForeground} />
-                    <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-                        Make sure Wi-Fi or mobile data is turned on
-                    </Text>
-                </Animated.View>
-            </View>
+                    <View style={{ height: FOOTER_TOP_GAP }} />
+
+                    <Animated.View entering={FadeIn.delay(600).duration(500)} style={styles.bottomHint}>
+                        <Ionicons name="information-circle-outline" size={18} color={colors.mutedForeground} />
+                        <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                            Make sure Wi-Fi or mobile data is turned on.
+                        </Text>
+                    </Animated.View>
+                </View>
+                </View>
+            </ScrollView>
         </SafeAreaView>
     );
 }
@@ -131,20 +160,29 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    main: {
+    scroll: {
         flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
+        paddingHorizontal: H_PAD,
+        paddingTop: 12,
+    },
+    centerColumn: {
         justifyContent: 'center',
-        minHeight: 0,
+        width: '100%',
     },
     content: {
         width: '100%',
         maxWidth: CONTENT_MAX,
         alignSelf: 'center',
         alignItems: 'center',
-        paddingHorizontal: H_PAD,
     },
     iconContainer: {
         marginBottom: 22,
+        paddingVertical: 10,
+        paddingHorizontal: 10,
+        overflow: 'visible',
     },
     iconBackground: {
         width: 140,
@@ -170,16 +208,23 @@ const styles = StyleSheet.create({
     titleBlock: {
         width: '100%',
         marginBottom: 10,
+        alignItems: 'center',
+        paddingTop: 4,
+        paddingBottom: 2,
     },
     title: {
         fontSize: 24,
         fontWeight: '700',
         textAlign: 'center',
         letterSpacing: -0.3,
+        paddingHorizontal: 8,
+        lineHeight: 30,
+        ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
     },
     descBlock: {
         width: '100%',
-        marginBottom: 26,
+        marginBottom: 28,
+        paddingHorizontal: 2,
     },
     description: {
         fontSize: 15,
@@ -189,50 +234,65 @@ const styles = StyleSheet.create({
     buttonsContainer: {
         width: '100%',
         alignItems: 'stretch',
+        gap: 12,
     },
     settingsButton: {
-        paddingVertical: 14,
-        paddingHorizontal: 24,
+        width: '100%',
+        paddingVertical: 15,
+        paddingHorizontal: 20,
         borderRadius: 14,
         alignItems: 'center',
+        justifyContent: 'center',
     },
     settingsButtonText: {
         fontSize: 16,
         fontWeight: '600',
+        textAlign: 'center',
     },
     retryButton: {
+        width: '100%',
+        borderRadius: 14,
+        borderWidth: StyleSheet.hairlineWidth * 2,
+        overflow: 'hidden',
+    },
+    retryRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 14,
-        marginTop: 4,
+        paddingVertical: 15,
+        paddingHorizontal: 20,
+        minHeight: 52,
+    },
+    retryIconBox: {
+        width: 22,
+        height: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 10,
     },
     retryButtonText: {
         fontSize: 15,
-        fontWeight: '500',
-        marginLeft: 8,
+        fontWeight: '600',
+        lineHeight: 20,
+        textAlign: 'center',
+        ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
     },
     buttonPressed: {
-        opacity: 0.7,
-    },
-    footer: {
-        paddingHorizontal: H_PAD,
-        paddingTop: 12,
-        paddingBottom: 8,
-        alignItems: 'center',
+        opacity: 0.72,
     },
     bottomHint: {
-        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        gap: 10,
         width: '100%',
         maxWidth: CONTENT_MAX,
-        gap: 8,
+        alignSelf: 'center',
+        paddingHorizontal: 8,
     },
     hintText: {
         fontSize: 12,
-        lineHeight: 17,
-        flexShrink: 1,
+        lineHeight: 18,
         textAlign: 'center',
+        width: '100%',
+        maxWidth: CONTENT_MAX - 24,
     },
 });
