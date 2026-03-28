@@ -51,6 +51,7 @@ test("mapLegacyDateStatus keeps legacy date matches compatible with new sections
         userAConfirmed: false,
         userBConfirmed: false,
         status: "pending_setup" as const,
+        locationId: null,
         venueName: null,
         venueAddress: null,
         scheduledAt: null,

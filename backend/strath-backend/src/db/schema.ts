@@ -475,6 +475,25 @@ export const candidatePairHistory = pgTable(
 );
 
 // Date matches — created when a date request is accepted (both sides agreed)
+export const dateLocations = pgTable(
+    "date_locations",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        name: text("name").notNull(),
+        address: text("address").notNull(),
+        vibe: text("vibe").$type<"coffee" | "walk" | "dinner" | "hangout">(),
+        notes: text("notes"),
+        isActive: boolean("is_active").default(true).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        nameIdx: index("date_locations_name_idx").on(table.name),
+        vibeIdx: index("date_locations_vibe_idx").on(table.vibe),
+        activeIdx: index("date_locations_active_idx").on(table.isActive),
+    })
+);
+
 export const dateMatches = pgTable(
     "date_matches",
     {
@@ -499,6 +518,7 @@ export const dateMatches = pgTable(
             .$type<"pending_setup" | "scheduled" | "attended" | "cancelled" | "no_show">()
             .default("pending_setup")
             .notNull(),
+        locationId: uuid("location_id").references(() => dateLocations.id, { onDelete: "set null" }),
         venueName: text("venue_name"),
         venueAddress: text("venue_address"),
         scheduledAt: timestamp("scheduled_at"),
@@ -508,6 +528,7 @@ export const dateMatches = pgTable(
         requestIdx: index("date_match_request_idx").on(table.requestId),
         candidatePairIdx: index("date_match_candidate_pair_idx").on(table.candidatePairId),
         usersIdx: index("date_match_users_idx").on(table.userAId, table.userBId),
+        locationIdx: index("date_match_location_idx").on(table.locationId),
     })
 );
 

@@ -9,6 +9,7 @@ import {
     dateMatches,
     dateFeedback,
     analyticsEvents,
+    dateLocations,
 } from "@/db/schema";
 import { eq, desc, count, and, or, gte, lt, sql } from "drizzle-orm";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
@@ -40,7 +41,14 @@ export async function getAdminMetrics() {
         db.select({ requestsToday: count() }).from(dateRequests).where(gte(dateRequests.createdAt, todayStart)),
         db.select({ totalAccepted: count() }).from(dateRequests).where(eq(dateRequests.status, "accepted")),
         db.select({ totalDeclined: count() }).from(dateRequests).where(eq(dateRequests.status, "declined")),
-        db.select({ pendingSetup: count() }).from(dateMatches).where(eq(dateMatches.status, "pending_setup")),
+        db.select({ pendingSetup: count() }).from(dateMatches).where(
+            and(
+                eq(dateMatches.status, "pending_setup"),
+                eq(dateMatches.callCompleted, true),
+                eq(dateMatches.userAConfirmed, true),
+                eq(dateMatches.userBConfirmed, true),
+            )
+        ),
         db.select({ scheduled: count() }).from(dateMatches).where(eq(dateMatches.status, "scheduled")),
         db.select({ attended: count() }).from(dateMatches).where(eq(dateMatches.status, "attended")),
     ]);
@@ -108,7 +116,14 @@ export async function getAdminPendingDates() {
     const rows = await db
         .select()
         .from(dateMatches)
-        .where(eq(dateMatches.status, "pending_setup"))
+        .where(
+            and(
+                eq(dateMatches.status, "pending_setup"),
+                eq(dateMatches.callCompleted, true),
+                eq(dateMatches.userAConfirmed, true),
+                eq(dateMatches.userBConfirmed, true),
+            )
+        )
         .orderBy(desc(dateMatches.createdAt));
 
     return Promise.all(
@@ -145,15 +160,8 @@ export async function getAdminScheduledDates() {
     const rows = await db
         .select()
         .from(dateMatches)
-        .where(
-            or(
-                eq(dateMatches.status, "scheduled"),
-                eq(dateMatches.status, "attended"),
-                eq(dateMatches.status, "cancelled"),
-                eq(dateMatches.status, "no_show")
-            )
-        )
-        .orderBy(desc(dateMatches.createdAt));
+        .where(eq(dateMatches.status, "scheduled"))
+        .orderBy(desc(dateMatches.scheduledAt), desc(dateMatches.createdAt));
 
     return Promise.all(
         rows.map(async (dm) => {
@@ -165,6 +173,7 @@ export async function getAdminScheduledDates() {
             return {
                 ...dm,
                 createdAt: dm.createdAt.toISOString(),
+                scheduledAt: dm.scheduledAt?.toISOString() ?? null,
                 userA: {
                     firstName: profileA?.firstName ?? profileA?.user?.name?.split(" ")[0] ?? "Unknown",
                     profilePhoto: profileA?.profilePhoto ?? profileA?.user?.image,
@@ -180,6 +189,67 @@ export async function getAdminScheduledDates() {
             };
         })
     );
+}
+
+export async function getAdminDateHistory() {
+    await requireAdmin();
+
+    const rows = await db
+        .select()
+        .from(dateMatches)
+        .where(
+            or(
+                eq(dateMatches.status, "attended"),
+                eq(dateMatches.status, "cancelled"),
+                eq(dateMatches.status, "no_show")
+            )
+        )
+        .orderBy(desc(dateMatches.scheduledAt), desc(dateMatches.createdAt));
+
+    return Promise.all(
+        rows.map(async (dm) => {
+            const [profileA, profileB, feedbackRows] = await Promise.all([
+                db.query.profiles.findFirst({ where: eq(profiles.userId, dm.userAId), with: { user: true } }),
+                db.query.profiles.findFirst({ where: eq(profiles.userId, dm.userBId), with: { user: true } }),
+                db.query.dateFeedback.findMany({ where: eq(dateFeedback.dateMatchId, dm.id) }),
+            ]);
+            return {
+                ...dm,
+                createdAt: dm.createdAt.toISOString(),
+                scheduledAt: dm.scheduledAt?.toISOString() ?? null,
+                userA: {
+                    firstName: profileA?.firstName ?? profileA?.user?.name?.split(" ")[0] ?? "Unknown",
+                    profilePhoto: profileA?.profilePhoto ?? profileA?.user?.image,
+                },
+                userB: {
+                    firstName: profileB?.firstName ?? profileB?.user?.name?.split(" ")[0] ?? "Unknown",
+                    profilePhoto: profileB?.profilePhoto ?? profileB?.user?.image,
+                },
+                feedbackCount: feedbackRows.length,
+                avgRating: feedbackRows.length > 0
+                    ? Math.round((feedbackRows.reduce((s, f) => s + f.rating, 0) / feedbackRows.length) * 10) / 10
+                    : null,
+            };
+        })
+    );
+}
+
+export async function getAdminDateLocations(includeInactive = false) {
+    await requireAdmin();
+
+    const baseQuery = db
+        .select()
+        .from(dateLocations);
+
+    const rows = includeInactive
+        ? await baseQuery.orderBy(desc(dateLocations.createdAt))
+        : await baseQuery.where(eq(dateLocations.isActive, true)).orderBy(desc(dateLocations.createdAt));
+
+    return rows.map((row) => ({
+        ...row,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+    }));
 }
 
 export async function getAdminUsers() {
@@ -226,27 +296,32 @@ export async function scheduleDate(formData: FormData) {
     await requireAdmin();
 
     const matchId = formData.get("matchId") as string;
-    const venueName = formData.get("venueName") as string;
-    const venueAddress = formData.get("venueAddress") as string;
+    const locationId = formData.get("locationId") as string;
     const scheduledAt = formData.get("scheduledAt") as string;
 
-    if (!matchId || !venueName || !scheduledAt) {
+    if (!matchId || !locationId || !scheduledAt) {
         throw new Error("Missing required fields");
     }
 
     const dm = await db.query.dateMatches.findFirst({ where: eq(dateMatches.id, matchId) });
     if (!dm) throw new Error("Date match not found");
 
+    const location = await db.query.dateLocations.findFirst({
+        where: and(eq(dateLocations.id, locationId), eq(dateLocations.isActive, true)),
+    });
+    if (!location) throw new Error("Location not found");
+
     await db.update(dateMatches)
         .set({
             status: "scheduled",
-            venueName: venueName || null,
-            venueAddress: venueAddress || null,
+            locationId: location.id,
+            venueName: location.name,
+            venueAddress: location.address,
             scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         })
         .where(eq(dateMatches.id, matchId));
 
-    logEvent(EVENT_TYPES.DATE_SCHEDULED, null, { matchId, venueName }).catch(() => {});
+    logEvent(EVENT_TYPES.DATE_SCHEDULED, null, { matchId, venueName: location.name, locationId }).catch(() => {});
 
     const [userA, userB] = await Promise.all([
         db.query.user.findFirst({ where: eq(user.id, dm.userAId) }),
@@ -263,7 +338,7 @@ export async function scheduleDate(formData: FormData) {
         dateStyle: "medium",
         timeStyle: "short",
     });
-    const body = `${venueName}, ${venueAddress} — ${dateStr}`;
+    const body = `${location.name}, ${location.address} — ${dateStr}`;
 
     if (userA?.pushToken) {
         await sendPushNotification(userA.pushToken, {
@@ -282,6 +357,8 @@ export async function scheduleDate(formData: FormData) {
 
     revalidatePath("/admin/pending-dates");
     revalidatePath("/admin/scheduled-dates");
+    revalidatePath("/admin/history");
+    revalidatePath("/admin/locations");
     revalidatePath("/admin");
 }
 
@@ -329,7 +406,96 @@ export async function updateDateMatchStatus(matchId: string, status: string) {
 
     revalidatePath("/admin/scheduled-dates");
     revalidatePath("/admin/pending-dates");
+    revalidatePath("/admin/history");
     revalidatePath("/admin");
+}
+
+export async function createDateLocation(formData: FormData) {
+    await requireAdmin();
+
+    const name = String(formData.get("name") ?? "").trim();
+    const address = String(formData.get("address") ?? "").trim();
+    const vibeValue = String(formData.get("vibe") ?? "").trim();
+    const notes = String(formData.get("notes") ?? "").trim();
+
+    if (!name || !address) {
+        throw new Error("Location name and address are required");
+    }
+
+    const vibe =
+        vibeValue === "coffee" || vibeValue === "walk" || vibeValue === "dinner" || vibeValue === "hangout"
+            ? vibeValue
+            : null;
+
+    await db.insert(dateLocations).values({
+        name,
+        address,
+        vibe,
+        notes: notes || null,
+        isActive: true,
+    });
+
+    revalidatePath("/admin/locations");
+    revalidatePath("/admin/pending-dates");
+}
+
+export async function toggleDateLocation(locationId: string, nextActive: boolean) {
+    await requireAdmin();
+
+    await db
+        .update(dateLocations)
+        .set({ isActive: nextActive })
+        .where(eq(dateLocations.id, locationId));
+
+    revalidatePath("/admin/locations");
+    revalidatePath("/admin/pending-dates");
+}
+
+export async function updateDateLocation(formData: FormData) {
+    await requireAdmin();
+
+    const locationId = String(formData.get("locationId") ?? "").trim();
+    const name = String(formData.get("name") ?? "").trim();
+    const address = String(formData.get("address") ?? "").trim();
+    const vibeValue = String(formData.get("vibe") ?? "").trim();
+    const notes = String(formData.get("notes") ?? "").trim();
+
+    if (!locationId || !name || !address) {
+        throw new Error("Location id, name, and address are required");
+    }
+
+    const vibe =
+        vibeValue === "coffee" || vibeValue === "walk" || vibeValue === "dinner" || vibeValue === "hangout"
+            ? vibeValue
+            : null;
+
+    await db
+        .update(dateLocations)
+        .set({
+            name,
+            address,
+            vibe,
+            notes: notes || null,
+        })
+        .where(eq(dateLocations.id, locationId));
+
+    revalidatePath("/admin/locations");
+    revalidatePath("/admin/pending-dates");
+    revalidatePath("/admin/scheduled-dates");
+}
+
+export async function deleteDateLocation(locationId: string) {
+    await requireAdmin();
+
+    if (!locationId) {
+        throw new Error("Location id is required");
+    }
+
+    await db.delete(dateLocations).where(eq(dateLocations.id, locationId));
+
+    revalidatePath("/admin/locations");
+    revalidatePath("/admin/pending-dates");
+    revalidatePath("/admin/scheduled-dates");
 }
 
 export async function getAdminTimeSeries(days = 30) {

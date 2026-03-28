@@ -1,4 +1,4 @@
-import { getAdminPendingDates } from "@/lib/actions/admin";
+import { getAdminDateLocations, getAdminPendingDates } from "@/lib/actions/admin";
 import { ScheduleDateForm } from "./_actions";
 
 const VIBE_EMOJIS: Record<string, string> = {
@@ -9,20 +9,23 @@ const VIBE_EMOJIS: Record<string, string> = {
 };
 
 export default async function PendingDatesPage() {
-    const rows = await getAdminPendingDates();
+    const [rows, locations] = await Promise.all([
+        getAdminPendingDates(),
+        getAdminDateLocations(),
+    ]);
 
     return (
         <div className="p-8">
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-white">Pending Setup</h1>
+                <h1 className="text-2xl font-bold text-white">Arranging</h1>
                 <p className="text-sm text-gray-400 mt-1">
-                    {rows.length} date{rows.length !== 1 ? "s" : ""} waiting to be scheduled
+                    {rows.length} pair{rows.length !== 1 ? "s" : ""} agreed to meet and need a manual setup
                 </p>
             </div>
 
             {rows.length === 0 ? (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-16 text-center text-gray-500">
-                    All clear — no pending dates to schedule
+                    All clear — no agreed pairs waiting for setup
                 </div>
             ) : (
                 <div className="space-y-4">
@@ -55,6 +58,10 @@ export default async function PendingDatesPage() {
                                 </div>
                             </div>
 
+                            <div className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                                Both people finished the call and agreed to meet. Pick a saved location and time to move them to Upcoming.
+                            </div>
+
                             {/* Contact info */}
                             <div className="grid grid-cols-2 gap-3 mb-4 text-xs text-gray-400">
                                 <div className="bg-white/5 rounded-lg p-3">
@@ -70,7 +77,7 @@ export default async function PendingDatesPage() {
                             </div>
 
                             {/* Schedule form */}
-                            <ScheduleDateForm matchId={dm.id} />
+                            <ScheduleDateForm matchId={dm.id} locations={locations} />
                         </div>
                     ))}
                 </div>
