@@ -10,6 +10,7 @@ import {
     dateFeedback,
     analyticsEvents,
     dateLocations,
+    vibeChecks,
 } from "@/db/schema";
 import { eq, desc, count, and, or, gte, lt, sql } from "drizzle-orm";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
@@ -35,6 +36,7 @@ export async function getAdminMetrics() {
         [{ pendingSetup }],
         [{ scheduled }],
         [{ attended }],
+        [{ onCall }],
     ] = await Promise.all([
         db.select({ totalUsers: count() }).from(user),
         db.select({ totalRequestsAllTime: count() }).from(dateRequests),
@@ -51,6 +53,13 @@ export async function getAdminMetrics() {
         ),
         db.select({ scheduled: count() }).from(dateMatches).where(eq(dateMatches.status, "scheduled")),
         db.select({ attended: count() }).from(dateMatches).where(eq(dateMatches.status, "attended")),
+        db.select({ onCall: count() }).from(vibeChecks).where(
+            or(
+                eq(vibeChecks.status, "pending"),
+                eq(vibeChecks.status, "scheduled"),
+                eq(vibeChecks.status, "active"),
+            )
+        ),
     ]);
 
     const totalFeedback = await db.select({ cnt: count() }).from(dateFeedback);
@@ -63,6 +72,7 @@ export async function getAdminMetrics() {
         totalAccepted,
         totalDeclined,
         pendingSetup,
+        onCall,
         scheduled,
         attended,
         totalFeedback: totalFeedback[0].cnt,
@@ -192,6 +202,61 @@ export async function getAdminScheduledDates() {
                 avgRating: feedbackRows.length > 0
                     ? Math.round((feedbackRows.reduce((s, f) => s + f.rating, 0) / feedbackRows.length) * 10) / 10
                     : null,
+            };
+        })
+    );
+}
+
+export async function getAdminOnCallSessions() {
+    await requireAdmin();
+
+    const rows = await db
+        .select()
+        .from(vibeChecks)
+        .where(
+            or(
+                eq(vibeChecks.status, "pending"),
+                eq(vibeChecks.status, "scheduled"),
+                eq(vibeChecks.status, "active"),
+            )
+        )
+        .orderBy(desc(vibeChecks.startedAt), desc(vibeChecks.scheduledAt), desc(vibeChecks.createdAt));
+
+    return Promise.all(
+        rows.map(async (check) => {
+            const [profileA, profileB, dateMatch] = await Promise.all([
+                db.query.profiles.findFirst({ where: eq(profiles.userId, check.user1Id), with: { user: true } }),
+                db.query.profiles.findFirst({ where: eq(profiles.userId, check.user2Id), with: { user: true } }),
+                db.query.dateMatches.findFirst({
+                    where: or(
+                        and(eq(dateMatches.userAId, check.user1Id), eq(dateMatches.userBId, check.user2Id)),
+                        and(eq(dateMatches.userAId, check.user2Id), eq(dateMatches.userBId, check.user1Id)),
+                    ),
+                }),
+            ]);
+
+            return {
+                ...check,
+                createdAt: check.createdAt.toISOString(),
+                scheduledAt: check.scheduledAt?.toISOString() ?? null,
+                startedAt: check.startedAt?.toISOString() ?? null,
+                endedAt: check.endedAt?.toISOString() ?? null,
+                userA: {
+                    id: check.user1Id,
+                    firstName: profileA?.firstName ?? profileA?.user?.name?.split(" ")[0] ?? "Unknown",
+                    email: profileA?.user?.email,
+                    phone: profileA?.phoneNumber ?? profileA?.user?.phoneNumber,
+                    location: profileA?.currentLocation,
+                },
+                userB: {
+                    id: check.user2Id,
+                    firstName: profileB?.firstName ?? profileB?.user?.name?.split(" ")[0] ?? "Unknown",
+                    email: profileB?.user?.email,
+                    phone: profileB?.phoneNumber ?? profileB?.user?.phoneNumber,
+                    location: profileB?.currentLocation,
+                },
+                dateMatchStatus: dateMatch?.status ?? null,
+                callCompleted: dateMatch?.callCompleted ?? false,
             };
         })
     );

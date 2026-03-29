@@ -8,6 +8,7 @@ import {
     Clock3,
     CalendarCheck2,
     CalendarClock,
+    PhoneCall,
     ChevronDown,
     ClipboardList,
     LayoutDashboard,
@@ -57,6 +58,7 @@ const groups: NavGroup[] = [
         items: [
             { href: "/admin/verification", label: "Verification", icon: ShieldCheck },
             { href: "/admin/date-requests", label: "Date Requests", icon: ClipboardList },
+            { href: "/admin/on-call", label: "On Call", icon: PhoneCall },
             { href: "/admin/pending-dates", label: "Arranging", icon: CalendarClock },
             { href: "/admin/scheduled-dates", label: "Upcoming", icon: CalendarCheck2 },
             { href: "/admin/history", label: "History", icon: Clock3 },
