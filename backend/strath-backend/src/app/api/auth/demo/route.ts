@@ -4,12 +4,21 @@ import { eq, or } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { session as sessionTable, user } from "@/db/schema";
+import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
 
 const DEMO_USER_ID = "demo-dates-main";
 const DEMO_USER_EMAIL = "datesdemo@test.com";
 
 export async function POST(request: NextRequest) {
     try {
+        const demoLoginEnabled = await isFeatureEnabled(APP_FEATURE_KEYS.demoLoginEnabled, false);
+        if (!demoLoginEnabled) {
+            return NextResponse.json(
+                { success: false, error: "Demo login is currently disabled" },
+                { status: 403 },
+            );
+        }
+
         const demoUser = await db.query.user.findFirst({
             where: or(eq(user.id, DEMO_USER_ID), eq(user.email, DEMO_USER_EMAIL)),
         });

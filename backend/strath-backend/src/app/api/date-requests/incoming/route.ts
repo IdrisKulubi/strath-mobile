@@ -31,12 +31,18 @@ export async function GET(req: NextRequest) {
                     where: eq(profiles.userId, r.fromUserId),
                     with: { user: true },
                 });
+                const primaryPhoto =
+                    (Array.isArray(fromProfile?.photos) ? fromProfile.photos[0] : null)
+                    ?? fromProfile?.profilePhoto
+                    ?? fromProfile?.user?.profilePhoto
+                    ?? fromProfile?.user?.image
+                    ?? undefined;
 
                 const base = {
                     id: r.fromUserId as string,
                     firstName: fromProfile?.firstName ?? fromProfile?.user?.name?.split(" ")[0] ?? "Unknown",
                     age: fromProfile?.age ?? 0,
-                    profilePhoto: fromProfile?.profilePhoto ?? fromProfile?.user?.profilePhoto ?? fromProfile?.user?.image,
+                    profilePhoto: primaryPhoto,
                 };
 
                 const { score, reasons } = await computeCompatibility(session.user.id, r.fromUserId);

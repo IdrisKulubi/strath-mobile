@@ -1769,6 +1769,7 @@ export type HypeInviteLink = typeof hypeInviteLinks.$inferSelect;
 export type BlindDate = typeof blindDates.$inferSelect;
 export type NewBlindDate = typeof blindDates.$inferInsert;
 export type AgentAnalyticsEvent = typeof agentAnalytics.$inferSelect;
+export type AppFeatureFlag = typeof appFeatureFlags.$inferSelect;
 
 // Analytics events — lightweight funnel tracking
 export const analyticsEvents = pgTable(
@@ -1787,6 +1788,27 @@ export const analyticsEvents = pgTable(
         typeCreatedIdx: index("analytics_event_type_created_idx").on(table.eventType, table.createdAt),
     })
 );
+
+export const appFeatureFlags = pgTable(
+    "app_feature_flags",
+    {
+        key: text("key").primaryKey(),
+        enabled: boolean("enabled").default(false).notNull(),
+        description: text("description"),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+        updatedByUserId: text("updated_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    },
+    (table) => ({
+        updatedByIdx: index("app_feature_flags_updated_by_idx").on(table.updatedByUserId),
+    })
+);
+
+export const appFeatureFlagsRelations = relations(appFeatureFlags, ({ one }) => ({
+    updatedBy: one(user, {
+        fields: [appFeatureFlags.updatedByUserId],
+        references: [user.id],
+    }),
+}));
 
 // Mission type for templates
 export type MissionType = "coffee_meetup" | "song_exchange" | "photo_challenge" | "study_date" |

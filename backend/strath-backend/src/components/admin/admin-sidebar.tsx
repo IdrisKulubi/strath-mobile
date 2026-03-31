@@ -8,6 +8,7 @@ import {
     Clock3,
     CalendarCheck2,
     CalendarClock,
+    Flag,
     PhoneCall,
     ChevronDown,
     ClipboardList,
@@ -63,6 +64,7 @@ const groups: NavGroup[] = [
             { href: "/admin/scheduled-dates", label: "Upcoming", icon: CalendarCheck2 },
             { href: "/admin/history", label: "History", icon: Clock3 },
             { href: "/admin/locations", label: "Locations", icon: MapPinned },
+            { href: "/admin/feature-flags", label: "Feature Flags", icon: Flag },
         ],
     },
     {

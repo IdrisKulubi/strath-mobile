@@ -33,6 +33,7 @@ export default function LoginScreen() {
   const [appleLoading, setAppleLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
   const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
+  const [demoLoginEnabled, setDemoLoginEnabled] = useState(false);
   const router = useRouter();
   const toast = useToast();
   const { colors, isDark } = useTheme();
@@ -49,6 +50,25 @@ export default function LoginScreen() {
       }
     };
     checkAppleAuth();
+  }, []);
+
+  useEffect(() => {
+    const loadFeatureFlags = async () => {
+      try {
+        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://www.strathspace.com';
+        const response = await fetch(`${apiUrl}/api/public/feature-flags`);
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = await response.json();
+        setDemoLoginEnabled(Boolean(payload?.data?.demoLoginEnabled));
+      } catch (error) {
+        console.log('Could not load public feature flags:', error);
+      }
+    };
+
+    loadFeatureFlags();
   }, []);
 
   const handleGoogleAuth = async () => {
@@ -287,37 +307,37 @@ export default function LoginScreen() {
                 </LinearGradient>
               </Pressable>
 
-              {/*
-              <Pressable
-                onPress={handleDemoAuth}
-                disabled={loading || appleLoading || demoLoading}
-                style={({ pressed }) => [
-                  styles.demoBtn,
-                  {
-                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(233,30,140,0.14)',
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(233,30,140,0.05)',
-                    opacity: pressed && !loading && !appleLoading && !demoLoading ? 0.72 : 1,
-                  },
-                ]}
-              >
-                {demoLoading ? (
-                  <ActivityIndicator color={colors.primary} size="small" />
-                ) : (
-                  <View style={styles.demoBtnInner}>
-                    <View style={[styles.demoIconBadge, { backgroundColor: isDark ? 'rgba(233,30,140,0.18)' : 'rgba(233,30,140,0.1)' }]}>
-                      <Ionicons name="flask-outline" size={18} color={colors.primary} />
+              {demoLoginEnabled && (
+                <Pressable
+                  onPress={handleDemoAuth}
+                  disabled={loading || appleLoading || demoLoading}
+                  style={({ pressed }) => [
+                    styles.demoBtn,
+                    {
+                      borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(233,30,140,0.14)',
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(233,30,140,0.05)',
+                      opacity: pressed && !loading && !appleLoading && !demoLoading ? 0.72 : 1,
+                    },
+                  ]}
+                >
+                  {demoLoading ? (
+                    <ActivityIndicator color={colors.primary} size="small" />
+                  ) : (
+                    <View style={styles.demoBtnInner}>
+                      <View style={[styles.demoIconBadge, { backgroundColor: isDark ? 'rgba(233,30,140,0.18)' : 'rgba(233,30,140,0.1)' }]}>
+                        <Ionicons name="flask-outline" size={18} color={colors.primary} />
+                      </View>
+                      <View style={styles.demoTextWrap}>
+                        <Text style={[styles.demoLabelPrimary, { color: colors.foreground }]}>Continue as Demo</Text>
+                        <Text style={[styles.demoLabelSecondary, { color: colors.mutedForeground }]}>
+                          Preview seeded matches and dates
+                        </Text>
+                      </View>
+                      <Ionicons name="arrow-forward" size={18} color={colors.primary} />
                     </View>
-                    <View style={styles.demoTextWrap}>
-                      <Text style={[styles.demoLabelPrimary, { color: colors.foreground }]}>Continue as Demo</Text>
-                      <Text style={[styles.demoLabelSecondary, { color: colors.mutedForeground }]}>
-                        Preview seeded matches and dates
-                      </Text>
-                    </View>
-                    <Ionicons name="arrow-forward" size={18} color={colors.primary} />
-                  </View>
-                )}
-              </Pressable>
-              */}
+                  )}
+                </Pressable>
+              )}
 
               {appleAuthAvailable && (
                 <View style={styles.appleWrap}>

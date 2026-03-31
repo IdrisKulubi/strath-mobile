@@ -11,12 +11,14 @@ import {
     analyticsEvents,
     dateLocations,
     vibeChecks,
+    appFeatureFlags,
 } from "@/db/schema";
 import { eq, desc, count, and, or, gte, lt, sql } from "drizzle-orm";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 import { revalidatePath } from "next/cache";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
+import { APP_FEATURE_KEYS } from "@/lib/feature-flags";
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
@@ -623,6 +625,53 @@ export async function getAdminTimeSeries(days = 30) {
     }
 
     return result;
+}
+
+export async function getAdminFeatureFlags() {
+    await requireAdmin();
+
+    const rows = await db.select().from(appFeatureFlags);
+    const byKey = new Map(rows.map((row) => [row.key, row]));
+
+    return [
+        {
+            key: APP_FEATURE_KEYS.demoLoginEnabled,
+            label: "Demo Login",
+            description: "Controls whether the Apple review demo button appears on the mobile login screen and whether the demo auth endpoint accepts sign-ins.",
+            enabled: byKey.get(APP_FEATURE_KEYS.demoLoginEnabled)?.enabled ?? false,
+            updatedAt: byKey.get(APP_FEATURE_KEYS.demoLoginEnabled)?.updatedAt?.toISOString() ?? null,
+        },
+    ];
+}
+
+export async function setAdminFeatureFlag(key: string, enabled: boolean) {
+    const session = await requireAdmin();
+
+    if (key !== APP_FEATURE_KEYS.demoLoginEnabled) {
+        throw new Error("Unsupported feature flag");
+    }
+
+    await db
+        .insert(appFeatureFlags)
+        .values({
+            key,
+            enabled,
+            updatedByUserId: session.user.id,
+            description:
+                key === APP_FEATURE_KEYS.demoLoginEnabled
+                    ? "Allow the demo login button and demo session endpoint for App Review."
+                    : null,
+        })
+        .onConflictDoUpdate({
+            target: appFeatureFlags.key,
+            set: {
+                enabled,
+                updatedByUserId: session.user.id,
+                updatedAt: new Date(),
+            },
+        });
+
+    revalidatePath("/admin/feature-flags");
 }
 
 export async function setUserRole(userId: string, role: "user" | "admin") {

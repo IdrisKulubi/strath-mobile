@@ -114,6 +114,11 @@ export async function GET(
 
         const isUser1 = match.user1Id === userId;
         const partner = isUser1 ? match.user2 : match.user1;
+        const primaryPartnerPhoto =
+            (Array.isArray(partner.profile?.photos) ? partner.profile.photos[0] : null)
+            ?? partner.profile?.profilePhoto
+            ?? partner.image
+            ?? null;
 
         return successResponse({
             match: {
@@ -121,8 +126,11 @@ export async function GET(
                 partner: {
                     id: partner.id,
                     name: partner.name,
-                    image: partner.image,
-                    profile: partner.profile,
+                    image: primaryPartnerPhoto,
+                    profile: partner.profile ? {
+                        ...partner.profile,
+                        profilePhoto: primaryPartnerPhoto,
+                    } : null,
                 },
                 lastMessage: match.messages[0] || null,
                 createdAt: match.createdAt.toISOString(),

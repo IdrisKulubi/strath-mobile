@@ -47,6 +47,12 @@ export async function GET(req: NextRequest) {
                     where: eq(profiles.userId, otherUserId),
                     with: { user: true },
                 });
+                const primaryPhoto =
+                    (Array.isArray(otherProfile?.photos) ? otherProfile.photos[0] : null)
+                    ?? otherProfile?.profilePhoto
+                    ?? otherProfile?.user?.profilePhoto
+                    ?? otherProfile?.user?.image
+                    ?? undefined;
 
                 const { score, reasons } = await computeCompatibility(session.user.id, otherUserId);
 
@@ -66,7 +72,7 @@ export async function GET(req: NextRequest) {
                         id: otherUserId,
                         firstName: otherProfile?.firstName ?? otherProfile?.user?.name?.split(" ")[0] ?? "Unknown",
                         age: otherProfile?.age ?? 0,
-                        profilePhoto: otherProfile?.profilePhoto ?? otherProfile?.user?.profilePhoto ?? otherProfile?.user?.image,
+                        profilePhoto: primaryPhoto,
                         compatibilityScore: score,
                         compatibilityReasons: reasons,
                     },

@@ -74,6 +74,12 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                 }),
                 computeCompatibility(userId, otherUserId),
             ]);
+            const primaryPhoto =
+                (Array.isArray(profile?.photos) ? profile.photos[0] : null)
+                ?? profile?.profilePhoto
+                ?? profile?.user?.profilePhoto
+                ?? profile?.user?.image
+                ?? undefined;
 
             return {
                 id: row.id,
@@ -83,7 +89,7 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                     id: otherUserId,
                     firstName: profile?.firstName ?? profile?.user?.name?.split(" ")[0] ?? "Unknown",
                     age: profile?.age ?? 0,
-                    profilePhoto: (profile?.profilePhoto ?? profile?.user?.profilePhoto ?? profile?.user?.image) ?? undefined,
+                    profilePhoto: primaryPhoto,
                     compatibilityScore: compatibility.score,
                     compatibilityReasons: compatibility.reasons,
                 },
@@ -116,6 +122,12 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                     }),
                     computeCompatibility(userId, otherUserId),
                 ]);
+                const primaryPhoto =
+                    (Array.isArray(profile?.photos) ? profile.photos[0] : null)
+                    ?? profile?.profilePhoto
+                    ?? profile?.user?.profilePhoto
+                    ?? profile?.user?.image
+                    ?? undefined;
 
                 return {
                     id: row.id,
@@ -124,7 +136,7 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                         id: otherUserId,
                         firstName: profile?.firstName ?? profile?.user?.name?.split(" ")[0] ?? "Unknown",
                         age: profile?.age ?? 0,
-                        profilePhoto: (profile?.profilePhoto ?? profile?.user?.profilePhoto ?? profile?.user?.image) ?? undefined,
+                        profilePhoto: primaryPhoto,
                         compatibilityScore: compatibility.score,
                         compatibilityReasons: compatibility.reasons,
                     },

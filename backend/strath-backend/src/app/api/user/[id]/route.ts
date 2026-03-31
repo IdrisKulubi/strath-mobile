@@ -54,7 +54,16 @@ export async function GET(
             return errorResponse(new Error("User not found or hidden"), 404);
         }
 
-        return successResponse(profile);
+        const normalizedProfilePhoto =
+            (Array.isArray(profile.photos) ? profile.photos[0] : null)
+            ?? profile.profilePhoto
+            ?? profile.user?.image
+            ?? null;
+
+        return successResponse({
+            ...profile,
+            profilePhoto: normalizedProfilePhoto,
+        });
     } catch (error) {
         return errorResponse(error);
     }

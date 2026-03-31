@@ -14,11 +14,15 @@ import { requireMatchmakingAccess } from "@/lib/services/profile-access";
 export const dynamic = "force-dynamic";
 
 function buildUserInfo(
-    profile: { firstName?: string | null; age?: number | null; profilePhoto?: string | null; user?: { name?: string | null; profilePhoto?: string | null; image?: string | null } } | null,
+    profile: { firstName?: string | null; age?: number | null; profilePhoto?: string | null; photos?: string[] | null; user?: { name?: string | null; profilePhoto?: string | null; image?: string | null } } | null,
     userId: string
 ) {
     const u = profile?.user;
-    const profilePhoto = profile?.profilePhoto ?? u?.profilePhoto ?? u?.image;
+    const profilePhoto =
+        (Array.isArray(profile?.photos) ? profile.photos[0] : null)
+        ?? profile?.profilePhoto
+        ?? u?.profilePhoto
+        ?? u?.image;
     return {
         id: userId,
         firstName: profile?.firstName ?? u?.name?.split(" ")[0] ?? "Unknown",

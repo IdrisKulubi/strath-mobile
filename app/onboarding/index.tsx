@@ -260,6 +260,7 @@ export default function OnboardingScreen() {
             const payload = {
                 ...formData,
                 photos: uploadedPhotos,
+                profilePhoto: uploadedPhotos[0] ?? undefined,
                 age: formData.age ? parseInt(String(formData.age)) : undefined,
                 yearOfStudy: formData.yearOfStudy ? parseInt(String(formData.yearOfStudy)) : undefined,
                 interestedIn: getInterestedIn(formData.lookingFor), // Set interestedIn from lookingFor selection
