@@ -138,7 +138,9 @@ export function useVibeCheck(matchId: string, activeVibeCheckId?: string) {
         queryKey: ["vibe-check-status", matchId],
         queryFn: () => getVibeCheckStatusAPI(matchId),
         enabled: !!matchId,
-        staleTime: 30 * 1000,
+        staleTime: 0,
+        refetchOnMount: "always",
+        refetchOnWindowFocus: "always",
         refetchInterval: (query) => {
             const status = query.state.data?.status;
             return status === 'pending' || status === 'active' ? 2000 : false;
@@ -190,6 +192,7 @@ export function useVibeCheck(matchId: string, activeVibeCheckId?: string) {
         // Status
         vibeCheckStatus: statusQuery.data,
         isStatusLoading: statusQuery.isLoading,
+        isStatusFetching: statusQuery.isFetching,
         hasActiveVibeCheck: statusQuery.data?.exists ?? false,
         refetchStatus: statusQuery.refetch,
 

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, StatusBar, Pressable } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { ScreenGradient } from '@/components/ui/screen-gradient';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -39,12 +40,13 @@ export default function DatesScreen() {
     const isDark = colorScheme === 'dark';
     const [activeSection, setActiveSection] = useState<Section>('mutual');
     const [refreshing, setRefreshing] = useState(false);
+    const [isHydratingSections, setIsHydratingSections] = useState(true);
 
     const indicatorX = useSharedValue(0);
     const segmentWidth = useRef(0);
 
     const { data: myProfile } = useProfile();
-    const { data: mutualDates = [], isLoading: loadingMutuals, refetch: refetchMutuals } = useMutualMatches();
+    const { data: mutualDates = [], isLoading: loadingMutuals, isFetching: fetchingMutuals, refetch: refetchMutuals } = useMutualMatches();
     const { data: history = [], isLoading: loadingHistory, refetch: refetchHistory } = useDateHistory();
 
     const [matchModalVisible, setMatchModalVisible] = useState(false);
@@ -57,12 +59,35 @@ export default function DatesScreen() {
         upcoming: mutualDates.filter((item) => item.arrangementStatus === 'upcoming'),
     }), [mutualDates]);
 
+    useFocusEffect(
+        useCallback(() => {
+            let isActive = true;
+
+            const syncLatestDatesState = async () => {
+                setIsHydratingSections(true);
+                try {
+                    await Promise.all([refetchMutuals(), refetchHistory()]);
+                } finally {
+                    if (isActive) {
+                        setIsHydratingSections(false);
+                    }
+                }
+            };
+
+            syncLatestDatesState();
+
+            return () => {
+                isActive = false;
+            };
+        }, [refetchHistory, refetchMutuals]),
+    );
+
     useEffect(() => {
         const newMutual = sections.mutual.find((item) => !seenMatchIds.current.has(item.id));
-        if (!newMutual) return;
+        if (!newMutual || isHydratingSections || fetchingMutuals) return;
         seenMatchIds.current.add(newMutual.id);
         setTimeout(() => setMatchModalVisible(true), 400);
-    }, [sections.mutual]);
+    }, [fetchingMutuals, isHydratingSections, sections.mutual]);
 
     const handleSectionChange = useCallback((section: Section, idx: number) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -89,7 +114,7 @@ export default function DatesScreen() {
 
     const renderContent = () => {
         if (activeSection === 'history') {
-            if (loadingHistory) return <SectionSkeleton />;
+        if (loadingHistory || isHydratingSections) return <SectionSkeleton />;
             if (history.length === 0) return <EmptyDates section="history" />;
             return (
                 <View style={styles.list}>
@@ -100,7 +125,7 @@ export default function DatesScreen() {
             );
         }
 
-        if (loadingMutuals) return <SectionSkeleton />;
+        if (loadingMutuals || isHydratingSections) return <SectionSkeleton />;
 
         const items = sections[activeSection];
         if (items.length === 0) {

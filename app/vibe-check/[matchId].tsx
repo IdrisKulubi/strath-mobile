@@ -85,6 +85,7 @@ export default function VibeCheckCallScreen() {
     const {
         vibeCheckStatus,
         isStatusLoading,
+        isStatusFetching,
         refetchStatus,
         joinVibeCheckAsync,
         isJoining,
@@ -258,11 +259,11 @@ export default function VibeCheckCallScreen() {
     }, [callStarted, callerMode, handleJoinCall, vibeCheckStatus?.status, vibeCheckStatus?.vibeCheckId]);
 
     useEffect(() => {
-        if (vibeCheckStatus?.status === "expired") {
+        if (!isStatusFetching && vibeCheckStatus?.status === "expired") {
             toast.show({ message: "They did not join within 90 seconds.", variant: "warning" });
             router.replace("/(tabs)/dates");
         }
-    }, [router, toast, vibeCheckStatus?.status]);
+    }, [isStatusFetching, router, toast, vibeCheckStatus?.status]);
 
     const handleEndCall = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -299,7 +300,7 @@ export default function VibeCheckCallScreen() {
         );
     }
 
-    if (isStatusLoading || !matchId) {
+    if (isStatusLoading || (!session && isStatusFetching) || !matchId) {
         return (
             <SafeAreaView style={[styles.root, { backgroundColor: isDark ? "#0f0d23" : "#f8fafc" }]}>
                 <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />

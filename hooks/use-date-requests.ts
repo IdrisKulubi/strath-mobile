@@ -62,7 +62,10 @@ export function useMutualMatches() {
             const json = await res.json();
             return json?.data ?? [];
         },
-        staleTime: 30_000,
+        staleTime: 0,
+        refetchOnMount: 'always',
+        refetchOnWindowFocus: 'always',
+        refetchInterval: 10_000,
     });
 }
 
