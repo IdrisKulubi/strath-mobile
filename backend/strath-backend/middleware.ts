@@ -8,6 +8,7 @@ export async function middleware(request: NextRequest) {
     // List of public paths that don't require authentication
     const publicPaths = [
         "/api/auth",
+        "/api/public",
         "/api/hype/write",
         "/api/wingman/submit", // public token-gated endpoint (no user auth needed)
         "/api/test-db",
