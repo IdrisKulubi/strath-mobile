@@ -3,7 +3,7 @@
     "owner": "vehemgroup",
     "name": "strathSpace",
     "slug": "strathSpace",
-    "version": "1.0.2",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "strathspace",
@@ -12,7 +12,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.strathspace.mobile",
-      "buildNumber": "7",
+      "buildNumber": "9",
       "usesAppleSignIn": true,
       "icon": {
         "light": "./assets/images/icon.png",
@@ -29,8 +29,8 @@
       }
     },
     "android": {
-      "package": "com.strathspace.mobile",
-      "versionCode": 4,
+      "package": "com.strathspace.android",
+      "versionCode": 6,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
