@@ -30,7 +30,7 @@
     },
     "android": {
       "package": "com.strathspace.android",
-      "versionCode": 6,
+      "versionCode": 7,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
