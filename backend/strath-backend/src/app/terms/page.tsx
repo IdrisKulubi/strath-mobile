@@ -16,7 +16,7 @@ export default function TermsPage() {
             color: '#333'
         }}>
             <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Terms of Service</h1>
-            <p style={{ color: '#666', marginBottom: '2rem' }}>Last updated: January 2026</p>
+            <p style={{ color: '#666', marginBottom: '2rem' }}>Last updated: April 2026</p>
 
             <section style={{ marginBottom: '2rem' }}>
                 <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>1. Acceptance of Terms</h2>
@@ -75,7 +75,53 @@ export default function TermsPage() {
             </section>
 
             <section style={{ marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>5. User-Generated Content</h2>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#b91c1c' }}>5. Child Safety Standards; Prohibition of CSAE and CSAM</h2>
+                <p style={{ marginBottom: '1rem' }}>
+                    These standards apply to <strong>StrathSpace</strong> (the mobile application listed on Google Play
+                    and other app stores) and the related services we operate under the name <strong>Strathspace</strong>
+                    (together, the &quot;App&quot;).
+                </p>
+                <p style={{ fontWeight: 'bold', marginBottom: '0.75rem' }}>
+                    Prohibition of child sexual abuse and exploitation (CSAE)
+                </p>
+                <p style={{ marginBottom: '1rem' }}>
+                    We strictly prohibit child sexual abuse and exploitation (CSAE) in any form. You must not use the App
+                    to create, upload, solicit, share, distribute, possess, request, or facilitate access to child sexual
+                    abuse material (CSAM), or to groom, entice, endanger, or sexualize minors. Any content or conduct
+                    that violates laws protecting children, or that sexualizes or depicts minors in a sexual or abusive
+                    context, is forbidden.
+                </p>
+                <p style={{ marginBottom: '1rem' }}>
+                    Violations may result in immediate termination of your account, preservation of records as required by
+                    law, and referral to law enforcement and, where applicable, to designated reporting bodies (such as
+                    the National Center for Missing &amp; Exploited Children or regional equivalents).
+                </p>
+                <p style={{ marginBottom: '1rem' }}>
+                    We work to comply with applicable child safety and child endangerment laws and regulations, and with
+                    platform policies that apply to social and dating services.
+                </p>
+                <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>In-app reporting and feedback</p>
+                <p style={{ marginBottom: '1rem' }}>
+                    You can report users, messages, or other content through the in-app <strong>Report</strong> option (for
+                    example, from a profile or conversation menu). Reports are reviewed by our team, typically within 24
+                    hours, and we take action when violations are confirmed.
+                </p>
+                <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>Child safety point of contact</p>
+                <p style={{ marginBottom: '0.5rem' }}>
+                    For questions about our CSAM prevention practices, child safety compliance, or to escalate a
+                    child-safety concern, contact:
+                </p>
+                <p style={{ marginBottom: '0' }}>
+                    <strong>Email:</strong>{' '}
+                    <a href="mailto:support@strathspace.com?subject=Child%20safety" style={{ color: '#ec4899' }}>
+                        support@strathspace.com
+                    </a>
+                    {' '}(please use the subject line &quot;Child safety&quot; for urgent CSAM-related reports).
+                </p>
+            </section>
+
+            <section style={{ marginBottom: '2rem' }}>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>6. User-Generated Content</h2>
                 <p>
                     You retain ownership of content you create and share on Strathspace. However, by
                     posting content, you grant us a non-exclusive, worldwide, royalty-free license to
@@ -89,7 +135,7 @@ export default function TermsPage() {
             </section>
 
             <section style={{ marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>6. Reporting & Moderation</h2>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>7. Reporting & Moderation</h2>
                 <p>
                     We provide tools to report objectionable content and abusive users. All reports
                     are reviewed by our moderation team, typically within 24 hours. We take appropriate
@@ -105,7 +151,7 @@ export default function TermsPage() {
             </section>
 
             <section style={{ marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>7. Blocking Users</h2>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>8. Blocking Users</h2>
                 <p>
                     You can block any user at any time. Blocked users will not be able to view your
                     profile, send you messages, or interact with you in any way. Blocking is mutual
@@ -114,7 +160,7 @@ export default function TermsPage() {
             </section>
 
             <section style={{ marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>8. Privacy</h2>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>9. Privacy</h2>
                 <p>
                     Your privacy is important to us. Please review our{' '}
                     <a href="/privacy" style={{ color: '#ec4899' }}>Privacy Policy</a> to understand
@@ -125,7 +171,7 @@ export default function TermsPage() {
             </section>
 
             <section style={{ marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>9. Safety</h2>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>10. Safety</h2>
                 <p>
                     While we strive to create a safe environment, we cannot guarantee the behavior of
                     other users. You are responsible for your own safety when interacting with others.
@@ -140,7 +186,7 @@ export default function TermsPage() {
             </section>
 
             <section style={{ marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>10. Intellectual Property</h2>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>11. Intellectual Property</h2>
                 <p>
                     The App and its original content, features, and functionality are owned by
                     Strathspace and are protected by international copyright, trademark, and other
@@ -150,7 +196,7 @@ export default function TermsPage() {
             </section>
 
             <section style={{ marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>11. Disclaimers</h2>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>12. Disclaimers</h2>
                 <p>
                     THE APP IS PROVIDED &quot;AS IS&quot; AND &quot;AS AVAILABLE&quot; WITHOUT WARRANTIES OF ANY KIND.
                     WE DO NOT GUARANTEE THAT THE APP WILL BE UNINTERRUPTED, SECURE, OR ERROR-FREE.
@@ -159,7 +205,7 @@ export default function TermsPage() {
             </section>
 
             <section style={{ marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>12. Limitation of Liability</h2>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>13. Limitation of Liability</h2>
                 <p>
                     TO THE MAXIMUM EXTENT PERMITTED BY LAW, STRATHSPACE SHALL NOT BE LIABLE FOR ANY
                     INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING FROM
@@ -169,7 +215,7 @@ export default function TermsPage() {
             </section>
 
             <section style={{ marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>13. Termination</h2>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>14. Termination</h2>
                 <p>
                     We may terminate or suspend your account immediately, without prior notice or
                     liability, for any reason, including breach of these Terms. Upon termination,
@@ -178,7 +224,7 @@ export default function TermsPage() {
             </section>
 
             <section style={{ marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>14. Governing Law</h2>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>15. Governing Law</h2>
                 <p>
                     These Terms shall be governed by and construed in accordance with the laws of
                     Kenya, without regard to its conflict of law provisions.
@@ -186,7 +232,7 @@ export default function TermsPage() {
             </section>
 
             <section style={{ marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>15. Contact Us</h2>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>16. Contact Us</h2>
                 <p>
                     If you have any questions about these Terms, please contact us at:
                 </p>

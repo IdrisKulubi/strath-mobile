@@ -414,6 +414,14 @@ export default function ProfileViewScreen() {
                 completed={profile.currentUserDecision !== 'pending'}
                 disabled={!profile.pairId || respondToPair.isPending}
                 label={profile.pairId ? 'Open to Meet' : "Not in today's curated set"}
+                safetyTarget={{
+                    userId: profile.userId,
+                    userName: profile.firstName || 'User',
+                }}
+                onSafetyActionComplete={() => {
+                    queryClient.invalidateQueries({ queryKey: ['candidatePairs', 'daily'] });
+                    router.back();
+                }}
             />
 
             <ProfilePhotoViewer
