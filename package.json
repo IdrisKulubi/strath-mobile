@@ -8,7 +8,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "generate:android-icon": "python scripts/generate-android-adaptive-icon.py"
   },
   "dependencies": {
     "@better-auth/expo": "^1.4.1",

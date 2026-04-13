@@ -30,11 +30,11 @@
     },
     "android": {
       "package": "com.strathspace.android",
-      "versionCode": 11,
-      "icon": "./assets/images/icon.png",
+      "versionCode": 13,
+      "icon": "./assets/images/android-app-icon.png",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#FFFFFF"
+        "foregroundImage": "./assets/images/android-adaptive-foreground.png",
+        "backgroundColor": "#fce7f3"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
