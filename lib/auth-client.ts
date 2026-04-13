@@ -6,7 +6,8 @@ export const authClient = createAuthClient({
     baseURL: process.env.EXPO_PUBLIC_API_URL || "https://www.strathspace.com",
     plugins: [
         expoClient({
-            scheme: "strathSpace",
+            // MUST match app.json "expo.scheme" (Android intent filters are case-sensitive)
+            scheme: "strathspace",
             storagePrefix: "strathspace",
             storage: SecureStore,
         })

@@ -24,8 +24,12 @@ export const auth = betterAuth({
     },
     plugins: [expo()],
     trustedOrigins: [
-        // Mobile app scheme (MUST match app.json and auth-client.ts)
+        // Mobile app scheme (MUST match app.json "expo.scheme" and expoClient.scheme)
+        "strathspace://",
+        "strathspace://*",
+        // Older app binaries may still use this casing from a previous auth-client config
         "strathSpace://",
+        "strathSpace://*",
 
         // Production backend
         "https://www.strathspace.com",

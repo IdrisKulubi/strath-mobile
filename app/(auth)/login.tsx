@@ -22,7 +22,7 @@ import { LoginWelcomeBackground } from '@/components/auth/login-welcome-backgrou
 import { GoogleLogo } from '@/components/icons/google-logo';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
-import { signIn } from '@/lib/auth-client';
+import { authClient, signIn } from '@/lib/auth-client';
 import { clearSession } from '@/lib/auth-helpers';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -79,9 +79,23 @@ export default function LoginScreen() {
         provider: 'google',
         callbackURL: '/',
       });
-      if (result.data) {
+      if (result.error) {
+        toast.show({
+          message: result.error.message || 'Google sign-in was not completed.',
+          variant: 'danger',
+        });
+        return;
+      }
+      // Android: deep link can be handled slightly after the browser closes; refresh session cache.
+      const refreshed = await authClient.getSession();
+      if (refreshed.data?.session || result.data) {
         toast.show({ message: 'Welcome to StrathSpace', variant: 'success' });
         router.replace('/');
+      } else {
+        toast.show({
+          message: 'Sign-in did not finish in the app. Close any browser tab and try again.',
+          variant: 'danger',
+        });
       }
     } catch (error) {
       console.error('Auth error:', error);
