@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { expo } from "@better-auth/expo";
 import { db } from "./db";
 import * as schema from "../db/schema";
+import { WEB_CORS_ORIGINS } from "./web-cors-origins";
 
 export const auth = betterAuth({
     database: drizzleAdapter(db, {
@@ -24,16 +25,14 @@ export const auth = betterAuth({
     },
     plugins: [expo()],
     trustedOrigins: [
+        ...WEB_CORS_ORIGINS,
+
         // Mobile app scheme (MUST match app.json "expo.scheme" and expoClient.scheme)
         "strathspace://",
         "strathspace://*",
         // Older app binaries may still use this casing from a previous auth-client config
         "strathSpace://",
         "strathSpace://*",
-
-        // Production backend
-        "https://www.strathspace.com",
-        "https://strathspace.com",
 
         // Expo Go development - ADD YOUR CURRENT IP HERE
         "exp://172.20.10.4:8081",
@@ -42,16 +41,6 @@ export const auth = betterAuth({
         "exp://192.168.100.24:8082",
         "exp://localhost:8081",
         "exp://localhost:8082",
-
-        // Web/API development
-        "http://172.20.10.4:3000",
-        "http://172.20.10.4:3001",
-        "http://192.168.100.24:3000",
-        "http://192.168.100.24:3001",
-        "http://localhost:8081",
-        "http://localhost:8082",
-        "http://localhost:3000",
-        "http://localhost:3001",
     ],
     user: {
         additionalFields: {
