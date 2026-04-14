@@ -2,6 +2,7 @@
 
 import { Cormorant_Garamond } from "next/font/google";
 import { motion, type Variants } from "framer-motion";
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { InstagramBrandIcon, TikTokBrandIcon } from "./social-footer-icons";
@@ -252,13 +253,14 @@ export function MinimalLanding() {
               rel="noopener noreferrer"
               className="rounded-md outline-none ring-offset-2 ring-offset-transparent transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-white/70"
             >
-              <img
+              <Image
                 src="/badges/app-store-badge.svg"
                 alt="Download on the App Store"
                 width={120}
                 height={40}
-                decoding="async"
                 className="mx-auto block h-9 w-auto sm:h-10"
+                sizes="120px"
+                unoptimized
               />
             </a>
             <a
@@ -267,13 +269,13 @@ export function MinimalLanding() {
               rel="noopener noreferrer"
               className="rounded-md outline-none ring-offset-2 ring-offset-transparent transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-white/70"
             >
-              <img
+              <Image
                 src="/badges/google-play-badge.png"
                 alt="Get it on Google Play"
                 width={646}
                 height={250}
-                decoding="async"
                 className="mx-auto block h-[44px] w-auto sm:h-[50px]"
+                sizes="(max-width: 640px) 200px, 240px"
               />
             </a>
           </motion.div>
