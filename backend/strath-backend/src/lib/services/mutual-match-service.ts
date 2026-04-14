@@ -34,7 +34,8 @@ export function mapLegacyDateStatus(
     if (dm.status === "attended") return "completed";
     if (dm.status === "cancelled" || dm.status === "no_show") return "cancelled";
     if (dm.status === "scheduled") return "upcoming";
-    if (dm.callCompleted) return "being_arranged";
+    // Match admin "Arranging" queue: only after vibe call and both users confirmed meet intent
+    if (dm.callCompleted && dm.userAConfirmed && dm.userBConfirmed) return "being_arranged";
     return "call_pending";
 }
 

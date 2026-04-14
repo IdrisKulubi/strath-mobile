@@ -62,15 +62,47 @@ export default async function PendingDatesPage() {
                             <div className="mb-4 grid grid-cols-2 gap-3 text-xs text-gray-400">
                                 <div className="rounded-lg bg-white/5 p-3">
                                     <p className="mb-1 font-medium text-gray-300">{dm.userA.firstName}</p>
-                                    {dm.userA.phone && <p>Phone: {dm.userA.phone}</p>}
-                                    {dm.userA.email && <p className="truncate">Email: {dm.userA.email}</p>}
-                                    {dm.userA.location && <p className="mt-1 text-[11px] text-gray-500">Location: {dm.userA.location}</p>}
+                                    <p>
+                                        Phone:{" "}
+                                        {dm.userA.phone?.trim() ? (
+                                            dm.userA.phone
+                                        ) : (
+                                            <span className="text-amber-400/90">Not on file</span>
+                                        )}
+                                    </p>
+                                    <p className="truncate">
+                                        Email:{" "}
+                                        {dm.userA.email?.trim() ? (
+                                            dm.userA.email
+                                        ) : (
+                                            <span className="text-amber-400/90">Not on file</span>
+                                        )}
+                                    </p>
+                                    <p className="mt-1 text-[11px] text-gray-500">
+                                        Location: {dm.userA.location ?? "—"}
+                                    </p>
                                 </div>
                                 <div className="rounded-lg bg-white/5 p-3">
                                     <p className="mb-1 font-medium text-gray-300">{dm.userB.firstName}</p>
-                                    {dm.userB.phone && <p>Phone: {dm.userB.phone}</p>}
-                                    {dm.userB.email && <p className="truncate">Email: {dm.userB.email}</p>}
-                                    {dm.userB.location && <p className="mt-1 text-[11px] text-gray-500">Location: {dm.userB.location}</p>}
+                                    <p>
+                                        Phone:{" "}
+                                        {dm.userB.phone?.trim() ? (
+                                            dm.userB.phone
+                                        ) : (
+                                            <span className="text-amber-400/90">Not on file</span>
+                                        )}
+                                    </p>
+                                    <p className="truncate">
+                                        Email:{" "}
+                                        {dm.userB.email?.trim() ? (
+                                            dm.userB.email
+                                        ) : (
+                                            <span className="text-amber-400/90">Not on file</span>
+                                        )}
+                                    </p>
+                                    <p className="mt-1 text-[11px] text-gray-500">
+                                        Location: {dm.userB.location ?? "—"}
+                                    </p>
                                 </div>
                             </div>
 

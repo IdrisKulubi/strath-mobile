@@ -95,14 +95,14 @@ export async function POST(
                             await sendPushNotification(u1.pushToken, {
                                 title: "The vibe is real 🎉",
                                 body: `You and ${u2Name} both want to meet`,
-                                data: { type: NOTIFICATION_TYPES.DATE_SCHEDULED },
+                                data: { type: NOTIFICATION_TYPES.MUTUAL_MATCH },
                             });
                         }
                         if (u2?.pushToken) {
                             await sendPushNotification(u2.pushToken, {
                                 title: "The vibe is real 🎉",
                                 body: `You and ${u1Name} both want to meet`,
-                                data: { type: NOTIFICATION_TYPES.DATE_SCHEDULED },
+                                data: { type: NOTIFICATION_TYPES.MUTUAL_MATCH },
                             });
                         }
                     } else {

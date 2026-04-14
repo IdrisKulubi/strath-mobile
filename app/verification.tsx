@@ -18,7 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Camera, CheckCircle, Hourglass, ShieldCheck, WarningCircle } from 'phosphor-react-native';
 
-import { useFaceVerification } from '@/hooks/use-face-verification';
+import { useFaceVerification, type FaceVerificationSession } from '@/hooks/use-face-verification';
 import { useProfile } from '@/hooks/use-profile';
 import { hasVerifiedFace } from '@/lib/profile-access';
 import { useToast } from '@/components/ui/toast';
@@ -287,6 +287,10 @@ export default function VerificationScreen() {
     const profileSummary = profilePhotoUrls.length >= 2
         ? `${profilePhotoUrls.length} profile photos ready`
         : 'Add 2 profile photos to continue';
+    const profileRetryCount = profile?.faceVerificationRetryCount ?? 0;
+    const verifiedAtLabel = profile?.faceVerifiedAt
+        ? formatVerificationTimestamp(profile.faceVerifiedAt)
+        : null;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -310,6 +314,12 @@ export default function VerificationScreen() {
                         <Text style={styles.resultBody}>
                             Nice. Your profile is cleared and ready for the app.
                         </Text>
+                        <VerificationStatsBlock
+                            session={latestSession}
+                            profileRetryCount={profileRetryCount}
+                            verifiedAtLabel={verifiedAtLabel}
+                            variant="success"
+                        />
                         <Pressable
                             style={[styles.primaryButton, isBusy && styles.primaryButtonDisabled]}
                             onPress={handleContinueToApp}
@@ -340,6 +350,11 @@ export default function VerificationScreen() {
                         <Text style={styles.resultBody}>
                             {retryGuidance?.shortBody ?? 'Something was not clear enough in the last attempt.'}
                         </Text>
+                        <VerificationStatsBlock
+                            session={latestSession}
+                            profileRetryCount={profileRetryCount}
+                            variant="retry"
+                        />
 
                         <View style={styles.resultTips}>
                             {(retryGuidance?.tips.slice(0, 2) ?? []).map((tip) => (
@@ -433,8 +448,13 @@ export default function VerificationScreen() {
                             </View>
 
                             <Text style={styles.statusCopy}>
-                                {isProcessing ? 'Checking now.' : 'Take one selfie to keep moving.'}
+                                {getStatusDetailCopy(status, isProcessing)}
                             </Text>
+                            <VerificationStatsBlock
+                                session={latestSession}
+                                profileRetryCount={profileRetryCount}
+                                variant="inline"
+                            />
                         </View>
 
                         <Pressable
@@ -515,6 +535,297 @@ export default function VerificationScreen() {
     );
 }
 
+function getStatusDetailCopy(status: string, isProcessing: boolean) {
+    if (isProcessing || status === 'processing') {
+        return 'Your selfie is being compared with your profile photos. You can leave this screen open; it usually finishes within a minute.';
+    }
+    if (status === 'pending_capture') {
+        return 'Take one clear selfie. We compare it with your profile photos before you can use matchmaking.';
+    }
+    if (status === 'manual_review') {
+        return 'This check is waiting for a manual review. You will get access once it is cleared.';
+    }
+    if (status === 'blocked') {
+        return 'Verification is blocked on this account. Contact support if you think this is a mistake.';
+    }
+    return 'Take one selfie to keep moving.';
+}
+
+function VerificationStatsBlock({
+    session,
+    profileRetryCount,
+    verifiedAtLabel,
+    variant,
+}: {
+    session: FaceVerificationSession | null | undefined;
+    profileRetryCount?: number;
+    verifiedAtLabel?: string | null;
+    variant: 'inline' | 'success' | 'retry';
+}) {
+    if (!session) {
+        return null;
+    }
+
+    const summary = parseDecisionSummary(session.decisionSummary);
+    const results = session.results ?? [];
+    const failureReasons = session.failureReasons ?? [];
+    const hasNumericSummary =
+        summary.matchedPhotoCount !== null ||
+        summary.comparedPhotoCount !== null ||
+        summary.similarityThreshold !== null ||
+        summary.minimumMatchCount !== null;
+    const hasPerPhoto = results.length > 0;
+    const hasFailures = failureReasons.length > 0;
+    const completedLabel = session.completedAt
+        ? formatVerificationTimestamp(session.completedAt)
+        : null;
+    const startedLabel = session.startedAt ? formatVerificationTimestamp(session.startedAt) : null;
+
+    if (variant === 'inline' && !hasNumericSummary && !hasPerPhoto && !hasFailures) {
+        return (
+            <View style={styles.statsBlock}>
+                <Text style={styles.statsEyebrow}>Session</Text>
+                <View style={styles.statsMetaRow}>
+                    <Text style={styles.statsMetaText}>
+                        Attempt {session.attemptNumber}
+                        {session.thresholdConfigVersion ? ` · ${session.thresholdConfigVersion}` : ''}
+                    </Text>
+                </View>
+                {startedLabel ? (
+                    <Text style={styles.statsFootnote}>Started {startedLabel}</Text>
+                ) : null}
+            </View>
+        );
+    }
+
+    const containerStyle =
+        variant === 'inline'
+            ? styles.statsBlock
+            : variant === 'success'
+              ? styles.statsBlockSuccess
+              : styles.statsBlockRetry;
+
+    return (
+        <View style={containerStyle}>
+            <Text style={styles.statsEyebrow}>
+                {variant === 'inline' ? 'Latest check details' : 'How this check scored'}
+            </Text>
+
+            <View style={styles.statsGrid}>
+                <View style={styles.statsGridCell}>
+                    <Text style={styles.statsGridLabel}>Attempt</Text>
+                    <Text style={styles.statsGridValue}>{session.attemptNumber}</Text>
+                </View>
+                {typeof profileRetryCount === 'number' ? (
+                    <View style={styles.statsGridCell}>
+                        <Text style={styles.statsGridLabel}>Retries so far</Text>
+                        <Text style={styles.statsGridValue}>{profileRetryCount}</Text>
+                    </View>
+                ) : null}
+                {summary.comparedPhotoCount !== null ? (
+                    <View style={styles.statsGridCell}>
+                        <Text style={styles.statsGridLabel}>Photos compared</Text>
+                        <Text style={styles.statsGridValue}>{summary.comparedPhotoCount}</Text>
+                    </View>
+                ) : null}
+                {summary.matchedPhotoCount !== null ? (
+                    <View style={styles.statsGridCell}>
+                        <Text style={styles.statsGridLabel}>Strong matches</Text>
+                        <Text style={styles.statsGridValue}>{summary.matchedPhotoCount}</Text>
+                    </View>
+                ) : null}
+                {summary.minimumMatchCount !== null ? (
+                    <View style={styles.statsGridCell}>
+                        <Text style={styles.statsGridLabel}>Matches required</Text>
+                        <Text style={styles.statsGridValue}>{summary.minimumMatchCount}</Text>
+                    </View>
+                ) : null}
+                {summary.similarityThreshold !== null ? (
+                    <View style={styles.statsGridCell}>
+                        <Text style={styles.statsGridLabel}>Match threshold</Text>
+                        <Text style={styles.statsGridValue}>{summary.similarityThreshold}%</Text>
+                    </View>
+                ) : null}
+                {summary.sourceFacesDetected !== null ? (
+                    <View style={styles.statsGridCell}>
+                        <Text style={styles.statsGridLabel}>Faces in selfie</Text>
+                        <Text style={styles.statsGridValue}>{summary.sourceFacesDetected}</Text>
+                    </View>
+                ) : null}
+                {summary.usableProfilePhotoCount !== null ? (
+                    <View style={styles.statsGridCell}>
+                        <Text style={styles.statsGridLabel}>Profile photos used</Text>
+                        <Text style={styles.statsGridValue}>{summary.usableProfilePhotoCount}</Text>
+                    </View>
+                ) : null}
+            </View>
+
+            {session.thresholdConfigVersion ? (
+                <Text style={styles.statsFootnote}>Ruleset: {session.thresholdConfigVersion}</Text>
+            ) : null}
+            {completedLabel ? (
+                <Text style={styles.statsFootnote}>Finished {completedLabel}</Text>
+            ) : startedLabel ? (
+                <Text style={styles.statsFootnote}>Started {startedLabel}</Text>
+            ) : null}
+            {verifiedAtLabel && variant === 'success' ? (
+                <Text style={styles.statsFootnote}>Verified on profile {verifiedAtLabel}</Text>
+            ) : null}
+
+            {hasPerPhoto ? (
+                <View style={styles.statsComparisonSection}>
+                    <Text style={styles.statsSectionTitle}>Each profile photo</Text>
+                    {results.map((row, index) => (
+                        <View key={row.id ?? `${row.targetAssetKey}-${index}`} style={styles.statsComparisonRow}>
+                            <View style={styles.statsComparisonHeader}>
+                                <Text style={styles.statsComparisonTitle}>Photo {index + 1}</Text>
+                                <Text
+                                    style={[
+                                        styles.statsComparisonBadge,
+                                        row.decision === 'matched' && styles.statsComparisonBadgePass,
+                                        row.decision === 'not_matched' && styles.statsComparisonBadgeWarn,
+                                        row.decision === 'error' && styles.statsComparisonBadgeError,
+                                    ]}
+                                >
+                                    {formatDecisionLabel(row.decision)}
+                                </Text>
+                            </View>
+                            <View style={styles.statsComparisonMetrics}>
+                                <Text style={styles.statsComparisonMetric}>
+                                    Similarity:{' '}
+                                    {row.similarity != null ? `${row.similarity}%` : '—'}
+                                </Text>
+                                <Text style={styles.statsComparisonMetric}>
+                                    Confidence:{' '}
+                                    {row.faceConfidence != null ? `${row.faceConfidence}%` : '—'}
+                                </Text>
+                                <Text style={styles.statsComparisonMetric}>
+                                    Faces found: {row.facesDetected}
+                                </Text>
+                            </View>
+                            {row.qualityFlags.length > 0 ? (
+                                <Text style={styles.statsComparisonFlags}>
+                                    Notes: {row.qualityFlags.map(humanizeQualityFlag).join(' · ')}
+                                </Text>
+                            ) : null}
+                        </View>
+                    ))}
+                </View>
+            ) : null}
+
+            {hasFailures ? (
+                <View style={styles.statsFailureSection}>
+                    <Text style={styles.statsSectionTitle}>Why it stopped</Text>
+                    {failureReasons.map((code) => (
+                        <View key={code} style={styles.statsFailureRow}>
+                            <View style={styles.statsFailureDot} />
+                            <Text style={styles.statsFailureText}>{humanizeFailureReason(code)}</Text>
+                        </View>
+                    ))}
+                </View>
+            ) : null}
+        </View>
+    );
+}
+
+function parseDecisionSummary(raw: Record<string, unknown> | null | undefined) {
+    if (!raw || typeof raw !== 'object') {
+        return {
+            matchedPhotoCount: null as number | null,
+            comparedPhotoCount: null as number | null,
+            similarityThreshold: null as number | null,
+            minimumMatchCount: null as number | null,
+            sourceFacesDetected: null as number | null,
+            usableProfilePhotoCount: null as number | null,
+            candidateProfilePhotoCount: null as number | null,
+        };
+    }
+
+    return {
+        matchedPhotoCount: pickNumber(raw.matchedPhotoCount),
+        comparedPhotoCount: pickNumber(raw.comparedPhotoCount),
+        similarityThreshold: pickNumber(raw.similarityThreshold),
+        minimumMatchCount: pickNumber(raw.minimumMatchCount),
+        sourceFacesDetected: pickNumber(raw.sourceFacesDetected),
+        usableProfilePhotoCount: pickNumber(raw.usableProfilePhotoCount),
+        candidateProfilePhotoCount: pickNumber(raw.candidateProfilePhotoCount),
+    };
+}
+
+function pickNumber(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+    }
+    if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+}
+
+function formatVerificationTimestamp(value: string | Date) {
+    const date = typeof value === 'string' ? new Date(value) : value;
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
+    return date.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+    });
+}
+
+function formatDecisionLabel(decision: string) {
+    switch (decision) {
+        case 'matched':
+            return 'Match';
+        case 'not_matched':
+            return 'Below threshold';
+        case 'error':
+            return 'Could not read';
+        default:
+            return decision.replace(/_/g, ' ');
+    }
+}
+
+function humanizeFailureReason(code: string) {
+    return (
+        FAILURE_REASON_LABELS[code] ??
+        code.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    );
+}
+
+function humanizeQualityFlag(code: string) {
+    return QUALITY_FLAG_LABELS[code] ?? code.replace(/_/g, ' ');
+}
+
+const FAILURE_REASON_LABELS: Record<string, string> = {
+    insufficient_match_count: 'Not enough photos matched closely enough to your selfie.',
+    selfie_face_not_detected: 'We could not detect a clear face in your selfie.',
+    no_face_detected: 'At least one profile photo did not show a readable face.',
+    multiple_faces_detected: 'A profile photo showed more than one face.',
+    multiple_target_faces: 'A profile photo looked like it had multiple faces to match.',
+    missing_verification_assets: 'Some verification files were missing when we ran the check.',
+    insufficient_usable_profile_photos: 'Not enough profile photos passed the quality bar.',
+    invalid_image_format: 'An image used a format we could not process.',
+    invalid_image_parameters: 'An image had settings we could not process.',
+    image_too_large: 'An image file was too large to process.',
+    image_processing_failed: 'An image failed processing on our side.',
+    provider_error: 'The verification provider returned an error.',
+};
+
+const QUALITY_FLAG_LABELS: Record<string, string> = {
+    no_face_detected: 'No clear face',
+    multiple_faces_detected: 'Multiple faces',
+    multiple_target_faces: 'Multiple faces in target',
+    image_too_large: 'Image too large',
+    invalid_image_format: 'Unsupported format',
+    invalid_image_parameters: 'Bad image parameters',
+    image_processing_failed: 'Processing failed',
+    provider_error: 'Provider error',
+};
+
 function getVerificationUserMessage(error: unknown) {
     const fallback = 'We could not finish verification right now. Please try again.';
 
@@ -557,10 +868,20 @@ function getVerificationUserMessage(error: unknown) {
 
 function getFriendlyStatusLabel(status: string) {
     switch (status) {
+        case 'verified':
+            return 'Verified';
+        case 'processing':
+            return 'Checking';
+        case 'pending_capture':
+            return 'Selfie needed';
         case 'retry_required':
             return 'Needs another try';
+        case 'failed':
+            return 'Did not pass';
         case 'manual_review':
             return 'Under review';
+        case 'blocked':
+            return 'Blocked';
         case 'not_started':
             return 'Not started';
         default:
@@ -1069,5 +1390,166 @@ const styles = StyleSheet.create({
         height: '100%',
         borderRadius: 999,
         backgroundColor: '#f472b6',
+    },
+    statsBlock: {
+        marginTop: 14,
+        paddingTop: 14,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(148, 163, 184, 0.2)',
+        gap: 10,
+    },
+    statsBlockSuccess: {
+        width: '100%',
+        marginTop: 4,
+        padding: 16,
+        borderRadius: 20,
+        backgroundColor: 'rgba(15, 23, 42, 0.45)',
+        borderWidth: 1,
+        borderColor: 'rgba(52, 211, 153, 0.2)',
+        gap: 12,
+    },
+    statsBlockRetry: {
+        width: '100%',
+        marginTop: 4,
+        padding: 16,
+        borderRadius: 20,
+        backgroundColor: 'rgba(15, 23, 42, 0.45)',
+        borderWidth: 1,
+        borderColor: 'rgba(251, 113, 133, 0.2)',
+        gap: 12,
+    },
+    statsEyebrow: {
+        color: '#94a3b8',
+        fontSize: 11,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+        letterSpacing: 0.9,
+    },
+    statsMetaRow: {
+        paddingVertical: 2,
+    },
+    statsMetaText: {
+        color: '#e2e8f0',
+        fontSize: 13,
+        lineHeight: 20,
+    },
+    statsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    statsGridCell: {
+        minWidth: '44%',
+        flexGrow: 1,
+        backgroundColor: 'rgba(148, 163, 184, 0.1)',
+        borderRadius: 14,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        gap: 4,
+    },
+    statsGridLabel: {
+        color: '#94a3b8',
+        fontSize: 11,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    statsGridValue: {
+        color: '#f8fafc',
+        fontSize: 18,
+        fontWeight: '800',
+    },
+    statsFootnote: {
+        color: '#94a3b8',
+        fontSize: 12,
+        lineHeight: 18,
+    },
+    statsComparisonSection: {
+        gap: 10,
+        marginTop: 6,
+    },
+    statsSectionTitle: {
+        color: '#cbd5e1',
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    statsComparisonRow: {
+        backgroundColor: 'rgba(30, 41, 59, 0.65)',
+        borderRadius: 16,
+        padding: 12,
+        gap: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(148, 163, 184, 0.12)',
+    },
+    statsComparisonHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 10,
+    },
+    statsComparisonTitle: {
+        color: '#f1f5f9',
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    statsComparisonBadge: {
+        fontSize: 11,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 999,
+        overflow: 'hidden',
+        color: '#e2e8f0',
+        backgroundColor: 'rgba(148, 163, 184, 0.2)',
+    },
+    statsComparisonBadgePass: {
+        color: '#6ee7b7',
+        backgroundColor: 'rgba(52, 211, 153, 0.14)',
+    },
+    statsComparisonBadgeWarn: {
+        color: '#fcd34d',
+        backgroundColor: 'rgba(251, 191, 36, 0.12)',
+    },
+    statsComparisonBadgeError: {
+        color: '#fda4af',
+        backgroundColor: 'rgba(251, 113, 133, 0.14)',
+    },
+    statsComparisonMetrics: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    statsComparisonMetric: {
+        color: '#cbd5e1',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    statsComparisonFlags: {
+        color: '#fca5a5',
+        fontSize: 11,
+        lineHeight: 16,
+    },
+    statsFailureSection: {
+        gap: 8,
+        marginTop: 4,
+    },
+    statsFailureRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+    },
+    statsFailureDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 999,
+        backgroundColor: '#fb7185',
+        marginTop: 7,
+    },
+    statsFailureText: {
+        flex: 1,
+        color: '#fecdd3',
+        fontSize: 12,
+        lineHeight: 18,
     },
 });

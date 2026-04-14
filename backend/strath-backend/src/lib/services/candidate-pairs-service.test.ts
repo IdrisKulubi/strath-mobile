@@ -59,7 +59,14 @@ test("mapLegacyDateStatus keeps legacy date matches compatible with new sections
     };
 
     assert.equal(mapLegacyDateStatus(baseDateMatch), "call_pending");
-    assert.equal(mapLegacyDateStatus({ ...baseDateMatch, callCompleted: true }), "being_arranged");
+    assert.equal(
+        mapLegacyDateStatus({ ...baseDateMatch, callCompleted: true, userAConfirmed: true, userBConfirmed: true }),
+        "being_arranged",
+    );
+    assert.equal(
+        mapLegacyDateStatus({ ...baseDateMatch, callCompleted: true, userAConfirmed: true, userBConfirmed: false }),
+        "call_pending",
+    );
     assert.equal(mapLegacyDateStatus({ ...baseDateMatch, status: "scheduled", callCompleted: true }), "upcoming");
     assert.equal(mapLegacyDateStatus({ ...baseDateMatch, status: "attended" }), "completed");
     assert.equal(mapLegacyDateStatus({ ...baseDateMatch, status: "cancelled" }), "cancelled");

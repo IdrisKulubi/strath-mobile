@@ -18,6 +18,8 @@ export type FaceVerificationStatus =
 export interface FaceVerificationResult {
     id: string;
     sessionId: string;
+    sourceAssetKey?: string;
+    targetAssetKey?: string;
     decision: string;
     similarity?: number | null;
     faceConfidence?: number | null;
