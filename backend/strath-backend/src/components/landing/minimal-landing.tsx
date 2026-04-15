@@ -188,7 +188,7 @@ export function MinimalLanding() {
                 the noise, and space to say what you mean.
               </p>
               <p>
-                When you are both in, you move forward together—a short call,
+                When you are both in, you move forward together a short call,
                 then help lining up a date if you want it. Less theatre, more
                 momentum.
               </p>
@@ -218,7 +218,7 @@ export function MinimalLanding() {
               <ol className="mt-1.5 space-y-0.5 text-[0.7rem] leading-tight text-white/85 sm:mt-2 sm:space-y-1 sm:text-[0.75rem] sm:leading-snug">
                 <li className="flex gap-1.5 sm:gap-2">
                   <span className="w-3 shrink-0 font-medium text-white/35">1</span>
-                  <span>Daily curated matches—not an endless feed.</span>
+                  <span>Daily curated matches not an endless feed.</span>
                 </li>
                 <li className="flex gap-1.5 sm:gap-2">
                   <span className="w-3 shrink-0 font-medium text-white/35">2</span>
