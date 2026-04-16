@@ -9,7 +9,7 @@ import {
     Platform,
     ActivityIndicator,
 } from 'react-native';
-import { ScrollView, Pressable } from 'react-native-gesture-handler';
+import { ScrollView } from 'react-native-gesture-handler';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -235,7 +235,14 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
     };
 
     const handleBirthdayChange = (event: any, selectedDate?: Date) => {
-        setShowDatePicker(Platform.OS === 'ios');
+        if (Platform.OS === 'android') {
+            setShowDatePicker(false);
+        } else {
+            setShowDatePicker(true);
+        }
+        if (event?.type === 'dismissed' && Platform.OS === 'android') {
+            return;
+        }
         if (selectedDate) {
             setBirthday(selectedDate);
             const age = calculateAge(selectedDate);
@@ -243,7 +250,7 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                 selectedDate.getMonth() + 1,
                 selectedDate.getDate()
             );
-            onUpdate({ age: String(age), zodiacSign: zodiac });
+            onUpdate({ age, zodiacSign: zodiac });
         }
     };
 
@@ -375,10 +382,11 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
     return (
         <KeyboardAvoidingView
             style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
             <LinearGradient
                 colors={['#0f0d23', '#1a0d2e', '#0f0d23']}
+                pointerEvents="none"
                 style={StyleSheet.absoluteFill}
             />
 
@@ -396,9 +404,11 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                 </View>
             </View>
 
+            <View style={styles.scrollRegion}>
             <ScrollView
-                contentContainerStyle={styles.content}
-                keyboardShouldPersistTaps="handled"
+                style={styles.scrollFill}
+                contentContainerStyle={[styles.content, step === 2 && styles.contentWithBirthdayFooter]}
+                keyboardShouldPersistTaps="always"
                 showsVerticalScrollIndicator={false}
             >
                 {/* Step 0: Name */}
@@ -497,9 +507,9 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                     </Animated.View>
                 )}
 
-                {/* Step 2: Birthday */}
+                {/* Step 2: Birthday — plain View (no Reanimated entering) so Android touches work after the native date dialog */}
                 {step === 2 && (
-                    <Animated.View entering={SlideInRight.springify()} style={styles.stepContainer}>
+                    <View style={styles.stepContainer} collapsable={false}>
                         <View style={styles.iconContainer}>
                             <Calendar size={32} color="#ec4899" weight="fill" />
                         </View>
@@ -551,22 +561,7 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                                 </Text>
                             </Animated.View>
                         )}
-
-                        <Pressable
-                            onPress={handleBirthdayContinue}
-                            disabled={!isBirthdayValid}
-                            style={({ pressed }) => [{ opacity: pressed && isBirthdayValid ? 0.85 : 1 }]}
-                        >
-                            <LinearGradient
-                                colors={isBirthdayValid ? ['#ec4899', '#f43f5e'] : ['#374151', '#374151']}
-                                style={styles.continueButton}
-                            >
-                                <Text style={[styles.continueButtonText, !isBirthdayValid && styles.disabledText]}>
-                                    Continue
-                                </Text>
-                            </LinearGradient>
-                        </Pressable>
-                    </Animated.View>
+                    </View>
                 )}
 
                 {/* Step 3: Gender */}
@@ -666,12 +661,40 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                     </Animated.View>
                 )}
             </ScrollView>
+
+            {step === 2 && (
+                <View style={styles.birthdayFooter} collapsable={false}>
+                    <TouchableOpacity
+                        onPress={handleBirthdayContinue}
+                        disabled={!isBirthdayValid}
+                        activeOpacity={0.85}
+                        style={styles.birthdayFooterTouchable}
+                    >
+                        <LinearGradient
+                            pointerEvents="none"
+                            colors={isBirthdayValid ? ['#ec4899', '#f43f5e'] : ['#374151', '#374151']}
+                            style={styles.continueButton}
+                        >
+                            <Text style={[styles.continueButtonText, !isBirthdayValid && styles.disabledText]}>
+                                Continue
+                            </Text>
+                        </LinearGradient>
+                    </TouchableOpacity>
+                </View>
+            )}
+            </View>
         </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
+        flex: 1,
+    },
+    scrollRegion: {
+        flex: 1,
+    },
+    scrollFill: {
         flex: 1,
     },
     progressBarContainer: {
@@ -693,6 +716,22 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         paddingHorizontal: 24,
         paddingBottom: 40,
+    },
+    contentWithBirthdayFooter: {
+        paddingBottom: 120,
+    },
+    birthdayFooter: {
+        paddingHorizontal: 24,
+        paddingTop: 8,
+        paddingBottom: 28,
+        backgroundColor: '#0f0d23',
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: 'rgba(255,255,255,0.08)',
+        zIndex: 50,
+        elevation: 50,
+    },
+    birthdayFooterTouchable: {
+        width: '100%',
     },
     stepContainer: {
         flex: 1,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -10,6 +10,7 @@ import {
     Platform,
     Dimensions,
     Alert,
+    LayoutChangeEvent,
 } from 'react-native';
 import Animated, {
     FadeIn,
@@ -22,7 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile, Profile } from '@/hooks/use-profile';
 import { useImageUpload } from '@/hooks/use-image-upload';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
     CaretLeft,
@@ -174,6 +175,12 @@ export default function EditProfileScreen() {
     const { data: profile, updateProfile, isUpdating, isLoading } = useProfile();
     const { uploadImage, isUploading: isImageUploading } = useImageUpload();
     const router = useRouter();
+    const params = useLocalSearchParams<{ focus?: string | string[] }>();
+    const scrollViewRef = useRef<ScrollView>(null);
+    const photosSectionY = useRef(0);
+
+    const focusRaw = params.focus;
+    const focusParam = Array.isArray(focusRaw) ? focusRaw[0] : focusRaw;
 
     const [formData, setFormData] = useState<Partial<Profile>>({});
     const [isDirty, setIsDirty] = useState(false);
@@ -191,6 +198,23 @@ export default function EditProfileScreen() {
             setFormData(profile);
         }
     }, [profile]);
+
+    useEffect(() => {
+        if (focusParam !== 'photos' || isLoading) {
+            return;
+        }
+        const timer = setTimeout(() => {
+            scrollViewRef.current?.scrollTo({
+                y: Math.max(0, photosSectionY.current - 16),
+                animated: true,
+            });
+        }, 480);
+        return () => clearTimeout(timer);
+    }, [focusParam, isLoading]);
+
+    const onPhotosSectionLayout = useCallback((e: LayoutChangeEvent) => {
+        photosSectionY.current = e.nativeEvent.layout.y;
+    }, []);
 
     useEffect(() => {
         if (isDirty) {
@@ -443,6 +467,7 @@ export default function EditProfileScreen() {
                 style={{ flex: 1 }}
             >
                 <ScrollView
+                    ref={scrollViewRef}
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                 >
@@ -451,15 +476,17 @@ export default function EditProfileScreen() {
                         <StrengthMeter percentage={calculateCompletion()} />
                     </Animated.View>
 
-                    {/* Photos Section */}
-                    <Animated.View entering={FadeInDown.delay(150)}>
-                        <PhotosEditor
-                            profilePhoto={formData.profilePhoto}
-                            photos={formData.photos}
-                            onUpdateProfilePhoto={(uri) => handleChange('profilePhoto', uri)}
-                            onUpdatePhotos={(photos) => handleChange('photos', photos)}
-                        />
-                    </Animated.View>
+                    {/* Photos Section — layout y used when opening from face verification (focus=photos) */}
+                    <View onLayout={onPhotosSectionLayout}>
+                        <Animated.View entering={FadeInDown.delay(150)}>
+                            <PhotosEditor
+                                profilePhoto={formData.profilePhoto}
+                                photos={formData.photos}
+                                onUpdateProfilePhoto={(uri) => handleChange('profilePhoto', uri)}
+                                onUpdatePhotos={(photos) => handleChange('photos', photos)}
+                            />
+                        </Animated.View>
+                    </View>
 
                     {/* Basic Info */}
                     <SectionCard

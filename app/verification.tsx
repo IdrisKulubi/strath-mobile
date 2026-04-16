@@ -18,7 +18,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Camera, CheckCircle, Hourglass, ShieldCheck, WarningCircle } from 'phosphor-react-native';
 
-import { useFaceVerification, type FaceVerificationSession } from '@/hooks/use-face-verification';
+import {
+    useFaceVerification,
+    type FaceVerificationResult,
+    type FaceVerificationSession,
+} from '@/hooks/use-face-verification';
 import { useProfile } from '@/hooks/use-profile';
 import { hasVerifiedFace } from '@/lib/profile-access';
 import { useToast } from '@/components/ui/toast';
@@ -90,6 +94,11 @@ export default function VerificationScreen() {
         [profile?.photos],
     );
 
+    const profilePhotoIssueSignals = useMemo(
+        () => deriveProfilePhotoIssueSignals(latestSession?.results),
+        [latestSession?.results],
+    );
+
     useEffect(() => {
         if (!isProfileLoading && profile && hasVerifiedFace(profile)) {
             router.replace('/' as any);
@@ -108,15 +117,40 @@ export default function VerificationScreen() {
                 failureReasons: latestSession?.failureReasons ?? [],
                 results: latestSession?.results ?? [],
                 supportedProfilePhotoCount: profilePhotoUrls.length,
-                unsupportedProfilePhotoCount: 0,
+                unsupportedProfilePhotoCount: profilePhotoIssueSignals.unsupportedProfilePhotoCount,
             }),
         [
             latestSession?.failureReasons,
             latestSession?.results,
+            profilePhotoIssueSignals.unsupportedProfilePhotoCount,
             status,
             profilePhotoUrls.length,
         ],
     );
+
+    const photoFailureCauseLine = useMemo(
+        () => getPhotoFailureCauseLine(retryGuidance, latestSession?.failureReasons ?? []),
+        [retryGuidance, latestSession?.failureReasons],
+    );
+
+    const retryShowPhoto = retryGuidance?.showPhotoAction ?? false;
+    const retryShowSelfie = retryGuidance?.showSelfieAction ?? false;
+
+    const handleRetakeSelfieFromFailure = () => {
+        setSelfieUri(null);
+        setResultStateDismissed(true);
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    };
+
+    const handleEditProfilePhotos = () => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        router.push({ pathname: '/edit-profile', params: { focus: 'photos' } } as any);
+    };
+
+    const handleDismissRetryCard = () => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        setResultStateDismissed(true);
+    };
 
     useEffect(() => {
         setResultStateDismissed(false);
@@ -346,10 +380,21 @@ export default function VerificationScreen() {
                         <View style={[styles.resultIconWrap, styles.resultIconWrapRetry]}>
                             <WarningCircle size={52} color="#fb7185" weight="fill" />
                         </View>
-                        <Text style={styles.resultTitle}>Verification needs another try</Text>
+                        <Text style={styles.resultTitle}>
+                            {retryGuidance?.title ?? 'Verification needs another try'}
+                        </Text>
                         <Text style={styles.resultBody}>
                             {retryGuidance?.shortBody ?? 'Something was not clear enough in the last attempt.'}
                         </Text>
+                        {retryGuidance?.body ? (
+                            <Text style={styles.resultBodyMuted}>{retryGuidance.body}</Text>
+                        ) : null}
+                        {photoFailureCauseLine ? (
+                            <View style={styles.resultCauseBanner}>
+                                <Text style={styles.resultCauseBannerText}>{photoFailureCauseLine}</Text>
+                            </View>
+                        ) : null}
+
                         <VerificationStatsBlock
                             session={latestSession}
                             profileRetryCount={profileRetryCount}
@@ -366,18 +411,45 @@ export default function VerificationScreen() {
                         </View>
 
                         <View style={styles.resultActions}>
-                            <Pressable
-                                style={styles.primaryButton}
-                                onPress={() => setResultStateDismissed(true)}
-                            >
-                                <Text style={styles.primaryButtonText}>Try again</Text>
-                            </Pressable>
-                            {retryGuidance?.showPhotoAction ? (
-                                <Pressable
-                                    style={styles.resultSecondaryButton}
-                                    onPress={() => router.push('/edit-profile' as any)}
-                                >
-                                    <Text style={styles.resultSecondaryButtonText}>Update photos</Text>
+                            {retryShowPhoto && !retryShowSelfie ? (
+                                <>
+                                    <Pressable style={[styles.primaryButton, styles.primaryButtonInResultStack]} onPress={handleEditProfilePhotos}>
+                                        <Text style={styles.primaryButtonText}>Edit profile photos</Text>
+                                    </Pressable>
+                                    <Pressable style={styles.resultSecondaryButton} onPress={handleDismissRetryCard}>
+                                        <Text style={styles.resultSecondaryButtonText}>Try again</Text>
+                                    </Pressable>
+                                </>
+                            ) : null}
+
+                            {retryShowPhoto && retryShowSelfie ? (
+                                <>
+                                    <Pressable style={[styles.primaryButton, styles.primaryButtonInResultStack]} onPress={handleEditProfilePhotos}>
+                                        <Text style={styles.primaryButtonText}>Edit profile photos</Text>
+                                    </Pressable>
+                                    <Pressable style={styles.resultSecondaryButton} onPress={handleRetakeSelfieFromFailure}>
+                                        <Text style={styles.resultSecondaryButtonText}>Retake selfie</Text>
+                                    </Pressable>
+                                    <Pressable style={styles.resultTertiaryButton} onPress={handleDismissRetryCard}>
+                                        <Text style={styles.resultTertiaryButtonText}>Try again</Text>
+                                    </Pressable>
+                                </>
+                            ) : null}
+
+                            {!retryShowPhoto && retryShowSelfie ? (
+                                <>
+                                    <Pressable style={[styles.primaryButton, styles.primaryButtonInResultStack]} onPress={handleRetakeSelfieFromFailure}>
+                                        <Text style={styles.primaryButtonText}>Retake selfie</Text>
+                                    </Pressable>
+                                    <Pressable style={styles.resultSecondaryButton} onPress={handleDismissRetryCard}>
+                                        <Text style={styles.resultSecondaryButtonText}>Try again</Text>
+                                    </Pressable>
+                                </>
+                            ) : null}
+
+                            {!retryShowPhoto && !retryShowSelfie ? (
+                                <Pressable style={[styles.primaryButton, styles.primaryButtonInResultStack]} onPress={handleDismissRetryCard}>
+                                    <Text style={styles.primaryButtonText}>Try again</Text>
                                 </Pressable>
                             ) : null}
                         </View>
@@ -409,7 +481,7 @@ export default function VerificationScreen() {
                                 </Text>
                             ) : null}
                             {profilePhotoUrls.length < 2 ? (
-                                <Pressable style={styles.secondaryButton} onPress={() => router.push('/edit-profile' as any)}>
+                                <Pressable style={styles.secondaryButton} onPress={handleEditProfilePhotos}>
                                     <Text style={styles.secondaryButtonText}>Update profile photos</Text>
                                 </Pressable>
                             ) : null}
@@ -892,7 +964,7 @@ function getFriendlyStatusLabel(status: string) {
 function getVerificationRetryGuidance(input: {
     status: string;
     failureReasons: string[];
-    results: { qualityFlags: string[] }[];
+    results: FaceVerificationResult[];
     supportedProfilePhotoCount: number;
     unsupportedProfilePhotoCount: number;
 }) {
@@ -905,7 +977,7 @@ function getVerificationRetryGuidance(input: {
         PHOTO_RELATED_REASON_CODES.has(reason),
     ).length;
     const photoRelatedResultCount = input.results.filter((result) =>
-        result.qualityFlags.some((flag) => PHOTO_RELATED_QUALITY_FLAGS.has(flag)),
+        (result.qualityFlags ?? []).some((flag) => PHOTO_RELATED_QUALITY_FLAGS.has(flag)),
     ).length;
     const photoIssueDetected =
         input.supportedProfilePhotoCount < 2 ||
@@ -973,6 +1045,15 @@ function getVerificationRetryGuidance(input: {
         };
     }
 
+    const hasWeakPerPhotoSignals = input.results.some(
+        (r) =>
+            r.decision === 'error' ||
+            r.decision === 'not_matched' ||
+            (r.qualityFlags?.length ?? 0) > 0,
+    );
+    const shouldOfferPhotosForMixedFailure =
+        input.failureReasons.includes('insufficient_match_count') && hasWeakPerPhotoSignals;
+
     return {
         title: 'One more try should do it',
         shortBody: 'Try one more selfie and we will check it again.',
@@ -982,7 +1063,7 @@ function getVerificationRetryGuidance(input: {
             'Take off anything covering your face and hold the phone steady.',
         ],
         showSelfieAction: true,
-        showPhotoAction: false,
+        showPhotoAction: shouldOfferPhotosForMixedFailure,
     };
 }
 
@@ -1008,6 +1089,39 @@ const PHOTO_RELATED_QUALITY_FLAGS = new Set([
     'multiple_faces_detected',
     'multiple_target_faces',
 ]);
+
+function deriveProfilePhotoIssueSignals(results: FaceVerificationResult[] | undefined) {
+    const rows = results ?? [];
+    let unsupportedProfilePhotoCount = 0;
+    for (const row of rows) {
+        if (row.decision === 'error') {
+            unsupportedProfilePhotoCount += 1;
+            continue;
+        }
+        const flags = row.qualityFlags ?? [];
+        if (flags.some((flag) => PHOTO_RELATED_QUALITY_FLAGS.has(flag))) {
+            unsupportedProfilePhotoCount += 1;
+        }
+    }
+    return { unsupportedProfilePhotoCount };
+}
+
+function getPhotoFailureCauseLine(
+    guidance: { showPhotoAction?: boolean } | null | undefined,
+    failureReasons: string[],
+): string | null {
+    if (!guidance?.showPhotoAction) {
+        return null;
+    }
+    const explicitPhotoCode = failureReasons.some((code) => PHOTO_RELATED_REASON_CODES.has(code));
+    if (explicitPhotoCode) {
+        return 'Our check flagged an issue with your profile photos. Edit them in your profile, save, then run verification again.';
+    }
+    if (failureReasons.includes('insufficient_match_count')) {
+        return 'Your selfie did not match enough profile photos closely enough. Update your photos (or add clearer ones), save, then try again.';
+    }
+    return 'Updating your profile photos may help this pass. Edit them from your profile, save, then run verification again.';
+}
 
 const styles = StyleSheet.create({
     container: {
@@ -1256,6 +1370,32 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         maxWidth: 320,
     },
+    resultBodyMuted: {
+        color: '#94a3b8',
+        fontSize: 14,
+        lineHeight: 22,
+        textAlign: 'center',
+        maxWidth: 320,
+        marginTop: 8,
+    },
+    resultCauseBanner: {
+        width: '100%',
+        maxWidth: 340,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 16,
+        backgroundColor: 'rgba(244, 114, 182, 0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(244, 114, 182, 0.28)',
+        marginTop: 4,
+    },
+    resultCauseBannerText: {
+        color: '#fce7f3',
+        fontSize: 14,
+        lineHeight: 21,
+        fontWeight: '600',
+        textAlign: 'center',
+    },
     resultTips: {
         width: '100%',
         gap: 10,
@@ -1278,6 +1418,19 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '700',
     },
+    resultTertiaryButton: {
+        borderRadius: 999,
+        paddingVertical: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(148, 163, 184, 0.35)',
+    },
+    resultTertiaryButtonText: {
+        color: '#cbd5e1',
+        fontSize: 15,
+        fontWeight: '600',
+    },
     primaryButton: {
         backgroundColor: '#ec4899',
         borderRadius: 999,
@@ -1285,6 +1438,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 30,
+    },
+    primaryButtonInResultStack: {
+        marginBottom: 0,
     },
     primaryButtonDisabled: {
         opacity: 0.7,
