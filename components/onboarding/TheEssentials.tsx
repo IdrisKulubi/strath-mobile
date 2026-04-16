@@ -5,11 +5,11 @@ import {
     StyleSheet,
     TextInput,
     TouchableOpacity,
-    ScrollView,
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
 } from 'react-native';
+import { ScrollView, Pressable } from 'react-native-gesture-handler';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -243,15 +243,20 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                 selectedDate.getMonth() + 1,
                 selectedDate.getDate()
             );
-            onUpdate({ age, zodiacSign: zodiac });
+            onUpdate({ age: String(age), zodiacSign: zodiac });
         }
     };
 
     const handleBirthdayContinue = () => {
-        if (birthday && data.age >= 18) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setStep(3);
+        if (!birthday) {
+            return;
         }
+        const ageYears = calculateAge(birthday);
+        if (ageYears < 18) {
+            return;
+        }
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        setStep(3);
     };
 
     const handleGenderSelect = (gender: string) => {
@@ -364,7 +369,8 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
     ];
 
     const isNameValid = firstName.trim().length >= 2 && lastName.trim().length >= 2;
-    const isBirthdayValid = birthday && data.age >= 18;
+    const birthdayAge = birthday ? calculateAge(birthday) : 0;
+    const isBirthdayValid = Boolean(birthday && birthdayAge >= 18);
 
     return (
         <KeyboardAvoidingView
@@ -529,16 +535,16 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                             />
                         )}
 
-                        {birthday && data.age && (
+                        {birthday && !!data.zodiacSign && (
                             <Animated.View entering={FadeIn} style={styles.zodiacReveal}>
                                 <Text style={styles.zodiacEmoji}>{getZodiacEmoji(data.zodiacSign)}</Text>
                                 <Text style={styles.zodiacText}>
-                                    {`You're ${data.age} years old and a ${data.zodiacSign}!`}
+                                    {`You're ${birthdayAge} years old and a ${data.zodiacSign}!`}
                                 </Text>
                             </Animated.View>
                         )}
 
-                        {birthday && data.age && data.age < 18 && (
+                        {birthday && birthdayAge > 0 && birthdayAge < 18 && (
                             <Animated.View entering={FadeIn} style={styles.errorBanner}>
                                 <Text style={styles.errorText}>
                                     You must be 18+ to use Strathspace
@@ -546,10 +552,10 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                             </Animated.View>
                         )}
 
-                        <TouchableOpacity
+                        <Pressable
                             onPress={handleBirthdayContinue}
                             disabled={!isBirthdayValid}
-                            activeOpacity={0.8}
+                            style={({ pressed }) => [{ opacity: pressed && isBirthdayValid ? 0.85 : 1 }]}
                         >
                             <LinearGradient
                                 colors={isBirthdayValid ? ['#ec4899', '#f43f5e'] : ['#374151', '#374151']}
@@ -559,7 +565,7 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                                     Continue
                                 </Text>
                             </LinearGradient>
-                        </TouchableOpacity>
+                        </Pressable>
                     </Animated.View>
                 )}
 
