@@ -19,15 +19,17 @@ export function HomeHeader({ firstName, matchCount }: HomeHeaderProps) {
     const { colors, isDark } = useTheme();
     const greeting = getGreeting();
     const visibleCount = matchCount && matchCount > 0 ? Math.min(matchCount, 4) : 0;
+    const subtitle =
+        visibleCount > 0
+            ? `Your top ${visibleCount} matches today`
+            : 'We’re curating your introduction';
 
     return (
         <View style={styles.container}>
             <Text style={[styles.greeting, { color: colors.foreground }]}>
                 {greeting}{firstName ? `, ${firstName}` : ''} ☀️
             </Text>
-            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                {visibleCount > 0 ? `Your top ${visibleCount} matches today` : 'Your curated matches today'}
-            </Text>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
             {visibleCount > 0 && (
                 <Text style={[styles.refreshLine, { color: colors.mutedForeground }]}>
                     Only {visibleCount} matches refresh every 24 hours
