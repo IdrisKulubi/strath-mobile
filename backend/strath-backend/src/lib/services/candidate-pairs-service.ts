@@ -732,13 +732,30 @@ export async function generateCandidatePairsForUser(userId: string) {
     }
 
     if (aboveThreshold.length === 0) {
-        console.log(
-            "[candidate-pairs] SKIP: no candidates at or above effective min (reciprocal:",
-            reciprocalPoolSize,
-            "effectiveMin:",
-            effectiveMin,
-            ")",
+        const scored = scoredCandidates.filter(
+            (e): e is NonNullable<typeof e> => Boolean(e),
         );
+        const scores = scored.map((e) => e.score);
+        const maxScore = scores.length > 0 ? Math.max(...scores) : null;
+        const minScore = scores.length > 0 ? Math.min(...scores) : null;
+
+        console.log("[candidate-pairs] SKIP below effective min", {
+            viewerUserId: userId,
+            effectiveMin,
+            baseMinScore: MIN_CANDIDATE_MATCH_SCORE,
+            scoreFloor: MIN_CANDIDATE_MATCH_SCORE_FLOOR,
+            reciprocalPoolSize,
+            scoredCount: scored.length,
+            exposureFilteredCount: filteredByExposure,
+            maxScore,
+            minScore,
+            scored: scored.map((e) => ({
+                candidateUserId: e.candidate.userId,
+                score: e.score,
+                gapToEffectiveMin: effectiveMin - e.score,
+                compatibilityReasons: e.reasons,
+            })),
+        });
         return [];
     }
 

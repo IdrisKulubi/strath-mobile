@@ -33,9 +33,15 @@ export async function GET(req: NextRequest) {
         console.log("[daily-matches] active pairs after promotion:", matches.length);
 
         if (matches.length === 0) {
-            console.log("[daily-matches] no active pairs, generating...");
+            console.log("[daily-matches] no active pairs, generating...", { userId });
             matches = await generateCandidatePairsForUser(userId);
-            console.log("[daily-matches] after generate:", matches.length);
+            console.log("[daily-matches] after generate:", matches.length, { userId });
+            if (matches.length === 0) {
+                console.log(
+                    "[daily-matches] zero matches after generate — check [candidate-pairs] SKIP or pool logs for",
+                    { userId },
+                );
+            }
         }
 
         const hasUpcomingQueued = await getHasUpcomingQueuedForUser(userId);
