@@ -37,8 +37,10 @@ function buildIdentityLine(match: DailyMatch) {
 function buildExpiryText(expiresAt: string) {
     const remainingMs = new Date(expiresAt).getTime() - Date.now();
     const remainingHours = Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60)));
-    if (remainingHours <= 1) return 'Resets in under 1 hour';
-    return `Resets in ${remainingHours} hours`;
+    if (remainingHours <= 1) return 'This intro closes in under an hour';
+    if (remainingHours < 24) return `This intro closes in about ${remainingHours} hours`;
+    const days = Math.ceil(remainingHours / 24);
+    return `This intro closes in about ${days} day${days === 1 ? '' : 's'}`;
 }
 
 export function MatchCard({ match, index, onOpenToMeet, onPass, onViewProfile }: MatchCardProps) {

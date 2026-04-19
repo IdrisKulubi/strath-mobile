@@ -6,6 +6,8 @@
 export const NOTIFICATION_TYPES = {
     // Legacy
     MATCH: 'match',
+    /** New curated home introduction (candidate pair went live). */
+    NEW_CANDIDATE_MATCH: 'new_candidate_match',
     MESSAGE: 'message',
     CALL: 'call',
     GENERIC: 'generic',

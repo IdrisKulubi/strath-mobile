@@ -7,6 +7,7 @@ import { isAuthorizedCronRequest } from "@/lib/security";
 import {
     generateCandidatePairsForUser,
     getActiveCandidatePairsForUser,
+    promoteDueQueuedPairsForUser,
 } from "@/lib/services/candidate-pairs-service";
 import { runPairExpiration } from "@/lib/services/pair-expiration-service";
 
@@ -41,6 +42,7 @@ export async function GET(req: NextRequest) {
 
         let generatedFor = 0;
         for (const activeUser of usersToCheck) {
+            await promoteDueQueuedPairsForUser(activeUser.id);
             const existingPairs = await getActiveCandidatePairsForUser(activeUser.id);
             if (existingPairs.length > 0) continue;
             const created = await generateCandidatePairsForUser(activeUser.id);

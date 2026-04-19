@@ -1,12 +1,33 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+    addUtcDays,
     canonicalizePairUsers,
     getCurrentUserDecision,
     getPairRole,
     resolveCandidatePairStatus,
+    startOfNextUtcDay,
+    startOfUtcDay,
 } from "@/lib/services/candidate-pairs-service";
 import { mapLegacyDateStatus } from "@/lib/services/mutual-match-service";
+
+test("startOfNextUtcDay returns following UTC midnight", () => {
+    const from = new Date(Date.UTC(2026, 3, 19, 14, 30, 0));
+    const next = startOfNextUtcDay(from);
+    assert.equal(next.toISOString(), "2026-04-20T00:00:00.000Z");
+});
+
+test("startOfUtcDay normalizes to UTC midnight", () => {
+    const d = new Date(Date.UTC(2026, 0, 2, 23, 59, 59));
+    const s = startOfUtcDay(d);
+    assert.equal(s.toISOString(), "2026-01-02T00:00:00.000Z");
+});
+
+test("addUtcDays advances calendar days in UTC", () => {
+    const base = new Date(Date.UTC(2026, 0, 28, 12, 0, 0));
+    const out = addUtcDays(base, 3);
+    assert.equal(out.toISOString(), "2026-01-31T12:00:00.000Z");
+});
 
 test("canonicalizePairUsers stores pair members deterministically", () => {
     assert.deepEqual(

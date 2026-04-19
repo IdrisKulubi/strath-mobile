@@ -4,7 +4,8 @@ import { getSessionWithFallback } from "@/lib/auth-helpers";
 import {
     generateCandidatePairsForUser,
     getActiveCandidatePairsForUser,
-    getNextPairsAvailableAt,
+    getHasUpcomingQueuedForUser,
+    promoteDueQueuedPairsForUser,
 } from "@/lib/services/candidate-pairs-service";
 import { runPairExpiration } from "@/lib/services/pair-expiration-service";
 
@@ -26,19 +27,20 @@ export async function GET(req: NextRequest) {
             console.log("[daily-matches] expired", expiration.expiredCount, "pairs for user", userId);
         }
 
+        await promoteDueQueuedPairsForUser(userId);
+
         let matches = await getActiveCandidatePairsForUser(userId);
-        console.log("[daily-matches] existing active pairs:", matches.length);
+        console.log("[daily-matches] active pairs after promotion:", matches.length);
 
         if (matches.length === 0) {
-            console.log("[daily-matches] no existing pairs, generating...");
+            console.log("[daily-matches] no active pairs, generating...");
             matches = await generateCandidatePairsForUser(userId);
             console.log("[daily-matches] after generate:", matches.length);
         }
 
-        const nextPairsAvailableAt =
-            matches.length === 0 ? await getNextPairsAvailableAt(userId) : undefined;
+        const hasUpcomingQueued = await getHasUpcomingQueuedForUser(userId);
 
-        return successResponse({ matches, nextPairsAvailableAt });
+        return successResponse({ matches, hasUpcomingQueued });
     } catch (error) {
         console.error("[home/daily-matches] Error:", error);
         return errorResponse(error);

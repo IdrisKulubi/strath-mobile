@@ -60,7 +60,7 @@ export default function HomeScreen() {
         verificationRequired,
     } = useDailyMatches();
     const matches = useMemo(() => matchesData?.matches ?? [], [matchesData]);
-    const nextPairsAvailableAt = matchesData?.nextPairsAvailableAt;
+    const hasUpcomingQueued = matchesData?.hasUpcomingQueued ?? false;
     const respondToPair = useRespondToDailyPair();
     const [refreshing, setRefreshing] = useState(false);
     const [hasSeenMatchesToday, setHasSeenMatchesToday] = useState(false);
@@ -158,11 +158,7 @@ export default function HomeScreen() {
                         }}
                     />
                 ) : (
-                    <EmptyMatches
-                        allActioned={allActioned}
-                        nextPairsAvailableAt={nextPairsAvailableAt}
-                        onCountdownEnd={refetch}
-                    />
+                    <EmptyMatches allActioned={allActioned} hasUpcomingQueued={hasUpcomingQueued} />
                 )}
 
                 {!isLoading && matches.length > 0 && activeMatchCount === 0 ? (

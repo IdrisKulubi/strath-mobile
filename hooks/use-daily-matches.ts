@@ -25,7 +25,8 @@ export interface DailyMatch {
 
 export interface DailyMatchesResponse {
     matches: DailyMatch[];
-    nextPairsAvailableAt?: string;
+    /** True when a queued introduction is scheduled for a future UTC day (no timer shown). */
+    hasUpcomingQueued?: boolean;
 }
 
 export function useDailyMatches() {
@@ -43,7 +44,7 @@ export function useDailyMatches() {
             const json = await res.json();
             return {
                 matches: json?.data?.matches ?? [],
-                nextPairsAvailableAt: json?.data?.nextPairsAvailableAt,
+                hasUpcomingQueued: Boolean(json?.data?.hasUpcomingQueued),
             };
         },
         staleTime: 60 * 1000, // 1 minute — ensures fresh pairs after expiry, pull-to-refresh always refetches

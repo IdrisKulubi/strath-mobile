@@ -9,6 +9,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 export const NOTIFICATION_TYPES = {
     // Legacy
     MATCH: 'match',
+    NEW_CANDIDATE_MATCH: 'new_candidate_match',
     MESSAGE: 'message',
     CALL: 'call',
     GENERIC: 'generic',

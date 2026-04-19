@@ -34,6 +34,7 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
         case NOTIFICATION_TYPES.MUTUAL_MATCH:
         case NOTIFICATION_TYPES.DATE_REQUEST_ACCEPTED:
         case NOTIFICATION_TYPES.DATE_SCHEDULED:
+        case NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH:
         case NOTIFICATION_TYPES.MATCH:
             return 'accent';
 
@@ -88,6 +89,9 @@ function resolveRoute(data: NotificationPayload): string | null {
 
         case NOTIFICATION_TYPES.MATCH:
             return '/(tabs)/dates';
+
+        case NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH:
+            return '/(tabs)';
 
         default:
             return null;

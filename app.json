@@ -30,7 +30,7 @@
     },
     "android": {
       "package": "com.strathspace.android",
-      "versionCode": 13,
+      "versionCode": 14,
       "icon": "./assets/images/android-app-icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-adaptive-foreground.png",

@@ -438,9 +438,11 @@ export const candidatePairs = pgTable(
             .default("pending")
             .notNull(),
         status: text("status")
-            .$type<"active" | "mutual" | "closed" | "expired">()
+            .$type<"active" | "queued" | "mutual" | "closed" | "expired">()
             .default("active")
             .notNull(),
+        /** When status is `queued`, introduction goes live at this UTC time (successive calendar days). */
+        revealAt: timestamp("reveal_at"),
         expiresAt: timestamp("expires_at").notNull(),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
@@ -451,6 +453,7 @@ export const candidatePairs = pgTable(
         userBIdx: index("candidate_pairs_user_b_idx").on(table.userBId),
         statusIdx: index("candidate_pairs_status_idx").on(table.status),
         expiresIdx: index("candidate_pairs_expires_idx").on(table.expiresAt),
+        revealAtIdx: index("candidate_pairs_reveal_at_idx").on(table.status, table.revealAt),
         activeExposureAIdx: index("candidate_pairs_active_exposure_a_idx").on(table.userAId, table.status, table.expiresAt),
         activeExposureBIdx: index("candidate_pairs_active_exposure_b_idx").on(table.userBId, table.status, table.expiresAt),
     })
@@ -464,10 +467,19 @@ export const candidatePairHistory = pgTable(
             .notNull()
             .references(() => candidatePairs.id, { onDelete: "cascade" }),
         actorUserId: text("actor_user_id").references(() => user.id, { onDelete: "set null" }),
-        fromStatus: text("from_status").$type<"active" | "mutual" | "closed" | "expired">(),
-        toStatus: text("to_status").$type<"active" | "mutual" | "closed" | "expired">(),
+        fromStatus: text("from_status").$type<"active" | "queued" | "mutual" | "closed" | "expired">(),
+        toStatus: text("to_status").$type<"active" | "queued" | "mutual" | "closed" | "expired">(),
         eventType: text("event_type")
-            .$type<"generated" | "responded" | "mutual" | "closed" | "expired" | "bridged_to_match" | "bridged_to_date">()
+            .$type<
+                | "generated"
+                | "promoted"
+                | "responded"
+                | "mutual"
+                | "closed"
+                | "expired"
+                | "bridged_to_match"
+                | "bridged_to_date"
+            >()
             .notNull(),
         metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
         createdAt: timestamp("created_at").defaultNow().notNull(),
