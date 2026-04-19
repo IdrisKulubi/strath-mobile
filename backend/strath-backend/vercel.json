@@ -17,6 +17,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron/expire-stale-vibe-checks",
+      "schedule": "15 * * * *"
+    },
+    {
       "path": "/api/worker/face-verification",
       "schedule": "* * * * *"
     }

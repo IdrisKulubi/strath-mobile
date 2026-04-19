@@ -104,6 +104,8 @@ export default function VibeCheckCallScreen() {
     const startTimeRef = useRef<number | null>(null);
     const autoJoinTriggeredRef = useRef(false);
     const inviteExpiryHandledRef = useRef(false);
+    const callEndedRef = useRef(false);
+    const sessionRef = useRef<VibeCheckSession | null>(null);
 
     const { data: matchesData } = useMatches();
     const currentMatch = matchesData?.matches?.find((m) => m.id === matchId);
@@ -120,7 +122,15 @@ export default function VibeCheckCallScreen() {
             if (remaining === 0) {
                 if (timerRef.current) clearInterval(timerRef.current);
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                stopCallAndShowDecision(CALL_DURATION_SECONDS);
+                // Try to close the in-app browser so the user is dropped back into the
+                // app for the meet/pass decision instead of staring at Daily's
+                // "you have been removed" screen. iOS-only API; safe no-op on Android.
+                try {
+                    WebBrowser.dismissBrowser();
+                } catch {
+                    // ignore; AppState fallback will handle Android dismissal
+                }
+                finishCallRef.current?.("timer");
             }
         }, 1000);
     }, []);
@@ -159,13 +169,41 @@ export default function VibeCheckCallScreen() {
         router.replace("/(tabs)/dates");
     }, [router, stopInviteTimer, toast]);
 
-    const stopCallAndShowDecision = useCallback((durationSeconds: number) => {
-        stopTimer();
-        if (session?.id) {
-            endCall({ vibeCheckId: session.id, durationSeconds });
-        }
-        setShowDecision(true);
-    }, [endCall, session?.id, stopTimer]);
+    /**
+     * Single source of truth for "the call is over, show the meet/pass UI".
+     * Guarded so we never double-fire endCall when, for example, the timer expires AND
+     * the user closes the browser AND AppState fires `active` all in quick succession.
+     */
+    const finishCall = useCallback(
+        (reason: "timer" | "browser_dismiss" | "foreground" | "manual" | "server_completed") => {
+            if (callEndedRef.current) return;
+            const sessionId = sessionRef.current?.id;
+            if (!sessionId && reason !== "server_completed") return;
+            callEndedRef.current = true;
+            stopTimer();
+            const elapsed = startTimeRef.current
+                ? Math.min(
+                      CALL_DURATION_SECONDS,
+                      Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000)),
+                  )
+                : CALL_DURATION_SECONDS;
+            if (sessionId) {
+                endCall({ vibeCheckId: sessionId, durationSeconds: elapsed });
+            }
+            console.log("[vibe-check] finishCall", { reason, sessionId, elapsed });
+            setShowDecision(true);
+        },
+        [endCall, stopTimer],
+    );
+
+    const finishCallRef = useRef(finishCall);
+    useEffect(() => {
+        finishCallRef.current = finishCall;
+    }, [finishCall]);
+
+    useEffect(() => {
+        sessionRef.current = session;
+    }, [session]);
 
     useEffect(() => {
         return () => {
@@ -204,9 +242,21 @@ export default function VibeCheckCallScreen() {
 
     useEffect(() => {
         const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
-            if (state === "active" && callStarted && startTimeRef.current) {
-                const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
-                setSecondsLeft(Math.max(0, CALL_DURATION_SECONDS - elapsed));
+            if (state !== "active" || !callStarted || !startTimeRef.current) return;
+            const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+            const remaining = Math.max(0, CALL_DURATION_SECONDS - elapsed);
+            setSecondsLeft(remaining);
+
+            // Android safety net: if the user backgrounded the app while Daily ejected
+            // them at 3:00, on return we force-dismiss the in-app browser (no-op if
+            // already closed) and surface the decision UI.
+            if (remaining === 0 && !callEndedRef.current) {
+                try {
+                    WebBrowser.dismissBrowser();
+                } catch {
+                    // ignore — we just want to flip to decision UI either way
+                }
+                finishCallRef.current("foreground");
             }
         });
         return () => sub.remove();
@@ -215,18 +265,27 @@ export default function VibeCheckCallScreen() {
     const openCall = useCallback(async (joinedSession: VibeCheckSession) => {
         const callUrl = `${joinedSession.roomUrl}?t=${joinedSession.token}`;
         setSession(joinedSession);
+        sessionRef.current = joinedSession;
+        callEndedRef.current = false;
         setCallStarted(true);
         setSecondsLeft(CALL_DURATION_SECONDS);
         startTimer();
 
-        await WebBrowser.openBrowserAsync(callUrl, {
-            presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-            toolbarColor: isDark ? "#1a1a2e" : "#f8fafc",
-            enableBarCollapsing: true,
-        });
+        try {
+            await WebBrowser.openBrowserAsync(callUrl, {
+                presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+                toolbarColor: isDark ? "#1a1a2e" : "#f8fafc",
+                enableBarCollapsing: true,
+            });
+        } catch (err) {
+            console.warn("[vibe-check] openBrowserAsync threw:", err);
+        }
 
-        stopTimer();
-    }, [isDark, startTimer, stopTimer]);
+        // Resolves when the user closes the browser (manual or programmatic dismiss).
+        // Always transition to the decision UI here so a partner-initiated 3-min eject
+        // doesn't leave the user stranded on Daily's "you have been removed" page.
+        finishCallRef.current("browser_dismiss");
+    }, [isDark, startTimer]);
 
     const handleJoinCall = useCallback(async () => {
         if (!vibeCheckStatus?.vibeCheckId) {
@@ -267,9 +326,13 @@ export default function VibeCheckCallScreen() {
 
     const handleEndCall = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        const elapsed = CALL_DURATION_SECONDS - secondsLeft;
-        stopCallAndShowDecision(elapsed);
-    }, [secondsLeft, stopCallAndShowDecision]);
+        try {
+            WebBrowser.dismissBrowser();
+        } catch {
+            // ignore
+        }
+        finishCall("manual");
+    }, [finishCall]);
 
     const handleLeaveWaitingRoom = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -285,12 +348,39 @@ export default function VibeCheckCallScreen() {
 
     useWaitingRoomHaptics(isInWaitingRoom);
 
+    // Force-quit recovery: the user may have closed the app mid-call (or before deciding),
+    // come back, and the server now reports the call as completed/expired. Skip the join
+    // step entirely and drop them straight into the decision UI so they can finalize.
+    const serverCallFinished = vibeCheckStatus?.status === "completed";
+    const userHasNotDecided = !vibeCheckStatus?.userDecision;
+    const showDecisionFromServer =
+        !showDecision &&
+        !session &&
+        Boolean(vibeCheckStatus?.exists && vibeCheckStatus?.vibeCheckId) &&
+        serverCallFinished &&
+        userHasNotDecided;
+
     if (showDecision && session) {
         return (
             <SafeAreaView style={[styles.root, { backgroundColor: isDark ? "#0f0d23" : "#f8fafc" }]}>
                 <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
                 <VibeCheckDecision
                     vibeCheckId={session.id}
+                    matchId={matchId ?? ""}
+                    partnerFirstName={partnerFirstName}
+                    partnerPhoto={partnerPhoto}
+                    onClose={() => router.push("/(tabs)/dates")}
+                />
+            </SafeAreaView>
+        );
+    }
+
+    if (showDecisionFromServer && vibeCheckStatus?.vibeCheckId) {
+        return (
+            <SafeAreaView style={[styles.root, { backgroundColor: isDark ? "#0f0d23" : "#f8fafc" }]}>
+                <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+                <VibeCheckDecision
+                    vibeCheckId={vibeCheckStatus.vibeCheckId}
                     matchId={matchId ?? ""}
                     partnerFirstName={partnerFirstName}
                     partnerPhoto={partnerPhoto}

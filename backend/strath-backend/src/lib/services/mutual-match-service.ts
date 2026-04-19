@@ -4,6 +4,7 @@ import {
     dateMatches,
     mutualMatches,
     profiles,
+    vibeChecks,
 } from "@/db/schema";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 
@@ -141,7 +142,58 @@ export type MutualDatesItem = {
     venueAddress?: string;
     scheduledAt?: string;
     createdAt: string;
+    /**
+     * Sub-state of the post-call decision flow. Drives the Dates tab UI for `call_pending`
+     * mutuals so users can resume an undecided meet/pass even after the original call screen closed.
+     */
+    callStage?:
+        | "call_ready"
+        | "decision_pending_me"
+        | "decision_pending_partner"
+        | "decision_pending_both"
+        | "completed";
+    vibeCheckId?: string;
+    myDecision?: "meet" | "pass" | null;
+    partnerDecision?: "meet" | "pass" | null;
+    callEndedAt?: string;
 };
+
+function deriveCallStage(input: {
+    viewerIsUser1: boolean;
+    user1Decision: "meet" | "pass" | null;
+    user2Decision: "meet" | "pass" | null;
+    bothAgreedToMeet: boolean;
+    status: "pending" | "scheduled" | "active" | "completed" | "expired" | "cancelled";
+    endedAt: Date | null;
+}): {
+    stage: NonNullable<MutualDatesItem["callStage"]>;
+    myDecision: MutualDatesItem["myDecision"];
+    partnerDecision: MutualDatesItem["partnerDecision"];
+} {
+    const myDecision = input.viewerIsUser1 ? input.user1Decision : input.user2Decision;
+    const partnerDecision = input.viewerIsUser1 ? input.user2Decision : input.user1Decision;
+    const bothDecided = !!(input.user1Decision && input.user2Decision);
+
+    if (input.bothAgreedToMeet || (bothDecided && input.status === "completed")) {
+        return { stage: "completed", myDecision, partnerDecision };
+    }
+
+    const callOver = input.status === "completed" || input.status === "expired" || input.endedAt !== null;
+    if (!callOver) {
+        return { stage: "call_ready", myDecision, partnerDecision };
+    }
+
+    if (!myDecision && !partnerDecision) {
+        return { stage: "decision_pending_both", myDecision, partnerDecision };
+    }
+    if (!myDecision) {
+        return { stage: "decision_pending_me", myDecision, partnerDecision };
+    }
+    if (!partnerDecision) {
+        return { stage: "decision_pending_partner", myDecision, partnerDecision };
+    }
+    return { stage: "completed", myDecision, partnerDecision };
+}
 
 export function mapLegacyDateStatus(
     dm: typeof dateMatches.$inferSelect,
@@ -183,12 +235,18 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
     const hydratedMutuals = await Promise.all(
         mutualRows.map(async (row) => {
             const otherUserId = row.userAId === userId ? row.userBId : row.userAId;
-            const [profile, compatibility] = await Promise.all([
+            const [profile, compatibility, latestVibeCheck] = await Promise.all([
                 db.query.profiles.findFirst({
                     where: eq(profiles.userId, otherUserId),
                     with: { user: true },
                 }),
                 computeCompatibility(userId, otherUserId),
+                row.legacyMatchId
+                    ? db.query.vibeChecks.findFirst({
+                          where: eq(vibeChecks.matchId, row.legacyMatchId),
+                          orderBy: (v, { desc }) => [desc(v.createdAt)],
+                      })
+                    : Promise.resolve(undefined),
             ]);
             const primaryPhoto =
                 (Array.isArray(profile?.photos) ? profile.photos[0] : null)
@@ -196,6 +254,35 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                 ?? profile?.user?.profilePhoto
                 ?? profile?.user?.image
                 ?? undefined;
+
+            let callStage: MutualDatesItem["callStage"];
+            let myDecision: MutualDatesItem["myDecision"];
+            let partnerDecision: MutualDatesItem["partnerDecision"];
+            let vibeCheckId: string | undefined;
+            let callEndedAt: string | undefined;
+
+            if (latestVibeCheck && row.status === "call_pending") {
+                const viewerIsUser1 = latestVibeCheck.user1Id === userId;
+                const derived = deriveCallStage({
+                    viewerIsUser1,
+                    user1Decision: latestVibeCheck.user1Decision ?? null,
+                    user2Decision: latestVibeCheck.user2Decision ?? null,
+                    bothAgreedToMeet: !!latestVibeCheck.bothAgreedToMeet,
+                    status: (latestVibeCheck.status ?? "pending") as
+                        | "pending"
+                        | "scheduled"
+                        | "active"
+                        | "completed"
+                        | "expired"
+                        | "cancelled",
+                    endedAt: latestVibeCheck.endedAt ?? null,
+                });
+                callStage = derived.stage;
+                myDecision = derived.myDecision;
+                partnerDecision = derived.partnerDecision;
+                vibeCheckId = latestVibeCheck.id;
+                callEndedAt = latestVibeCheck.endedAt?.toISOString();
+            }
 
             return {
                 id: row.id,
@@ -216,6 +303,11 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                 venueAddress: row.venueAddress ?? undefined,
                 scheduledAt: row.scheduledAt?.toISOString() ?? undefined,
                 createdAt: row.createdAt.toISOString(),
+                callStage,
+                vibeCheckId,
+                myDecision,
+                partnerDecision,
+                callEndedAt,
             };
         }),
     );

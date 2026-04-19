@@ -8,12 +8,15 @@ import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useMutualMatches, useDateHistory } from '@/hooks/use-date-requests';
 import { ConfirmedMatchCard } from '@/components/dates/confirmed-match-card';
+import { DecisionPendingCard } from '@/components/dates/decision-pending-card';
+import { FinishDecisionModal } from '@/components/dates/finish-decision-modal';
 import { HistoryCard } from '@/components/dates/history-card';
 import { EmptyDates } from '@/components/dates/empty-dates';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DateMatchModal } from '@/components/date-match/date-match-modal';
 import { useProfile } from '@/hooks/use-profile';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
+import type { MutualDate } from '@/hooks/use-date-requests';
 
 type Section = 'mutual' | 'call_pending' | 'being_arranged' | 'upcoming' | 'history';
 
@@ -50,6 +53,7 @@ export default function DatesScreen() {
     const { data: history = [], isLoading: loadingHistory, refetch: refetchHistory } = useDateHistory();
 
     const [matchModalVisible, setMatchModalVisible] = useState(false);
+    const [decisionMatch, setDecisionMatch] = useState<MutualDate | null>(null);
     const seenMatchIds = useRef<Set<string>>(new Set());
 
     const sections = useMemo(() => ({
@@ -130,6 +134,32 @@ export default function DatesScreen() {
         const items = sections[activeSection];
         if (items.length === 0) {
             return <EmptyDates section={activeSection} />;
+        }
+
+        if (activeSection === 'call_pending') {
+            return (
+                <View style={styles.list}>
+                    {items.map((match, index) => {
+                        const stage = match.callStage;
+                        const isDecisionPending =
+                            stage === 'decision_pending_me'
+                            || stage === 'decision_pending_partner'
+                            || stage === 'decision_pending_both';
+
+                        if (isDecisionPending) {
+                            return (
+                                <DecisionPendingCard
+                                    key={match.id}
+                                    match={match}
+                                    index={index}
+                                    onPress={(m) => setDecisionMatch(m)}
+                                />
+                            );
+                        }
+                        return <ConfirmedMatchCard key={match.id} match={match} index={index} />;
+                    })}
+                </View>
+            );
         }
 
         return (
@@ -247,6 +277,12 @@ export default function DatesScreen() {
                 myPhoto={myProfile?.profilePhoto ?? myProfile?.photos?.[0]}
                 compatibilityScore={celebratedMatch?.withUser.compatibilityScore}
                 onClose={() => setMatchModalVisible(false)}
+            />
+
+            <FinishDecisionModal
+                visible={!!decisionMatch}
+                mutualDate={decisionMatch}
+                onClose={() => setDecisionMatch(null)}
             />
         </ScreenGradient>
         </TabSwipeView>

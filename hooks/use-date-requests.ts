@@ -5,6 +5,18 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export type DateVibe = 'coffee' | 'walk' | 'dinner' | 'hangout';
 
+/**
+ * Sub-state of the post-call decision flow. Surfaced for `call_pending` mutuals so the
+ * Dates tab can render a "Finish your decision" affordance after the deciding user gets
+ * routed back without finalizing.
+ */
+export type CallStage =
+    | 'call_ready'
+    | 'decision_pending_me'
+    | 'decision_pending_partner'
+    | 'decision_pending_both'
+    | 'completed';
+
 export interface MutualDate {
     id: string;
     pairId?: string;
@@ -24,6 +36,12 @@ export interface MutualDate {
     venueName?: string;
     venueAddress?: string;
     scheduledAt?: string;
+    /** Only present for `call_pending` mutuals backed by a vibe check. */
+    callStage?: CallStage;
+    vibeCheckId?: string;
+    myDecision?: 'meet' | 'pass' | null;
+    partnerDecision?: 'meet' | 'pass' | null;
+    callEndedAt?: string;
 }
 
 export interface ScheduledDate {

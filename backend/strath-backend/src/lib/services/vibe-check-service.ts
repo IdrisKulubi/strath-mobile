@@ -416,5 +416,86 @@ export async function getVibeCheckStatus(
     };
 }
 
+/**
+ * Push the non-deciding partner of a vibe check after the deciding user's 60s wait elapses.
+ * Idempotent: uses `vibeChecks.partnerNudgeSent` so we only fire once per call.
+ *
+ * Returns:
+ *   - `nudged: true` if a push was just sent.
+ *   - `nudged: false` with a reason for any skip (already nudged, partner already decided,
+ *     mutual already finalized, no push token, etc.).
+ */
+export async function notifyPartnerDecisionPending(
+    vibeCheckId: string,
+    callerUserId: string,
+): Promise<
+    | { nudged: true }
+    | {
+          nudged: false;
+          reason:
+              | "not_found"
+              | "not_participant"
+              | "already_nudged"
+              | "both_decided"
+              | "partner_already_decided"
+              | "no_push_token";
+      }
+> {
+    const { sendPushNotification } = await import("@/lib/notifications");
+    const { user: userTable } = await import("@/db/schema");
+    const { NOTIFICATION_TYPES } = await import("@/lib/notification-types");
+
+    const check = await db.query.vibeChecks.findFirst({
+        where: eq(vibeChecks.id, vibeCheckId),
+    });
+    if (!check) return { nudged: false, reason: "not_found" };
+
+    const isUser1 = check.user1Id === callerUserId;
+    const isUser2 = check.user2Id === callerUserId;
+    if (!isUser1 && !isUser2) return { nudged: false, reason: "not_participant" };
+
+    if (check.partnerNudgeSent) return { nudged: false, reason: "already_nudged" };
+
+    const partnerDecision = isUser1 ? check.user2Decision : check.user1Decision;
+    const myDecision = isUser1 ? check.user1Decision : check.user2Decision;
+
+    if (myDecision && partnerDecision) {
+        return { nudged: false, reason: "both_decided" };
+    }
+    if (partnerDecision) {
+        return { nudged: false, reason: "partner_already_decided" };
+    }
+
+    const partnerUserId = isUser1 ? check.user2Id : check.user1Id;
+    const [partnerUser, callerProfile] = await Promise.all([
+        db.query.user.findFirst({ where: eq(userTable.id, partnerUserId) }),
+        db.query.profiles.findFirst({ where: eq(profiles.userId, callerUserId) }),
+    ]);
+
+    const callerName = callerProfile?.firstName ?? "Your match";
+
+    // Mark first so a parallel call doesn't double-nudge even on push failure.
+    await db
+        .update(vibeChecks)
+        .set({ partnerNudgeSent: true })
+        .where(eq(vibeChecks.id, vibeCheckId));
+
+    if (!partnerUser?.pushToken) {
+        return { nudged: false, reason: "no_push_token" };
+    }
+
+    await sendPushNotification(partnerUser.pushToken, {
+        title: `Decide on your call with ${callerName}`,
+        body: "They're waiting on you to say meet or pass.",
+        data: {
+            type: NOTIFICATION_TYPES.CALL_REMINDER,
+            vibeCheckId,
+            route: "/(tabs)/dates",
+        },
+    });
+
+    return { nudged: true };
+}
+
 // Re-export the call duration so routes and the client can share it
 export { CALL_DURATION_MS, CONVERSATION_TOPICS, INVITE_WINDOW_MS };

@@ -1318,6 +1318,9 @@ export const vibeChecks = pgTable("vibe_checks", {
 
     status: text("status").$type<"pending" | "scheduled" | "active" | "completed" | "expired" | "cancelled">().default("pending"),
 
+    /** Idempotency flag: ensures we only push the partner once when their decision window expires. */
+    partnerNudgeSent: boolean("partner_nudge_sent").default(false),
+
     createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
     matchIdx: index("vibe_checks_match_idx").on(table.matchId),

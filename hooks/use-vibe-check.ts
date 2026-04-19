@@ -122,6 +122,17 @@ async function getVibeCheckResultAPI(vibeCheckId: string): Promise<VibeCheckResu
     return json.data ?? json;
 }
 
+async function nudgePartnerAPI(vibeCheckId: string): Promise<{ nudged: boolean; reason?: string }> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_URL}/api/vibe-check/${vibeCheckId}/nudge-partner`, {
+        method: "POST",
+        headers,
+    });
+    if (!res.ok) throw new Error("Failed to nudge partner");
+    const json = await res.json();
+    return json.data ?? json;
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -188,6 +199,11 @@ export function useVibeCheck(matchId: string, activeVibeCheckId?: string) {
         },
     });
 
+    // ── Nudge partner (best-effort) ──────────────────────────────────────────
+    const nudgeMutation = useMutation({
+        mutationFn: (vcId: string) => nudgePartnerAPI(vcId),
+    });
+
     return {
         // Status
         vibeCheckStatus: statusQuery.data,
@@ -212,9 +228,17 @@ export function useVibeCheck(matchId: string, activeVibeCheckId?: string) {
         joinedSession: joinMutation.data,
 
         submitDecision: decisionMutation.mutate,
+        submitDecisionAsync: decisionMutation.mutateAsync,
         isSubmittingDecision: decisionMutation.isPending,
+        submitDecisionError: decisionMutation.error,
+        isSubmitDecisionError: decisionMutation.isError,
+        resetSubmitDecision: decisionMutation.reset,
 
         endCall: endCallMutation.mutate,
         isEndingCall: endCallMutation.isPending,
+
+        nudgePartner: nudgeMutation.mutate,
+        nudgePartnerAsync: nudgeMutation.mutateAsync,
+        isNudgingPartner: nudgeMutation.isPending,
     };
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     View,
     StyleSheet,
@@ -10,7 +10,6 @@ import Animated, {
     useAnimatedStyle,
     withSpring,
     withTiming,
-    withDelay,
     FadeInDown,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,8 +17,10 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
+import { useToast } from '@/components/ui/toast';
 import { useTheme } from '@/hooks/use-theme';
 import { useVibeCheck } from '@/hooks/use-vibe-check';
+import { PARTNER_DECISION_TIMEOUT_SECONDS } from '@/lib/vibe-check-constants';
 
 interface VibeCheckDecisionProps {
     vibeCheckId: string;
@@ -38,16 +39,36 @@ export function VibeCheckDecision({
 }: VibeCheckDecisionProps) {
     const { colors, isDark } = useTheme();
     const router = useRouter();
+    const toast = useToast();
 
-    const { submitDecision, isSubmittingDecision, vibeCheckResult } =
-        useVibeCheck(matchId, vibeCheckId);
+    const {
+        submitDecisionAsync,
+        isSubmittingDecision,
+        submitDecisionError,
+        isSubmitDecisionError,
+        resetSubmitDecision,
+        vibeCheckResult,
+        nudgePartnerAsync,
+    } = useVibeCheck(matchId, vibeCheckId);
 
     const yesScale = useSharedValue(1);
     const noScale = useSharedValue(1);
-
-    // Celebration bounce when both agreed
     const celebY = useSharedValue(0);
     const celebOpacity = useSharedValue(0);
+
+    /** Last decision the user attempted; used for retry on network failure. */
+    const [pendingRetry, setPendingRetry] = useState<'meet' | 'pass' | null>(null);
+    /**
+     * Countdown for "waiting on partner" after this user picks `meet`. When it hits 0 we
+     * nudge the partner and route back to Dates so the user isn't stuck on a spinner.
+     */
+    const [partnerCountdown, setPartnerCountdown] = useState<number | null>(null);
+    const partnerTimeoutFiredRef = useRef(false);
+    const partnerTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const userDecision = vibeCheckResult?.userDecision;
+    const bothAgreed = vibeCheckResult?.bothAgreedToMeet;
+    const bothDecided = vibeCheckResult?.bothDecided;
 
     useEffect(() => {
         if (vibeCheckResult?.bothAgreedToMeet) {
@@ -58,21 +79,124 @@ export function VibeCheckDecision({
         }
     }, [vibeCheckResult?.bothAgreedToMeet, celebY, celebOpacity]);
 
+    const stopPartnerTimer = useCallback(() => {
+        if (partnerTimerRef.current) {
+            clearInterval(partnerTimerRef.current);
+            partnerTimerRef.current = null;
+        }
+    }, []);
+
+    /**
+     * Owns the 60s "waiting on partner" countdown. Only runs when the deciding user said
+     * `meet` and the partner has not yet decided. Stops as soon as both decide.
+     */
+    useEffect(() => {
+        if (userDecision !== 'meet' || bothDecided) {
+            stopPartnerTimer();
+            setPartnerCountdown(null);
+            partnerTimeoutFiredRef.current = false;
+            return;
+        }
+
+        if (partnerCountdown !== null) return; // already running
+
+        partnerTimeoutFiredRef.current = false;
+        setPartnerCountdown(PARTNER_DECISION_TIMEOUT_SECONDS);
+        partnerTimerRef.current = setInterval(() => {
+            setPartnerCountdown((prev) => {
+                if (prev === null) return null;
+                const next = prev - 1;
+                if (next <= 0) {
+                    if (partnerTimerRef.current) {
+                        clearInterval(partnerTimerRef.current);
+                        partnerTimerRef.current = null;
+                    }
+                    return 0;
+                }
+                return next;
+            });
+        }, 1000);
+
+        return () => {
+            stopPartnerTimer();
+        };
+    // partnerCountdown intentionally excluded — this effect bootstraps it once per state change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userDecision, bothDecided, stopPartnerTimer]);
+
+    /** Cleanup on unmount. */
+    useEffect(() => () => stopPartnerTimer(), [stopPartnerTimer]);
+
+    /**
+     * Side effect of countdown reaching 0: best-effort nudge then route to Dates.
+     * Guarded with `partnerTimeoutFiredRef` so a fast unmount/remount can't double-fire.
+     */
+    useEffect(() => {
+        if (partnerCountdown !== 0) return;
+        if (partnerTimeoutFiredRef.current) return;
+        if (bothDecided) return;
+        partnerTimeoutFiredRef.current = true;
+
+        const partnerName = partnerFirstName ?? 'They';
+        nudgePartnerAsync(vibeCheckId).catch(() => {
+            // best-effort; surface only as toast, don't block the redirect
+        });
+        toast.show({
+            message: `${partnerName} hasn't decided yet — finish from Dates.`,
+            variant: 'default',
+        });
+        if (onClose) {
+            onClose();
+        } else {
+            router.replace('/(tabs)/dates');
+        }
+    }, [
+        partnerCountdown,
+        bothDecided,
+        nudgePartnerAsync,
+        vibeCheckId,
+        partnerFirstName,
+        onClose,
+        router,
+        toast,
+    ]);
+
+    const submitWithRetryGuard = useCallback(
+        async (decision: 'meet' | 'pass') => {
+            try {
+                resetSubmitDecision();
+                setPendingRetry(decision);
+                await submitDecisionAsync({ vibeCheckId, decision });
+                setPendingRetry(null);
+            } catch {
+                // mutation surfaces error via isSubmitDecisionError; pendingRetry stays set so
+                // the user has a Retry pill in the prompt UI.
+            }
+        },
+        [resetSubmitDecision, submitDecisionAsync, vibeCheckId],
+    );
+
     const handleYes = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         yesScale.value = withSpring(0.93, { damping: 10, stiffness: 300 }, () => {
             yesScale.value = withSpring(1);
         });
-        submitDecision({ vibeCheckId, decision: 'meet' });
-    }, [vibeCheckId, submitDecision, yesScale]);
+        submitWithRetryGuard('meet');
+    }, [submitWithRetryGuard, yesScale]);
 
     const handleNo = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         noScale.value = withTiming(0.94, { duration: 80 }, () => {
             noScale.value = withSpring(1);
         });
-        submitDecision({ vibeCheckId, decision: 'pass' });
-    }, [vibeCheckId, submitDecision, noScale]);
+        submitWithRetryGuard('pass');
+    }, [submitWithRetryGuard, noScale]);
+
+    const handleRetry = useCallback(() => {
+        if (!pendingRetry) return;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        submitWithRetryGuard(pendingRetry);
+    }, [pendingRetry, submitWithRetryGuard]);
 
     const handleDone = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -87,9 +211,6 @@ export function VibeCheckDecision({
     const noAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: noScale.value }] }));
 
     const name = partnerFirstName ?? 'them';
-    const userDecision = vibeCheckResult?.userDecision;
-    const bothAgreed = vibeCheckResult?.bothAgreedToMeet;
-    const bothDecided = vibeCheckResult?.bothDecided;
 
     // ── Mutual agree ─────────────────────────────────────────────────────────
     if (bothAgreed) {
@@ -127,8 +248,34 @@ export function VibeCheckDecision({
         );
     }
 
-    // ── Waiting for partner ───────────────────────────────────────────────────
-    if (userDecision && !bothDecided) {
+    // ── User picked "pass": no partner wait makes sense (mutual is impossible). ──
+    if (userDecision === 'pass' && !bothDecided) {
+        return (
+            <View style={[styles.container, { backgroundColor: colors.background }]}>
+                <Animated.View entering={FadeInDown.springify().damping(14)} style={styles.center}>
+                    <View style={[styles.successIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}>
+                        <Ionicons name="checkmark-circle-outline" size={44} color={colors.mutedForeground} />
+                    </View>
+                    <Text style={[styles.heading, { color: colors.foreground }]}>
+                        Got it
+                    </Text>
+                    <Text style={[styles.body, { color: colors.mutedForeground }]}>
+                        We won't share your decision with {name}. Keep exploring 💫
+                    </Text>
+                    <Pressable
+                        onPress={handleDone}
+                        style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+                    >
+                        <Text style={styles.primaryBtnText}>Back to Dates</Text>
+                    </Pressable>
+                </Animated.View>
+            </View>
+        );
+    }
+
+    // ── User picked "meet", waiting on partner with a 60s soft timeout ──────
+    if (userDecision === 'meet' && !bothDecided) {
+        const seconds = partnerCountdown ?? PARTNER_DECISION_TIMEOUT_SECONDS;
         return (
             <View style={[styles.container, { backgroundColor: colors.background }]}>
                 <Animated.View entering={FadeInDown.springify().damping(14)} style={styles.center}>
@@ -138,14 +285,17 @@ export function VibeCheckDecision({
                     </Text>
                     <Text style={[styles.body, { color: colors.mutedForeground }]}>
                         You said{' '}
-                        <Text style={{ color: userDecision === 'meet' ? '#10b981' : colors.mutedForeground, fontWeight: '700' }}>
-                            {userDecision === 'meet' ? 'Yes, let\'s meet' : 'Not this time'}
+                        <Text style={{ color: '#10b981', fontWeight: '700' }}>
+                            Yes, let&apos;s meet
                         </Text>
-                        . We'll notify you once {name} responds.
+                        . We&apos;ll route you to Dates if they don&apos;t reply soon.
+                    </Text>
+                    <Text style={[styles.countdownText, { color: colors.mutedForeground }]}>
+                        Waiting {seconds}s…
                     </Text>
                     <Pressable onPress={handleDone} style={styles.ghostBtn}>
                         <Text style={[styles.ghostBtnText, { color: colors.mutedForeground }]}>
-                            Back to Dates
+                            Go to Dates
                         </Text>
                     </Pressable>
                 </Animated.View>
@@ -216,7 +366,7 @@ export function VibeCheckDecision({
                             {isSubmittingDecision ? (
                                 <ActivityIndicator size="small" color="#fff" />
                             ) : (
-                                <Text style={styles.primaryBtnText}>Yes, I'm in</Text>
+                                <Text style={styles.primaryBtnText}>Yes, I&apos;m in</Text>
                             )}
                         </Pressable>
                     </Animated.View>
@@ -239,6 +389,25 @@ export function VibeCheckDecision({
                             </Text>
                         </Pressable>
                     </Animated.View>
+
+                    {isSubmitDecisionError && pendingRetry && !isSubmittingDecision && (
+                        <View style={styles.errorBlock}>
+                            <Text style={[styles.errorText, { color: '#f43f5e' }]}>
+                                {submitDecisionError instanceof Error
+                                    ? submitDecisionError.message
+                                    : "Couldn't save your choice."}
+                            </Text>
+                            <Pressable
+                                onPress={handleRetry}
+                                style={[styles.retryPill, { borderColor: colors.primary }]}
+                            >
+                                <Ionicons name="refresh" size={14} color={colors.primary} />
+                                <Text style={[styles.retryText, { color: colors.primary }]}>
+                                    Retry
+                                </Text>
+                            </Pressable>
+                        </View>
+                    )}
                 </View>
 
             </Animated.View>
@@ -362,5 +531,33 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 13,
         lineHeight: 18,
+    },
+    countdownText: {
+        fontSize: 13,
+        fontWeight: '600',
+        fontVariant: ['tabular-nums'],
+        marginTop: -4,
+    },
+    errorBlock: {
+        marginTop: 12,
+        alignItems: 'center',
+        gap: 8,
+    },
+    errorText: {
+        fontSize: 13,
+        textAlign: 'center',
+    },
+    retryPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+    },
+    retryText: {
+        fontSize: 13,
+        fontWeight: '700',
     },
 });
