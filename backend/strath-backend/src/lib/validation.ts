@@ -94,3 +94,13 @@ export const dateFeedbackSchema = z.object({
     meetAgain: z.enum(["yes", "maybe", "no"]),
     textFeedback: z.string().max(500).optional(),
 });
+
+export const matchHoldCancelSchema = z.object({
+    reason: z.enum([
+        "no_longer_interested",
+        "scheduling_conflict",
+        "safety_concern",
+        "other",
+    ]),
+    notes: z.string().max(500).optional().nullable(),
+});

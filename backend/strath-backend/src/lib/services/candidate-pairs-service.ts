@@ -19,6 +19,7 @@ import {
 } from "@/lib/matching/candidate-pool-policy";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
+import { expireQueuedPairsForUser, isUserOnMatchHold } from "@/lib/services/match-hold-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
@@ -563,6 +564,11 @@ export async function generateCandidatePairsForUser(userId: string) {
 
     await expireCandidatePairs();
 
+    if (await isUserOnMatchHold(userId)) {
+        console.log("[candidate-pairs] HOLD: user has active mutual/date — skip generation", { userId });
+        return [];
+    }
+
     await promoteDueQueuedPairsForUser(userId);
 
     const existingActivePairs = await getActiveCandidatePairsForUser(userId);
@@ -1005,6 +1011,7 @@ export async function respondToCandidatePair(
         }
 
         let mutual = null;
+        let mutualWasJustCreated = false;
         if (nextStatus === "mutual") {
             const pairIdForMutual = existingSameStatus ? existingSameStatus.id : updatedPair.id;
             mutual = await tx.query.mutualMatches.findFirst({
@@ -1022,9 +1029,28 @@ export async function respondToCandidatePair(
                     })
                     .returning();
                 mutual = createdMutual;
+                mutualWasJustCreated = true;
             }
         }
 
-        return { pair: updatedPair, mutual };
+        return { pair: updatedPair, mutual, mutualWasJustCreated };
+    }).then(async (result) => {
+        // Outside the transaction: when a mutual is freshly created, expire BOTH users' queued
+        // and other-active candidate pairs so the people we had queued for them can be re-matched
+        // with someone else, and so neither user gets new daily intros while the date is in flight.
+        if (result.mutualWasJustCreated && result.mutual) {
+            const excludeIds = [result.pair.id];
+            await Promise.all([
+                expireQueuedPairsForUser(result.mutual.userAId, {
+                    excludePairIds: excludeIds,
+                    reason: "mutual_created",
+                }),
+                expireQueuedPairsForUser(result.mutual.userBId, {
+                    excludePairIds: excludeIds,
+                    reason: "mutual_created",
+                }),
+            ]);
+        }
+        return { pair: result.pair, mutual: result.mutual };
     });
 }

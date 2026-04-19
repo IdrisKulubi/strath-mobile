@@ -21,6 +21,7 @@ import {
 import { HomeHeader } from '@/components/home/home-header';
 import { DailyMatchesList } from '@/components/home/daily-matches-list';
 import { EmptyMatches } from '@/components/home/empty-matches';
+import { DateHoldCard } from '@/components/home/date-hold-card';
 import { useToast } from '@/components/ui/toast';
 import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/decision-info-sheet';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
@@ -61,6 +62,7 @@ export default function HomeScreen() {
     } = useDailyMatches();
     const matches = useMemo(() => matchesData?.matches ?? [], [matchesData]);
     const hasUpcomingQueued = matchesData?.hasUpcomingQueued ?? false;
+    const hold = matchesData?.mode === 'hold' ? matchesData.hold ?? null : null;
     const respondToPair = useRespondToDailyPair();
     const [refreshing, setRefreshing] = useState(false);
     const [hasSeenMatchesToday, setHasSeenMatchesToday] = useState(false);
@@ -148,6 +150,8 @@ export default function HomeScreen() {
 
                 {isLoading ? (
                     <HomeSkeleton />
+                ) : hold ? (
+                    <DateHoldCard hold={hold} />
                 ) : matches.length > 0 ? (
                     <DailyMatchesList
                         matches={matches}

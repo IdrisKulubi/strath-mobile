@@ -7,6 +7,121 @@ import {
 } from "@/db/schema";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 
+/**
+ * After a vibe call both parties say "meet", flip the `mutualMatches` row to `being_arranged` and
+ * find-or-create the `dateMatches` row admins use on the Arranging queue.
+ *
+ * Bridge step is needed because `dateMatches` historically only got created by the legacy
+ * `dateRequests` accept flow. The new candidate-pair → mutual → call flow never created one,
+ * leaving the admin "Arranging" page empty.
+ *
+ * Idempotent: safe to call multiple times.
+ */
+export async function bridgeMutualToBeingArranged(input: {
+    user1Id: string;
+    user2Id: string;
+    candidatePairId?: string | null;
+}): Promise<{
+    mutualMatchId: string;
+    dateMatchId: string;
+    created: boolean;
+} | null> {
+    const { user1Id, user2Id } = input;
+
+    const mutualRow = await db.query.mutualMatches.findFirst({
+        where: or(
+            and(eq(mutualMatches.userAId, user1Id), eq(mutualMatches.userBId, user2Id)),
+            and(eq(mutualMatches.userAId, user2Id), eq(mutualMatches.userBId, user1Id)),
+        ),
+        orderBy: (m, { desc }) => [desc(m.createdAt)],
+    });
+
+    if (!mutualRow) {
+        console.warn("[mutual-match] bridgeMutualToBeingArranged: no mutualMatches row", {
+            user1Id,
+            user2Id,
+        });
+        return null;
+    }
+
+    const userAId = mutualRow.userAId;
+    const userBId = mutualRow.userBId;
+
+    const existingDateMatch = await db.query.dateMatches.findFirst({
+        where: or(
+            and(eq(dateMatches.userAId, userAId), eq(dateMatches.userBId, userBId)),
+            and(eq(dateMatches.userAId, userBId), eq(dateMatches.userBId, userAId)),
+        ),
+        orderBy: (m, { desc }) => [desc(m.createdAt)],
+    });
+
+    let dateMatchId: string;
+    let created = false;
+    const now = new Date();
+
+    if (existingDateMatch) {
+        dateMatchId = existingDateMatch.id;
+        const stillNeedsSetup =
+            existingDateMatch.status === "pending_setup" || existingDateMatch.status === "cancelled";
+
+        const update: Partial<typeof dateMatches.$inferInsert> = {
+            callCompleted: true,
+            userAConfirmed: true,
+            userBConfirmed: true,
+        };
+        if (stillNeedsSetup && existingDateMatch.status !== "pending_setup") {
+            update.status = "pending_setup";
+        }
+
+        await db.update(dateMatches).set(update).where(eq(dateMatches.id, existingDateMatch.id));
+    } else {
+        const [inserted] = await db
+            .insert(dateMatches)
+            .values({
+                userAId,
+                userBId,
+                vibe: "coffee",
+                callCompleted: true,
+                userAConfirmed: true,
+                userBConfirmed: true,
+                status: "pending_setup",
+                candidatePairId: mutualRow.candidatePairId ?? input.candidatePairId ?? null,
+                createdAt: now,
+            })
+            .returning({ id: dateMatches.id });
+        dateMatchId = inserted.id;
+        created = true;
+    }
+
+    if (
+        mutualRow.status !== "being_arranged"
+        || mutualRow.legacyDateMatchId !== dateMatchId
+    ) {
+        await db
+            .update(mutualMatches)
+            .set({
+                status: "being_arranged",
+                legacyDateMatchId: dateMatchId,
+                updatedAt: now,
+            })
+            .where(eq(mutualMatches.id, mutualRow.id));
+    }
+
+    console.log("[mutual-match] bridged to being_arranged", {
+        mutualMatchId: mutualRow.id,
+        dateMatchId,
+        createdDateMatch: created,
+        userAId,
+        userBId,
+    });
+
+    return {
+        mutualMatchId: mutualRow.id,
+        dateMatchId,
+        created,
+    };
+}
+
 export type MutualDatesItem = {
     id: string;
     pairId?: string;

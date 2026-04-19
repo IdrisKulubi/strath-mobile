@@ -8,6 +8,7 @@ import {
     promoteDueQueuedPairsForUser,
 } from "@/lib/services/candidate-pairs-service";
 import { runPairExpiration } from "@/lib/services/pair-expiration-service";
+import { getActiveMatchHoldForUser } from "@/lib/services/match-hold-service";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +22,26 @@ export async function GET(req: NextRequest) {
         const userId = session.user.id;
         console.log("[daily-matches] GET", { userId });
 
-        // Expire pairs first so we don't return stale/expired pairs
         const expiration = await runPairExpiration();
         if (expiration.expiredCount > 0) {
             console.log("[daily-matches] expired", expiration.expiredCount, "pairs for user", userId);
+        }
+
+        // Match hold short-circuit: if the user already has an active mutual / arranged date,
+        // we pause matching until it resolves (cancelled / completed + feedback / auto-released).
+        const hold = await getActiveMatchHoldForUser(userId);
+        if (hold) {
+            console.log("[daily-matches] HOLD active — returning hold mode", {
+                userId,
+                status: hold.status,
+                mutualMatchId: hold.mutualMatchId,
+            });
+            return successResponse({
+                mode: "hold" as const,
+                hold,
+                matches: [],
+                hasUpcomingQueued: false,
+            });
         }
 
         await promoteDueQueuedPairsForUser(userId);
@@ -46,7 +63,12 @@ export async function GET(req: NextRequest) {
 
         const hasUpcomingQueued = await getHasUpcomingQueuedForUser(userId);
 
-        return successResponse({ matches, hasUpcomingQueued });
+        return successResponse({
+            mode: "matches" as const,
+            matches,
+            hasUpcomingQueued,
+            hold: null,
+        });
     } catch (error) {
         console.error("[home/daily-matches] Error:", error);
         return errorResponse(error);

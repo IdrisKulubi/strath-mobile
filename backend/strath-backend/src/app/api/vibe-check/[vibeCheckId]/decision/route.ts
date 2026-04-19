@@ -1,12 +1,13 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { eq, or, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { recordDecision } from "@/lib/services/vibe-check-service";
+import { bridgeMutualToBeingArranged } from "@/lib/services/mutual-match-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
-import { vibeChecks, user as userTable, dateMatches } from "@/db/schema";
+import { vibeChecks, user as userTable } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -73,24 +74,23 @@ export async function POST(
                     const u2Name = u2?.name?.split(' ')[0] ?? 'Someone';
 
                     if (result.bothAgreedToMeet) {
-                        // Sync to date_match so Dates tab shows "being arranged"
-                        const userAId = check.user1Id!;
-                        const userBId = check.user2Id!;
-                        await db
-                            .update(dateMatches)
-                            .set({
-                                callCompleted: true,
-                                userAConfirmed: true,
-                                userBConfirmed: true,
-                            })
-                            .where(
-                                or(
-                                    and(eq(dateMatches.userAId, userAId), eq(dateMatches.userBId, userBId)),
-                                    and(eq(dateMatches.userAId, userBId), eq(dateMatches.userBId, userAId))
-                                )
+                        // Bridge mutual → being_arranged + ensure a date_matches row exists so the
+                        // admin "Arranging" page surfaces this pair. (Historically only the legacy
+                        // dateRequests accept flow created date_matches, leaving the new
+                        // candidate-pair → mutual → call flow with no row to update.)
+                        try {
+                            await bridgeMutualToBeingArranged({
+                                user1Id: check.user1Id!,
+                                user2Id: check.user2Id!,
+                            });
+                        } catch (bridgeErr) {
+                            console.error(
+                                "[VibeCheck] bridgeMutualToBeingArranged failed:",
+                                bridgeErr,
                             );
+                        }
 
-                        // Both said yes → notify both, status moves to "being arranged"
+                        // Both said yes → notify both, status now "being_arranged"
                         if (u1?.pushToken) {
                             await sendPushNotification(u1.pushToken, {
                                 title: "The vibe is real 🎉",
