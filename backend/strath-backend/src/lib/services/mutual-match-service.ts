@@ -1,7 +1,8 @@
-import { and, desc, eq, or } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
     dateMatches,
+    messages,
     mutualMatches,
     profiles,
     vibeChecks,
@@ -156,7 +157,19 @@ export type MutualDatesItem = {
     myDecision?: "meet" | "pass" | null;
     partnerDecision?: "meet" | "pass" | null;
     callEndedAt?: string;
+    /**
+     * Unread messages the viewer has not read yet in the linked chat thread. Populated
+     * only for items where chat is unlocked (status in `being_arranged | upcoming | completed`
+     * and a `legacyMatchId` exists). Omitted otherwise.
+     */
+    unreadMessageCount?: number;
 };
+
+const CHAT_UNLOCKED_STATUSES: ReadonlyArray<MutualDatesItem["arrangementStatus"]> = [
+    "being_arranged",
+    "upcoming",
+    "completed",
+];
 
 function deriveCallStage(input: {
     viewerIsUser1: boolean;
@@ -358,7 +371,48 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
             }),
     );
 
-    return [...hydratedMutuals, ...hydratedLegacy].sort(
+    const combined: MutualDatesItem[] = [...hydratedMutuals, ...hydratedLegacy].sort(
         (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
     );
+
+    // Populate unread message counts for every item with chat unlocked. One grouped
+    // query covers all matches in the list. Pattern mirrors /api/matches/route.ts.
+    const chatUnlockedLegacyIds = combined
+        .filter((item) =>
+            CHAT_UNLOCKED_STATUSES.includes(item.arrangementStatus)
+            && !!item.legacyMatchId,
+        )
+        .map((item) => item.legacyMatchId as string);
+
+    if (chatUnlockedLegacyIds.length > 0) {
+        const rows = await db
+            .select({
+                matchId: messages.matchId,
+                count: sql<number>`count(*)::int`,
+            })
+            .from(messages)
+            .where(
+                and(
+                    inArray(messages.matchId, chatUnlockedLegacyIds),
+                    ne(messages.senderId, userId),
+                    ne(messages.status, "read"),
+                ),
+            )
+            .groupBy(messages.matchId);
+
+        const unreadByMatch = new Map<string, number>(
+            rows.map((r) => [r.matchId, Number(r.count) || 0]),
+        );
+
+        for (const item of combined) {
+            if (
+                item.legacyMatchId
+                && CHAT_UNLOCKED_STATUSES.includes(item.arrangementStatus)
+            ) {
+                item.unreadMessageCount = unreadByMatch.get(item.legacyMatchId) ?? 0;
+            }
+        }
+    }
+
+    return combined;
 }

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { messages, matches } from "@/db/schema";
+import { messages, matches, mutualMatches } from "@/db/schema";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { eq, and, or, ne } from "drizzle-orm";
 
@@ -53,6 +53,18 @@ export async function PATCH(
 
         if (!match) {
             return errorResponse(new Error("Match not found or unauthorized"), 404);
+        }
+
+        // Chat is only available after the 3-minute call when both agreed to meet.
+        // Prevents read-acking a still-locked thread via tampered clients.
+        const mm = await db.query.mutualMatches.findFirst({
+            where: eq(mutualMatches.legacyMatchId, matchId),
+        });
+        if (!mm || !(["being_arranged", "upcoming", "completed"] as const).includes(mm.status as any)) {
+            return errorResponse(
+                new Error("Chat unlocks after the 3-minute call when you both agree to meet."),
+                403,
+            );
         }
 
         console.log('[MarkAsRead API] Marking messages as read for match:', matchId, 'user:', session.user.id);

@@ -129,6 +129,8 @@ export function useChat(matchId: string) {
             markMessagesAsRead(matchId).then(() => {
                 // Invalidate matches cache to update unread counts in the list
                 queryClient.invalidateQueries({ queryKey: ['matches'] });
+                // Invalidate mutualDates so the Dates tab chip unread badge clears
+                queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
                 // Also invalidate notification counts to clear the badge
                 queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
             });
@@ -195,6 +197,8 @@ export function useChat(matchId: string) {
             queryClient.invalidateQueries({ queryKey: ['chat', matchId] });
             // Also invalidate matches to update last message
             queryClient.invalidateQueries({ queryKey: ['matches'] });
+            // Keep the Dates tab chip fresh (unread count / ordering)
+            queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
         },
     });
 

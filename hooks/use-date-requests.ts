@@ -42,6 +42,8 @@ export interface MutualDate {
     myDecision?: 'meet' | 'pass' | null;
     partnerDecision?: 'meet' | 'pass' | null;
     callEndedAt?: string;
+    /** Unread messages the viewer has not yet read in the linked chat thread. */
+    unreadMessageCount?: number;
 }
 
 export interface ScheduledDate {
@@ -150,6 +152,20 @@ export const VIBE_EMOJIS: Record<DateVibe, string> = {
     dinner: '🍽️',
     hangout: '🎮',
 };
+
+/**
+ * Chat is only available after the 3-minute call has happened and both users agreed
+ * to meet. That maps to `mutualMatches.status` being `being_arranged`, `upcoming`, or
+ * `completed`, plus a non-null `legacyMatchId` (the `matches.id` the chat screen uses).
+ */
+export function isChatUnlocked(match: MutualDate): boolean {
+    if (!match.legacyMatchId) return false;
+    return (
+        match.arrangementStatus === 'being_arranged'
+        || match.arrangementStatus === 'upcoming'
+        || match.arrangementStatus === 'completed'
+    );
+}
 
 export const ARRANGEMENT_STATUS_LABELS: Record<MutualDate['arrangementStatus'], string> = {
     mutual: 'You both said yes',

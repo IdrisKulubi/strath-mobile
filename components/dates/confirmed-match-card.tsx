@@ -16,7 +16,7 @@ import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
-import { MutualDate, ARRANGEMENT_STATUS_LABELS, useStartMutualMatchCall } from '@/hooks/use-date-requests';
+import { MutualDate, ARRANGEMENT_STATUS_LABELS, isChatUnlocked, useStartMutualMatchCall } from '@/hooks/use-date-requests';
 
 interface ConfirmedMatchCardProps {
     match: MutualDate;
@@ -66,6 +66,16 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         router.push(`/profile/${match.withUser.id}`);
     }, [match.withUser.id, router]);
+
+    const handleOpenChat = useCallback(() => {
+        if (!match.legacyMatchId) return;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        router.push({ pathname: '/chat/[matchId]', params: { matchId: match.legacyMatchId } } as any);
+    }, [match.legacyMatchId, router]);
+
+    const chatUnlocked = isChatUnlocked(match);
+    const unreadCount = match.unreadMessageCount ?? 0;
+    const unreadLabel = unreadCount > 9 ? '9+' : String(unreadCount);
 
     const handleStartCall = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -216,6 +226,37 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                     </Pressable>
                 </View>
             )}
+
+            {/* Post-call chat chip — unlocks only after both agreed to meet */}
+            {chatUnlocked && (
+                <Pressable
+                    onPress={handleOpenChat}
+                    style={({ pressed }) => [
+                        styles.chatChip,
+                        {
+                            borderColor: colors.border,
+                            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
+                            opacity: pressed ? 0.7 : 1,
+                        },
+                    ]}
+                >
+                    <Ionicons
+                        name="chatbubble-ellipses-outline"
+                        size={18}
+                        color={colors.foreground}
+                    />
+                    <Text style={[styles.chatChipText, { color: colors.foreground }]} numberOfLines={1}>
+                        Message {match.withUser.firstName}
+                    </Text>
+                    {unreadCount > 0 ? (
+                        <View style={[styles.chatUnreadBadge, { backgroundColor: colors.primary }]}>
+                            <Text style={styles.chatUnreadBadgeText}>{unreadLabel}</Text>
+                        </View>
+                    ) : (
+                        <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+                    )}
+                </Pressable>
+            )}
         </Animated.View>
     );
 }
@@ -339,5 +380,33 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 15,
         fontWeight: '700',
+    },
+    chatChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        borderRadius: 14,
+        borderWidth: 1,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        minHeight: 46,
+    },
+    chatChipText: {
+        flex: 1,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    chatUnreadBadge: {
+        minWidth: 22,
+        height: 22,
+        borderRadius: 11,
+        paddingHorizontal: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    chatUnreadBadgeText: {
+        color: '#fff',
+        fontSize: 11,
+        fontWeight: '800',
     },
 });
