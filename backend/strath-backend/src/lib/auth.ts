@@ -24,6 +24,13 @@ export const auth = betterAuth({
         },
     },
     plugins: [expo()],
+    // Long-lived sessions for the native app. The token is persisted in SecureStore
+    // on the device, so effectively the user stays logged in until they explicitly
+    // sign out, their session is revoked server-side, or 90 days of inactivity pass.
+    session: {
+        expiresIn: 60 * 60 * 24 * 90, // 90 days
+        updateAge: 60 * 60 * 24, // refresh the expiry once per day of activity
+    },
     trustedOrigins: [
         ...WEB_CORS_ORIGINS,
 

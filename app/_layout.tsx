@@ -15,10 +15,13 @@ import { ThemeProvider, useThemeContext } from '@/context/theme-context';
 import { ToastProvider } from '@/components/ui/toast';
 import { LaunchExperience } from '@/components/intro/launch-experience';
 import { NoInternetScreen } from '@/components/no-internet-screen';
+import { OfflineBanner } from '@/components/offline-banner';
+import { SessionBootstrap } from '@/components/session-bootstrap';
 import { useNetwork } from '@/hooks/use-network';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { usePresenceHeartbeat } from '@/hooks/use-presence-heartbeat';
 import { hasCompletedIntroSlides } from '@/lib/intro-storage';
+import { isAuthenticated } from '@/lib/auth-helpers';
 
 ExpoSplashScreen.preventAutoHideAsync();
 
@@ -26,11 +29,17 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-function RootLayoutNav() {
+function RootLayoutNav({ hasAuthToken }: { hasAuthToken: boolean }) {
   const { theme } = useThemeContext();
-  const { isConnected, isLoading, refresh } = useNetwork();
+  const { isOffline, isLoading, refresh } = useNetwork();
 
-  if (!isLoading && !isConnected) {
+  // Only show the full-screen "No Internet" takeover for truly unauthenticated
+  // users (first-launch / login flow). Authenticated users should stay in the
+  // app with a subtle banner + their cached data — losing Wi-Fi should never
+  // feel like being logged out.
+  const showFullOfflineScreen = !hasAuthToken && !isLoading && isOffline;
+
+  if (showFullOfflineScreen) {
     return (
       <NavThemeProvider value={theme === 'dark' ? NavigationDarkTheme : NavigationLightTheme}>
         <NoInternetScreen onRetry={refresh} />
@@ -41,7 +50,7 @@ function RootLayoutNav() {
 
   return (
     <NavThemeProvider value={theme === 'dark' ? NavigationDarkTheme : NavigationLightTheme}>
-        <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
@@ -57,6 +66,7 @@ function RootLayoutNav() {
         <Stack.Screen name="profile/[userId]" />
         <Stack.Screen name="feedback/[dateId]" />
       </Stack>
+      <OfflineBanner />
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
     </NavThemeProvider>
   );
@@ -68,8 +78,13 @@ function NotificationsBootstrap() {
   return null;
 }
 
+interface BootstrapState {
+  isNewUserIntro: boolean;
+  hasAuthToken: boolean;
+}
+
 export default function RootLayout() {
-  const [bootstrap, setBootstrap] = useState<{ isNewUserIntro: boolean } | null>(null);
+  const [bootstrap, setBootstrap] = useState<BootstrapState | null>(null);
   const [showLaunch, setShowLaunch] = useState(true);
 
   useEffect(() => {
@@ -77,17 +92,18 @@ export default function RootLayout() {
 
     async function prepare() {
       try {
-        const [, slidesDone] = await Promise.all([
+        const [, slidesDone, authed] = await Promise.all([
           new Promise<void>((resolve) => setTimeout(resolve, 350)),
           hasCompletedIntroSlides(),
+          isAuthenticated(),
         ]);
         if (!cancelled) {
-          setBootstrap({ isNewUserIntro: !slidesDone });
+          setBootstrap({ isNewUserIntro: !slidesDone, hasAuthToken: authed });
         }
       } catch (e) {
         console.warn(e);
         if (!cancelled) {
-          setBootstrap({ isNewUserIntro: true });
+          setBootstrap({ isNewUserIntro: true, hasAuthToken: false });
         }
       } finally {
         if (!cancelled) {
@@ -123,8 +139,9 @@ export default function RootLayout() {
                 />
               ) : (
                 <>
+                  <SessionBootstrap />
                   <NotificationsBootstrap />
-                  <RootLayoutNav />
+                  <RootLayoutNav hasAuthToken={bootstrap.hasAuthToken} />
                 </>
               )}
             </ToastProvider>

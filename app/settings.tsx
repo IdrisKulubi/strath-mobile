@@ -5,10 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useAiConsent } from '@/hooks/use-ai-consent';
-import { authClient } from '@/lib/auth-client';
-import { getAuthToken } from '@/lib/auth-helpers';
+import { clearSession, getAuthToken } from '@/lib/auth-helpers';
 import { AI_CONSENT_DISCLOSURE, AI_PROVIDER_NAME } from '@/lib/ai-consent';
-import * as SecureStore from 'expo-secure-store';
 
 export default function SettingsScreen() {
     const router = useRouter();
@@ -77,30 +75,6 @@ export default function SettingsScreen() {
         }
     };
 
-    const clearAllLocalData = async () => {
-        try {
-            // Clear SecureStore items used by auth
-            const keysToDelete = [
-                'strathspace_session_token',
-                'strathspace_session',
-                'strathspace_user',
-                'strathspace.session_token',
-                'strathspace.session',
-                'strathspace.user',
-            ];
-            
-            for (const key of keysToDelete) {
-                try {
-                    await SecureStore.deleteItemAsync(key);
-                } catch {
-                    // Key might not exist, continue
-                }
-            }
-        } catch (error) {
-            console.error('Error clearing local data:', error);
-        }
-    };
-
     const handleLogout = () => {
         Alert.alert(
             "Log Out",
@@ -113,20 +87,14 @@ export default function SettingsScreen() {
                     onPress: async () => {
                         setIsLoggingOut(true);
                         try {
-                            // Sign out from the server
-                            await authClient.signOut();
-                            
-                            // Clear all local data
-                            await clearAllLocalData();
-                            
-                            // Navigate to login
-                            router.replace('/(auth)/login');
+                            // clearSession() signs out on the server AND wipes
+                            // every known local storage key (Better Auth
+                            // cookies, Apple fallback, profile cache).
+                            await clearSession();
                         } catch (error) {
                             console.error('Logout error:', error);
-                            // Even if server signout fails, clear local data and redirect
-                            await clearAllLocalData();
-                            router.replace('/(auth)/login');
                         } finally {
+                            router.replace('/(auth)/login');
                             setIsLoggingOut(false);
                         }
                     }
@@ -178,8 +146,7 @@ export default function SettingsScreen() {
                                                 throw new Error(errorData.error || 'Failed to delete account');
                                             }
 
-                                            // Clear all local data
-                                            await clearAllLocalData();
+                                            await clearSession();
 
                                             Alert.alert(
                                                 "Account Deleted",

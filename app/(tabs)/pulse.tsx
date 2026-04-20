@@ -33,7 +33,7 @@ import {
 import { AiConsentCard } from '@/components/ai/ai-consent-card';
 import type { AgentMatch } from '@/hooks/use-agent';
 import { WingmanMatchCard, WingmanMatchDetail } from '@/components/wingman';
-import { clearSession, getAuthToken } from '@/lib/auth-helpers';
+import { getAuthToken } from '@/lib/auth-helpers';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 
 // ─── Progress dots ────────────────────────────────────────────────────────────
@@ -246,8 +246,11 @@ export default function WingmanTabScreen() {
 
   if (status.isError) {
     const message = status.error instanceof Error ? status.error.message : 'Request failed';
-    const isUnauthorized = /unauthorized|401/i.test(message);
     const isNotEnabled = /not enabled|migrations|501|failed to load wingman status/i.test(message);
+    // A transient 401 (rate limit, proxy, intermittent CDN) is NOT a reason
+    // to log the user out. The central api-client session-expired handler is
+    // the only code path that clears auth. Here we just surface a retry.
+    const isNetworkish = /network|offline|timeout|fetch failed/i.test(message);
 
     return (
       <TabSwipeView route="/(tabs)/pulse">
@@ -255,8 +258,8 @@ export default function WingmanTabScreen() {
         <View style={s.centered}>
           <Text style={[s.errorTitle, { color: colors.foreground }]}>Couldn&apos;t load Wingman</Text>
           <Text style={[s.errorSub, { color: colors.mutedForeground }]}>
-            {isUnauthorized
-              ? 'Your session expired. Please sign in again.'
+            {isNetworkish
+              ? "You're offline or the network is flaky. Check your connection and try again."
               : isNotEnabled
                 ? "Wingman isn't enabled yet — missing DB migration."
                 : message}
@@ -267,17 +270,6 @@ export default function WingmanTabScreen() {
           >
             <Text style={{ color: colors.foreground, fontWeight: '600' }}>Try again</Text>
           </TouchableOpacity>
-          {isUnauthorized && (
-            <TouchableOpacity
-              onPress={async () => {
-                await clearSession();
-                router.replace('/(auth)/login');
-              }}
-              style={[s.outlineBtn, { borderColor: colors.primary, marginTop: 8 }]}
-            >
-              <Text style={{ color: colors.primary, fontWeight: '700' }}>Sign in again</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </ScreenGradient>
       </TabSwipeView>
