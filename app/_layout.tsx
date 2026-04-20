@@ -17,6 +17,7 @@ import { LaunchExperience } from '@/components/intro/launch-experience';
 import { NoInternetScreen } from '@/components/no-internet-screen';
 import { OfflineBanner } from '@/components/offline-banner';
 import { SessionBootstrap } from '@/components/session-bootstrap';
+import { AppFeedbackNudge } from '@/components/feedback/app-feedback-nudge';
 import { useNetwork } from '@/hooks/use-network';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { usePresenceHeartbeat } from '@/hooks/use-presence-heartbeat';
@@ -65,8 +66,10 @@ function RootLayoutNav({ hasAuthToken }: { hasAuthToken: boolean }) {
         <Stack.Screen name="ui-preview" />
         <Stack.Screen name="profile/[userId]" />
         <Stack.Screen name="feedback/[dateId]" />
+        <Stack.Screen name="app-feedback" />
       </Stack>
       <OfflineBanner />
+      <AppFeedbackNudge hasAuthToken={hasAuthToken} />
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
     </NavThemeProvider>
   );

@@ -322,6 +322,17 @@ export default function SettingsScreen() {
                     />
                 </SettingCard>
 
+                {/* Feedback */}
+                <SettingCard title="Feedback">
+                    <SettingItem
+                        label="Send Feedback"
+                        type="link"
+                        icon="chatbubble-ellipses-outline"
+                        description="Feature requests, bug reports, or anything you'd like us to hear."
+                        onPress={() => router.push('/app-feedback')}
+                    />
+                </SettingCard>
+
                 {/* Legal & Support */}
                 <SettingCard title="Legal & Support">
                     <SettingItem label="Help Center" type="link" onPress={() => router.push('/legal?section=help')} />

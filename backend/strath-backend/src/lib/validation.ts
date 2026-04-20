@@ -104,3 +104,17 @@ export const matchHoldCancelSchema = z.object({
     ]),
     notes: z.string().max(500).optional().nullable(),
 });
+
+export const APP_FEEDBACK_CATEGORIES = [
+    "feature_request",
+    "bug",
+    "general",
+    "complaint",
+    "other",
+] as const;
+
+export const appFeedbackSchema = z.object({
+    category: z.enum(APP_FEEDBACK_CATEGORIES),
+    message: z.string().trim().min(3, "Please write a bit more").max(1000),
+    anonymous: z.boolean().optional().default(false),
+});
