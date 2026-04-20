@@ -220,12 +220,12 @@ function buildTimelineSteps({
             : callCompleted
             ? "Completed"
             : "Scheduled",
-        status: stage === "on-call" ? "current" : callCompleted || stage !== "on-call" ? "done" : "pending",
+        status: stage === "on-call" ? "current" : callCompleted ? "done" : "pending",
     });
 
     steps.push({
         label: "Arranging",
-        detail: stage === "arranging" ? "Pick venue & time" : stage === "on-call" ? "Pending" : undefined,
+        detail: stage === "arranging" ? "Pick venue & time" : undefined,
         status:
             stage === "arranging"
                 ? "current"
