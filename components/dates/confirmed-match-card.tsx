@@ -128,14 +128,6 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                     <Text style={[styles.name, { color: colors.foreground }]}>
                         {match.withUser.firstName}{match.withUser.age ? `, ${match.withUser.age}` : ''}
                     </Text>
-                    {match.withUser.compatibilityScore !== undefined && (
-                        <View style={styles.compatRow}>
-                            <Ionicons name="sparkles" size={12} color="#10b981" />
-                            <Text style={styles.compatText}>
-                                {match.withUser.compatibilityScore}% compatible
-                            </Text>
-                        </View>
-                    )}
                     <Text style={[styles.vibeText, { color: colors.mutedForeground }]}>
                         Curated for both of you
                     </Text>
@@ -276,16 +268,6 @@ const styles = StyleSheet.create({
     name: {
         fontSize: 18,
         fontWeight: '700',
-    },
-    compatRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    compatText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#10b981',
     },
     vibeText: {
         fontSize: 13,

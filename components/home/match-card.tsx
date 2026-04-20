@@ -16,8 +16,8 @@ import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { DailyMatch } from '@/hooks/use-daily-matches';
-import { CompatibilityBar } from './compatibility-bar';
 import { MatchReasons } from './match-reasons';
+import { getMatchTier } from '@/lib/match-tier';
 
 interface MatchCardProps {
     match: DailyMatch;
@@ -48,6 +48,7 @@ export function MatchCard({ match, index, onOpenToMeet, onPass, onViewProfile }:
     const router = useRouter();
     const identityLine = buildIdentityLine(match);
     const expiryText = buildExpiryText(match.expiresAt);
+    const tier = getMatchTier(match.compatibilityScore);
 
     const askScale = useSharedValue(1);
     const skipScale = useSharedValue(1);
@@ -119,20 +120,19 @@ export function MatchCard({ match, index, onOpenToMeet, onPass, onViewProfile }:
                 />
                 <View style={styles.photoMetaRow}>
                     <View style={styles.photoNameWrap}>
+                        <View style={styles.tierPill}>
+                            <Ionicons name="sparkles" size={11} color="#fff" />
+                            <Text style={styles.tierPillText}>{tier.label}</Text>
+                        </View>
                         <Text style={styles.photoName}>
                             {match.firstName}, {match.age}
                         </Text>
                         <Text style={styles.photoCourse}>{identityLine}</Text>
                     </View>
-                    <View style={styles.scoreBadge}>
-                        <Text style={styles.scoreBadgeValue}>{match.compatibilityScore}%</Text>
-                        <Text style={styles.scoreBadgeLabel}>Vibe Match</Text>
-                    </View>
                 </View>
             </Pressable>
 
             <View style={styles.body}>
-                <CompatibilityBar score={match.compatibilityScore} animationDelay={index * 80 + 200} />
                 <MatchReasons reasons={match.reasons} />
                 <Text style={[styles.refreshText, { color: colors.mutedForeground }]}>
                     {expiryText}
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
         elevation: 6,
     },
     photoWrap: {
-        height: 320,
+        height: 480,
         position: 'relative',
     },
     photoGradient: {
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         bottom: 0,
-        height: 120,
+        height: 180,
     },
     photo: {
         width: '100%',
@@ -245,51 +245,47 @@ const styles = StyleSheet.create({
     },
     photoName: {
         color: '#fff',
-        fontSize: 31,
+        fontSize: 28,
         fontWeight: '800',
-        letterSpacing: -0.8,
-        lineHeight: 34,
+        letterSpacing: -0.7,
+        lineHeight: 32,
         textShadowColor: 'rgba(0,0,0,0.5)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 3,
     },
     photoCourse: {
-        color: 'rgba(255,255,255,0.9)',
-        fontSize: 14,
+        color: 'rgba(255,255,255,0.88)',
+        fontSize: 13,
         fontWeight: '600',
         textShadowColor: 'rgba(0,0,0,0.4)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 2,
     },
-    scoreBadge: {
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.16)',
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        minWidth: 86,
+    tierPill: {
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        gap: 4,
+        borderRadius: 999,
+        backgroundColor: 'rgba(233,30,140,0.85)',
+        paddingHorizontal: 9,
+        paddingVertical: 3,
+        marginBottom: 6,
     },
-    scoreBadgeValue: {
+    tierPillText: {
         color: '#fff',
-        fontSize: 18,
-        fontWeight: '800',
-        lineHeight: 20,
-    },
-    scoreBadgeLabel: {
-        color: 'rgba(255,255,255,0.88)',
-        fontSize: 11,
-        fontWeight: '600',
-        textTransform: 'lowercase',
+        fontSize: 10,
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
     body: {
-        paddingHorizontal: 18,
-        paddingTop: 18,
-        paddingBottom: 16,
-        gap: 16,
+        paddingHorizontal: 16,
+        paddingTop: 14,
+        paddingBottom: 14,
+        gap: 12,
     },
     refreshText: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '500',
     },
     ctaRow: {
@@ -301,15 +297,15 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     ctaView: {
-        borderRadius: 18,
+        borderRadius: 16,
         borderWidth: 1,
-        paddingVertical: 16,
+        paddingVertical: 14,
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 56,
+        minHeight: 50,
     },
     ctaViewText: {
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '700',
     },
     ctaAskWrap: {
@@ -317,9 +313,9 @@ const styles = StyleSheet.create({
     },
     ctaAsk: {
         flex: 1,
-        borderRadius: 18,
+        borderRadius: 16,
         overflow: 'hidden',
-        minHeight: 56,
+        minHeight: 50,
         position: 'relative',
     },
     ctaAskSent: {
@@ -329,7 +325,7 @@ const styles = StyleSheet.create({
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 56,
+        minHeight: 50,
     },
     ctaAskSentInner: {
         flexDirection: 'row',
@@ -337,7 +333,7 @@ const styles = StyleSheet.create({
     },
     ctaAskText: {
         color: '#fff',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '700',
     },
     skipWrap: {

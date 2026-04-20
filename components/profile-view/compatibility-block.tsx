@@ -3,34 +3,41 @@ import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
-import { CompatibilityBar } from '@/components/home/compatibility-bar';
+import { getMatchTier } from '@/lib/match-tier';
 
 interface CompatibilityBlockProps {
     score: number;
     reasons: string[];
 }
 
+/**
+ * Qualitative compatibility block shown on profile detail views. We no longer
+ * surface a raw percentage to the user — the score still drives matching
+ * server-side, but here we show a tier label + concrete shared-signal chips
+ * (the "why you might click" reasons) which are what actually helps users.
+ */
 export function CompatibilityBlock({ score, reasons }: CompatibilityBlockProps) {
     const { colors, isDark } = useTheme();
+    const tier = getMatchTier(score);
 
     return (
         <View style={[styles.container, {
             backgroundColor: isDark ? 'rgba(233,30,140,0.08)' : 'rgba(233,30,140,0.05)',
             borderColor: colors.primary + '30',
         }]}>
-            <View style={styles.scoreRow}>
-                <View style={styles.scoreLabelWrap}>
+            <View style={styles.header}>
+                <View style={styles.headerIconWrap}>
                     <Ionicons name="sparkles" size={14} color={colors.primary} />
-                    <Text style={[styles.scoreLabel, { color: colors.mutedForeground }]}>
-                        Compatibility
+                </View>
+                <View style={styles.headerTextWrap}>
+                    <Text style={[styles.tierLabel, { color: colors.primary }]}>
+                        {tier.label}
+                    </Text>
+                    <Text style={[styles.tierHelper, { color: colors.mutedForeground }]}>
+                        {tier.helper}
                     </Text>
                 </View>
-                <Text style={[styles.scoreNumber, { color: colors.primary }]}>
-                    {score}% match
-                </Text>
             </View>
-
-            <CompatibilityBar score={score} animationDelay={300} />
 
             {reasons.length > 0 && (
                 <View style={styles.reasonsWrap}>
@@ -63,27 +70,33 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         borderWidth: 1,
         padding: 16,
-        gap: 12,
+        gap: 14,
     },
-    scoreRow: {
+    header: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        gap: 10,
     },
-    scoreLabelWrap: {
-        flexDirection: 'row',
+    headerIconWrap: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: 'rgba(233,30,140,0.18)',
         alignItems: 'center',
-        gap: 5,
+        justifyContent: 'center',
     },
-    scoreLabel: {
-        fontSize: 13,
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
+    headerTextWrap: {
+        flex: 1,
+        gap: 2,
     },
-    scoreNumber: {
-        fontSize: 16,
+    tierLabel: {
+        fontSize: 15,
         fontWeight: '700',
+        letterSpacing: -0.2,
+    },
+    tierHelper: {
+        fontSize: 12,
+        fontWeight: '500',
     },
     reasonsWrap: {
         gap: 8,

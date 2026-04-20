@@ -31,7 +31,6 @@ export interface DateMatchModalProps {
     theirFirstName: string;
     theirPhoto?: string | null;
     myPhoto?: string | null;
-    compatibilityScore?: number;
     onClose: () => void;
 }
 
@@ -42,7 +41,6 @@ export function DateMatchModal({
     theirFirstName,
     theirPhoto,
     myPhoto,
-    compatibilityScore,
     onClose,
 }: DateMatchModalProps) {
     const { colors, isDark } = useTheme();
@@ -183,17 +181,6 @@ export function DateMatchModal({
                         <Text style={[styles.subline, { color: colors.mutedForeground }]}>
                             Looks like you're both open to meeting
                         </Text>
-
-                        {compatibilityScore !== undefined && (
-                            <View style={[styles.compatChip, {
-                                backgroundColor: isDark ? 'rgba(233,30,140,0.12)' : 'rgba(233,30,140,0.08)',
-                                borderColor: colors.primary + '30',
-                            }]}>
-                                <Text style={[styles.compatText, { color: colors.primary }]}>
-                                    {compatibilityScore}% compatibility
-                                </Text>
-                            </View>
-                        )}
                     </View>
 
                     {/* Call nudge */}
@@ -288,17 +275,6 @@ const styles = StyleSheet.create({
     subline: {
         fontSize: 16,
         textAlign: 'center',
-    },
-    compatChip: {
-        borderRadius: 20,
-        borderWidth: 1,
-        paddingHorizontal: 14,
-        paddingVertical: 6,
-        marginTop: 4,
-    },
-    compatText: {
-        fontSize: 14,
-        fontWeight: '700',
     },
     callHintBox: {
         borderRadius: 14,

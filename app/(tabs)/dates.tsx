@@ -275,7 +275,6 @@ export default function DatesScreen() {
                 theirFirstName={celebratedMatch?.withUser.firstName ?? ''}
                 theirPhoto={celebratedMatch?.withUser.profilePhoto}
                 myPhoto={myProfile?.profilePhoto ?? myProfile?.photos?.[0]}
-                compatibilityScore={celebratedMatch?.withUser.compatibilityScore}
                 onClose={() => setMatchModalVisible(false)}
             />
 
