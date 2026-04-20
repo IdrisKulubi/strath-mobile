@@ -33,9 +33,9 @@ export const CANDIDATE_PAIR_EXPIRY_HOURS = EXPIRY_MINUTES / 60;
 export const EXPIRED_PAIR_COOLDOWN_DAYS = CANDIDATE_PAIR_EXPIRY_HOURS < 1 ? 1 / (24 * 60) : 7;
 
 /** Minimum compatibility (0–100) required before creating a candidate pair or queue slot. */
-export const MIN_CANDIDATE_MATCH_SCORE = Number(process.env.MIN_CANDIDATE_MATCH_SCORE) || 58;
+export const MIN_CANDIDATE_MATCH_SCORE = Number(process.env.MIN_CANDIDATE_MATCH_SCORE) || 72;
 /** Never relax effective minimum below this (0–100). */
-const MIN_CANDIDATE_MATCH_SCORE_FLOOR = Number(process.env.MIN_CANDIDATE_MATCH_SCORE_FLOOR) || 50;
+const MIN_CANDIDATE_MATCH_SCORE_FLOOR = Number(process.env.MIN_CANDIDATE_MATCH_SCORE_FLOOR) || 62;
 /** Max curated introductions per batch: one goes live immediately, the rest queue for later UTC days. */
 export const MAX_CANDIDATE_QUEUE_SIZE = Number(process.env.MAX_CANDIDATE_QUEUE_SIZE) || 5;
 
@@ -44,7 +44,7 @@ function getFairnessRelaxConfig(): FairnessRelaxConfig {
     const sparseExtra = Number(process.env.MATCH_SPARSE_EXTRA_RELAX_STEPS) || 1;
     return {
         waitDaysBeforeRelax: Number(process.env.MATCH_WAIT_DAYS_BEFORE_RELAX) || 3,
-        scoreRelaxPerStep: Number(process.env.MATCH_SCORE_RELAX_PER_STEP) || 2,
+        scoreRelaxPerStep: Number(process.env.MATCH_SCORE_RELAX_PER_STEP) || 3,
         maxRelaxSteps: maxRelax,
         sparsePoolThreshold: Number(process.env.MATCH_SPARSE_POOL_THRESHOLD) || 8,
         sparseExtraRelaxSteps: sparseExtra,
