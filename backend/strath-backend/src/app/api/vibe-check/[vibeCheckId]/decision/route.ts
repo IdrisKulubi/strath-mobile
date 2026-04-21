@@ -56,6 +56,11 @@ export async function POST(
 
         const result = await recordDecision(vibeCheckId, user.id, decision);
 
+        // Captured when both agreed + bridge ran — returned in the response so
+        // the mobile client can route straight into the payment paywall.
+        let bridgedDateMatchId: string | null = null;
+        let paymentState: string | null = null;
+
         // Fire notifications once both people have decided
         if (result.bothDecided) {
             try {
@@ -79,10 +84,24 @@ export async function POST(
                         // dateRequests accept flow created date_matches, leaving the new
                         // candidate-pair → mutual → call flow with no row to update.)
                         try {
-                            await bridgeMutualToBeingArranged({
+                            const bridge = await bridgeMutualToBeingArranged({
                                 user1Id: check.user1Id!,
                                 user2Id: check.user2Id!,
                             });
+                            bridgedDateMatchId = bridge?.dateMatchId ?? null;
+
+                            // Look up the resulting payment_state so the client
+                            // can decide whether to open the paywall immediately
+                            // (awaiting_payment) or go straight to "being
+                            // arranged" UI (not_required / legacy path).
+                            if (bridgedDateMatchId) {
+                                const { dateMatches } = await import("@/db/schema");
+                                const dm = await db.query.dateMatches.findFirst({
+                                    where: eq(dateMatches.id, bridgedDateMatchId),
+                                    columns: { paymentState: true },
+                                });
+                                paymentState = dm?.paymentState ?? "not_required";
+                            }
                         } catch (bridgeErr) {
                             console.error(
                                 "[VibeCheck] bridgeMutualToBeingArranged failed:",
@@ -135,6 +154,8 @@ export async function POST(
             decision,
             bothDecided: result.bothDecided,
             bothAgreedToMeet: result.bothAgreedToMeet,
+            dateMatchId: bridgedDateMatchId,
+            paymentState,
             message: result.bothAgreedToMeet
                 ? "🎉 You both want to meet! Full profiles revealed."
                 : result.bothDecided

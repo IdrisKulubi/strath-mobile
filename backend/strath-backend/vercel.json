@@ -21,6 +21,10 @@
       "schedule": "15 * * * *"
     },
     {
+      "path": "/api/cron/payment-expiry",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/worker/face-verification",
       "schedule": "* * * * *"
     }

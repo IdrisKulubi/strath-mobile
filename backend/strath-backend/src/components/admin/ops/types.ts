@@ -45,6 +45,7 @@ export interface OpsOnCallSession {
     startedAt: string | null;
     endedAt: string | null;
     createdAt: string;
+    dateMatchId: string | null;
     dateMatchStatus: string | null;
     callCompleted: boolean;
     user1Decision: string | null;

@@ -116,6 +116,7 @@ export function OnCallCard({ session }: OnCallCardProps) {
                 userADecision={session.user1Decision}
                 userBDecision={session.user2Decision}
                 status={status}
+                dateMatchId={session.dateMatchId}
             />
         </>
     );

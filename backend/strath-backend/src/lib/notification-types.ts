@@ -21,6 +21,14 @@ export const NOTIFICATION_TYPES = {
     DATE_SCHEDULED: 'date_scheduled',
     FEEDBACK_PROMPT: 'feedback_prompt',
     DATE_CANCELLED: 'date_cancelled',
+
+    // Payments (docs/payment.md §12)
+    PAYMENT_REQUIRED: 'payment_required',
+    PARTNER_PAID: 'partner_paid',
+    PAYMENT_REMINDER_12H: 'payment_reminder_12h',
+    PAYMENT_EXPIRED: 'payment_expired',
+    CREDIT_GRANTED: 'credit_granted',
+    DATE_BEING_ARRANGED: 'date_being_arranged',
 } as const;
 
 export type NotificationType = typeof NOTIFICATION_TYPES[keyof typeof NOTIFICATION_TYPES];

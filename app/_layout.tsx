@@ -17,6 +17,7 @@ import { LaunchExperience } from '@/components/intro/launch-experience';
 import { NoInternetScreen } from '@/components/no-internet-screen';
 import { OfflineBanner } from '@/components/offline-banner';
 import { SessionBootstrap } from '@/components/session-bootstrap';
+import { RevenueCatBootstrap } from '@/components/revenuecat-bootstrap';
 import { AppFeedbackNudge } from '@/components/feedback/app-feedback-nudge';
 import { useNetwork } from '@/hooks/use-network';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
@@ -143,6 +144,7 @@ export default function RootLayout() {
               ) : (
                 <>
                   <SessionBootstrap />
+                  <RevenueCatBootstrap />
                   <NotificationsBootstrap />
                   <RootLayoutNav hasAuthToken={bootstrap.hasAuthToken} />
                 </>

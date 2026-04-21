@@ -10,6 +10,9 @@ export const EVENT_TYPES = {
     DATE_SCHEDULED: "date_scheduled",
     DATE_ATTENDED: "date_attended",
     FEEDBACK_SUBMITTED: "feedback_submitted",
+    // Payments (docs/payment.md §13)
+    PAYMENT_REFUNDED: "payment_refunded",
+    CREDIT_GRANTED: "credit_granted",
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];

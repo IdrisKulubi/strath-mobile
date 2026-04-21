@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { endCall } from "@/lib/services/vibe-check-service";
-import { vibeChecks } from "@/db/schema";
+import { dateMatches, vibeChecks } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +56,32 @@ export async function GET(
         const userDecision = isUser1 ? check.user1Decision : check.user2Decision;
         const partnerDecision = isUser1 ? check.user2Decision : check.user1Decision;
 
+        // If both agreed, surface the downstream date_match + its payment
+        // state so the client can route into the paywall without a second
+        // round-trip. Safe no-op when no date_match has been bridged yet.
+        let dateMatchId: string | null = null;
+        let paymentState: string | null = null;
+        if (check.bothAgreedToMeet) {
+            const dm = await db.query.dateMatches.findFirst({
+                where: and(
+                    or(
+                        and(
+                            eq(dateMatches.userAId, check.user1Id!),
+                            eq(dateMatches.userBId, check.user2Id!),
+                        ),
+                        and(
+                            eq(dateMatches.userAId, check.user2Id!),
+                            eq(dateMatches.userBId, check.user1Id!),
+                        ),
+                    ),
+                ),
+                orderBy: (m, { desc }) => [desc(m.createdAt)],
+                columns: { id: true, paymentState: true },
+            });
+            dateMatchId = dm?.id ?? null;
+            paymentState = dm?.paymentState ?? null;
+        }
+
         return successResponse({
             vibeCheckId: check.id,
             status: check.status,
@@ -64,6 +90,8 @@ export async function GET(
             partnerDecision: partnerDecision ?? null,
             bothDecided: !!userDecision && !!partnerDecision,
             durationSeconds: check.durationSeconds,
+            dateMatchId,
+            paymentState,
         });
     } catch (err) {
         console.error("[VibeCheck] RESULT error:", err);

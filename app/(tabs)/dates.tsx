@@ -9,7 +9,9 @@ import { useTheme } from '@/hooks/use-theme';
 import { useMutualMatches, useDateHistory } from '@/hooks/use-date-requests';
 import { ConfirmedMatchCard } from '@/components/dates/confirmed-match-card';
 import { DecisionPendingCard } from '@/components/dates/decision-pending-card';
+import { PendingPaymentCard } from '@/components/dates/pending-payment-card';
 import { FinishDecisionModal } from '@/components/dates/finish-decision-modal';
+import { useFeatureFlags } from '@/hooks/use-feature-flags';
 import { HistoryCard } from '@/components/dates/history-card';
 import { EmptyDates } from '@/components/dates/empty-dates';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -49,6 +51,8 @@ export default function DatesScreen() {
     const segmentWidth = useRef(0);
 
     const { data: myProfile } = useProfile();
+    const { flags: featureFlags } = useFeatureFlags();
+    const paymentsEnabled = !!featureFlags?.paymentsEnabled;
     const { data: mutualDates = [], isLoading: loadingMutuals, isFetching: fetchingMutuals, refetch: refetchMutuals } = useMutualMatches();
     const { data: history = [], isLoading: loadingHistory, refetch: refetchHistory } = useDateHistory();
 
@@ -156,6 +160,25 @@ export default function DatesScreen() {
                                 />
                             );
                         }
+
+                        // When payments are ON, matches where both agreed but
+                        // the window hasn't been paid yet surface a dedicated
+                        // CTA that reopens the paywall. Without this the user
+                        // would be stuck with no way back into the paywall.
+                        if (
+                            paymentsEnabled
+                            && (match.paymentState === 'awaiting_payment'
+                                || match.paymentState === 'paid_waiting_for_other')
+                        ) {
+                            return (
+                                <PendingPaymentCard
+                                    key={match.id}
+                                    match={match}
+                                    index={index}
+                                />
+                            );
+                        }
+
                         return <ConfirmedMatchCard key={match.id} match={match} index={index} />;
                     })}
                 </View>

@@ -13,6 +13,7 @@ import {
 import { PairAvatars } from "./pair-avatars";
 import { ContactRow } from "./contact-row";
 import { DateFlowTimeline } from "./date-flow-timeline";
+import { PaymentsPanel } from "./payments-panel";
 import { getVibeMeta, type OpsPairUser, type OpsStage } from "./types";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +33,8 @@ interface PairDetailSheetProps {
     callCompleted?: boolean;
     userADecision?: string | null;
     userBDecision?: string | null;
+    /** When provided, renders the admin Payments panel (docs/payment.md §13). */
+    dateMatchId?: string | null;
     actions?: ReactNode;
     extraContent?: ReactNode;
 }
@@ -52,6 +55,7 @@ export function PairDetailSheet({
     callCompleted,
     userADecision,
     userBDecision,
+    dateMatchId,
     actions,
     extraContent,
 }: PairDetailSheetProps) {
@@ -154,6 +158,8 @@ export function PairDetailSheet({
                             </div>
                         </div>
                     </section>
+
+                    {dateMatchId && <PaymentsPanel dateMatchId={dateMatchId} />}
 
                     {extraContent}
                 </div>

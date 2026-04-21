@@ -33,6 +33,17 @@ export interface MutualDate {
     arrangementStatus: 'mutual' | 'call_pending' | 'being_arranged' | 'upcoming' | 'completed' | 'cancelled' | 'expired';
     legacyMatchId?: string;
     legacyDateMatchId?: string;
+    /** Orthogonal payment state, only meaningful when `paymentsEnabled`. */
+    paymentState?:
+        | 'not_required'
+        | 'awaiting_payment'
+        | 'paid_waiting_for_other'
+        | 'being_arranged'
+        | 'confirmed'
+        | 'expired'
+        | 'refunded';
+    /** ISO timestamp of when the payment window closes. */
+    paymentDueBy?: string;
     venueName?: string;
     venueAddress?: string;
     scheduledAt?: string;

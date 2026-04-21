@@ -136,6 +136,7 @@ export function UpcomingView({ rows: initialRows, isDemo }: UpcomingViewProps) {
                     venueName={detail.venueName}
                     venueAddress={detail.venueAddress}
                     status={detail.status}
+                    dateMatchId={detail.id}
                     actions={
                         <StatusActionButtons
                             matchId={detail.id}

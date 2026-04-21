@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     View,
     StyleSheet,
@@ -15,12 +15,15 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
+import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useToast } from '@/components/ui/toast';
 import { useTheme } from '@/hooks/use-theme';
 import { useVibeCheck } from '@/hooks/use-vibe-check';
+import { useFeatureFlags } from '@/hooks/use-feature-flags';
 import { PARTNER_DECISION_TIMEOUT_SECONDS } from '@/lib/vibe-check-constants';
+import { DateCoordinationPaywall } from '@/components/paywall/date-coordination-paywall';
 
 interface VibeCheckDecisionProps {
     vibeCheckId: string;
@@ -69,6 +72,44 @@ export function VibeCheckDecision({
     const userDecision = vibeCheckResult?.userDecision;
     const bothAgreed = vibeCheckResult?.bothAgreedToMeet;
     const bothDecided = vibeCheckResult?.bothDecided;
+
+    // ─── Payment gate (docs/payment.md) ──────────────────────────────────
+    // When `payments_enabled` is ON and the backend-bridged date_match sits
+    // in an open payment state, the "Being arranged" success screen is
+    // replaced with a CTA that opens the Date Coordination paywall.
+    const { flags: featureFlags } = useFeatureFlags();
+    const paymentsEnabled = !!featureFlags?.paymentsEnabled;
+    const dateMatchId = vibeCheckResult?.dateMatchId ?? null;
+    const paymentState = vibeCheckResult?.paymentState ?? null;
+    const needsPayment = useMemo(
+        () =>
+            paymentsEnabled
+            && !!dateMatchId
+            && (paymentState === 'awaiting_payment'
+                || paymentState === 'paid_waiting_for_other'),
+        [paymentsEnabled, dateMatchId, paymentState],
+    );
+    const paywallRef = useRef<BottomSheet>(null);
+    const hasAutoOpenedPaywallRef = useRef(false);
+
+    const openPaywall = useCallback(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        paywallRef.current?.expand();
+    }, []);
+
+    const handlePaywallClose = useCallback(() => {
+        paywallRef.current?.close();
+    }, []);
+
+    // Auto-open the paywall the first time we land on the mutual-agree branch
+    // with an unpaid match. Manual reopen is available via the CTA below.
+    useEffect(() => {
+        if (!bothAgreed || !needsPayment) return;
+        if (hasAutoOpenedPaywallRef.current) return;
+        hasAutoOpenedPaywallRef.current = true;
+        const t = setTimeout(openPaywall, 650);
+        return () => clearTimeout(t);
+    }, [bothAgreed, needsPayment, openPaywall]);
 
     useEffect(() => {
         if (vibeCheckResult?.bothAgreedToMeet) {
@@ -224,26 +265,84 @@ export function VibeCheckDecision({
                         The vibe is real! 🎉
                     </Text>
                     <Text style={[styles.body, { color: colors.mutedForeground }]}>
-                        You and {name} both want to meet.{'\n'}StrathSpace will arrange the date.
+                        {needsPayment
+                            ? `You and ${name} both want to meet.\nConfirm with a KES 200 coordination fee to arrange it.`
+                            : `You and ${name} both want to meet.\nStrathSpace will arrange the date.`}
                     </Text>
-                    <View style={[styles.arrangeBox, {
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-                        borderColor: colors.border,
-                    }]}>
-                        <View style={styles.arrangeDot}>
-                            <View style={[styles.dot, { backgroundColor: colors.primary }]} />
-                        </View>
-                        <Text style={[styles.arrangeText, { color: colors.mutedForeground }]}>
-                            Being arranged by StrathSpace — we'll reach out soon.
-                        </Text>
-                    </View>
-                    <Pressable
-                        onPress={handleDone}
-                        style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
-                    >
-                        <Text style={styles.primaryBtnText}>Go to Dates</Text>
-                    </Pressable>
+
+                    {needsPayment ? (
+                        <>
+                            <View style={[styles.arrangeBox, {
+                                backgroundColor: isDark ? 'rgba(236,72,153,0.12)' : 'rgba(236,72,153,0.08)',
+                                borderColor: isDark ? 'rgba(236,72,153,0.28)' : 'rgba(236,72,153,0.2)',
+                            }]}>
+                                <View style={styles.arrangeDot}>
+                                    <Ionicons name="sparkles" size={16} color={colors.primary} />
+                                </View>
+                                <Text style={[styles.arrangeText, { color: colors.mutedForeground }]}>
+                                    {paymentState === 'paid_waiting_for_other'
+                                        ? `${name} has already paid. Confirm your half to arrange the date.`
+                                        : 'A small commitment fee keeps StrathSpace intentional.'}
+                                </Text>
+                            </View>
+                            <Pressable
+                                onPress={openPaywall}
+                                style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+                            >
+                                <Text style={styles.primaryBtnText}>
+                                    Confirm with KES 200
+                                </Text>
+                            </Pressable>
+                            <Pressable onPress={handleDone} style={styles.ghostBtn}>
+                                <Text style={[styles.ghostBtnText, { color: colors.mutedForeground }]}>
+                                    I&apos;ll do this later
+                                </Text>
+                            </Pressable>
+                        </>
+                    ) : (
+                        <>
+                            <View style={[styles.arrangeBox, {
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                                borderColor: colors.border,
+                            }]}>
+                                <View style={styles.arrangeDot}>
+                                    <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+                                </View>
+                                <Text style={[styles.arrangeText, { color: colors.mutedForeground }]}>
+                                    Being arranged by StrathSpace — we&apos;ll reach out soon.
+                                </Text>
+                            </View>
+                            <Pressable
+                                onPress={handleDone}
+                                style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+                            >
+                                <Text style={styles.primaryBtnText}>Go to Dates</Text>
+                            </Pressable>
+                        </>
+                    )}
                 </Animated.View>
+
+                {needsPayment && dateMatchId ? (
+                    <DateCoordinationPaywall
+                        ref={paywallRef}
+                        dateMatchId={dateMatchId}
+                        partnerName={partnerFirstName ?? null}
+                        onClose={handlePaywallClose}
+                        onPaid={() => {
+                            // Paywall auto-closes on success. Route to Dates so
+                            // the user lands in the "being_arranged" item.
+                            toast.show({
+                                message: 'You\'re confirmed. We\'ll arrange this one.',
+                                variant: 'success',
+                            });
+                            if (onClose) {
+                                onClose();
+                            } else {
+                                router.replace('/(tabs)/dates');
+                            }
+                        }}
+                    />
+                ) : null}
             </View>
         );
     }

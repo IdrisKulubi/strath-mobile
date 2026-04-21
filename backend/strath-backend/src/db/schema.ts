@@ -535,6 +535,22 @@ export const dateMatches = pgTable(
             .$type<"pending_setup" | "scheduled" | "attended" | "cancelled" | "no_show">()
             .default("pending_setup")
             .notNull(),
+        // Payment state is orthogonal to `status`. Legacy rows (and any row
+        // created while `payments_enabled` is OFF) stay at `not_required`.
+        // See docs/payment.md §4.1 for the full state machine.
+        paymentState: text("payment_state")
+            .$type<
+                | "not_required"
+                | "awaiting_payment"
+                | "paid_waiting_for_other"
+                | "being_arranged"
+                | "confirmed"
+                | "expired"
+                | "refunded"
+            >()
+            .default("not_required")
+            .notNull(),
+        paymentDueBy: timestamp("payment_due_by"),
         locationId: uuid("location_id").references(() => dateLocations.id, { onDelete: "set null" }),
         venueName: text("venue_name"),
         venueAddress: text("venue_address"),
@@ -546,8 +562,117 @@ export const dateMatches = pgTable(
         candidatePairIdx: index("date_match_candidate_pair_idx").on(table.candidatePairId),
         usersIdx: index("date_match_users_idx").on(table.userAId, table.userBId),
         locationIdx: index("date_match_location_idx").on(table.locationId),
+        paymentStateIdx: index("date_match_payment_state_idx").on(table.paymentState),
     })
 );
+
+// Date payments — one row per user per match (KES 200 Date Coordination Fee).
+// See docs/payment.md §4.2. Keyed by `revenuecat_transaction_id` for webhook
+// idempotency; the `(date_match_id, user_id)` uniqueness prevents a user
+// from being double-charged for the same date.
+export const datePayments = pgTable(
+    "date_payments",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        dateMatchId: uuid("date_match_id")
+            .notNull()
+            .references(() => dateMatches.id, { onDelete: "cascade" }),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+
+        // Money
+        amountCents: integer("amount_cents").notNull(),
+        currency: text("currency").default("KES").notNull(),
+
+        // Provider
+        provider: text("provider")
+            .$type<"revenuecat" | "credit" | "manual">()
+            .notNull(),
+        platform: text("platform").$type<"ios" | "android" | null>(),
+        revenuecatAppUserId: text("revenuecat_app_user_id"),
+        revenuecatTransactionId: text("revenuecat_transaction_id"),
+        storeTransactionId: text("store_transaction_id"),
+        productId: text("product_id").notNull(),
+
+        // Lifecycle
+        status: text("status")
+            .$type<"pending" | "paid" | "failed" | "refunded" | "credited">()
+            .default("pending")
+            .notNull(),
+        paidAt: timestamp("paid_at"),
+        refundedAt: timestamp("refunded_at"),
+        refundReason: text("refund_reason"),
+
+        // Audit
+        rawWebhookPayload: jsonb("raw_webhook_payload").$type<Record<string, unknown>>(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userMatchUnique: uniqueIndex("date_payments_user_match_unique").on(
+            table.dateMatchId,
+            table.userId,
+        ),
+        transactionUnique: uniqueIndex("date_payments_transaction_unique").on(
+            table.revenuecatTransactionId,
+        ),
+        userIdx: index("date_payments_user_idx").on(table.userId),
+        statusIdx: index("date_payments_status_idx").on(table.status),
+    }),
+);
+
+// User credits ledger — balance = SUM(amount_cents) per user. Positive rows
+// are granted credits (refunds, promos); negative rows are spent credits.
+// See docs/payment.md §4.3.
+export const userCredits = pgTable(
+    "user_credits",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        amountCents: integer("amount_cents").notNull(),
+        currency: text("currency").default("KES").notNull(),
+        reason: text("reason")
+            .$type<"partner_did_not_pay" | "admin_refund" | "date_spent" | "promo" | "goodwill">()
+            .notNull(),
+        dateMatchId: uuid("date_match_id").references(() => dateMatches.id, { onDelete: "set null" }),
+        adminUserId: text("admin_user_id").references(() => user.id, { onDelete: "set null" }),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdx: index("user_credits_user_idx").on(table.userId),
+        dateMatchIdx: index("user_credits_date_match_idx").on(table.dateMatchId),
+    }),
+);
+
+export const datePaymentsRelations = relations(datePayments, ({ one }) => ({
+    dateMatch: one(dateMatches, {
+        fields: [datePayments.dateMatchId],
+        references: [dateMatches.id],
+    }),
+    paidByUser: one(user, {
+        fields: [datePayments.userId],
+        references: [user.id],
+    }),
+}));
+
+export const userCreditsRelations = relations(userCredits, ({ one }) => ({
+    user: one(user, {
+        fields: [userCredits.userId],
+        references: [user.id],
+    }),
+    dateMatch: one(dateMatches, {
+        fields: [userCredits.dateMatchId],
+        references: [dateMatches.id],
+    }),
+    admin: one(user, {
+        fields: [userCredits.adminUserId],
+        references: [user.id],
+        relationName: "user_credits_admin",
+    }),
+}));
 
 // Date feedback — post-date rating and meet_again
 export const dateFeedback = pgTable(
@@ -1785,6 +1910,10 @@ export type BlindDate = typeof blindDates.$inferSelect;
 export type NewBlindDate = typeof blindDates.$inferInsert;
 export type AgentAnalyticsEvent = typeof agentAnalytics.$inferSelect;
 export type AppFeatureFlag = typeof appFeatureFlags.$inferSelect;
+export type DatePayment = typeof datePayments.$inferSelect;
+export type NewDatePayment = typeof datePayments.$inferInsert;
+export type UserCredit = typeof userCredits.$inferSelect;
+export type NewUserCredit = typeof userCredits.$inferInsert;
 
 // Analytics events — lightweight funnel tracking
 export const analyticsEvents = pgTable(

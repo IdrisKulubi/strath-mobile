@@ -152,6 +152,7 @@ export function HistoryView({ rows: initialRows, isDemo }: HistoryViewProps) {
                     venueName={detail.venueName}
                     venueAddress={detail.venueAddress}
                     status={detail.status}
+                    dateMatchId={detail.id}
                     extraContent={
                         detail.feedbackCount > 0 ? (
                             <section className="mb-6">

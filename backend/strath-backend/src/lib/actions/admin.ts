@@ -8,17 +8,22 @@ import {
     dateRequests,
     dateMatches,
     dateFeedback,
+    datePayments,
+    userCredits,
     analyticsEvents,
     dateLocations,
     vibeChecks,
     appFeatureFlags,
 } from "@/db/schema";
-import { eq, desc, count, and, or, gte, lt, sql } from "drizzle-orm";
+import { eq, desc, count, and, or, inArray, gte, lt, sql } from "drizzle-orm";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 import { revalidatePath } from "next/cache";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 import { APP_FEATURE_KEYS } from "@/lib/feature-flags";
+import {
+    getUserCreditBalanceCents,
+} from "@/lib/services/payments-service";
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
@@ -51,6 +56,9 @@ export async function getAdminMetrics() {
                 eq(dateMatches.callCompleted, true),
                 eq(dateMatches.userAConfirmed, true),
                 eq(dateMatches.userBConfirmed, true),
+                // Payment-gated: matches awaiting payment are NOT in the
+                // admin "arranging" queue yet (docs/payment.md §4.1).
+                inArray(dateMatches.paymentState, ["not_required", "being_arranged"]),
             )
         ),
         db.select({ scheduled: count() }).from(dateMatches).where(eq(dateMatches.status, "scheduled")),
@@ -138,6 +146,10 @@ export async function getAdminPendingDates() {
                 eq(dateMatches.callCompleted, true),
                 eq(dateMatches.userAConfirmed, true),
                 eq(dateMatches.userBConfirmed, true),
+                // Payment-gated (docs/payment.md §4.1): admin only sees pairs
+                // that either didn't need to pay (flag off / legacy rows) or
+                // have already completed payment on both sides.
+                inArray(dateMatches.paymentState, ["not_required", "being_arranged"]),
             )
         )
         .orderBy(desc(dateMatches.createdAt));
@@ -257,6 +269,7 @@ export async function getAdminOnCallSessions() {
                     phone: profileB?.phoneNumber ?? profileB?.user?.phoneNumber,
                     location: profileB?.currentLocation,
                 },
+                dateMatchId: dateMatch?.id ?? null,
                 dateMatchStatus: dateMatch?.status ?? null,
                 callCompleted: dateMatch?.callCompleted ?? false,
             };
@@ -391,6 +404,11 @@ export async function scheduleDate(formData: FormData) {
             venueName: location.name,
             venueAddress: location.address,
             scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+            // Mirror the payment state to `confirmed` for rows that went
+            // through the paid flow. Legacy rows stay at `not_required`.
+            paymentState: dm.paymentState === "being_arranged"
+                ? "confirmed"
+                : dm.paymentState ?? "not_required",
         })
         .where(eq(dateMatches.id, matchId));
 
@@ -627,27 +645,43 @@ export async function getAdminTimeSeries(days = 30) {
     return result;
 }
 
+const FLAG_METADATA: Record<
+    string,
+    { label: string; description: string }
+> = {
+    [APP_FEATURE_KEYS.demoLoginEnabled]: {
+        label: "Demo Login",
+        description:
+            "Controls whether the Apple review demo button appears on the mobile login screen and whether the demo auth endpoint accepts sign-ins.",
+    },
+    [APP_FEATURE_KEYS.paymentsEnabled]: {
+        label: "Payments — Date Coordination Fee",
+        description:
+            "Master switch for the KES 200 pay-per-date flow. When OFF, every date bypasses the paywall and flows straight from post-call confirmation to admin scheduling (legacy behaviour). When ON, both users must pay before we arrange the date.",
+    },
+};
+
+const SUPPORTED_FLAG_KEYS = Object.values(APP_FEATURE_KEYS) as string[];
+
 export async function getAdminFeatureFlags() {
     await requireAdmin();
 
     const rows = await db.select().from(appFeatureFlags);
     const byKey = new Map(rows.map((row) => [row.key, row]));
 
-    return [
-        {
-            key: APP_FEATURE_KEYS.demoLoginEnabled,
-            label: "Demo Login",
-            description: "Controls whether the Apple review demo button appears on the mobile login screen and whether the demo auth endpoint accepts sign-ins.",
-            enabled: byKey.get(APP_FEATURE_KEYS.demoLoginEnabled)?.enabled ?? false,
-            updatedAt: byKey.get(APP_FEATURE_KEYS.demoLoginEnabled)?.updatedAt?.toISOString() ?? null,
-        },
-    ];
+    return SUPPORTED_FLAG_KEYS.map((key) => ({
+        key,
+        label: FLAG_METADATA[key]?.label ?? key,
+        description: FLAG_METADATA[key]?.description ?? "",
+        enabled: byKey.get(key)?.enabled ?? false,
+        updatedAt: byKey.get(key)?.updatedAt?.toISOString() ?? null,
+    }));
 }
 
 export async function setAdminFeatureFlag(key: string, enabled: boolean) {
     const session = await requireAdmin();
 
-    if (key !== APP_FEATURE_KEYS.demoLoginEnabled) {
+    if (!SUPPORTED_FLAG_KEYS.includes(key)) {
         throw new Error("Unsupported feature flag");
     }
 
@@ -657,10 +691,7 @@ export async function setAdminFeatureFlag(key: string, enabled: boolean) {
             key,
             enabled,
             updatedByUserId: session.user.id,
-            description:
-                key === APP_FEATURE_KEYS.demoLoginEnabled
-                    ? "Allow the demo login button and demo session endpoint for App Review."
-                    : null,
+            description: FLAG_METADATA[key]?.description ?? null,
         })
         .onConflictDoUpdate({
             target: appFeatureFlags.key,
@@ -690,4 +721,232 @@ export async function reinstateUser(userId: string) {
     await requireAdmin();
     await db.update(user).set({ deletedAt: null }).where(eq(user.id, userId));
     revalidatePath("/admin/users");
+}
+
+// ─── Payments (docs/payment.md §13) ─────────────────────────────────────────
+
+export interface AdminMatchPaymentRow {
+    id: string;
+    userId: string;
+    firstName: string;
+    amountCents: number;
+    currency: string;
+    provider: "revenuecat" | "credit" | "manual";
+    status: "pending" | "paid" | "failed" | "refunded" | "credited";
+    paidAt: string | null;
+    refundedAt: string | null;
+    refundReason: string | null;
+    productId: string;
+    revenuecatTransactionId: string | null;
+    creditBalanceCents: number;
+}
+
+export interface AdminMatchPaymentsSummary {
+    dateMatchId: string;
+    paymentState: string;
+    paymentDueBy: string | null;
+    rows: AdminMatchPaymentRow[];
+}
+
+/**
+ * Pulls every payment row attached to a single date match plus each user's
+ * current credit balance. Admins use this to decide whether to refund a
+ * charge, grant a goodwill credit, or confirm an off-platform make-good.
+ */
+export async function getAdminMatchPayments(
+    dateMatchId: string,
+): Promise<AdminMatchPaymentsSummary | null> {
+    await requireAdmin();
+
+    const match = await db.query.dateMatches.findFirst({
+        where: eq(dateMatches.id, dateMatchId),
+    });
+    if (!match) return null;
+
+    const payments = await db
+        .select()
+        .from(datePayments)
+        .where(eq(datePayments.dateMatchId, dateMatchId))
+        .orderBy(desc(datePayments.createdAt));
+
+    const userIds = Array.from(new Set([match.userAId, match.userBId]));
+    const profileRows = await db
+        .select({ userId: profiles.userId, firstName: profiles.firstName })
+        .from(profiles)
+        .where(inArray(profiles.userId, userIds));
+
+    const nameByUserId = new Map(profileRows.map((r) => [r.userId, r.firstName]));
+
+    const balances = await Promise.all(
+        userIds.map(async (uid) => ({
+            userId: uid,
+            balance: await getUserCreditBalanceCents(uid),
+        })),
+    );
+    const balanceByUserId = new Map(balances.map((b) => [b.userId, b.balance]));
+
+    // Build a row per user — even if they haven't paid yet, so the admin
+    // panel can show "not paid" state and a "grant credit" affordance.
+    const rows: AdminMatchPaymentRow[] = [];
+    for (const uid of userIds) {
+        const payment = payments.find((p) => p.userId === uid);
+        rows.push({
+            id: payment?.id ?? `placeholder-${uid}`,
+            userId: uid,
+            firstName: nameByUserId.get(uid) ?? "User",
+            amountCents: payment?.amountCents ?? 0,
+            currency: payment?.currency ?? "KES",
+            provider: payment?.provider ?? "revenuecat",
+            status: payment?.status ?? "pending",
+            paidAt: payment?.paidAt?.toISOString() ?? null,
+            refundedAt: payment?.refundedAt?.toISOString() ?? null,
+            refundReason: payment?.refundReason ?? null,
+            productId: payment?.productId ?? "",
+            revenuecatTransactionId: payment?.revenuecatTransactionId ?? null,
+            creditBalanceCents: balanceByUserId.get(uid) ?? 0,
+        });
+    }
+
+    return {
+        dateMatchId,
+        paymentState: match.paymentState ?? "not_required",
+        paymentDueBy: match.paymentDueBy?.toISOString() ?? null,
+        rows,
+    };
+}
+
+/**
+ * Marks a `date_payments` row as refunded. Store-side refunds for IAP must
+ * still be issued through App Store / Play Console — this action only records
+ * the decision on our side and (optionally) issues a make-good credit.
+ *
+ * Docs: `payment.md §13`.
+ */
+export async function refundDatePayment(input: {
+    paymentId: string;
+    reason: string;
+    grantCredit?: boolean;
+}) {
+    const session = await requireAdmin();
+
+    const payment = await db.query.datePayments.findFirst({
+        where: eq(datePayments.id, input.paymentId),
+    });
+    if (!payment) throw new Error("Payment not found");
+    if (payment.status === "refunded") {
+        throw new Error("Payment is already refunded");
+    }
+    if (payment.status !== "paid" && payment.status !== "credited") {
+        throw new Error("Only paid or credited payments can be refunded");
+    }
+
+    const now = new Date();
+
+    await db
+        .update(datePayments)
+        .set({
+            status: "refunded",
+            refundedAt: now,
+            refundReason: input.reason.slice(0, 500),
+            updatedAt: now,
+        })
+        .where(eq(datePayments.id, payment.id));
+
+    // Reflect the refund on the match itself so the user-facing list updates.
+    await db
+        .update(dateMatches)
+        .set({ paymentState: "refunded" })
+        .where(eq(dateMatches.id, payment.dateMatchId));
+
+    // Make-good credit (mirrors `grantPartnerDidNotPayCredit` but tagged
+    // `admin_refund` so we can account for it separately in reports).
+    if (input.grantCredit) {
+        await db.insert(userCredits).values({
+            userId: payment.userId,
+            amountCents: payment.amountCents,
+            currency: payment.currency,
+            reason: "admin_refund",
+            dateMatchId: payment.dateMatchId,
+            adminUserId: session.user.id,
+        });
+
+        // Best-effort push — don't fail the action if the user has no token.
+        const u = await db.query.user.findFirst({ where: eq(user.id, payment.userId) });
+        if (u?.pushToken) {
+            await sendPushNotification(u.pushToken, {
+                title: "Refund issued",
+                body: `You received KES ${(payment.amountCents / 100).toFixed(0)} in StrathSpace credit.`,
+                data: { type: NOTIFICATION_TYPES.CREDIT_GRANTED },
+            }).catch(() => {});
+        }
+    }
+
+    logEvent(EVENT_TYPES.PAYMENT_REFUNDED, session.user.id, {
+        paymentId: payment.id,
+        dateMatchId: payment.dateMatchId,
+        userId: payment.userId,
+        amountCents: payment.amountCents,
+        grantCredit: !!input.grantCredit,
+        reason: input.reason,
+    }).catch(() => {});
+
+    revalidatePath("/admin/pending-dates");
+    revalidatePath("/admin/scheduled-dates");
+    revalidatePath("/admin/history");
+    revalidatePath("/admin/on-call");
+}
+
+/**
+ * Drops goodwill / promo / make-good credit into a user's ledger. Amount is
+ * in KES cents so the client never has to worry about currency math.
+ *
+ * Reasons mirror the `user_credits.reason` enum exactly.
+ */
+export async function grantUserCredit(input: {
+    userId: string;
+    amountCents: number;
+    reason: "goodwill" | "promo" | "admin_refund" | "partner_did_not_pay";
+    dateMatchId?: string | null;
+    notifyUser?: boolean;
+}) {
+    const session = await requireAdmin();
+
+    if (!Number.isFinite(input.amountCents) || input.amountCents <= 0) {
+        throw new Error("Amount must be a positive number");
+    }
+    if (input.amountCents > 100_00 * 50) {
+        // Safety cap: no accidental KES 50_000 credits from a typo.
+        throw new Error("Amount exceeds admin grant limit");
+    }
+
+    const u = await db.query.user.findFirst({ where: eq(user.id, input.userId) });
+    if (!u) throw new Error("User not found");
+
+    await db.insert(userCredits).values({
+        userId: input.userId,
+        amountCents: input.amountCents,
+        currency: "KES",
+        reason: input.reason,
+        dateMatchId: input.dateMatchId ?? null,
+        adminUserId: session.user.id,
+    });
+
+    if (input.notifyUser && u.pushToken) {
+        await sendPushNotification(u.pushToken, {
+            title: "You received StrathSpace credit",
+            body: `KES ${(input.amountCents / 100).toFixed(0)} was added to your account.`,
+            data: { type: NOTIFICATION_TYPES.CREDIT_GRANTED },
+        }).catch(() => {});
+    }
+
+    logEvent(EVENT_TYPES.CREDIT_GRANTED, session.user.id, {
+        targetUserId: input.userId,
+        amountCents: input.amountCents,
+        reason: input.reason,
+        dateMatchId: input.dateMatchId ?? null,
+    }).catch(() => {});
+
+    revalidatePath("/admin/pending-dates");
+    revalidatePath("/admin/scheduled-dates");
+    revalidatePath("/admin/history");
 }

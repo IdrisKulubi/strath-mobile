@@ -129,6 +129,7 @@ export function ArrangingView({ rows: initialRows, locations, isDemo }: Arrangin
                     stage="arranging"
                     createdAt={detailTarget.createdAt}
                     callCompleted
+                    dateMatchId={detailTarget.id}
                     actions={
                         <button
                             type="button"

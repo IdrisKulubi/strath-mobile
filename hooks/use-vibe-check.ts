@@ -28,6 +28,15 @@ export interface VibeCheckStatus {
     scheduledAt?: string | null;
 }
 
+export type PaymentStateFromVibeCheck =
+    | "not_required"
+    | "awaiting_payment"
+    | "paid_waiting_for_other"
+    | "being_arranged"
+    | "confirmed"
+    | "expired"
+    | "refunded";
+
 export interface VibeCheckResult {
     vibeCheckId: string;
     status: string;
@@ -36,6 +45,19 @@ export interface VibeCheckResult {
     partnerDecision: "meet" | "pass" | null;
     bothDecided: boolean;
     durationSeconds: number | null;
+    /** Resolved once both users agree + the date_match has been bridged. */
+    dateMatchId?: string | null;
+    /** Drives whether the client opens the paywall or the "being arranged" UI. */
+    paymentState?: PaymentStateFromVibeCheck | null;
+}
+
+export interface VibeCheckDecisionResult {
+    decision: "meet" | "pass";
+    bothDecided: boolean;
+    bothAgreedToMeet: boolean;
+    dateMatchId?: string | null;
+    paymentState?: PaymentStateFromVibeCheck | null;
+    message: string;
 }
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
@@ -87,7 +109,7 @@ async function joinVibeCheckAPI(vibeCheckId: string): Promise<VibeCheckSession> 
 async function submitDecisionAPI(
     vibeCheckId: string,
     decision: "meet" | "pass",
-): Promise<{ decision: "meet" | "pass"; bothDecided: boolean; bothAgreedToMeet: boolean; message: string }> {
+): Promise<VibeCheckDecisionResult> {
     const headers = await authHeaders();
     const res = await fetch(`${API_URL}/api/vibe-check/${vibeCheckId}/decision`, {
         method: "POST",

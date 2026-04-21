@@ -8,6 +8,8 @@ import {
     vibeChecks,
 } from "@/db/schema";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
+import { isPaymentsEnabled } from "@/lib/feature-flags";
+import { getPaymentWindowHours } from "@/lib/revenuecat-server";
 
 /**
  * After a vibe call both parties say "meet", flip the `mutualMatches` row to `being_arranged` and
@@ -61,6 +63,18 @@ export async function bridgeMutualToBeingArranged(input: {
     let created = false;
     const now = new Date();
 
+    // Payment gate (docs/payment.md §10). When `payments_enabled` is ON, both
+    // users need to pay the Date Coordination Fee before admins see this pair
+    // in the arranging queue. When OFF we stay on the legacy path and rows
+    // continue to use the default `paymentState = 'not_required'`.
+    const paymentsOn = await isPaymentsEnabled();
+    const paymentState: typeof dateMatches.$inferInsert["paymentState"] = paymentsOn
+        ? "awaiting_payment"
+        : "not_required";
+    const paymentDueBy = paymentsOn
+        ? new Date(now.getTime() + getPaymentWindowHours() * 60 * 60 * 1000)
+        : null;
+
     if (existingDateMatch) {
         dateMatchId = existingDateMatch.id;
         const stillNeedsSetup =
@@ -75,6 +89,18 @@ export async function bridgeMutualToBeingArranged(input: {
             update.status = "pending_setup";
         }
 
+        // Only open the payment window once — never roll a match that's
+        // already paid / being_arranged backwards.
+        if (
+            paymentsOn
+            && (existingDateMatch.paymentState === "not_required"
+                || existingDateMatch.paymentState === null
+                || existingDateMatch.paymentState === undefined)
+        ) {
+            update.paymentState = "awaiting_payment";
+            update.paymentDueBy = paymentDueBy;
+        }
+
         await db.update(dateMatches).set(update).where(eq(dateMatches.id, existingDateMatch.id));
     } else {
         const [inserted] = await db
@@ -87,6 +113,8 @@ export async function bridgeMutualToBeingArranged(input: {
                 userAConfirmed: true,
                 userBConfirmed: true,
                 status: "pending_setup",
+                paymentState,
+                paymentDueBy,
                 candidatePairId: mutualRow.candidatePairId ?? input.candidatePairId ?? null,
                 createdAt: now,
             })
@@ -139,6 +167,17 @@ export type MutualDatesItem = {
     arrangementStatus: "mutual" | "call_pending" | "being_arranged" | "upcoming" | "completed" | "cancelled" | "expired";
     legacyMatchId?: string;
     legacyDateMatchId?: string;
+    /** Orthogonal payment-state, only meaningful when `paymentsEnabled` is on. */
+    paymentState?:
+        | "not_required"
+        | "awaiting_payment"
+        | "paid_waiting_for_other"
+        | "being_arranged"
+        | "confirmed"
+        | "expired"
+        | "refunded";
+    /** Deadline for closing the payment window; null if not in a paying state. */
+    paymentDueBy?: string;
     venueName?: string;
     venueAddress?: string;
     scheduledAt?: string;
@@ -214,6 +253,19 @@ export function mapLegacyDateStatus(
     if (dm.status === "attended") return "completed";
     if (dm.status === "cancelled" || dm.status === "no_show") return "cancelled";
     if (dm.status === "scheduled") return "upcoming";
+
+    // Payment-gated: a match sitting in `awaiting_payment` /
+    // `paid_waiting_for_other` / `expired` / `refunded` is NOT ready for admin
+    // arranging — users are still in the paywall flow. Keep it in the client's
+    // "call_pending" bucket so the paywall UI can take over.
+    const paymentState = dm.paymentState ?? "not_required";
+    const paymentNotReady =
+        paymentState === "awaiting_payment"
+        || paymentState === "paid_waiting_for_other"
+        || paymentState === "expired"
+        || paymentState === "refunded";
+    if (paymentNotReady) return "call_pending";
+
     // Match admin "Arranging" queue: only after vibe call and both users confirmed meet intent
     if (dm.callCompleted && dm.userAConfirmed && dm.userBConfirmed) return "being_arranged";
     return "call_pending";
@@ -244,6 +296,10 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
             )
             .orderBy(desc(dateMatches.createdAt)),
     ]);
+
+    // Build a lookup from dateMatchId -> row so we can enrich candidate-pair
+    // mutuals with their linked payment state without an N+1 query.
+    const dateMatchById = new Map(legacyRows.map((r) => [r.id, r]));
 
     const hydratedMutuals = await Promise.all(
         mutualRows.map(async (row) => {
@@ -297,6 +353,10 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                 callEndedAt = latestVibeCheck.endedAt?.toISOString();
             }
 
+            const linkedDateMatch = row.legacyDateMatchId
+                ? dateMatchById.get(row.legacyDateMatchId)
+                : undefined;
+
             return {
                 id: row.id,
                 pairId: row.candidatePairId,
@@ -312,6 +372,8 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                 arrangementStatus: row.status,
                 legacyMatchId: row.legacyMatchId ?? undefined,
                 legacyDateMatchId: row.legacyDateMatchId ?? undefined,
+                paymentState: linkedDateMatch?.paymentState ?? undefined,
+                paymentDueBy: linkedDateMatch?.paymentDueBy?.toISOString() ?? undefined,
                 venueName: row.venueName ?? undefined,
                 venueAddress: row.venueAddress ?? undefined,
                 scheduledAt: row.scheduledAt?.toISOString() ?? undefined,
@@ -363,6 +425,8 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                     },
                     arrangementStatus: mapLegacyDateStatus(row),
                     legacyDateMatchId: row.id,
+                    paymentState: row.paymentState ?? undefined,
+                    paymentDueBy: row.paymentDueBy?.toISOString() ?? undefined,
                     venueName: row.venueName ?? undefined,
                     venueAddress: row.venueAddress ?? undefined,
                     scheduledAt: row.scheduledAt?.toISOString() ?? undefined,
