@@ -53,6 +53,7 @@ export default function DatesScreen() {
     const { data: history = [], isLoading: loadingHistory, refetch: refetchHistory } = useDateHistory();
 
     const [matchModalVisible, setMatchModalVisible] = useState(false);
+    const [celebrationMatch, setCelebrationMatch] = useState<MutualDate | null>(null);
     const [decisionMatch, setDecisionMatch] = useState<MutualDate | null>(null);
     const seenMatchIds = useRef<Set<string>>(new Set());
 
@@ -90,6 +91,7 @@ export default function DatesScreen() {
         const newMutual = sections.mutual.find((item) => !seenMatchIds.current.has(item.id));
         if (!newMutual || isHydratingSections || fetchingMutuals) return;
         seenMatchIds.current.add(newMutual.id);
+        setCelebrationMatch(newMutual);
         setTimeout(() => setMatchModalVisible(true), 400);
     }, [fetchingMutuals, isHydratingSections, sections.mutual]);
 
@@ -114,8 +116,6 @@ export default function DatesScreen() {
     const arrangingBadge = sections.being_arranged.length > 0 ? sections.being_arranged.length : null;
     const upcomingBadge = sections.upcoming.length > 0 ? sections.upcoming.length : null;
     const historyBadge = history.length > 0 ? history.length : null;
-    const celebratedMatch = sections.mutual[0];
-
     const renderContent = () => {
         if (activeSection === 'history') {
         if (loadingHistory || isHydratingSections) return <SectionSkeleton />;
@@ -270,12 +270,15 @@ export default function DatesScreen() {
 
             <DateMatchModal
                 visible={matchModalVisible}
-                matchId={celebratedMatch?.id}
-                callMatchId={celebratedMatch?.legacyMatchId}
-                theirFirstName={celebratedMatch?.withUser.firstName ?? ''}
-                theirPhoto={celebratedMatch?.withUser.profilePhoto}
+                matchId={celebrationMatch?.id}
+                callMatchId={celebrationMatch?.legacyMatchId}
+                theirFirstName={celebrationMatch?.withUser.firstName ?? ''}
+                theirPhoto={celebrationMatch?.withUser.profilePhoto}
                 myPhoto={myProfile?.profilePhoto ?? myProfile?.photos?.[0]}
-                onClose={() => setMatchModalVisible(false)}
+                onClose={() => {
+                    setMatchModalVisible(false);
+                    setCelebrationMatch(null);
+                }}
             />
 
             <FinishDecisionModal

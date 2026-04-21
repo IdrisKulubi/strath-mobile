@@ -67,6 +67,7 @@ export interface StartCallResult {
     vibeCheckId: string;
     partnerAvailability: 'online' | 'recently_active' | 'offline';
     notificationSent: boolean;
+    reusedExistingCall: boolean;
 }
 
 export function useMutualMatches() {
@@ -135,6 +136,8 @@ export function useStartMutualMatchCall() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
             queryClient.invalidateQueries({ queryKey: ['matches'] });
+            queryClient.invalidateQueries({ queryKey: ['candidatePairs', 'daily'] });
+            queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
         },
     });
 }

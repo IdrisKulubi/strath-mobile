@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
     timestamp,
     pgTable,
@@ -607,6 +607,10 @@ export const matches = pgTable(
     },
     (table) => ({
         userIdx: index("match_users_idx").on(table.user1Id, table.user2Id),
+        canonicalPairUniqueIdx: uniqueIndex("matches_canonical_pair_unique_idx").on(
+            sql`LEAST(${table.user1Id}, ${table.user2Id})`,
+            sql`GREATEST(${table.user1Id}, ${table.user2Id})`,
+        ),
         lastMessageIdx: index("last_message_idx").on(table.lastMessageAt),
     })
 );
@@ -1338,6 +1342,9 @@ export const vibeChecks = pgTable("vibe_checks", {
 }, (table) => ({
     matchIdx: index("vibe_checks_match_idx").on(table.matchId),
     statusIdx: index("vibe_checks_status_idx").on(table.status),
+    openMatchUniqueIdx: uniqueIndex("vibe_checks_open_match_unique_idx")
+        .on(table.matchId)
+        .where(sql`${table.status} in ('pending', 'scheduled', 'active')`),
 }));
 
 // Campus Pulse — anonymous social feed

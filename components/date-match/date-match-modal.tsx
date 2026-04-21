@@ -94,7 +94,9 @@ export function DateMatchModal({
             try {
                 if (matchId && !callMatchId) {
                     const result = await startMutualMatchCall(matchId);
-                    if (result.partnerAvailability === 'online') {
+                    if (result.reusedExistingCall) {
+                        toast.show({ message: 'This call is already ready. Joining now.', variant: 'default' });
+                    } else if (result.partnerAvailability === 'online') {
                         toast.show({ message: 'They look online. Starting your vibe check now.', variant: 'success' });
                     } else if (result.notificationSent) {
                         toast.show({ message: 'They are not online right now. We sent them a call notification.', variant: 'default' });
