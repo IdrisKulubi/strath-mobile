@@ -8,6 +8,7 @@ import {
     updateAdminSignupCapConfig,
     releaseAdminWaitlist,
     openAppToEveryone,
+    resetUserAdmission,
 } from "@/lib/actions/admin";
 import type { AdmissionStats, GenderBucket } from "@/lib/services/admission-service";
 
@@ -95,6 +96,8 @@ export function SignupCapPanel({
                 disabledUntilFlag={!enabled && totalWaitlisted(stats) === 0}
                 waitlistedCount={totalWaitlisted(stats)}
             />
+
+            <ResetAdmissionForm />
         </div>
     );
 }
@@ -296,5 +299,95 @@ function OpenToEveryoneButton({
                 {isPending ? "Opening..." : "Open the app to everyone"}
             </button>
         </div>
+    );
+}
+
+function ResetAdmissionForm() {
+    const [isPending, startTransition] = useTransition();
+    const [identifier, setIdentifier] = useState("");
+    const [result, setResult] = useState<
+        | { kind: "success"; message: string }
+        | { kind: "error"; message: string }
+        | null
+    >(null);
+    const router = useRouter();
+
+    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const trimmed = identifier.trim();
+        if (!trimmed) return;
+        if (
+            !window.confirm(
+                `Reset admission for "${trimmed}"? Their waitlist status will be cleared and the gate will run again with the current caps.`
+            )
+        ) {
+            return;
+        }
+
+        startTransition(async () => {
+            setResult(null);
+            try {
+                const res = await resetUserAdmission(trimmed);
+                const outcome = res.admission?.status ?? "pending";
+                setResult({
+                    kind: "success",
+                    message: res.reRan
+                        ? `Reset ${res.email}. New status: ${outcome}${
+                              res.admission?.status === "waitlisted" && res.admission.position
+                                  ? ` (position ${res.admission.position})`
+                                  : ""
+                          }.`
+                        : `Reset ${res.email}. They haven't finished onboarding yet — the gate will run when they do.`,
+                });
+                setIdentifier("");
+                router.refresh();
+            } catch (err) {
+                setResult({
+                    kind: "error",
+                    message: err instanceof Error ? err.message : "Something went wrong",
+                });
+            }
+        });
+    };
+
+    return (
+        <form
+            onSubmit={handleSubmit}
+            className="rounded-lg border border-white/10 bg-white/5 p-4"
+        >
+            <p className="text-sm font-semibold text-white">Reset a user's admission</p>
+            <p className="mt-1 text-xs text-gray-400">
+                Dev helper for testing the waitlist flow. Clears the user's waitlist status and
+                re-runs the gate with current caps. Safe to run on yourself — you can use this to
+                bounce between admitted and waitlisted as you tune caps.
+            </p>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <input
+                    type="text"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    placeholder="user@email.com or user id"
+                    className="flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:border-white/30 focus:outline-none"
+                />
+                <button
+                    type="submit"
+                    disabled={isPending || !identifier.trim()}
+                    className="rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/15 disabled:opacity-50"
+                >
+                    {isPending ? "Resetting..." : "Reset admission"}
+                </button>
+            </div>
+
+            {result && (
+                <p
+                    className={`mt-3 text-xs ${
+                        result.kind === "success" ? "text-emerald-300" : "text-rose-300"
+                    }`}
+                >
+                    {result.message}
+                </p>
+            )}
+        </form>
     );
 }

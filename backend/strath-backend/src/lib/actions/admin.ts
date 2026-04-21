@@ -22,6 +22,7 @@ import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 import { APP_FEATURE_KEYS, parseSignupCapConfig, type SignupCapConfig } from "@/lib/feature-flags";
 import {
     admitEveryoneFromWaitlist,
+    admitOrWaitlist,
     getAdmissionStats,
     releaseFromWaitlist,
     type GenderBucket,
@@ -905,6 +906,68 @@ export async function getAdminBroadcastHistory(limit = 30) {
         ...row,
         sentAt: row.sentAt.toISOString(),
     }));
+}
+
+/**
+ * Dev/testing helper: wipe a user's waitlist decision and re-run the admission
+ * gate immediately. Useful for testing the waitlist flow without needing a
+ * brand new account each time. Accepts either the user's email or user id.
+ */
+export async function resetUserAdmission(identifier: string) {
+    await requireAdmin();
+
+    const trimmed = identifier.trim();
+    if (!trimmed) throw new Error("Email or user ID is required");
+
+    const isEmail = trimmed.includes("@");
+    const targetUser = await db.query.user.findFirst({
+        where: isEmail ? eq(user.email, trimmed.toLowerCase()) : eq(user.id, trimmed),
+    });
+
+    if (!targetUser) {
+        throw new Error(`No user found for "${trimmed}"`);
+    }
+
+    const targetProfile = await db.query.profiles.findFirst({
+        where: eq(profiles.userId, targetUser.id),
+        columns: { id: true, profileCompleted: true, isComplete: true },
+    });
+
+    if (!targetProfile) {
+        throw new Error("User has no profile yet — nothing to reset");
+    }
+
+    // Wipe the waitlist decision.
+    await db
+        .update(profiles)
+        .set({
+            waitlistStatus: null,
+            waitlistPosition: null,
+            admittedAt: null,
+            updatedAt: new Date(),
+        })
+        .where(eq(profiles.userId, targetUser.id));
+
+    // If they've finished onboarding, re-run the gate so the new decision
+    // reflects the current cap settings right away. Otherwise leave them
+    // pending — they'll hit the gate naturally when they finish onboarding.
+    const hasCompletedProfile =
+        targetProfile.profileCompleted === true || targetProfile.isComplete === true;
+
+    let admission: Awaited<ReturnType<typeof admitOrWaitlist>> | null = null;
+    if (hasCompletedProfile) {
+        admission = await admitOrWaitlist(targetUser.id);
+    }
+
+    revalidatePath("/admin/feature-flags");
+    revalidatePath("/admin/users");
+
+    return {
+        email: targetUser.email,
+        userId: targetUser.id,
+        reRan: hasCompletedProfile,
+        admission,
+    };
 }
 
 export async function setUserRole(userId: string, role: "user" | "admin") {
