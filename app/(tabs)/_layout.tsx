@@ -12,7 +12,7 @@ import { getProfileRoute } from '@/lib/profile-access';
 export default function TabLayout() {
   const { colors } = useTheme();
   const { unreadMessages, datesAttention } = useNotificationCounts();
-  const { data: profile, isLoading } = useProfile();
+  const { data: profile, isLoading, isSuccess } = useProfile();
   const datesBadge = datesAttention ?? 0;
 
   if (isLoading) {
@@ -30,9 +30,11 @@ export default function TabLayout() {
     );
   }
 
-  const nextRoute = getProfileRoute(profile ?? null);
-  if (nextRoute !== '/(tabs)') {
-    return <Redirect href={nextRoute as any} />;
+  if (isSuccess) {
+    const nextRoute = getProfileRoute(profile);
+    if (nextRoute !== '/(tabs)') {
+      return <Redirect href={nextRoute as any} />;
+    }
   }
 
   return (
