@@ -23,6 +23,10 @@ export const NOTIFICATION_TYPES = {
     DATE_SCHEDULED: 'date_scheduled',                 // "Your date is set! Saturday 6PM 📍"
     FEEDBACK_PROMPT: 'feedback_prompt',               // "How was your date with Sarah? 💬"
     DATE_CANCELLED: 'date_cancelled',                 // "Your date with Sarah was cancelled."
+
+    // Soft-launch gating
+    ADMITTED_FROM_WAITLIST: 'admitted_from_waitlist', // "You're in 💛" — user promoted from waitlist to admitted
+    ADMIN_ANNOUNCEMENT: 'admin_announcement',         // Arbitrary broadcast from the admin console
 } as const;
 
 export type AppNotificationType = typeof NOTIFICATION_TYPES[keyof typeof NOTIFICATION_TYPES];

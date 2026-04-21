@@ -12,13 +12,21 @@ import {
     dateLocations,
     vibeChecks,
     appFeatureFlags,
+    adminBroadcasts,
 } from "@/db/schema";
-import { eq, desc, count, and, or, gte, lt, sql } from "drizzle-orm";
+import { eq, desc, count, and, or, gte, lt, sql, isNotNull } from "drizzle-orm";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 import { revalidatePath } from "next/cache";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
-import { APP_FEATURE_KEYS } from "@/lib/feature-flags";
+import { APP_FEATURE_KEYS, parseSignupCapConfig, type SignupCapConfig } from "@/lib/feature-flags";
+import {
+    admitEveryoneFromWaitlist,
+    getAdmissionStats,
+    releaseFromWaitlist,
+    type GenderBucket,
+} from "@/lib/services/admission-service";
+import { Expo, type ExpoPushMessage } from "expo-server-sdk";
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
@@ -627,27 +635,43 @@ export async function getAdminTimeSeries(days = 30) {
     return result;
 }
 
+const FLAG_DESCRIPTIONS: Record<string, string> = {
+    [APP_FEATURE_KEYS.demoLoginEnabled]:
+        "Allow the demo login button and demo session endpoint for App Review.",
+    [APP_FEATURE_KEYS.signupCapEnabled]:
+        "Gate new signups behind per-gender capacity limits during soft launch.",
+};
+
+const FLAG_LABELS: Record<string, string> = {
+    [APP_FEATURE_KEYS.demoLoginEnabled]: "Demo Login",
+    [APP_FEATURE_KEYS.signupCapEnabled]: "Signup Cap (Soft Launch)",
+};
+
+const SUPPORTED_FLAG_KEYS = new Set<string>(Object.values(APP_FEATURE_KEYS));
+
 export async function getAdminFeatureFlags() {
     await requireAdmin();
 
     const rows = await db.select().from(appFeatureFlags);
     const byKey = new Map(rows.map((row) => [row.key, row]));
 
-    return [
-        {
-            key: APP_FEATURE_KEYS.demoLoginEnabled,
-            label: "Demo Login",
-            description: "Controls whether the Apple review demo button appears on the mobile login screen and whether the demo auth endpoint accepts sign-ins.",
-            enabled: byKey.get(APP_FEATURE_KEYS.demoLoginEnabled)?.enabled ?? false,
-            updatedAt: byKey.get(APP_FEATURE_KEYS.demoLoginEnabled)?.updatedAt?.toISOString() ?? null,
-        },
-    ];
+    return Object.values(APP_FEATURE_KEYS).map((key) => {
+        const row = byKey.get(key);
+        return {
+            key,
+            label: FLAG_LABELS[key] ?? key,
+            description: row?.description ?? FLAG_DESCRIPTIONS[key] ?? "",
+            enabled: row?.enabled ?? false,
+            config: row?.config ?? {},
+            updatedAt: row?.updatedAt?.toISOString() ?? null,
+        };
+    });
 }
 
 export async function setAdminFeatureFlag(key: string, enabled: boolean) {
     const session = await requireAdmin();
 
-    if (key !== APP_FEATURE_KEYS.demoLoginEnabled) {
+    if (!SUPPORTED_FLAG_KEYS.has(key)) {
         throw new Error("Unsupported feature flag");
     }
 
@@ -657,10 +681,7 @@ export async function setAdminFeatureFlag(key: string, enabled: boolean) {
             key,
             enabled,
             updatedByUserId: session.user.id,
-            description:
-                key === APP_FEATURE_KEYS.demoLoginEnabled
-                    ? "Allow the demo login button and demo session endpoint for App Review."
-                    : null,
+            description: FLAG_DESCRIPTIONS[key] ?? null,
         })
         .onConflictDoUpdate({
             target: appFeatureFlags.key,
@@ -672,6 +693,218 @@ export async function setAdminFeatureFlag(key: string, enabled: boolean) {
         });
 
     revalidatePath("/admin/feature-flags");
+}
+
+// ─── Signup cap (soft launch) ────────────────────────────────────────────────
+
+export async function getAdminSignupCapStats() {
+    await requireAdmin();
+    return getAdmissionStats();
+}
+
+export async function updateAdminSignupCapConfig(formData: FormData) {
+    const session = await requireAdmin();
+
+    const parsed: SignupCapConfig = parseSignupCapConfig({
+        maxMale: formData.get("maxMale"),
+        maxFemale: formData.get("maxFemale"),
+        maxOther: formData.get("maxOther"),
+    });
+
+    await db
+        .insert(appFeatureFlags)
+        .values({
+            key: APP_FEATURE_KEYS.signupCapEnabled,
+            enabled: false,
+            description: FLAG_DESCRIPTIONS[APP_FEATURE_KEYS.signupCapEnabled],
+            config: parsed as unknown as Record<string, unknown>,
+            updatedByUserId: session.user.id,
+        })
+        .onConflictDoUpdate({
+            target: appFeatureFlags.key,
+            set: {
+                config: parsed as unknown as Record<string, unknown>,
+                updatedByUserId: session.user.id,
+                updatedAt: new Date(),
+            },
+        });
+
+    // If the cap was raised, try to release anyone now within the new limits.
+    const stats = await getAdmissionStats();
+    const buckets: GenderBucket[] = ["male", "female", "other"];
+    for (const bucket of buckets) {
+        const max =
+            bucket === "male"
+                ? parsed.maxMale
+                : bucket === "female"
+                ? parsed.maxFemale
+                : parsed.maxOther;
+        const admittedNow = stats.admitted[bucket];
+        const headroom = Math.max(0, max - admittedNow);
+        if (headroom > 0) {
+            await releaseFromWaitlist(headroom, bucket).catch((err) => {
+                console.error(`[admin] auto-release for ${bucket} failed:`, err);
+            });
+        }
+    }
+
+    revalidatePath("/admin/feature-flags");
+}
+
+export async function releaseAdminWaitlist(bucket: GenderBucket, countToRelease: number) {
+    await requireAdmin();
+    const n = Math.max(0, Math.min(countToRelease, 1000));
+    const result = await releaseFromWaitlist(n, bucket);
+    revalidatePath("/admin/feature-flags");
+    return result;
+}
+
+export async function openAppToEveryone() {
+    const session = await requireAdmin();
+
+    // Turn the cap flag off.
+    await db
+        .insert(appFeatureFlags)
+        .values({
+            key: APP_FEATURE_KEYS.signupCapEnabled,
+            enabled: false,
+            description: FLAG_DESCRIPTIONS[APP_FEATURE_KEYS.signupCapEnabled],
+            updatedByUserId: session.user.id,
+        })
+        .onConflictDoUpdate({
+            target: appFeatureFlags.key,
+            set: {
+                enabled: false,
+                updatedByUserId: session.user.id,
+                updatedAt: new Date(),
+            },
+        });
+
+    const released = await admitEveryoneFromWaitlist();
+    revalidatePath("/admin/feature-flags");
+    return released;
+}
+
+// ─── Admin broadcast push notifications ──────────────────────────────────────
+
+export type BroadcastAudience =
+    | "everyone"
+    | "admitted"
+    | "waitlisted"
+    | "guys"
+    | "ladies"
+    | "other";
+
+function audienceWhereClause(audience: BroadcastAudience) {
+    switch (audience) {
+        case "admitted":
+            return eq(profiles.waitlistStatus, "admitted");
+        case "waitlisted":
+            return eq(profiles.waitlistStatus, "waitlisted");
+        case "guys":
+            return eq(profiles.gender, "male");
+        case "ladies":
+            return eq(profiles.gender, "female");
+        case "other":
+            return sql`(${profiles.gender} IS NULL OR ${profiles.gender} NOT IN ('male','female'))`;
+        case "everyone":
+        default:
+            return undefined;
+    }
+}
+
+export async function getAdminBroadcastAudienceCount(audience: BroadcastAudience) {
+    await requireAdmin();
+
+    const base = db
+        .select({ cnt: count() })
+        .from(user)
+        .innerJoin(profiles, eq(profiles.userId, user.id))
+        .where(and(isNotNull(user.pushToken), audienceWhereClause(audience)));
+
+    const [{ cnt }] = await base;
+    return cnt;
+}
+
+export async function sendAdminBroadcast(formData: FormData) {
+    const session = await requireAdmin();
+
+    const title = String(formData.get("title") ?? "").trim();
+    const body = String(formData.get("body") ?? "").trim();
+    const audience = (String(formData.get("audience") ?? "everyone") as BroadcastAudience);
+
+    if (!title) throw new Error("Title is required");
+    if (!body) throw new Error("Message is required");
+
+    const where = audienceWhereClause(audience);
+
+    const recipients = await db
+        .select({ pushToken: user.pushToken })
+        .from(user)
+        .innerJoin(profiles, eq(profiles.userId, user.id))
+        .where(and(isNotNull(user.pushToken), where));
+
+    const tokens = recipients
+        .map((r) => r.pushToken)
+        .filter((t): t is string => typeof t === "string" && Expo.isExpoPushToken(t));
+
+    const expo = new Expo();
+    const messages: ExpoPushMessage[] = tokens.map((to) => ({
+        to,
+        title,
+        body,
+        sound: "default",
+        priority: "high",
+        data: { type: NOTIFICATION_TYPES.ADMIN_ANNOUNCEMENT },
+    }));
+
+    const chunks = expo.chunkPushNotifications(messages);
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const chunk of chunks) {
+        try {
+            const tickets = await expo.sendPushNotificationsAsync(chunk);
+            for (const ticket of tickets) {
+                if (ticket.status === "ok") successCount += 1;
+                else failureCount += 1;
+            }
+        } catch (err) {
+            console.error("[admin broadcast] chunk send failed:", err);
+            failureCount += chunk.length;
+        }
+    }
+
+    await db.insert(adminBroadcasts).values({
+        title,
+        body,
+        audience,
+        recipientCount: tokens.length,
+        successCount,
+        failureCount,
+        sentByUserId: session.user.id,
+    });
+
+    revalidatePath("/admin/broadcast");
+
+    return {
+        recipientCount: tokens.length,
+        successCount,
+        failureCount,
+    };
+}
+
+export async function getAdminBroadcastHistory(limit = 30) {
+    await requireAdmin();
+    const rows = await db
+        .select()
+        .from(adminBroadcasts)
+        .orderBy(desc(adminBroadcasts.sentAt))
+        .limit(limit);
+    return rows.map((row) => ({
+        ...row,
+        sentAt: row.sentAt.toISOString(),
+    }));
 }
 
 export async function setUserRole(userId: string, role: "user" | "admin") {

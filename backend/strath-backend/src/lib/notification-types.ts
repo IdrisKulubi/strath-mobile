@@ -21,6 +21,10 @@ export const NOTIFICATION_TYPES = {
     DATE_SCHEDULED: 'date_scheduled',
     FEEDBACK_PROMPT: 'feedback_prompt',
     DATE_CANCELLED: 'date_cancelled',
+
+    // Soft-launch gating
+    ADMITTED_FROM_WAITLIST: 'admitted_from_waitlist',
+    ADMIN_ANNOUNCEMENT: 'admin_announcement',
 } as const;
 
 export type NotificationType = typeof NOTIFICATION_TYPES[keyof typeof NOTIFICATION_TYPES];

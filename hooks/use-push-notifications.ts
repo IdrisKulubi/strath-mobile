@@ -93,6 +93,15 @@ function resolveRoute(data: NotificationPayload): string | null {
         case NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH:
             return '/(tabs)';
 
+        // Soft-launch: "You're in" push — land them at the root so the route
+        // guard picks the right screen once the profile refetches.
+        case NOTIFICATION_TYPES.ADMITTED_FROM_WAITLIST:
+            return '/';
+
+        // Generic admin announcements don't deep-link anywhere specific.
+        case NOTIFICATION_TYPES.ADMIN_ANNOUNCEMENT:
+            return null;
+
         default:
             return null;
     }

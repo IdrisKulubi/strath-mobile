@@ -14,7 +14,7 @@ import { getProfileRoute } from '@/lib/profile-access';
 
 const CACHE_KEY = 'strathspace_profile_cache_v1';
 
-export type CachedProfileRoute = '/onboarding' | '/verification' | '/(tabs)';
+export type CachedProfileRoute = '/onboarding' | '/verification' | '/waitlist' | '/(tabs)';
 
 export interface CachedProfileSnapshot {
     userId: string;

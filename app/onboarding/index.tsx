@@ -327,6 +327,15 @@ export default function OnboardingScreen() {
 
             console.log('[Onboarding] Profile saved successfully!');
 
+            // Soft-launch gating: if the backend placed this user on the waitlist,
+            // skip verification and drop them on the waitlist screen immediately.
+            // They'll finish verification later when they're admitted.
+            const admission = responseData?.data?.admission;
+            if (admission?.status === 'waitlisted') {
+                router.replace('/waitlist' as any);
+                return;
+            }
+
             // Continue into the face verification checkpoint before matchmaking access.
             router.replace('/verification' as any);
         } catch (error: any) {

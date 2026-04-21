@@ -58,6 +58,7 @@ function RootLayoutNav({ hasAuthToken }: { hasAuthToken: boolean }) {
         <Stack.Screen name="chat/[matchId]" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="verification" />
+        <Stack.Screen name="waitlist" options={{ gestureEnabled: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Modal' }} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="edit-profile" />

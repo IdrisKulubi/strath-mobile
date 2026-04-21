@@ -228,6 +228,16 @@ export const profiles = pgTable("profiles", {
     personalitySummary: text("personality_summary"), // AI-generated natural language summary
     embedding: vector("embedding", { dimension: 3072 }), // pgvector embedding for semantic search
     embeddingUpdatedAt: timestamp("embedding_updated_at"), // Track when embedding was last generated
+
+    // ============================================
+    // SOFT-LAUNCH GATING (signup cap / waitlist)
+    // ============================================
+    // "admitted" — user is allowed into the app
+    // "waitlisted" — profile is complete but cap was reached; holding until a slot opens
+    // null — not yet gated (profile still incomplete or feature off at the time)
+    waitlistStatus: text("waitlist_status").$type<"admitted" | "waitlisted" | null>(),
+    waitlistPosition: integer("waitlist_position"),
+    admittedAt: timestamp("admitted_at"),
 }, (table) => ({
     userIdIdx: index("profile_user_id_idx").on(table.userId),
     isVisibleIdx: index("profile_is_visible_idx").on(table.isVisible),
@@ -241,6 +251,9 @@ export const profiles = pgTable("profiles", {
     educationIdx: index("profile_education_idx").on(table.education),
     smokingIdx: index("profile_smoking_idx").on(table.smoking),
     politicsIdx: index("profile_politics_idx").on(table.politics),
+    waitlistStatusIdx: index("profile_waitlist_status_idx").on(table.waitlistStatus),
+    waitlistStatusGenderIdx: index("profile_waitlist_status_gender_idx").on(table.waitlistStatus, table.gender),
+    waitlistPositionIdx: index("profile_waitlist_position_idx").on(table.waitlistStatus, table.gender, table.waitlistPosition),
 }));
 
 export const faceVerificationSessions = pgTable("face_verification_sessions", {
@@ -1810,6 +1823,9 @@ export const appFeatureFlags = pgTable(
         key: text("key").primaryKey(),
         enabled: boolean("enabled").default(false).notNull(),
         description: text("description"),
+        // Free-form per-flag configuration (e.g. signup cap maxes). Shape is
+        // enforced at the application layer, not in the DB.
+        config: jsonb("config").$type<Record<string, unknown>>().default({}).notNull(),
         updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
         updatedByUserId: text("updated_by_user_id").references(() => user.id, { onDelete: "set null" }),
     },
@@ -1824,6 +1840,37 @@ export const appFeatureFlagsRelations = relations(appFeatureFlags, ({ one }) => 
         references: [user.id],
     }),
 }));
+
+// Admin broadcast history — record of every push announcement sent from the
+// admin console, for auditability and a "recent broadcasts" list in the UI.
+export const adminBroadcasts = pgTable(
+    "admin_broadcasts",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        title: text("title").notNull(),
+        body: text("body").notNull(),
+        audience: text("audience").notNull(),
+        recipientCount: integer("recipient_count").default(0).notNull(),
+        successCount: integer("success_count").default(0).notNull(),
+        failureCount: integer("failure_count").default(0).notNull(),
+        sentByUserId: text("sent_by_user_id").references(() => user.id, { onDelete: "set null" }),
+        sentAt: timestamp("sent_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        sentAtIdx: index("admin_broadcasts_sent_at_idx").on(table.sentAt),
+        sentByIdx: index("admin_broadcasts_sent_by_idx").on(table.sentByUserId),
+    })
+);
+
+export const adminBroadcastsRelations = relations(adminBroadcasts, ({ one }) => ({
+    sentBy: one(user, {
+        fields: [adminBroadcasts.sentByUserId],
+        references: [user.id],
+    }),
+}));
+
+export type AdminBroadcast = typeof adminBroadcasts.$inferSelect;
+export type NewAdminBroadcast = typeof adminBroadcasts.$inferInsert;
 
 // Mission type for templates
 export type MissionType = "coffee_meetup" | "song_exchange" | "photo_challenge" | "study_date" |

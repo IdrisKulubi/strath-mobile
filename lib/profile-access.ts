@@ -20,6 +20,10 @@ export function hasVerifiedFace(profile: Profile | null | undefined) {
     return profile.faceVerificationStatus === 'verified';
 }
 
+export function isWaitlisted(profile: Profile | null | undefined) {
+    return profile?.waitlist?.status === 'waitlisted';
+}
+
 export function getProfileRoute(profile: Profile | null | undefined) {
     if (!profile || !hasCompletedProfile(profile)) {
         return '/onboarding' as const;
@@ -27,6 +31,12 @@ export function getProfileRoute(profile: Profile | null | undefined) {
 
     if (!hasVerifiedFace(profile)) {
         return '/verification' as const;
+    }
+
+    // Soft-launch gate: if the user finished onboarding but is on the
+    // waitlist, park them on the waitlist screen until admitted.
+    if (isWaitlisted(profile)) {
+        return '/waitlist' as const;
     }
 
     return '/(tabs)' as const;

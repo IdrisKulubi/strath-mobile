@@ -14,6 +14,7 @@ import {
     ClipboardList,
     LayoutDashboard,
     MapPinned,
+    Megaphone,
     ShieldCheck,
     Sparkles,
     Users,
@@ -65,6 +66,7 @@ const groups: NavGroup[] = [
             { href: "/admin/history", label: "History", icon: Clock3 },
             { href: "/admin/locations", label: "Locations", icon: MapPinned },
             { href: "/admin/feature-flags", label: "Feature Flags", icon: Flag },
+            { href: "/admin/broadcast", label: "Broadcast", icon: Megaphone },
         ],
     },
     {

@@ -67,6 +67,18 @@ export interface Profile {
         email: string;
         image?: string;
     };
+    // Soft-launch gating — populated by /api/user/me
+    waitlist?: {
+        status: 'waitlisted';
+        position: number;
+        peopleAhead: number;
+        tier: 'imminent' | 'soon' | 'first_wave' | 'early_access';
+    } | null;
+    // Returned on PATCH after profileCompleted flips true
+    admission?: {
+        status: 'admitted' | 'waitlisted';
+        position: number | null;
+    } | null;
 }
 
 async function fetchProfile() {

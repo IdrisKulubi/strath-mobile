@@ -7,6 +7,7 @@ import { updateProfileSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { resetAgentContext } from "@/services/agent-context";
 import { syncProfilePhotoAssetsForUser } from "@/lib/services/profile-photo-assets";
+import { admitOrWaitlist, getWaitlistViewFor } from "@/lib/services/admission-service";
 import { ZodError } from "zod";
 
 type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
@@ -59,7 +60,15 @@ export async function GET(req: NextRequest) {
             return errorResponse(new Error("Profile not found"), 404);
         }
 
-        return successResponse(profile);
+        // Attach a lightweight waitlist view so the mobile client can route to
+        // the waitlist screen without a second round-trip. `null` for admitted
+        // or not-yet-gated users.
+        const waitlist = await getWaitlistViewFor(session.user.id).catch((err) => {
+            console.error("[GET /api/user/me] waitlist view failed:", err);
+            return null;
+        });
+
+        return successResponse({ ...profile, waitlist });
     } catch (error) {
         return errorResponse(error);
     }
@@ -205,7 +214,32 @@ export async function PATCH(req: NextRequest) {
             console.error("[PATCH /api/user/me] Failed to sync profile photo assets:", photoAssetError);
         });
 
-        return successResponse(resultProfile);
+        // Soft-launch admission gate: when a user flips profileCompleted/isComplete
+        // to true, decide whether they're admitted or placed on the waitlist.
+        // admitOrWaitlist is idempotent — repeat PATCH calls are safe.
+        const isCompletingProfile =
+            filteredData.profileCompleted === true || filteredData.isComplete === true;
+        let admission: Awaited<ReturnType<typeof admitOrWaitlist>> | null = null;
+        if (isCompletingProfile && resultProfile) {
+            try {
+                admission = await admitOrWaitlist(session.user.id);
+            } catch (admissionError) {
+                console.error("[PATCH /api/user/me] admission failed:", admissionError);
+                // Fail open — don't block the user on admission infra errors.
+                admission = { status: "admitted", position: null };
+            }
+        }
+
+        const waitlist = await getWaitlistViewFor(session.user.id).catch((err) => {
+            console.error("[PATCH /api/user/me] waitlist view failed:", err);
+            return null;
+        });
+
+        return successResponse({
+            ...resultProfile,
+            waitlist,
+            admission: admission ?? null,
+        });
     } catch (error: unknown) {
         console.error('[PATCH /api/user/me] Error:', error);
         
