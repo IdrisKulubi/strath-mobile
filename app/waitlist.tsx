@@ -14,32 +14,33 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Bell, Heart, InstagramLogo, ShareNetwork, Sparkle } from 'phosphor-react-native';
+import { InstagramLogo, ShareNetwork, TiktokLogo } from 'phosphor-react-native';
 
 import { useProfile } from '@/hooks/use-profile';
 import { getProfileRoute, isWaitlisted } from '@/lib/profile-access';
 
 const INSTAGRAM_URL = 'https://instagram.com/strathspace';
+const TIKTOK_URL = 'https://tiktok.com/@strathspace';
 
 const TIER_COPY: Record<
     NonNullable<NonNullable<ReturnType<typeof useProfile>['data']>['waitlist']>['tier'],
     { headline: string; eta: string }
 > = {
     imminent: {
-        headline: "You're next!",
-        eta: 'Minutes away — keep notifications on',
+        headline: "You're next in line",
+        eta: 'Just a few minutes away',
     },
     soon: {
-        headline: 'You\'re up soon',
-        eta: 'Usually within a day',
+        headline: "You're almost there",
+        eta: 'Typically within 24 hours',
     },
     first_wave: {
         headline: "You're in the first wave",
-        eta: 'A few days at most',
+        eta: 'A couple of days at most',
     },
     early_access: {
-        headline: "You're on the early-access list",
-        eta: "We'll let you in as soon as a spot opens",
+        headline: "You're on the list",
+        eta: "We'll get you in as soon as we can",
     },
 };
 
@@ -47,8 +48,6 @@ export default function WaitlistScreen() {
     const router = useRouter();
     const { data: profile, isLoading, refetch, isRefetching } = useProfile();
 
-    // If the user lands here already admitted (e.g. they got the "you're in"
-    // push while the screen was open), bounce them to the right place.
     useEffect(() => {
         if (!profile) return;
         if (!isWaitlisted(profile)) {
@@ -60,22 +59,24 @@ export default function WaitlistScreen() {
     }, [profile, router]);
 
     const waitlist = profile?.waitlist ?? null;
-    const tierCopy = useMemo(
-        () => (waitlist ? TIER_COPY[waitlist.tier] : null),
-        [waitlist],
-    );
+    const tierCopy = useMemo(() => (waitlist ? TIER_COPY[waitlist.tier] : null), [waitlist]);
 
     const handleFollowInstagram = useCallback(async () => {
-        await Haptics.selectionAsync().catch(() => {});
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         Linking.openURL(INSTAGRAM_URL).catch((err) => console.warn('Could not open IG:', err));
     }, []);
 
+    const handleFollowTiktok = useCallback(async () => {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        Linking.openURL(TIKTOK_URL).catch((err) => console.warn('Could not open TikTok:', err));
+    }, []);
+
     const handleShare = useCallback(async () => {
-        await Haptics.selectionAsync().catch(() => {});
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         try {
             await Share.share({
                 message:
-                    "I just joined Strathspace ✨ — it's invite-only right now. Join the waitlist with me: https://strathspace.com",
+                    "I'm on the waitlist for Strathspace. Join me: https://strathspace.com",
             });
         } catch (err) {
             console.warn('Share failed:', err);
@@ -107,77 +108,67 @@ export default function WaitlistScreen() {
                         <RefreshControl
                             refreshing={isRefetching}
                             onRefresh={refetch}
-                            tintColor="#f9a8d4"
-                            title="Checking your spot..."
-                            titleColor="rgba(255,255,255,0.5)"
+                            tintColor="#ffffff"
                         />
                     }
                 >
-                    <View style={styles.sparkleRow}>
-                        <Sparkle size={18} color="#f9a8d4" weight="fill" />
-                        <Sparkle size={12} color="#c4b5fd" weight="fill" />
-                        <Sparkle size={22} color="#f9a8d4" weight="fill" />
-                    </View>
-
-                    <Text style={styles.headline}>You&apos;re on the list</Text>
-
-                    <Text style={styles.intro}>
-                        We&apos;re letting people in a few at a time, so every match actually feels
-                        right. You&apos;ll be in super soon — we promise.
-                    </Text>
-
-                    {tierCopy && (
-                        <View style={styles.positionCard}>
-                            <View style={styles.positionIcon}>
-                                <Heart size={22} color="#f9a8d4" weight="fill" />
-                            </View>
-                            <View style={styles.positionBody}>
-                                <Text style={styles.positionHeadline}>{tierCopy.headline}</Text>
-                                <Text style={styles.positionEta}>{tierCopy.eta}</Text>
-                            </View>
-                        </View>
-                    )}
-
-                    <View style={styles.notificationHint}>
-                        <Bell size={16} color="rgba(255,255,255,0.7)" weight="fill" />
-                        <Text style={styles.notificationText}>
-                            We&apos;ll send you a notification the moment it&apos;s your turn.
+                    <View style={styles.headerContainer}>
+                        <Text style={styles.headline}>You&apos;re on the list.</Text>
+                        <Text style={styles.subtitle}>
+                            We&apos;re letting people in slowly to ensure every match feels right. 
+                            We&apos;ll notify you the moment it&apos;s your turn.
                         </Text>
                     </View>
 
-                    <View style={styles.ctaGroup}>
+                    {tierCopy && (
+                        <View style={styles.card}>
+                            <Text style={styles.cardHeadline}>{tierCopy.headline}</Text>
+                            <Text style={styles.cardEta}>{tierCopy.eta}</Text>
+                        </View>
+                    )}
+
+                    <View style={styles.actions}>
                         <Pressable
                             style={({ pressed }) => [
-                                styles.cta,
-                                styles.ctaPrimary,
-                                pressed && styles.ctaPressed,
+                                styles.socialBtn,
+                                pressed && styles.btnPressed,
                             ]}
                             onPress={handleFollowInstagram}
-                            accessibilityRole="button"
-                            accessibilityLabel="Follow Strathspace on Instagram"
                         >
-                            <InstagramLogo size={20} color="#fff" weight="fill" />
-                            <Text style={styles.ctaText}>Follow us on Instagram</Text>
+                            <View style={styles.btnContent}>
+                                <InstagramLogo size={22} color="#fff" weight="regular" />
+                                <Text style={styles.btnText}>Follow on Instagram</Text>
+                            </View>
                         </Pressable>
 
                         <Pressable
                             style={({ pressed }) => [
-                                styles.cta,
-                                styles.ctaSecondary,
-                                pressed && styles.ctaPressed,
+                                styles.socialBtn,
+                                pressed && styles.btnPressed,
+                            ]}
+                            onPress={handleFollowTiktok}
+                        >
+                            <View style={styles.btnContent}>
+                                <TiktokLogo size={22} color="#fff" weight="regular" />
+                                <Text style={styles.btnText}>Follow on TikTok</Text>
+                            </View>
+                        </Pressable>
+
+                        <Pressable
+                            style={({ pressed }) => [
+                                styles.secondaryBtn,
+                                pressed && styles.btnPressed,
                             ]}
                             onPress={handleShare}
-                            accessibilityRole="button"
-                            accessibilityLabel="Share with a friend"
                         >
-                            <ShareNetwork size={20} color="#fff" weight="regular" />
-                            <Text style={styles.ctaText}>Tell a friend</Text>
+                            <View style={styles.btnContent}>
+                                <ShareNetwork size={22} color="#fff" weight="regular" />
+                                <Text style={styles.secondaryBtnText}>Tell a friend</Text>
+                            </View>
                         </Pressable>
                     </View>
 
-                    <Text style={styles.footer}>
-                        Pull down to refresh · Check back anytime
-                    </Text>
+                    <Text style={styles.footer}>Pull down to refresh</Text>
                 </ScrollView>
             </SafeAreaView>
         </View>
@@ -194,10 +185,10 @@ const styles = StyleSheet.create({
     },
     scroll: {
         flexGrow: 1,
-        paddingHorizontal: 28,
-        paddingTop: 48,
-        paddingBottom: 48,
-        justifyContent: 'center',
+        paddingHorizontal: 32,
+        paddingTop: 100,
+        paddingBottom: 40,
+        alignItems: 'center',
     },
     loadingContainer: {
         flex: 1,
@@ -205,100 +196,86 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: '#1a0b2e',
     },
-    sparkleRow: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 8,
-        marginBottom: 24,
+    headerContainer: {
+        alignItems: 'center',
+        marginBottom: 48,
     },
     headline: {
         fontSize: 34,
         fontWeight: '800',
-        color: '#fff',
+        color: '#ffffff',
         textAlign: 'center',
         letterSpacing: -0.5,
     },
-    intro: {
+    subtitle: {
         marginTop: 16,
         fontSize: 16,
         lineHeight: 24,
         color: 'rgba(255,255,255,0.75)',
         textAlign: 'center',
-        paddingHorizontal: 8,
+        maxWidth: 300,
     },
-    positionCard: {
-        marginTop: 36,
-        padding: 20,
+    card: {
+        width: '100%',
+        alignItems: 'center',
+        paddingVertical: 32,
+        paddingHorizontal: 24,
         borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.08)',
+        backgroundColor: 'rgba(255,255,255,0.06)',
         borderWidth: 1,
-        borderColor: 'rgba(249,168,212,0.25)',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
+        borderColor: 'rgba(255,255,255,0.1)',
     },
-    positionIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: 'rgba(249,168,212,0.15)',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    positionBody: {
-        flex: 1,
-    },
-    positionHeadline: {
-        fontSize: 16,
+    cardHeadline: {
+        fontSize: 18,
         fontWeight: '700',
-        color: '#fff',
+        color: '#ffffff',
+        letterSpacing: -0.2,
+        marginBottom: 6,
     },
-    positionEta: {
-        marginTop: 2,
-        fontSize: 13,
-        color: 'rgba(255,255,255,0.65)',
+    cardEta: {
+        fontSize: 15,
+        color: 'rgba(255,255,255,0.6)',
     },
-    notificationHint: {
-        marginTop: 20,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        paddingHorizontal: 16,
-    },
-    notificationText: {
-        fontSize: 13,
-        color: 'rgba(255,255,255,0.7)',
-        textAlign: 'center',
-    },
-    ctaGroup: {
-        marginTop: 36,
+    actions: {
+        marginTop: 48,
+        width: '100%',
         gap: 12,
     },
-    cta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
+    socialBtn: {
+        width: '100%',
         paddingVertical: 16,
+        paddingHorizontal: 24,
         borderRadius: 14,
-    },
-    ctaPrimary: {
         backgroundColor: '#db2777',
     },
-    ctaSecondary: {
+    secondaryBtn: {
+        width: '100%',
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        borderRadius: 14,
         backgroundColor: 'rgba(255,255,255,0.1)',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.15)',
     },
-    ctaPressed: {
-        opacity: 0.85,
-        transform: [{ scale: 0.99 }],
+    btnContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
     },
-    ctaText: {
-        fontSize: 15,
+    btnText: {
+        fontSize: 16,
         fontWeight: '600',
-        color: '#fff',
+        color: '#ffffff',
+    },
+    secondaryBtnText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: 'rgba(255,255,255,0.9)',
+    },
+    btnPressed: {
+        opacity: 0.85,
+        transform: [{ scale: 0.98 }],
     },
     footer: {
         marginTop: 32,
