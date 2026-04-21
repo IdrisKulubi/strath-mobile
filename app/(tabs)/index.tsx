@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     View,
     StyleSheet,
@@ -24,7 +24,18 @@ import { EmptyMatches } from '@/components/home/empty-matches';
 import { DateHoldCard } from '@/components/home/date-hold-card';
 import { useToast } from '@/components/ui/toast';
 import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/decision-info-sheet';
+import { PendingDecisionBar } from '@/components/home/pending-decision-bar';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
+
+const UNDO_WINDOW_MS = 5000;
+
+interface PendingHomeDecision {
+    pairId: string;
+    decision: 'open_to_meet' | 'passed';
+    firstName: string;
+    expiresAt: number;
+    status: 'undoable' | 'committing';
+}
 
 function HomeSkeleton() {
     return (
@@ -66,6 +77,8 @@ export default function HomeScreen() {
     const respondToPair = useRespondToDailyPair();
     const [refreshing, setRefreshing] = useState(false);
     const [hasSeenMatchesToday, setHasSeenMatchesToday] = useState(false);
+    const [pendingDecision, setPendingDecision] = useState<PendingHomeDecision | null>(null);
+    const pendingCommitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         if (matches.length > 0) {
@@ -79,12 +92,109 @@ export default function HomeScreen() {
         }
     }, [error, router, verificationRequired]);
 
-    const allActioned = hasSeenMatchesToday && matches.length === 0 && !isLoading && !isRefetching;
+    const displayedMatches = useMemo(() => {
+        if (!pendingDecision) {
+            return matches;
+        }
+
+        return matches.flatMap((match) => {
+            if (match.pairId !== pendingDecision.pairId) {
+                return [match];
+            }
+
+            if (pendingDecision.decision === 'passed') {
+                return [];
+            }
+
+            return [{ ...match, currentUserDecision: 'open_to_meet' as const }];
+        });
+    }, [matches, pendingDecision]);
+
+    const allActioned = !pendingDecision && hasSeenMatchesToday && displayedMatches.length === 0 && !isLoading && !isRefetching;
 
     const activeMatchCount = useMemo(
-        () => matches.filter((match) => match.currentUserDecision === 'pending').length,
-        [matches]
+        () => displayedMatches.filter((match) => match.currentUserDecision === 'pending').length,
+        [displayedMatches]
     );
+
+    const clearPendingCommitTimeout = useCallback(() => {
+        if (pendingCommitTimeoutRef.current) {
+            clearTimeout(pendingCommitTimeoutRef.current);
+            pendingCommitTimeoutRef.current = null;
+        }
+    }, []);
+
+    const finalizeDecision = useCallback(async (decisionState: PendingHomeDecision) => {
+        setPendingDecision((current) => (
+            current?.pairId === decisionState.pairId
+                ? { ...current, status: 'committing' }
+                : current
+        ));
+
+        try {
+            await respondToPair.mutateAsync({
+                pairId: decisionState.pairId,
+                decision: decisionState.decision,
+            });
+
+            setPendingDecision((current) => (
+                current?.pairId === decisionState.pairId ? null : current
+            ));
+
+            if (decisionState.decision === 'open_to_meet') {
+                setInfoSheet({
+                    visible: true,
+                    type: 'open_to_meet',
+                    firstName: decisionState.firstName,
+                });
+            } else {
+                setInfoSheet({
+                    visible: true,
+                    type: 'pass',
+                    firstName: decisionState.firstName,
+                });
+            }
+        } catch (err) {
+            setPendingDecision((current) => (
+                current?.pairId === decisionState.pairId ? null : current
+            ));
+
+            if (
+                decisionState.decision === 'open_to_meet'
+                && err?.message?.includes('You have already responded to this pair')
+            ) {
+                setInfoSheet({
+                    visible: true,
+                    type: 'already_responded',
+                    firstName: decisionState.firstName,
+                });
+                return;
+            }
+
+            toast.show({
+                message: decisionState.decision === 'open_to_meet'
+                    ? 'Could not save your decision right now. Please try again.'
+                    : 'Could not pass on this pair right now. Please try again.',
+                variant: 'danger',
+            });
+        }
+    }, [respondToPair, toast]);
+
+    useEffect(() => {
+        if (!pendingDecision || pendingDecision.status !== 'undoable') {
+            clearPendingCommitTimeout();
+            return;
+        }
+
+        const remainingMs = Math.max(0, pendingDecision.expiresAt - Date.now());
+        pendingCommitTimeoutRef.current = setTimeout(() => {
+            void finalizeDecision(pendingDecision);
+        }, remainingMs);
+
+        return () => {
+            clearPendingCommitTimeout();
+        };
+    }, [clearPendingCommitTimeout, finalizeDecision, pendingDecision]);
 
     const handleRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -95,43 +205,42 @@ export default function HomeScreen() {
         }
     }, [refetch]);
 
+    const queueDecision = useCallback((match: DailyMatch, decision: PendingHomeDecision['decision']) => {
+        if (pendingDecision) {
+            toast.show({
+                message: 'Undo or wait a moment before choosing another profile.',
+                variant: 'warning',
+            });
+            return;
+        }
+
+        setPendingDecision({
+            pairId: match.pairId,
+            decision,
+            firstName: match.firstName,
+            expiresAt: Date.now() + UNDO_WINDOW_MS,
+            status: 'undoable',
+        });
+    }, [pendingDecision, toast]);
+
     const handleOpenToMeet = useCallback((match: DailyMatch) => {
-        respondToPair.mutate(
-            { pairId: match.pairId, decision: 'open_to_meet' },
-            {
-                onSuccess: () => {
-                    setInfoSheet({ visible: true, type: 'open_to_meet', firstName: match.firstName });
-                },
-                onError: (err) => {
-                    if (err?.message?.includes('You have already responded to this pair')) {
-                        setInfoSheet({ visible: true, type: 'already_responded', firstName: match.firstName });
-                    } else {
-                        toast.show({
-                            message: 'Could not save your decision right now. Please try again.',
-                            variant: 'danger',
-                        });
-                    }
-                },
-            }
-        );
-    }, [respondToPair, toast]);
+        queueDecision(match, 'open_to_meet');
+    }, [queueDecision]);
 
     const handlePass = useCallback((match: DailyMatch) => {
-        respondToPair.mutate(
-            { pairId: match.pairId, decision: 'passed' },
-            {
-                onSuccess: () => {
-                    setInfoSheet({ visible: true, type: 'pass', firstName: match.firstName });
-                },
-                onError: () => {
-                    toast.show({
-                        message: 'Could not pass on this pair right now. Please try again.',
-                        variant: 'danger',
-                    });
-                },
-            }
-        );
-    }, [respondToPair, toast]);
+        queueDecision(match, 'passed');
+    }, [queueDecision]);
+
+    const handleUndoPendingDecision = useCallback(() => {
+        clearPendingCommitTimeout();
+        setPendingDecision(null);
+    }, [clearPendingCommitTimeout]);
+
+    useEffect(() => {
+        return () => {
+            clearPendingCommitTimeout();
+        };
+    }, [clearPendingCommitTimeout]);
 
     return (
         <TabSwipeView route="/(tabs)">
@@ -139,25 +248,29 @@ export default function HomeScreen() {
             <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
             <ScrollView
                 style={styles.scroll}
-                contentContainerStyle={styles.content}
+                contentContainerStyle={[
+                    styles.content,
+                    pendingDecision?.status === 'undoable' && styles.contentWithUndo,
+                ]}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
                 showsVerticalScrollIndicator={false}
             >
                 <HomeHeader
                     firstName={profile?.firstName}
-                    matchCount={matches.length}
+                    matchCount={displayedMatches.length}
                 />
 
                 {isLoading ? (
                     <HomeSkeleton />
                 ) : hold ? (
                     <DateHoldCard hold={hold} />
-                ) : matches.length > 0 ? (
+                ) : displayedMatches.length > 0 ? (
                     <DailyMatchesList
-                        matches={matches}
-                onOpenToMeet={handleOpenToMeet}
-                onPass={handlePass}
-                onViewProfile={(match) => {
+                        matches={displayedMatches}
+                        onOpenToMeet={handleOpenToMeet}
+                        onPass={handlePass}
+                        actionsDisabled={!!pendingDecision}
+                        onViewProfile={(match) => {
                             setInfoSheet({ visible: true, type: 'view_profile', firstName: match.firstName, match });
                         }}
                     />
@@ -165,7 +278,7 @@ export default function HomeScreen() {
                     <EmptyMatches allActioned={allActioned} hasUpcomingQueued={hasUpcomingQueued} />
                 )}
 
-                {!isLoading && matches.length > 0 && activeMatchCount === 0 ? (
+                {!pendingDecision && !isLoading && displayedMatches.length > 0 && activeMatchCount === 0 ? (
                     <View style={[styles.allSentBanner, { backgroundColor: isDark ? colors.card : '#f5f5f5', borderColor: colors.border }]}>
                         <Text style={[styles.allSentTitle, { color: colors.foreground }]}>
                             Decisions locked in 😉 
@@ -176,6 +289,15 @@ export default function HomeScreen() {
                     </View>
                 ) : null}
             </ScrollView>
+
+            {pendingDecision?.status === 'undoable' ? (
+                <PendingDecisionBar
+                    decision={pendingDecision.decision}
+                    firstName={pendingDecision.firstName}
+                    expiresAt={pendingDecision.expiresAt}
+                    onUndo={handleUndoPendingDecision}
+                />
+            ) : null}
 
             <DecisionInfoSheet
                 visible={infoSheet.visible}
@@ -203,6 +325,9 @@ const styles = StyleSheet.create({
     },
     content: {
         paddingBottom: 28,
+    },
+    contentWithUndo: {
+        paddingBottom: 144,
     },
     skeletonWrap: {
         paddingHorizontal: 16,

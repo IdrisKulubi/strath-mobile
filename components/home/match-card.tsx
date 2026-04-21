@@ -25,6 +25,7 @@ interface MatchCardProps {
     onOpenToMeet: (match: DailyMatch) => void;
     onPass: (match: DailyMatch) => void;
     onViewProfile?: (match: DailyMatch) => void;
+    actionsDisabled?: boolean;
 }
 
 function buildIdentityLine(match: DailyMatch) {
@@ -43,7 +44,14 @@ function buildExpiryText(expiresAt: string) {
     return `This intro closes in about ${days} day${days === 1 ? '' : 's'}`;
 }
 
-export function MatchCard({ match, index, onOpenToMeet, onPass, onViewProfile }: MatchCardProps) {
+export function MatchCard({
+    match,
+    index,
+    onOpenToMeet,
+    onPass,
+    onViewProfile,
+    actionsDisabled = false,
+}: MatchCardProps) {
     const { colors, isDark } = useTheme();
     const router = useRouter();
     const identityLine = buildIdentityLine(match);
@@ -157,11 +165,16 @@ export function MatchCard({ match, index, onOpenToMeet, onPass, onViewProfile }:
 
                     <Animated.View style={[styles.ctaAskWrap, askAnimStyle]}>
                         <Pressable
-                            onPress={match.currentUserDecision === 'pending' ? handleOpenToMeet : undefined}
-                            disabled={match.currentUserDecision !== 'pending'}
+                            onPress={
+                                match.currentUserDecision === 'pending' && !actionsDisabled
+                                    ? handleOpenToMeet
+                                    : undefined
+                            }
+                            disabled={match.currentUserDecision !== 'pending' || actionsDisabled}
                             style={[
                                 styles.ctaAsk,
                                 match.currentUserDecision === 'open_to_meet' && styles.ctaAskSent,
+                                actionsDisabled && match.currentUserDecision === 'pending' && styles.ctaDisabled,
                             ]}
                         >
                             {match.currentUserDecision === 'open_to_meet' ? (
@@ -187,7 +200,11 @@ export function MatchCard({ match, index, onOpenToMeet, onPass, onViewProfile }:
 
                 {match.currentUserDecision === 'pending' && (
                     <Animated.View style={[styles.skipWrap, skipAnimStyle]}>
-                        <Pressable onPress={handlePass} style={styles.skipBtn}>
+                        <Pressable
+                            onPress={!actionsDisabled ? handlePass : undefined}
+                            disabled={actionsDisabled}
+                            style={[styles.skipBtn, actionsDisabled && styles.skipBtnDisabled]}
+                        >
                             <Text style={[styles.skipText, { color: colors.mutedForeground }]}>
                                 Pass
                             </Text>
@@ -321,6 +338,9 @@ const styles = StyleSheet.create({
     ctaAskSent: {
         backgroundColor: '#10b981',
     },
+    ctaDisabled: {
+        opacity: 0.55,
+    },
     ctaAskInner: {
         flex: 1,
         alignItems: 'center',
@@ -342,6 +362,9 @@ const styles = StyleSheet.create({
     skipBtn: {
         paddingVertical: 4,
         paddingHorizontal: 16,
+    },
+    skipBtnDisabled: {
+        opacity: 0.45,
     },
     skipText: {
         fontSize: 14,
