@@ -47,98 +47,96 @@ function maxForBucket(config: SignupCapConfig, bucket: GenderBucket) {
  * Idempotent: if the user already has a waitlist status, this simply returns
  * the existing one — safe to call on every profile save.
  *
- * Race-safety note: we wrap the read-then-write in a transaction, but because
- * we use neon-http (READ COMMITTED) the cap is best-effort. In the worst case
- * two near-simultaneous requests can both admit, so the actual admitted count
- * may overshoot the configured cap by the number of concurrent finishers. For
- * a soft launch this is totally acceptable — "100-ish" is fine.
+ * Race-safety note: neon-http doesn't support transactions. We run sequential
+ * queries and accept a best-effort cap. In the worst case two near-simultaneous
+ * requests can both admit, so the actual admitted count may overshoot the cap
+ * by the number of concurrent finishers. For a soft launch this is acceptable.
  */
 export async function admitOrWaitlist(userId: string): Promise<AdmissionResult> {
     const capFlag = await getSignupCapFlag();
 
-    return db.transaction(async (tx) => {
-        const profile = await tx.query.profiles.findFirst({
-            where: eq(profiles.userId, userId),
-            columns: {
-                id: true,
-                userId: true,
-                gender: true,
-                waitlistStatus: true,
-                waitlistPosition: true,
-            },
-        });
+    // Note: no transaction — neon-http driver limitation.
+    const profile = await db.query.profiles.findFirst({
+        where: eq(profiles.userId, userId),
+        columns: {
+            id: true,
+            userId: true,
+            gender: true,
+            waitlistStatus: true,
+            waitlistPosition: true,
+        },
+    });
 
-        if (!profile) {
-            throw new Error(`Cannot run admission for unknown profile: ${userId}`);
-        }
+    if (!profile) {
+        throw new Error(`Cannot run admission for unknown profile: ${userId}`);
+    }
 
-        // Already decided — idempotent return.
-        if (profile.waitlistStatus === "admitted") {
-            return { status: "admitted", position: null };
-        }
-        if (profile.waitlistStatus === "waitlisted") {
-            return { status: "waitlisted", position: profile.waitlistPosition ?? null };
-        }
+    // Already decided — idempotent return.
+    if (profile.waitlistStatus === "admitted") {
+        return { status: "admitted", position: null };
+    }
+    if (profile.waitlistStatus === "waitlisted") {
+        return { status: "waitlisted", position: profile.waitlistPosition ?? null };
+    }
 
-        // Cap is off → admit everyone.
-        if (!capFlag.enabled) {
-            await tx
-                .update(profiles)
-                .set({
-                    waitlistStatus: "admitted",
-                    waitlistPosition: null,
-                    admittedAt: new Date(),
-                    updatedAt: new Date(),
-                })
-                .where(eq(profiles.userId, userId));
-            return { status: "admitted", position: null };
-        }
-
-        const bucket = normalizeGenderBucket(profile.gender);
-        const max = maxForBucket(capFlag.config, bucket);
-
-        const [{ admittedCount }] = await tx
-            .select({ admittedCount: count() })
-            .from(profiles)
-            .where(and(eq(profiles.waitlistStatus, "admitted"), eq(profiles.gender, profile.gender ?? "")));
-
-        if (admittedCount < max) {
-            await tx
-                .update(profiles)
-                .set({
-                    waitlistStatus: "admitted",
-                    waitlistPosition: null,
-                    admittedAt: new Date(),
-                    updatedAt: new Date(),
-                })
-                .where(eq(profiles.userId, userId));
-            return { status: "admitted", position: null };
-        }
-
-        // Cap reached — put them on the waitlist at the tail of their gender queue.
-        const [{ maxPos }] = await tx
-            .select({ maxPos: sql<number | null>`max(${profiles.waitlistPosition})` })
-            .from(profiles)
-            .where(
-                and(
-                    eq(profiles.waitlistStatus, "waitlisted"),
-                    eq(profiles.gender, profile.gender ?? ""),
-                ),
-            );
-        const nextPosition = (maxPos ?? 0) + 1;
-
-        await tx
+    // Cap is off → admit everyone.
+    if (!capFlag.enabled) {
+        await db
             .update(profiles)
             .set({
-                waitlistStatus: "waitlisted",
-                waitlistPosition: nextPosition,
-                admittedAt: null,
+                waitlistStatus: "admitted",
+                waitlistPosition: null,
+                admittedAt: new Date(),
                 updatedAt: new Date(),
             })
             .where(eq(profiles.userId, userId));
+        return { status: "admitted", position: null };
+    }
 
-        return { status: "waitlisted", position: nextPosition };
-    });
+    const bucket = normalizeGenderBucket(profile.gender);
+    const max = maxForBucket(capFlag.config, bucket);
+
+    const [{ admittedCount }] = await db
+        .select({ admittedCount: count() })
+        .from(profiles)
+        .where(and(eq(profiles.waitlistStatus, "admitted"), eq(profiles.gender, profile.gender ?? "")));
+
+    if (admittedCount < max) {
+        await db
+            .update(profiles)
+            .set({
+                waitlistStatus: "admitted",
+                waitlistPosition: null,
+                admittedAt: new Date(),
+                updatedAt: new Date(),
+            })
+            .where(eq(profiles.userId, userId));
+        return { status: "admitted", position: null };
+    }
+
+    // Cap reached — put them on the waitlist at the tail of their gender queue.
+    const [{ maxPos }] = await db
+        .select({ maxPos: sql<number | null>`max(${profiles.waitlistPosition})` })
+        .from(profiles)
+        .where(
+            and(
+                eq(profiles.waitlistStatus, "waitlisted"),
+                eq(profiles.gender, profile.gender ?? ""),
+            ),
+        );
+    const nextPosition = (maxPos ?? 0) + 1;
+
+    await db
+        .update(profiles)
+        .set({
+            waitlistStatus: "waitlisted",
+            waitlistPosition: nextPosition,
+            admittedAt: null,
+            updatedAt: new Date(),
+        })
+        .where(eq(profiles.userId, userId));
+
+    return { status: "waitlisted", position: nextPosition };
 }
 
 /**
