@@ -27,6 +27,7 @@ import {
     releaseFromWaitlist,
     type GenderBucket,
 } from "@/lib/services/admission-service";
+import { syncMutualMatchFromDateMatch } from "@/lib/services/mutual-match-service";
 import { Expo, type ExpoPushMessage } from "expo-server-sdk";
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -403,6 +404,15 @@ export async function scheduleDate(formData: FormData) {
         })
         .where(eq(dateMatches.id, matchId));
 
+    // Keep the bridged mutualMatches row (mobile source of truth) in sync — flips
+    // Arranging -> Upcoming on the mobile Dates tab and updates the home hold card.
+    await syncMutualMatchFromDateMatch(matchId).catch((error) => {
+        console.error("[admin.scheduleDate] syncMutualMatchFromDateMatch failed", {
+            matchId,
+            error,
+        });
+    });
+
     logEvent(EVENT_TYPES.DATE_SCHEDULED, null, { matchId, venueName: location.name, locationId }).catch(() => {});
 
     const [userA, userB] = await Promise.all([
@@ -453,6 +463,16 @@ export async function updateDateMatchStatus(matchId: string, status: string) {
     await db.update(dateMatches)
         .set({ status: status as any })
         .where(eq(dateMatches.id, matchId));
+
+    // Mirror the new admin status onto the linked mutualMatches row so the mobile Dates
+    // tabs (Arranging / Upcoming) and home hold card reflect attendance / cancellations.
+    await syncMutualMatchFromDateMatch(matchId).catch((error) => {
+        console.error("[admin.updateDateMatchStatus] syncMutualMatchFromDateMatch failed", {
+            matchId,
+            status,
+            error,
+        });
+    });
 
     if (status === "attended") {
         logEvent(EVENT_TYPES.DATE_ATTENDED, null, { matchId }).catch(() => {});

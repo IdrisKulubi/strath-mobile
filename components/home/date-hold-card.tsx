@@ -376,10 +376,10 @@ function buildCopy(hold: MatchHold): HoldCopy {
                 statusIcon: 'chatbubble-ellipses-outline',
                 title: `Tell us about your date with ${name}`,
                 subtitle:
-                    'Your date is marked as completed. Share quick feedback so we can pick your next match.',
+                    'Your date is marked as completed. Leave feedback to continue receiving matches.',
                 footnote: hold.autoReleaseAt
-                    ? `Matching auto-resumes ${formatRelative(hold.autoReleaseAt)} if you don’t respond.`
-                    : 'Matching will auto-resume soon if you don’t respond.',
+                    ? `New matches stay paused until you respond, or auto-resume ${formatRelative(hold.autoReleaseAt)}.`
+                    : 'New matches stay paused until you respond, or auto-resume soon.',
                 primaryCta: { label: 'Leave feedback', kind: 'feedback' },
             };
     }

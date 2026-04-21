@@ -219,6 +219,113 @@ export function mapLegacyDateStatus(
     return "call_pending";
 }
 
+/**
+ * Pure mapping from admin-facing `dateMatches.status` (+ call/confirmation flags) to the
+ * corresponding `mutualMatches.status` value used by the mobile app.
+ *
+ * Returns `null` when no deterministic transition should be applied (e.g. a `pending_setup`
+ * date without confirmations — in that case we preserve whatever the mutual row currently has
+ * so we don't accidentally regress `call_pending` back to an earlier state).
+ */
+export function mapDateMatchStatusToMutualStatus(dm: {
+    status: typeof dateMatches.$inferSelect["status"];
+    callCompleted: boolean | null;
+    userAConfirmed: boolean | null;
+    userBConfirmed: boolean | null;
+}): "being_arranged" | "upcoming" | "completed" | "cancelled" | null {
+    if (dm.status === "scheduled") return "upcoming";
+    if (dm.status === "attended") return "completed";
+    if (dm.status === "cancelled" || dm.status === "no_show") return "cancelled";
+    if (
+        dm.status === "pending_setup"
+        && dm.callCompleted
+        && dm.userAConfirmed
+        && dm.userBConfirmed
+    ) {
+        return "being_arranged";
+    }
+    return null;
+}
+
+export interface SyncMutualFromDateMatchResult {
+    synced: boolean;
+    mutualMatchId?: string;
+    previousStatus?: typeof mutualMatches.$inferSelect["status"];
+    nextStatus?: typeof mutualMatches.$inferSelect["status"];
+    reason?: "no_date_match" | "no_linked_mutual" | "no_change";
+}
+
+/**
+ * Keep the bridged `mutualMatches` row in sync with its linked `dateMatches`. Admin actions
+ * (schedule date, mark attended / cancelled / no_show) only touch `dateMatches`, so the mobile
+ * app — which reads `mutualMatches.status`, `venueName`, `venueAddress`, and `scheduledAt` for
+ * the Arranging / Upcoming tabs and the home hold card — would otherwise stay behind.
+ *
+ * Idempotent. Safe to call from any admin mutation or reconciliation job.
+ */
+export async function syncMutualMatchFromDateMatch(
+    dateMatchId: string,
+): Promise<SyncMutualFromDateMatchResult> {
+    const dm = await db.query.dateMatches.findFirst({
+        where: eq(dateMatches.id, dateMatchId),
+    });
+    if (!dm) return { synced: false, reason: "no_date_match" };
+
+    const mutualRow = await db.query.mutualMatches.findFirst({
+        where: eq(mutualMatches.legacyDateMatchId, dateMatchId),
+    });
+    if (!mutualRow) return { synced: false, reason: "no_linked_mutual" };
+
+    const mapped = mapDateMatchStatusToMutualStatus(dm);
+    const nextStatus = (mapped ?? mutualRow.status) as typeof mutualMatches.$inferSelect["status"];
+
+    const currentScheduledMs = mutualRow.scheduledAt?.getTime() ?? null;
+    const nextScheduledMs = dm.scheduledAt?.getTime() ?? null;
+
+    const statusChanged = nextStatus !== mutualRow.status;
+    const venueChanged = (mutualRow.venueName ?? null) !== (dm.venueName ?? null);
+    const addressChanged = (mutualRow.venueAddress ?? null) !== (dm.venueAddress ?? null);
+    const timeChanged = currentScheduledMs !== nextScheduledMs;
+
+    if (!statusChanged && !venueChanged && !addressChanged && !timeChanged) {
+        return {
+            synced: false,
+            mutualMatchId: mutualRow.id,
+            previousStatus: mutualRow.status,
+            nextStatus,
+            reason: "no_change",
+        };
+    }
+
+    const update: Partial<typeof mutualMatches.$inferInsert> = {
+        venueName: dm.venueName ?? null,
+        venueAddress: dm.venueAddress ?? null,
+        scheduledAt: dm.scheduledAt ?? null,
+        updatedAt: new Date(),
+    };
+    if (statusChanged) update.status = nextStatus;
+
+    await db.update(mutualMatches).set(update).where(eq(mutualMatches.id, mutualRow.id));
+
+    console.log("[mutual-match] sync from date_match", {
+        mutualMatchId: mutualRow.id,
+        dateMatchId,
+        previousStatus: mutualRow.status,
+        nextStatus,
+        statusChanged,
+        venueChanged,
+        addressChanged,
+        timeChanged,
+    });
+
+    return {
+        synced: true,
+        mutualMatchId: mutualRow.id,
+        previousStatus: mutualRow.status,
+        nextStatus,
+    };
+}
+
 export async function listMutualDatesForUser(userId: string): Promise<MutualDatesItem[]> {
     const [mutualRows, legacyRows] = await Promise.all([
         db
