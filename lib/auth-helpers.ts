@@ -35,6 +35,11 @@ export interface StoredAuthSnapshot {
     source: 'better-auth' | 'apple';
 }
 
+function normalizeSessionToken(token: string | null | undefined): string | null {
+    if (!token) return null;
+    return token.split('.')[0] || null;
+}
+
 async function readBetterAuthSessionData(): Promise<StoredSessionData | null> {
     try {
         const raw = await SecureStore.getItemAsync(BA_SESSION_DATA_KEY);
@@ -43,7 +48,15 @@ async function readBetterAuthSessionData(): Promise<StoredSessionData | null> {
         // Better Auth stores the /get-session response shape which contains
         // { session, user }. Empty cache is sometimes written as "{}".
         if (parsed?.session?.token && parsed?.user?.id) {
-            return parsed as StoredSessionData;
+            const token = normalizeSessionToken(parsed.session.token);
+            if (!token) return null;
+            return {
+                ...parsed,
+                session: {
+                    ...parsed.session,
+                    token,
+                },
+            } as StoredSessionData;
         }
         return null;
     } catch {
@@ -66,7 +79,7 @@ async function readBetterAuthCookieToken(): Promise<string | null> {
             // Better Auth's cookie value can be signed as
             // "<db-session-token>.<signature>". API bearer calls need the raw
             // DB token because the backend fallback checks session.token.
-            return entry.value.split('.')[0] || null;
+            return normalizeSessionToken(entry.value);
         }
         return null;
     } catch {
@@ -79,7 +92,16 @@ async function readAppleSession(): Promise<StoredSessionData | null> {
         const raw = await SecureStore.getItemAsync(APPLE_SESSION_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw) as StoredSessionData;
-        if (parsed?.session?.token && parsed?.user?.id) return parsed;
+        const token = normalizeSessionToken(parsed?.session?.token);
+        if (token && parsed?.user?.id) {
+            return {
+                ...parsed,
+                session: {
+                    ...parsed.session,
+                    token,
+                },
+            };
+        }
         return null;
     } catch {
         return null;
@@ -145,7 +167,7 @@ export async function getAuthToken(): Promise<string | null> {
 
     // Last-resort legacy key, in case the Apple flow wrote the token on its own
     const legacy = await SecureStore.getItemAsync(APPLE_TOKEN_KEY);
-    return legacy || null;
+    return normalizeSessionToken(legacy);
 }
 
 /**

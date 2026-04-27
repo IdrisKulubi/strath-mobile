@@ -7,12 +7,13 @@ import { HapticTab } from '@/components/haptic-tab';
 import { useTheme } from '@/hooks/use-theme';
 import { useNotificationCounts, formatBadgeCount } from '@/hooks/use-notification-counts';
 import { useProfile } from '@/hooks/use-profile';
+import { isApiError, isAuthExpiredError } from '@/lib/api-client';
 import { getProfileRoute } from '@/lib/profile-access';
 
 export default function TabLayout() {
   const { colors } = useTheme();
   const { unreadMessages, datesAttention } = useNotificationCounts();
-  const { data: profile, isLoading, isSuccess } = useProfile();
+  const { data: profile, error: profileError, isError: isProfileError, isLoading, isSuccess } = useProfile();
   const datesBadge = datesAttention ?? 0;
 
   if (isLoading) {
@@ -34,6 +35,20 @@ export default function TabLayout() {
     const nextRoute = getProfileRoute(profile);
     if (nextRoute !== '/(tabs)') {
       return <Redirect href={nextRoute as any} />;
+    }
+  }
+
+  if (isProfileError) {
+    if (isAuthExpiredError(profileError) || (profileError instanceof Error && profileError.message === 'Not authenticated')) {
+      return <Redirect href="/(auth)/login" />;
+    }
+
+    if (
+      isApiError(profileError) &&
+      profileError.status === 404 &&
+      profileError.message.toLowerCase().includes('profile not found')
+    ) {
+      return <Redirect href="/onboarding" />;
     }
   }
 

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-helpers';
-import { apiFetch } from '@/lib/api-client';
+import { apiFetch, isApiError, isAuthExpiredError } from '@/lib/api-client';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.strathspace.com';
 
@@ -134,6 +134,12 @@ export function useProfile() {
     const query = useQuery({
         queryKey: ['profile'],
         queryFn: fetchProfile,
+        retry: (failureCount, error) => {
+            if (isAuthExpiredError(error)) return false;
+            if (isApiError(error) && (error.status === 401 || error.status === 404)) return false;
+            if (error instanceof Error && error.message === 'Not authenticated') return false;
+            return failureCount < 1;
+        },
     });
 
     const mutation = useMutation({
