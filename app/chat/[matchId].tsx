@@ -20,7 +20,6 @@ import { useUnmatch } from '@/hooks/use-unmatch';
 import { MessageBubble, ChatInput, ChatHeader } from '@/components/chat';
 import { SafetyToolkitModal } from '@/components/chat/safety-toolkit-modal';
 import { BlockReportModal } from '@/components/discover/block-report-modal';
-import { VibeCheckPrompt } from '@/components/vibe-check';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
     useAnimatedStyle,
@@ -278,14 +277,7 @@ export default function ChatScreen() {
                             onMorePress={() => setIsSafetyModalVisible(true)}
                         />
 
-                        {/* ── Vibe Check Prompt ── */}
-                        {!!matchId && (
-                            <VibeCheckPrompt
-                                matchId={matchId}
-                                partnerFirstName={partner?.profile?.firstName ?? partner?.name?.split(' ')[0]}
-                                compact
-                            />
-                        )}
+                       
 
                         <KeyboardAvoidingView
                             style={styles.keyboardView}

@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { profiles } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -8,42 +7,12 @@ import { successResponse, errorResponse } from "@/lib/api-response";
 import { resetAgentContext } from "@/services/agent-context";
 import { syncProfilePhotoAssetsForUser } from "@/lib/services/profile-photo-assets";
 import { admitOrWaitlist, getWaitlistViewFor } from "@/lib/services/admission-service";
+import { getSessionWithBearerFallback } from "@/lib/security";
 import { ZodError } from "zod";
-
-type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
 
 export async function GET(req: NextRequest) {
     try {
-        let session: AuthSession = await auth.api.getSession({ headers: req.headers });
-
-        // Fallback: Manual token check if getSession fails (e.g. Bearer token issue)
-        if (!session) {
-            const authHeader = req.headers.get('authorization');
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                const token = authHeader.split(' ')[1];
-
-                // Import session table dynamically to avoid circular deps if any, or just use db
-                const { session: sessionTable } = await import("@/db/schema");
-
-                const dbSession = await db.query.session.findFirst({
-                    where: eq(sessionTable.token, token),
-                    with: {
-                        user: true
-                    }
-                });
-
-                if (dbSession) {
-                    const now = new Date();
-                    if (dbSession.expiresAt > now) {
-                        // Construct a session object compatible with what we need
-                        session = {
-                            session: dbSession,
-                            user: dbSession.user
-                        } as unknown as AuthSession;
-                    }
-                }
-            }
-        }
+        const session = await getSessionWithBearerFallback(req);
 
         if (!session) {
             return errorResponse(new Error("Unauthorized"), 401);
@@ -76,37 +45,7 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
     try {
-        let session: AuthSession = await auth.api.getSession({ headers: req.headers });
-
-        // Fallback: Manual token check if getSession fails
-        if (!session) {
-            const authHeader = req.headers.get('authorization');
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                const token = authHeader.split(' ')[1];
-                const { session: sessionTable } = await import("@/db/schema");
-                const dbSession = await db.query.session.findFirst({
-                    where: eq(sessionTable.token, token),
-                    with: { user: true }
-                });
-
-                if (dbSession) {
-                    const now = new Date();
-                    if (dbSession.expiresAt > now) {
-                        session = {
-                            session: dbSession,
-                            user: dbSession.user
-                        } as unknown as AuthSession;
-                    } else {
-                        console.error('[PATCH /api/user/me] Session expired');
-                        return errorResponse(new Error("Session expired. Please log in again."), 401);
-                    }
-                } else {
-                    console.error('[PATCH /api/user/me] Token not found in database');
-                }
-            } else {
-                console.error('[PATCH /api/user/me] No authorization header');
-            }
-        }
+        const session = await getSessionWithBearerFallback(req);
 
         if (!session) {
             return errorResponse(new Error("Unauthorized. Please log in again."), 401);
