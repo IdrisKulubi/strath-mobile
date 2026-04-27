@@ -115,6 +115,8 @@ export function MatchCard({
                         uri={match.profilePhoto}
                         style={styles.photo}
                         contentFit="cover"
+                        priority="high"
+                        allowDownscaling={false}
                     />
                 ) : (
                     <View style={[styles.photo, styles.photoFallback, { backgroundColor: colors.muted }]}>
@@ -122,7 +124,8 @@ export function MatchCard({
                     </View>
                 )}
                 <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.75)']}
+                    colors={['transparent', 'rgba(0,0,0,0.14)', 'rgba(0,0,0,0.7)']}
+                    locations={[0, 0.45, 1]}
                     style={styles.photoGradient}
                     pointerEvents="none"
                 />
@@ -236,11 +239,12 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         bottom: 0,
-        height: 180,
+        height: 220,
     },
     photo: {
         width: '100%',
         height: '100%',
+        backgroundColor: '#111827',
     },
     photoFallback: {
         alignItems: 'center',

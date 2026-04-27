@@ -18,6 +18,7 @@ import {
 } from '../../components/onboarding';
 import { useImageUpload } from '@/hooks/use-image-upload';
 import { getAuthToken, clearSession, getCurrentUser } from '@/lib/auth-helpers';
+import { setCachedProfile } from '@/lib/session-cache';
 
 // Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=Personality, 8=Lifestyle, 9=OpeningLine, 10=ProfileDetails, 11=Celebration
 type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
@@ -38,7 +39,7 @@ export default function OnboardingScreen() {
         locationLatitude: '',
         locationLongitude: '',
         locationPermissionStatus: 'unknown',
-        university: 'Strathmore University',
+        university: '',
         course: '',
         yearOfStudy: '',
         age: '',
@@ -326,6 +327,9 @@ export default function OnboardingScreen() {
             }
 
             console.log('[Onboarding] Profile saved successfully!');
+            if (responseData?.data?.userId) {
+                await setCachedProfile(responseData.data.userId, responseData.data);
+            }
 
             // Soft-launch gating: if the backend placed this user on the waitlist,
             // skip verification and drop them on the waitlist screen immediately.
@@ -512,6 +516,7 @@ export default function OnboardingScreen() {
                 return (
                     <ProfileDetailsStep
                         data={{
+                            university: formData.university,
                             course: formData.course,
                             education: formData.education,
                             politics: formData.politics,

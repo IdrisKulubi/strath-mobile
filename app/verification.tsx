@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -13,6 +13,7 @@ import {
     View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -25,6 +26,7 @@ import {
 } from '@/hooks/use-face-verification';
 import { useProfile } from '@/hooks/use-profile';
 import { hasVerifiedFace } from '@/lib/profile-access';
+import { setCachedProfile } from '@/lib/session-cache';
 import { useToast } from '@/components/ui/toast';
 
 const UPLOAD_STAGES = [
@@ -70,6 +72,7 @@ const PROCESSING_STAGES = [
 
 export default function VerificationScreen() {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const { show } = useToast();
     const { data: profile, isLoading: isProfileLoading, refetch: refetchProfile } = useProfile();
     const {
@@ -88,6 +91,7 @@ export default function VerificationScreen() {
     const [resultStateDismissed, setResultStateDismissed] = useState(false);
     const resultScale = useState(() => new Animated.Value(0.92))[0];
     const resultOpacity = useState(() => new Animated.Value(0))[0];
+    const exitToTabsInFlightRef = useRef(false);
 
     const profilePhotoUrls = useMemo(
         () => (profile?.photos ?? []).filter((photo: string | undefined | null): photo is string => !!photo).slice(0, 4),
@@ -99,16 +103,73 @@ export default function VerificationScreen() {
         [latestSession?.results],
     );
 
-    useEffect(() => {
-        if (!isProfileLoading && profile && hasVerifiedFace(profile)) {
-            router.replace('/' as any);
-        }
-    }, [isProfileLoading, profile, router]);
-
     const status = latestSession?.status ?? profile?.faceVerificationStatus ?? 'not_started';
     const isProcessing = status === 'processing';
     const canRetry = status === 'retry_required' || status === 'failed';
-    const showSuccessState = status === 'verified';
+
+    const sessionVerified = latestSession?.status === 'verified';
+    const profileVerified = Boolean(profile && hasVerifiedFace(profile));
+    const shouldExitToTabs =
+        !isProfileLoading &&
+        !isSessionLoading &&
+        Boolean(profile) &&
+        (profileVerified || sessionVerified);
+
+    useEffect(() => {
+        if (!shouldExitToTabs) return;
+        if (exitToTabsInFlightRef.current) return;
+        exitToTabsInFlightRef.current = true;
+
+        void (async () => {
+            try {
+                const refreshed = await refetchProfile();
+                const p = refreshed.data ?? profile;
+                if (!p?.userId) {
+                    exitToTabsInFlightRef.current = false;
+                    return;
+                }
+
+                let next = hasVerifiedFace(p)
+                    ? p
+                    : sessionVerified
+                      ? {
+                            ...p,
+                            faceVerificationStatus: 'verified' as const,
+                            faceVerifiedAt:
+                                latestSession?.completedAt ??
+                                p.faceVerifiedAt ??
+                                new Date().toISOString(),
+                        }
+                      : null;
+
+                if (!next || !hasVerifiedFace(next)) {
+                    exitToTabsInFlightRef.current = false;
+                    return;
+                }
+
+                queryClient.setQueryData(['profile'], next);
+                await setCachedProfile(next.userId, next);
+                router.replace('/(tabs)' as any);
+            } catch {
+                exitToTabsInFlightRef.current = false;
+            }
+        })();
+    }, [
+        shouldExitToTabs,
+        sessionVerified,
+        profile,
+        latestSession?.completedAt,
+        latestSession?.status,
+        queryClient,
+        router,
+        refetchProfile,
+    ]);
+
+    const showSuccessState =
+        !isProfileLoading &&
+        !isSessionLoading &&
+        status === 'verified' &&
+        !shouldExitToTabs;
     const showRetryState = canRetry && !resultStateDismissed;
     const retryGuidance = useMemo(
         () =>
@@ -301,8 +362,15 @@ export default function VerificationScreen() {
     const handleContinueToApp = async () => {
         try {
             setIsContinuingToApp(true);
-            await refetchProfile();
-            router.replace('/' as any);
+            const refreshed = await refetchProfile();
+            const nextProfile = hasVerifiedFace(refreshed.data)
+                ? refreshed.data
+                : getVerifiedProfileForRouting();
+            if (nextProfile?.userId) {
+                queryClient.setQueryData(['profile'], nextProfile);
+                await setCachedProfile(nextProfile.userId, nextProfile);
+            }
+            router.replace('/(tabs)' as any);
         } finally {
             setIsContinuingToApp(false);
         }
@@ -325,6 +393,28 @@ export default function VerificationScreen() {
     const verifiedAtLabel = profile?.faceVerifiedAt
         ? formatVerificationTimestamp(profile.faceVerifiedAt)
         : null;
+    const getVerifiedProfileForRouting = () => {
+        if (!profile) return null;
+        if (hasVerifiedFace(profile)) return profile;
+        if (latestSession?.status !== 'verified') return null;
+
+        return {
+            ...profile,
+            faceVerificationStatus: 'verified' as const,
+            faceVerifiedAt: latestSession.completedAt ?? profile.faceVerifiedAt ?? new Date().toISOString(),
+        };
+    };
+
+    if (shouldExitToTabs) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <LinearGradient colors={['#0f0d23', '#1a0d2e', '#0f0d23']} style={StyleSheet.absoluteFill} />
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#f472b6" />
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -335,19 +425,24 @@ export default function VerificationScreen() {
                         style={[
                             styles.resultCard,
                             styles.resultCardSuccess,
+                            styles.successCard,
                             {
                                 opacity: resultOpacity,
                                 transform: [{ scale: resultScale }],
                             },
                         ]}
                     >
-                        <View style={[styles.resultIconWrap, styles.resultIconWrapSuccess]}>
-                            <CheckCircle size={54} color="#34d399" weight="fill" />
+                        <View style={styles.successHeader}>
+                            <View style={[styles.resultIconWrap, styles.resultIconWrapSuccess, styles.successIconWrap]}>
+                                <CheckCircle size={34} color="#34d399" weight="fill" />
+                            </View>
+                            <View style={styles.successCopy}>
+                                <Text style={[styles.resultTitle, styles.successTitle]}>You&apos;re verified</Text>
+                                <Text style={[styles.resultBody, styles.successBody]}>
+                                    Your profile is cleared and ready for the app.
+                                </Text>
+                            </View>
                         </View>
-                        <Text style={styles.resultTitle}>You&apos;re verified</Text>
-                        <Text style={styles.resultBody}>
-                            Nice. Your profile is cleared and ready for the app.
-                        </Text>
                         <VerificationStatsBlock
                             session={latestSession}
                             profileRetryCount={profileRetryCount}
@@ -355,7 +450,7 @@ export default function VerificationScreen() {
                             variant="success"
                         />
                         <Pressable
-                            style={[styles.primaryButton, isBusy && styles.primaryButtonDisabled]}
+                            style={[styles.primaryButton, styles.successPrimaryButton, isBusy && styles.primaryButtonDisabled]}
                             onPress={handleContinueToApp}
                             disabled={isBusy}
                         >
@@ -676,6 +771,25 @@ function VerificationStatsBlock({
             : variant === 'success'
               ? styles.statsBlockSuccess
               : styles.statsBlockRetry;
+    const shouldShowExpandedDetails = variant !== 'success';
+    const successStats = [
+        { label: 'Attempt', value: String(session.attemptNumber) },
+        typeof profileRetryCount === 'number'
+            ? { label: 'Retries', value: String(profileRetryCount) }
+            : null,
+        summary.comparedPhotoCount !== null
+            ? { label: 'Photos compared', value: String(summary.comparedPhotoCount) }
+            : null,
+        summary.matchedPhotoCount !== null
+            ? { label: 'Strong matches', value: String(summary.matchedPhotoCount) }
+            : null,
+        summary.minimumMatchCount !== null
+            ? { label: 'Required', value: String(summary.minimumMatchCount) }
+            : null,
+        summary.similarityThreshold !== null
+            ? { label: 'Threshold', value: `${summary.similarityThreshold}%` }
+            : null,
+    ].filter((item): item is { label: string; value: string } => !!item);
 
     return (
         <View style={containerStyle}>
@@ -683,54 +797,65 @@ function VerificationStatsBlock({
                 {variant === 'inline' ? 'Latest check details' : 'How this check scored'}
             </Text>
 
-            <View style={styles.statsGrid}>
-                <View style={styles.statsGridCell}>
-                    <Text style={styles.statsGridLabel}>Attempt</Text>
-                    <Text style={styles.statsGridValue}>{session.attemptNumber}</Text>
+            {variant === 'success' ? (
+                <View style={styles.successStatsGrid}>
+                    {successStats.slice(0, 6).map((item) => (
+                        <View key={item.label} style={styles.successStatsCell}>
+                            <Text style={styles.successStatsValue}>{item.value}</Text>
+                            <Text style={styles.successStatsLabel}>{item.label}</Text>
+                        </View>
+                    ))}
                 </View>
-                {typeof profileRetryCount === 'number' ? (
+            ) : (
+                <View style={styles.statsGrid}>
                     <View style={styles.statsGridCell}>
-                        <Text style={styles.statsGridLabel}>Retries so far</Text>
-                        <Text style={styles.statsGridValue}>{profileRetryCount}</Text>
+                        <Text style={styles.statsGridLabel}>Attempt</Text>
+                        <Text style={styles.statsGridValue}>{session.attemptNumber}</Text>
                     </View>
-                ) : null}
-                {summary.comparedPhotoCount !== null ? (
-                    <View style={styles.statsGridCell}>
-                        <Text style={styles.statsGridLabel}>Photos compared</Text>
-                        <Text style={styles.statsGridValue}>{summary.comparedPhotoCount}</Text>
-                    </View>
-                ) : null}
-                {summary.matchedPhotoCount !== null ? (
-                    <View style={styles.statsGridCell}>
-                        <Text style={styles.statsGridLabel}>Strong matches</Text>
-                        <Text style={styles.statsGridValue}>{summary.matchedPhotoCount}</Text>
-                    </View>
-                ) : null}
-                {summary.minimumMatchCount !== null ? (
-                    <View style={styles.statsGridCell}>
-                        <Text style={styles.statsGridLabel}>Matches required</Text>
-                        <Text style={styles.statsGridValue}>{summary.minimumMatchCount}</Text>
-                    </View>
-                ) : null}
-                {summary.similarityThreshold !== null ? (
-                    <View style={styles.statsGridCell}>
-                        <Text style={styles.statsGridLabel}>Match threshold</Text>
-                        <Text style={styles.statsGridValue}>{summary.similarityThreshold}%</Text>
-                    </View>
-                ) : null}
-                {summary.sourceFacesDetected !== null ? (
-                    <View style={styles.statsGridCell}>
-                        <Text style={styles.statsGridLabel}>Faces in selfie</Text>
-                        <Text style={styles.statsGridValue}>{summary.sourceFacesDetected}</Text>
-                    </View>
-                ) : null}
-                {summary.usableProfilePhotoCount !== null ? (
-                    <View style={styles.statsGridCell}>
-                        <Text style={styles.statsGridLabel}>Profile photos used</Text>
-                        <Text style={styles.statsGridValue}>{summary.usableProfilePhotoCount}</Text>
-                    </View>
-                ) : null}
-            </View>
+                    {typeof profileRetryCount === 'number' ? (
+                        <View style={styles.statsGridCell}>
+                            <Text style={styles.statsGridLabel}>Retries so far</Text>
+                            <Text style={styles.statsGridValue}>{profileRetryCount}</Text>
+                        </View>
+                    ) : null}
+                    {summary.comparedPhotoCount !== null ? (
+                        <View style={styles.statsGridCell}>
+                            <Text style={styles.statsGridLabel}>Photos compared</Text>
+                            <Text style={styles.statsGridValue}>{summary.comparedPhotoCount}</Text>
+                        </View>
+                    ) : null}
+                    {summary.matchedPhotoCount !== null ? (
+                        <View style={styles.statsGridCell}>
+                            <Text style={styles.statsGridLabel}>Strong matches</Text>
+                            <Text style={styles.statsGridValue}>{summary.matchedPhotoCount}</Text>
+                        </View>
+                    ) : null}
+                    {summary.minimumMatchCount !== null ? (
+                        <View style={styles.statsGridCell}>
+                            <Text style={styles.statsGridLabel}>Matches required</Text>
+                            <Text style={styles.statsGridValue}>{summary.minimumMatchCount}</Text>
+                        </View>
+                    ) : null}
+                    {summary.similarityThreshold !== null ? (
+                        <View style={styles.statsGridCell}>
+                            <Text style={styles.statsGridLabel}>Match threshold</Text>
+                            <Text style={styles.statsGridValue}>{summary.similarityThreshold}%</Text>
+                        </View>
+                    ) : null}
+                    {summary.sourceFacesDetected !== null ? (
+                        <View style={styles.statsGridCell}>
+                            <Text style={styles.statsGridLabel}>Faces in selfie</Text>
+                            <Text style={styles.statsGridValue}>{summary.sourceFacesDetected}</Text>
+                        </View>
+                    ) : null}
+                    {summary.usableProfilePhotoCount !== null ? (
+                        <View style={styles.statsGridCell}>
+                            <Text style={styles.statsGridLabel}>Profile photos used</Text>
+                            <Text style={styles.statsGridValue}>{summary.usableProfilePhotoCount}</Text>
+                        </View>
+                    ) : null}
+                </View>
+            )}
 
             {session.thresholdConfigVersion ? (
                 <Text style={styles.statsFootnote}>Ruleset: {session.thresholdConfigVersion}</Text>
@@ -744,7 +869,7 @@ function VerificationStatsBlock({
                 <Text style={styles.statsFootnote}>Verified on profile {verifiedAtLabel}</Text>
             ) : null}
 
-            {hasPerPhoto ? (
+            {shouldShowExpandedDetails && hasPerPhoto ? (
                 <View style={styles.statsComparisonSection}>
                     <Text style={styles.statsSectionTitle}>Each profile photo</Text>
                     {results.map((row, index) => (
@@ -785,7 +910,7 @@ function VerificationStatsBlock({
                 </View>
             ) : null}
 
-            {hasFailures ? (
+            {shouldShowExpandedDetails && hasFailures ? (
                 <View style={styles.statsFailureSection}>
                     <Text style={styles.statsSectionTitle}>Why it stopped</Text>
                     {failureReasons.map((code) => (
@@ -1340,6 +1465,27 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(16, 185, 129, 0.08)',
         borderColor: 'rgba(52, 211, 153, 0.22)',
     },
+    successCard: {
+        minHeight: 0,
+        justifyContent: 'flex-start',
+        paddingHorizontal: 18,
+        paddingVertical: 18,
+        gap: 14,
+    },
+    successHeader: {
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+    },
+    successCopy: {
+        flex: 1,
+        gap: 4,
+    },
+    successIconWrap: {
+        width: 64,
+        height: 64,
+    },
     resultCardRetry: {
         backgroundColor: 'rgba(251, 113, 133, 0.08)',
         borderColor: 'rgba(251, 113, 133, 0.22)',
@@ -1363,12 +1509,23 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         textAlign: 'center',
     },
+    successTitle: {
+        fontSize: 28,
+        lineHeight: 32,
+        textAlign: 'left',
+    },
     resultBody: {
         color: '#cbd5e1',
         fontSize: 15,
         lineHeight: 23,
         textAlign: 'center',
         maxWidth: 320,
+    },
+    successBody: {
+        fontSize: 14,
+        lineHeight: 20,
+        textAlign: 'left',
+        maxWidth: undefined,
     },
     resultBodyMuted: {
         color: '#94a3b8',
@@ -1438,6 +1595,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 30,
+    },
+    successPrimaryButton: {
+        width: '100%',
+        minHeight: 54,
+        paddingVertical: 0,
+        marginBottom: 0,
+        marginTop: 2,
     },
     primaryButtonInResultStack: {
         marginBottom: 0,
@@ -1556,13 +1720,13 @@ const styles = StyleSheet.create({
     },
     statsBlockSuccess: {
         width: '100%',
-        marginTop: 4,
-        padding: 16,
-        borderRadius: 20,
+        marginTop: 0,
+        padding: 14,
+        borderRadius: 18,
         backgroundColor: 'rgba(15, 23, 42, 0.45)',
         borderWidth: 1,
         borderColor: 'rgba(52, 211, 153, 0.2)',
-        gap: 12,
+        gap: 10,
     },
     statsBlockRetry: {
         width: '100%',
@@ -1614,6 +1778,36 @@ const styles = StyleSheet.create({
         color: '#f8fafc',
         fontSize: 18,
         fontWeight: '800',
+    },
+    successStatsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    successStatsCell: {
+        width: '48%',
+        flexGrow: 1,
+        minHeight: 58,
+        borderRadius: 14,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        backgroundColor: 'rgba(148, 163, 184, 0.1)',
+        justifyContent: 'center',
+    },
+    successStatsValue: {
+        color: '#f8fafc',
+        fontSize: 22,
+        lineHeight: 24,
+        fontWeight: '800',
+    },
+    successStatsLabel: {
+        marginTop: 3,
+        color: '#94a3b8',
+        fontSize: 10,
+        lineHeight: 13,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     statsFootnote: {
         color: '#94a3b8',

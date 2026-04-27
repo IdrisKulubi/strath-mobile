@@ -60,7 +60,10 @@ export default function Index() {
 
                 if (hasCachedRoute) {
                     // Optimistic route — user is in the app immediately.
-                    route(cached!.route as Parameters<typeof router.replace>[0]);
+                    const cachedRoute = cached!.route;
+                    const optimisticTarget =
+                        cachedRoute === '/verification' && cached!.faceVerified ? '/(tabs)' : cachedRoute;
+                    route(optimisticTarget as Parameters<typeof router.replace>[0]);
 
                     // Refresh profile in the background. Failure is harmless.
                     void refreshProfileQuietly(stored.userId);
