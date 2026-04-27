@@ -20,6 +20,7 @@ import {
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
 import { expireQueuedPairsForUser, isUserOnMatchHold } from "@/lib/services/match-hold-service";
+import { resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
@@ -602,6 +603,14 @@ export async function generateCandidatePairsForUser(userId: string) {
         return [];
     }
 
+    const matchExcludedUserIds = await resolveMatchExcludedUserIds();
+    if (matchExcludedUserIds.has(userId)) {
+        console.log("[candidate-pairs] SKIP: user excluded from daily matchmaking (admin / staff list)", {
+            userId,
+        });
+        return [];
+    }
+
     const [blockedIds, matchedIds, usersIPassedIds, existingPairMap, waitContext] = await Promise.all([
         getBlockedUserIds(userId),
         getMatchedUserIds(userId),
@@ -620,6 +629,7 @@ export async function generateCandidatePairsForUser(userId: string) {
         ...blockedIds,
         ...matchedIds,
         ...usersIPassedIds,
+        ...matchExcludedUserIds,
     ];
 
     const candidateProfiles = await readDb.query.profiles.findMany({
@@ -840,6 +850,11 @@ export async function generateCandidatePairsForUser(userId: string) {
 }
 
 export async function getActiveCandidatePairsForUser(userId: string) {
+    const matchExcludedUserIds = await resolveMatchExcludedUserIds();
+    if (matchExcludedUserIds.has(userId)) {
+        return [];
+    }
+
     const now = new Date();
     const expiryMs = CANDIDATE_PAIR_EXPIRY_HOURS * 60 * 60 * 1000;
     const createdAtCutoff = new Date(now.getTime() - expiryMs);
@@ -863,6 +878,9 @@ export async function getActiveCandidatePairsForUser(userId: string) {
     const result = await Promise.all(
         rows.map(async (pair) => {
             const otherUserId = getOtherUserId(pair, userId);
+            if (matchExcludedUserIds.has(otherUserId)) {
+                return null;
+            }
             const profile = await readDb.query.profiles.findFirst({
                 where: eq(profiles.userId, otherUserId),
                 with: { user: true },

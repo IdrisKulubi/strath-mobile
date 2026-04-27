@@ -13,6 +13,7 @@ import { redis } from "@/lib/redis";
 import { ensureMissionForMatch } from "@/lib/services/mission-service";
 import { getSessionWithBearerFallback } from "@/lib/security";
 import { requireMatchmakingAccess } from "@/lib/services/profile-access";
+import { resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
 
 async function logPulseEvent(type: string, message: string, data?: any) {
     try {
@@ -48,6 +49,14 @@ export async function POST(req: NextRequest) {
         const { targetUserId, action } = swipeSchema.parse(body);
 
         const isLike = action === "like";
+
+        const matchExcludedUserIds = await resolveMatchExcludedUserIds();
+        if (isLike && (matchExcludedUserIds.has(session.user.id) || matchExcludedUserIds.has(targetUserId))) {
+            return errorResponse(
+                new Error("Matchmaking is disabled for staff or admin test accounts."),
+                403,
+            );
+        }
 
         // Check if user already swiped on this person (prevent duplicates)
         const existingSwipe = await db.query.swipes.findFirst({
