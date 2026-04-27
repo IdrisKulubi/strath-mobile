@@ -63,7 +63,10 @@ async function readBetterAuthCookieToken(): Promise<string | null> {
             if (!name.includes('session_token')) continue;
             if (!entry?.value) continue;
             if (entry.expires && new Date(entry.expires) < now) continue;
-            return entry.value;
+            // Better Auth's cookie value can be signed as
+            // "<db-session-token>.<signature>". API bearer calls need the raw
+            // DB token because the backend fallback checks session.token.
+            return entry.value.split('.')[0] || null;
         }
         return null;
     } catch {

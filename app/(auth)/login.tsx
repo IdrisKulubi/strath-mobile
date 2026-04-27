@@ -23,10 +23,23 @@ import { GoogleLogo } from '@/components/icons/google-logo';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { authClient, signIn } from '@/lib/auth-client';
-import { clearSession } from '@/lib/auth-helpers';
+import { clearSession, getStoredAuth } from '@/lib/auth-helpers';
 import { useTheme } from '@/hooks/use-theme';
 
 const CTA_H = 50;
+
+async function waitForStoredAuth(timeoutMs = 3000) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    await authClient.getSession();
+    const stored = await getStoredAuth();
+    if (stored?.token) return stored;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  return null;
+}
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
@@ -86,9 +99,11 @@ export default function LoginScreen() {
         });
         return;
       }
-      // Android: deep link can be handled slightly after the browser closes; refresh session cache.
-      const refreshed = await authClient.getSession();
-      if (refreshed.data?.session || result.data) {
+      // Android can finish the deep-link handoff slightly after the browser closes.
+      // Do not treat Better Auth's redirect payload as a completed login until
+      // the Expo storage layer has actually persisted a token.
+      const storedAuth = await waitForStoredAuth();
+      if (storedAuth?.token) {
         toast.show({ message: 'Welcome to StrathSpace', variant: 'success' });
         router.replace('/');
       } else {

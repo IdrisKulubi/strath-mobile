@@ -31,7 +31,7 @@ export async function getSessionWithBearerFallback(req: NextRequest): Promise<Ap
         return null;
     }
 
-    const token = authHeader.slice("Bearer ".length).trim();
+    const token = authHeader.slice("Bearer ".length).trim().split(".")[0];
     if (!token) {
         return null;
     }

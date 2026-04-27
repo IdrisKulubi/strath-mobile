@@ -161,7 +161,8 @@ export default function HomeScreen() {
 
             if (
                 decisionState.decision === 'open_to_meet'
-                && err?.message?.includes('You have already responded to this pair')
+                && err instanceof Error
+                && err.message.includes('You have already responded to this pair')
             ) {
                 setInfoSheet({
                     visible: true,

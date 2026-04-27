@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { getStoredAuth } from '@/lib/auth-helpers';
 import { getCachedProfile, setCachedProfile } from '@/lib/session-cache';
-import { apiFetch, isAuthExpiredError, isNetworkError } from '@/lib/api-client';
+import { apiFetch, isApiError, isAuthExpiredError, isNetworkError } from '@/lib/api-client';
 import { useTheme } from '@/hooks/use-theme';
 import { getProfileRoute } from '@/lib/profile-access';
 
@@ -89,6 +89,15 @@ export default function Index() {
                         // show their own "try again" states.
                         console.log('[Index] Network error during profile check; entering app optimistically');
                         route('/(tabs)');
+                        return;
+                    }
+                    if (
+                        isApiError(error) &&
+                        error.status === 404 &&
+                        error.message.toLowerCase().includes('profile not found')
+                    ) {
+                        await setCachedProfile(stored.userId, null);
+                        route('/onboarding');
                         return;
                     }
                     // Unknown non-auth server error (5xx, 404, etc). Same as
