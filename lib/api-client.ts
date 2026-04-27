@@ -99,7 +99,8 @@ function isAuthFailureBody(body: unknown): { code: string; message: string } | n
     if (
         msgLower.includes('session expired') ||
         msgLower.includes('invalid token') ||
-        msgLower.includes('token expired')
+        msgLower.includes('token expired') ||
+        msgLower === 'unauthorized'
     ) {
         return { code: 'SESSION_EXPIRED', message };
     }

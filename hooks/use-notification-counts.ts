@@ -2,8 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { getAuthToken } from '@/lib/auth-helpers';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+import { apiFetch } from '@/lib/api-client';
 
 interface NotificationCounts {
     unopenedMatches: number;
@@ -23,21 +22,7 @@ async function fetchNotificationCounts(): Promise<NotificationCounts> {
         return { unopenedMatches: 0, unreadMessages: 0, datesAttention: 0, total: 0 };
     }
 
-    const response = await fetch(`${API_URL}/api/notifications/counts`, {
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
-    });
-
-    if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        console.error('[NotificationCounts] Error:', response.status, text);
-        // Throw so React Query keeps the last successful value instead of overwriting with zeros
-        throw new Error(`Failed to fetch notification counts (${response.status})`);
-    }
-
-    const result = await response.json();
+    const result = await apiFetch<{ data?: NotificationCounts }>('/api/notifications/counts');
     const data = result.data || { unopenedMatches: 0, unreadMessages: 0, datesAttention: 0, total: 0 };
     console.log('[NotificationCounts] Fetched:', data);
     return data;
@@ -55,19 +40,9 @@ async function markMatchAsOpened(matchId: string): Promise<void> {
         return;
     }
 
-    const response = await fetch(`${API_URL}/api/matches/${matchId}/opened`, {
+    await apiFetch(`/api/matches/${matchId}/opened`, {
         method: 'PATCH',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
     });
-
-    console.log('[NotificationCounts] Mark as opened response:', response.status);
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        console.error('[NotificationCounts] Mark as opened failed:', error);
-    }
 }
 
 /**
