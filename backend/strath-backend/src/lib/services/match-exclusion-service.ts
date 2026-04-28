@@ -10,7 +10,7 @@ import { profiles, user } from "@/db/schema";
  * Extend via env `MATCH_EXCLUDED_FROM_POOL_EMAILS` (comma-separated, case-insensitive).
  * Any `user.role === "admin"` or `profiles.role === "admin"` is also excluded.
  */
-const DEFAULT_EXCLUDED_MATCH_EMAILS = ["kulubiidris@gmail.com", "maria.muthoni@strathmore.edu"] as const;
+const DEFAULT_EXCLUDED_MATCH_EMAILS = ["kulubiidris@gmail.com", "maria.muthoni@strathmore.edu", "jasminemaria784@gmail.com"] as const;
 
 function parseExtraExcludedEmailsFromEnv(): string[] {
     const raw = process.env.MATCH_EXCLUDED_FROM_POOL_EMAILS?.trim();
