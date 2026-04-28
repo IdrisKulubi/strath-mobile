@@ -94,7 +94,20 @@ async function fetchProfile() {
     }
 
     console.log('[useProfile] Fetching from:', `${API_URL}/api/user/me`);
-    const data = await apiFetch<{ data?: Profile }>('/api/user/me');
+    let data: { data?: Profile };
+    try {
+        data = await apiFetch<{ data?: Profile }>('/api/user/me');
+    } catch (error) {
+        if (
+            isApiError(error) &&
+            error.status === 404 &&
+            error.message.toLowerCase().includes('profile not found')
+        ) {
+            console.log('[useProfile] Profile not found; routing to onboarding');
+            return null;
+        }
+        throw error;
+    }
     console.log('[useProfile] Data received:', data?.data ? 'Has profile' : 'No profile data');
 
     // Helper to ensure URLs have protocol

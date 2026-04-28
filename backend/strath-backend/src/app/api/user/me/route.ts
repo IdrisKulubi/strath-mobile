@@ -26,7 +26,10 @@ export async function GET(req: NextRequest) {
         });
 
         if (!profile) {
-            return errorResponse(new Error("Profile not found"), 404);
+            console.info("[GET /api/user/me] Authenticated user has no profile yet; returning onboarding state", {
+                userId: session.user.id,
+            });
+            return successResponse(null);
         }
 
         // Attach a lightweight waitlist view so the mobile client can route to

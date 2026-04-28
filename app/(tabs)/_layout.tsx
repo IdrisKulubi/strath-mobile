@@ -1,5 +1,5 @@
-import { Redirect, Tabs } from 'expo-router';
-import React from 'react';
+import { Redirect, Tabs, useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Platform, View } from 'react-native';
 
@@ -11,10 +11,18 @@ import { isApiError, isAuthExpiredError } from '@/lib/api-client';
 import { getProfileRoute } from '@/lib/profile-access';
 
 export default function TabLayout() {
+  const router = useRouter();
   const { colors } = useTheme();
   const { unreadMessages, datesAttention } = useNotificationCounts();
   const { data: profile, error: profileError, isError: isProfileError, isLoading, isSuccess } = useProfile();
   const datesBadge = datesAttention ?? 0;
+  const nextRoute = isSuccess ? getProfileRoute(profile) : null;
+
+  useEffect(() => {
+    if (nextRoute && nextRoute !== '/(tabs)') {
+      router.replace(nextRoute as any);
+    }
+  }, [nextRoute, router]);
 
   if (isLoading) {
     return (
@@ -32,7 +40,6 @@ export default function TabLayout() {
   }
 
   if (isSuccess) {
-    const nextRoute = getProfileRoute(profile);
     if (nextRoute !== '/(tabs)') {
       return <Redirect href={nextRoute as any} />;
     }

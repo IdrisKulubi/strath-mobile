@@ -24,6 +24,9 @@ import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { authClient, signIn } from '@/lib/auth-client';
 import { clearSession, getStoredAuth } from '@/lib/auth-helpers';
+import { apiFetch, isApiError, isAuthExpiredError, isNetworkError } from '@/lib/api-client';
+import { getProfileRoute } from '@/lib/profile-access';
+import { setCachedProfile } from '@/lib/session-cache';
 import { useTheme } from '@/hooks/use-theme';
 
 const CTA_H = 50;
@@ -39,6 +42,48 @@ async function waitForStoredAuth(timeoutMs = 3000) {
   }
 
   return null;
+}
+
+async function routeAfterAuth(timeoutMs = 8000) {
+  const startedAt = Date.now();
+  let storedAuth = await getStoredAuth();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (!storedAuth?.token || !storedAuth.userId) {
+      await authClient.getSession();
+      storedAuth = await getStoredAuth();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      continue;
+    }
+
+    try {
+      const response = await apiFetch<{ data?: any }>('/api/user/me', { timeoutMs: 6000 });
+      const profile = response?.data ?? null;
+      await setCachedProfile(storedAuth.userId, profile);
+      return getProfileRoute(profile);
+    } catch (error) {
+      if (
+        isApiError(error) &&
+        error.status === 404 &&
+        error.message.toLowerCase().includes('profile not found')
+      ) {
+        await setCachedProfile(storedAuth.userId, null);
+        return '/onboarding' as const;
+      }
+
+      if (isNetworkError(error)) {
+        return '/(tabs)' as const;
+      }
+
+      if (isAuthExpiredError(error)) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+  }
+
+  return '/onboarding' as const;
 }
 
 export default function LoginScreen() {
@@ -104,8 +149,9 @@ export default function LoginScreen() {
       // the Expo storage layer has actually persisted a token.
       const storedAuth = await waitForStoredAuth();
       if (storedAuth?.token) {
+        const nextRoute = await routeAfterAuth();
         toast.show({ message: 'Welcome to StrathSpace', variant: 'success' });
-        router.replace('/');
+        router.replace(nextRoute as any);
       } else {
         toast.show({
           message: 'Sign-in did not finish in the app. Close any browser tab and try again.',
@@ -163,8 +209,9 @@ export default function LoginScreen() {
         await SecureStore.setItemAsync('strathspace_session_token', data.data.token);
       }
 
+      const nextRoute = await routeAfterAuth();
       toast.show({ message: 'Welcome to StrathSpace', variant: 'success' });
-      router.replace('/');
+      router.replace(nextRoute as any);
     } catch (error: unknown) {
       const err = error as { code?: string; message?: string };
       if (err.code === 'ERR_REQUEST_CANCELED' || err.code === 'ERR_CANCELED') {
@@ -220,8 +267,9 @@ export default function LoginScreen() {
       await SecureStore.setItemAsync('strathspace_session', JSON.stringify(sessionData));
       await SecureStore.setItemAsync('strathspace_session_token', sessionToken);
 
+      const nextRoute = await routeAfterAuth();
       toast.show({ message: 'Signed in as demo', variant: 'success' });
-      router.replace('/');
+      router.replace(nextRoute as any);
     } catch (error) {
       console.error('Demo auth error:', error);
       toast.show({
