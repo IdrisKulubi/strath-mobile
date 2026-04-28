@@ -11,7 +11,14 @@ import {
     sql,
 } from "drizzle-orm";
 
-import { faceVerificationJobs, faceVerificationSessions, profilePhotoAssets, profiles, user } from "@/db/schema";
+import {
+    faceVerificationJobs,
+    faceVerificationResults,
+    faceVerificationSessions,
+    profilePhotoAssets,
+    profiles,
+    user,
+} from "@/db/schema";
 import { db } from "@/lib/db";
 import {
     FACE_VERIFICATION_STATUSES,
@@ -166,10 +173,37 @@ export async function getFaceVerificationAdminOverview(limit = 20) {
                 startedAt: faceVerificationSessions.startedAt,
                 completedAt: faceVerificationSessions.completedAt,
                 updatedAt: faceVerificationSessions.updatedAt,
+                selfieAssetKeys: faceVerificationSessions.selfieAssetKeys,
+                profileAssetKeys: faceVerificationSessions.profileAssetKeys,
+                decisionSummary: faceVerificationSessions.decisionSummary,
+                thresholdConfigVersion: faceVerificationSessions.thresholdConfigVersion,
                 email: user.email,
                 name: user.name,
+                userPhoneNumber: user.phoneNumber,
+                userImage: user.image,
+                userProfilePhoto: user.profilePhoto,
+                userCreatedAt: user.createdAt,
+                userLastActive: user.lastActive,
                 firstName: profiles.firstName,
                 lastName: profiles.lastName,
+                profilePhoneNumber: profiles.phoneNumber,
+                profilePhoto: profiles.profilePhoto,
+                photos: profiles.photos,
+                age: profiles.age,
+                gender: profiles.gender,
+                bio: profiles.bio,
+                aboutMe: profiles.aboutMe,
+                course: profiles.course,
+                university: profiles.university,
+                yearOfStudy: profiles.yearOfStudy,
+                education: profiles.education,
+                currentLocation: profiles.currentLocation,
+                interests: profiles.interests,
+                qualities: profiles.qualities,
+                profileCompleted: profiles.profileCompleted,
+                isComplete: profiles.isComplete,
+                profileFaceVerificationStatus: profiles.faceVerificationStatus,
+                faceVerificationRetryCount: profiles.faceVerificationRetryCount,
             })
             .from(faceVerificationSessions)
             .innerJoin(user, eq(faceVerificationSessions.userId, user.id))
@@ -226,6 +260,70 @@ export async function getFaceVerificationAdminOverview(limit = 20) {
         assets_needing_refresh?: number;
         unanalyzed_assets?: number;
     } | undefined) ?? {};
+    const attentionUserIds = Array.from(new Set(recentAttentionSessions.map((session) => session.userId)));
+    const attentionSessionIds = recentAttentionSessions.map((session) => session.sessionId);
+    const [attentionPhotoAssets, attentionResults, attentionJobs] = await Promise.all([
+        attentionUserIds.length > 0
+            ? db
+                  .select({
+                      userId: profilePhotoAssets.userId,
+                      objectKey: profilePhotoAssets.objectKey,
+                      publicUrl: profilePhotoAssets.publicUrl,
+                      contentType: profilePhotoAssets.contentType,
+                      width: profilePhotoAssets.width,
+                      height: profilePhotoAssets.height,
+                      faceCount: profilePhotoAssets.faceCount,
+                      qualityFlags: profilePhotoAssets.qualityFlags,
+                      verificationReady: profilePhotoAssets.verificationReady,
+                      analysisError: profilePhotoAssets.analysisError,
+                      lastAnalyzedAt: profilePhotoAssets.lastAnalyzedAt,
+                      createdAt: profilePhotoAssets.createdAt,
+                  })
+                  .from(profilePhotoAssets)
+                  .where(inArray(profilePhotoAssets.userId, attentionUserIds))
+                  .orderBy(desc(profilePhotoAssets.createdAt))
+            : Promise.resolve([]),
+        attentionSessionIds.length > 0
+            ? db
+                  .select({
+                      sessionId: faceVerificationResults.sessionId,
+                      sourceAssetKey: faceVerificationResults.sourceAssetKey,
+                      targetAssetKey: faceVerificationResults.targetAssetKey,
+                      similarity: faceVerificationResults.similarity,
+                      faceConfidence: faceVerificationResults.faceConfidence,
+                      qualityFlags: faceVerificationResults.qualityFlags,
+                      facesDetected: faceVerificationResults.facesDetected,
+                      decision: faceVerificationResults.decision,
+                      createdAt: faceVerificationResults.createdAt,
+                  })
+                  .from(faceVerificationResults)
+                  .where(inArray(faceVerificationResults.sessionId, attentionSessionIds))
+                  .orderBy(desc(faceVerificationResults.createdAt))
+            : Promise.resolve([]),
+        attentionSessionIds.length > 0
+            ? db
+                  .select({
+                      sessionId: faceVerificationJobs.sessionId,
+                      jobType: faceVerificationJobs.jobType,
+                      status: faceVerificationJobs.status,
+                      attempts: faceVerificationJobs.attempts,
+                      maxAttempts: faceVerificationJobs.maxAttempts,
+                      assetKey: faceVerificationJobs.assetKey,
+                      lastError: faceVerificationJobs.lastError,
+                      createdAt: faceVerificationJobs.createdAt,
+                      updatedAt: faceVerificationJobs.updatedAt,
+                  })
+                  .from(faceVerificationJobs)
+                  .where(inArray(faceVerificationJobs.sessionId, attentionSessionIds))
+                  .orderBy(desc(faceVerificationJobs.updatedAt))
+            : Promise.resolve([]),
+    ]);
+    const assetsByUserId = groupBy(attentionPhotoAssets, (asset) => asset.userId);
+    const resultsBySessionId = groupBy(attentionResults, (result) => result.sessionId);
+    const jobsBySessionId = groupBy(
+        attentionJobs.filter((job) => job.sessionId),
+        (job) => job.sessionId!,
+    );
 
     return {
         configuration: {
@@ -272,6 +370,17 @@ export async function getFaceVerificationAdminOverview(limit = 20) {
         attentionSessions: recentAttentionSessions.map((session) => ({
             ...session,
             displayName: buildDisplayName(session.firstName, session.lastName, session.name),
+            contactPhoneNumber: session.profilePhoneNumber || session.userPhoneNumber || null,
+            profileImages: buildProfileImageList({
+                photos: session.photos,
+                profilePhoto: session.profilePhoto,
+                userProfilePhoto: session.userProfilePhoto,
+                userImage: session.userImage,
+                photoAssets: assetsByUserId[session.userId] ?? [],
+            }),
+            photoAssets: assetsByUserId[session.userId] ?? [],
+            results: resultsBySessionId[session.sessionId] ?? [],
+            jobs: jobsBySessionId[session.sessionId] ?? [],
             isExpiredProcessing:
                 session.status === FACE_VERIFICATION_STATUSES.PROCESSING &&
                 session.expiresAt.getTime() <= now.getTime(),
@@ -300,6 +409,38 @@ export async function getFaceVerificationAdminOverview(limit = 20) {
         }),
         generatedAt: now.toISOString(),
     };
+}
+
+function groupBy<T, K extends string | number>(
+    items: T[],
+    getKey: (item: T) => K,
+) {
+    return items.reduce<Record<K, T[]>>((acc, item) => {
+        const key = getKey(item);
+        acc[key] = acc[key] ?? [];
+        acc[key].push(item);
+        return acc;
+    }, {} as Record<K, T[]>);
+}
+
+function buildProfileImageList(input: {
+    photos: string[] | null;
+    profilePhoto: string | null;
+    userProfilePhoto: string | null;
+    userImage: string | null;
+    photoAssets: Array<{ publicUrl: string }>;
+}) {
+    return Array.from(
+        new Set(
+            [
+                input.profilePhoto,
+                ...(Array.isArray(input.photos) ? input.photos : []),
+                input.userProfilePhoto,
+                input.userImage,
+                ...input.photoAssets.map((asset) => asset.publicUrl),
+            ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+        ),
+    );
 }
 
 function buildStatusCountMap(

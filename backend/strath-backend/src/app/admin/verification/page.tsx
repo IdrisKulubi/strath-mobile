@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { requireAdmin } from "@/lib/admin-auth";
 import { getFaceVerificationAdminOverview } from "@/lib/services/face-verification-admin";
 
@@ -54,6 +56,45 @@ function AlertBadge({ severity }: { severity: "info" | "warning" | "critical" })
             {severity}
         </span>
     );
+}
+
+function DetailField({
+    label,
+    value,
+}: {
+    label: string;
+    value: ReactNode;
+}) {
+    return (
+        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+            <div className="mt-1 text-sm text-gray-200">{value || <span className="text-gray-500">-</span>}</div>
+        </div>
+    );
+}
+
+function ChipList({ items }: { items?: string[] | null }) {
+    if (!items || items.length === 0) {
+        return <span className="text-gray-500">-</span>;
+    }
+
+    return (
+        <div className="flex flex-wrap gap-1.5">
+            {items.map((item) => (
+                <span
+                    key={item}
+                    className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs text-gray-300"
+                >
+                    {item}
+                </span>
+            ))}
+        </div>
+    );
+}
+
+function formatDate(value: Date | string | null | undefined) {
+    if (!value) return "-";
+    return new Date(value).toLocaleString();
 }
 
 export default async function AdminVerificationPage() {
@@ -195,26 +236,32 @@ export default async function AdminVerificationPage() {
                 ) : (
                     <div className="space-y-4">
                         {overview.attentionSessions.map((session) => (
-                            <div
+                            <details
                                 key={session.sessionId}
-                                className="rounded-xl border border-white/10 bg-black/20 p-4"
+                                className="group rounded-xl border border-white/10 bg-black/20 p-4 open:border-pink-500/30 open:bg-pink-500/[0.04]"
                             >
-                                <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <summary className="mb-3 flex cursor-pointer list-none flex-col gap-3 md:flex-row md:items-start md:justify-between">
                                     <div className="space-y-2">
                                         <div className="flex items-center gap-2">
                                             <StatusBadge status={session.status} />
                                             <span className="text-xs text-gray-500">
                                                 Attempt {session.attemptNumber}
                                             </span>
+                                            <span className="text-xs text-pink-300 opacity-0 transition group-open:opacity-100">
+                                                Details open
+                                            </span>
                                         </div>
                                         <div>
                                             <p className="font-semibold text-white">{session.displayName}</p>
                                             <p className="text-sm text-gray-400">{session.email}</p>
+                                            <p className="text-xs text-gray-500">
+                                                {session.contactPhoneNumber || "No phone number on file"}
+                                            </p>
                                         </div>
                                         <div className="text-xs text-gray-500">
                                             <p>Session: {session.sessionId}</p>
-                                            <p>Updated: {new Date(session.updatedAt).toLocaleString()}</p>
-                                            <p>Expires: {new Date(session.expiresAt).toLocaleString()}</p>
+                                            <p>Updated: {formatDate(session.updatedAt)}</p>
+                                            <p>Expires: {formatDate(session.expiresAt)}</p>
                                         </div>
                                     </div>
 
@@ -227,6 +274,157 @@ export default async function AdminVerificationPage() {
                                         {session.isExpiredProcessing ? (
                                             <p className="mt-2 text-yellow-300">This processing session has expired.</p>
                                         ) : null}
+                                        <p className="mt-3 text-pink-200">Click to inspect profile and contact details</p>
+                                    </div>
+                                </summary>
+
+                                <div className="mb-4 grid gap-4 border-t border-white/10 pt-4 xl:grid-cols-[1fr,1.2fr]">
+                                    <div className="space-y-4">
+                                        <div>
+                                            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                                Contact + Profile
+                                            </h3>
+                                            <div className="grid gap-2 sm:grid-cols-2">
+                                                <DetailField label="Email" value={session.email} />
+                                                <DetailField label="Phone" value={session.contactPhoneNumber} />
+                                                <DetailField label="Course" value={session.course} />
+                                                <DetailField label="University" value={session.university} />
+                                                <DetailField label="Age" value={session.age} />
+                                                <DetailField label="Gender" value={session.gender} />
+                                                <DetailField label="Education" value={session.education} />
+                                                <DetailField label="Location" value={session.currentLocation} />
+                                                <DetailField label="Created" value={formatDate(session.userCreatedAt)} />
+                                                <DetailField label="Last active" value={formatDate(session.userLastActive)} />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                            <DetailField
+                                                label="Interests"
+                                                value={<ChipList items={session.interests} />}
+                                            />
+                                            <DetailField
+                                                label="Qualities"
+                                                value={<ChipList items={session.qualities} />}
+                                            />
+                                        </div>
+
+                                        <DetailField
+                                            label="Bio / About"
+                                            value={session.aboutMe || session.bio || null}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div>
+                                            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                                Profile Photos
+                                            </h3>
+                                            {session.profileImages.length === 0 ? (
+                                                <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-gray-500">
+                                                    No profile photos are available. Selfie images are intentionally not shown here.
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                                                    {session.profileImages.map((photoUrl) => (
+                                                        <a
+                                                            key={photoUrl}
+                                                            href={photoUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="group/photo overflow-hidden rounded-xl border border-white/10 bg-black/30"
+                                                        >
+                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                            <img
+                                                                src={photoUrl}
+                                                                alt={`${session.displayName} profile photo`}
+                                                                className="aspect-square w-full object-cover transition group-hover/photo:scale-105"
+                                                            />
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                                Verification Issue
+                                            </h3>
+                                            <div className="grid gap-2 sm:grid-cols-2">
+                                                <DetailField label="Profile status" value={session.profileFaceVerificationStatus} />
+                                                <DetailField label="Retry count" value={session.faceVerificationRetryCount} />
+                                                <DetailField label="Profile completed" value={session.profileCompleted || session.isComplete ? "Yes" : "No"} />
+                                                <DetailField label="Threshold version" value={session.thresholdConfigVersion} />
+                                            </div>
+                                            <div className="mt-3">
+                                                <DetailField
+                                                    label="Failure reasons"
+                                                    value={<ChipList items={session.failureReasons} />}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mb-4 grid gap-4 xl:grid-cols-2">
+                                    <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                            Comparison Results
+                                        </h3>
+                                        {session.results.length === 0 ? (
+                                            <p className="text-sm text-gray-500">No comparison results recorded.</p>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {session.results.map((result) => (
+                                                    <div
+                                                        key={`${result.sourceAssetKey}-${result.targetAssetKey}-${result.createdAt}`}
+                                                        className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs text-gray-300"
+                                                    >
+                                                        <div className="mb-2 flex flex-wrap gap-2">
+                                                            <span className="font-semibold text-white">{result.decision}</span>
+                                                            <span>Similarity: {result.similarity ?? "-"}</span>
+                                                            <span>Faces: {result.facesDetected}</span>
+                                                            <span>Confidence: {result.faceConfidence ?? "-"}</span>
+                                                        </div>
+                                                        <p className="break-all text-gray-500">Source: {result.sourceAssetKey}</p>
+                                                        <p className="break-all text-gray-500">Target: {result.targetAssetKey}</p>
+                                                        {result.qualityFlags.length > 0 ? (
+                                                            <div className="mt-2">
+                                                                <ChipList items={result.qualityFlags} />
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                            Jobs + Asset Health
+                                        </h3>
+                                        <div className="space-y-2">
+                                            {session.jobs.length === 0 ? (
+                                                <p className="text-sm text-gray-500">No jobs recorded for this session.</p>
+                                            ) : (
+                                                session.jobs.map((job) => (
+                                                    <div
+                                                        key={`${job.jobType}-${job.createdAt}-${job.assetKey ?? "session"}`}
+                                                        className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs text-gray-300"
+                                                    >
+                                                        <div className="mb-1 flex flex-wrap gap-2">
+                                                            <span className="font-semibold text-white">{job.jobType}</span>
+                                                            <span>{job.status}</span>
+                                                            <span>
+                                                                Attempts {job.attempts}/{job.maxAttempts}
+                                                            </span>
+                                                        </div>
+                                                        {job.assetKey ? <p className="break-all text-gray-500">Asset: {job.assetKey}</p> : null}
+                                                        {job.lastError ? <p className="mt-1 text-red-200">{job.lastError}</p> : null}
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -277,7 +475,7 @@ export default async function AdminVerificationPage() {
                                         </button>
                                     </form>
                                 </div>
-                            </div>
+                            </details>
                         ))}
                     </div>
                 )}
