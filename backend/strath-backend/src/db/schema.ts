@@ -1876,8 +1876,98 @@ export const adminBroadcastsRelations = relations(adminBroadcasts, ({ one }) => 
     }),
 }));
 
+export type CampaignBlock =
+    | { id: string; type: "eyebrow"; text: string }
+    | { id: string; type: "hero"; heading: string; body: string; imageUrl?: string }
+    | { id: string; type: "paragraph"; text: string }
+    | { id: string; type: "image"; imageUrl: string; alt?: string; caption?: string }
+    | { id: string; type: "checklist"; title?: string; items: string[] }
+    | { id: string; type: "steps"; title?: string; items: string[] }
+    | { id: string; type: "callout"; tone: "info" | "success" | "warning"; title?: string; text: string }
+    | { id: string; type: "button"; label: string; href: string }
+    | { id: string; type: "divider" }
+    | { id: string; type: "signature"; name: string; role?: string; note?: string };
+
+export const adminCampaigns = pgTable(
+    "admin_campaigns",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        name: text("name").notNull(),
+        subject: text("subject").notNull(),
+        previewText: text("preview_text"),
+        audience: text("audience").notNull(),
+        channels: jsonb("channels").$type<("email" | "push")[]>().default([]).notNull(),
+        contentBlocks: jsonb("content_blocks").$type<CampaignBlock[]>().default([]).notNull(),
+        pushTitle: text("push_title"),
+        pushBody: text("push_body"),
+        ctaUrl: text("cta_url"),
+        ctaLabel: text("cta_label"),
+        recipientCount: integer("recipient_count").default(0).notNull(),
+        emailSuccessCount: integer("email_success_count").default(0).notNull(),
+        emailFailureCount: integer("email_failure_count").default(0).notNull(),
+        pushSuccessCount: integer("push_success_count").default(0).notNull(),
+        pushFailureCount: integer("push_failure_count").default(0).notNull(),
+        status: text("status").$type<"draft" | "sent" | "failed">().default("sent").notNull(),
+        sentByUserId: text("sent_by_user_id").references(() => user.id, { onDelete: "set null" }),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        sentAt: timestamp("sent_at"),
+    },
+    (table) => ({
+        createdAtIdx: index("admin_campaigns_created_at_idx").on(table.createdAt),
+        sentAtIdx: index("admin_campaigns_sent_at_idx").on(table.sentAt),
+        audienceIdx: index("admin_campaigns_audience_idx").on(table.audience),
+        sentByIdx: index("admin_campaigns_sent_by_idx").on(table.sentByUserId),
+    })
+);
+
+export const adminCampaignRecipients = pgTable(
+    "admin_campaign_recipients",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        campaignId: uuid("campaign_id")
+            .notNull()
+            .references(() => adminCampaigns.id, { onDelete: "cascade" }),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        email: text("email"),
+        pushToken: text("push_token"),
+        emailStatus: text("email_status").$type<"skipped" | "sent" | "failed">().default("skipped").notNull(),
+        pushStatus: text("push_status").$type<"skipped" | "sent" | "failed">().default("skipped").notNull(),
+        error: text("error"),
+        sentAt: timestamp("sent_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        campaignIdx: index("admin_campaign_recipients_campaign_idx").on(table.campaignId),
+        userIdx: index("admin_campaign_recipients_user_idx").on(table.userId),
+    })
+);
+
+export const adminCampaignsRelations = relations(adminCampaigns, ({ one, many }) => ({
+    sentBy: one(user, {
+        fields: [adminCampaigns.sentByUserId],
+        references: [user.id],
+    }),
+    recipients: many(adminCampaignRecipients),
+}));
+
+export const adminCampaignRecipientsRelations = relations(adminCampaignRecipients, ({ one }) => ({
+    campaign: one(adminCampaigns, {
+        fields: [adminCampaignRecipients.campaignId],
+        references: [adminCampaigns.id],
+    }),
+    user: one(user, {
+        fields: [adminCampaignRecipients.userId],
+        references: [user.id],
+    }),
+}));
+
 export type AdminBroadcast = typeof adminBroadcasts.$inferSelect;
 export type NewAdminBroadcast = typeof adminBroadcasts.$inferInsert;
+export type AdminCampaign = typeof adminCampaigns.$inferSelect;
+export type NewAdminCampaign = typeof adminCampaigns.$inferInsert;
+export type AdminCampaignRecipient = typeof adminCampaignRecipients.$inferSelect;
+export type NewAdminCampaignRecipient = typeof adminCampaignRecipients.$inferInsert;
 
 // Mission type for templates
 export type MissionType = "coffee_meetup" | "song_exchange" | "photo_challenge" | "study_date" |

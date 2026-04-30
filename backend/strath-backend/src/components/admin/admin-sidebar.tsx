@@ -9,6 +9,7 @@ import {
     CalendarCheck2,
     CalendarClock,
     Flag,
+    Mail,
     PhoneCall,
     ChevronDown,
     ClipboardList,
@@ -67,6 +68,7 @@ const groups: NavGroup[] = [
             { href: "/admin/locations", label: "Locations", icon: MapPinned },
             { href: "/admin/feature-flags", label: "Feature Flags", icon: Flag },
             { href: "/admin/broadcast", label: "Broadcast", icon: Megaphone },
+            { href: "/admin/campaigns", label: "Campaigns", icon: Mail },
         ],
     },
     {
