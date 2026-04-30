@@ -36,6 +36,9 @@ export type CampaignRecipientPreview = {
     createdAt: string;
     lastActive: string;
     hasPush: boolean;
+    emailStatus: "none" | "sent" | "failed";
+    pushStatus: "none" | "sent" | "failed";
+    lastCampaignSentAt: string | null;
 };
 
 type CampaignRecipient = CampaignRecipientPreview & {
@@ -141,9 +144,47 @@ async function fetchCampaignRecipients(
         .orderBy(desc(user.createdAt))
         .limit(limit);
 
+    const userIds = rows.map((row) => row.userId);
+    const deliveryRows = userIds.length > 0
+        ? await db
+            .select({
+                userId: adminCampaignRecipients.userId,
+                emailStatus: adminCampaignRecipients.emailStatus,
+                pushStatus: adminCampaignRecipients.pushStatus,
+                sentAt: adminCampaignRecipients.sentAt,
+            })
+            .from(adminCampaignRecipients)
+            .where(inArray(adminCampaignRecipients.userId, userIds))
+            .orderBy(desc(adminCampaignRecipients.sentAt))
+        : [];
+
+    const deliveryByUser = new Map<string, {
+        emailStatus: "none" | "sent" | "failed";
+        pushStatus: "none" | "sent" | "failed";
+        lastCampaignSentAt: string | null;
+    }>();
+
+    for (const row of deliveryRows) {
+        const current = deliveryByUser.get(row.userId) ?? {
+            emailStatus: "none" as const,
+            pushStatus: "none" as const,
+            lastCampaignSentAt: row.sentAt.toISOString(),
+        };
+
+        if (!current.lastCampaignSentAt) current.lastCampaignSentAt = row.sentAt.toISOString();
+        if (row.emailStatus === "sent") current.emailStatus = "sent";
+        else if (row.emailStatus === "failed" && current.emailStatus !== "sent") current.emailStatus = "failed";
+
+        if (row.pushStatus === "sent") current.pushStatus = "sent";
+        else if (row.pushStatus === "failed" && current.pushStatus !== "sent") current.pushStatus = "failed";
+
+        deliveryByUser.set(row.userId, current);
+    }
+
     return rows.map((row) => {
         const firstName = row.profileFirstName?.trim() || firstNameFrom(row.name, row.email);
         const profilePhotos = Array.isArray(row.profilePhotos) ? row.profilePhotos.filter(Boolean) : [];
+        const delivery = deliveryByUser.get(row.userId);
         return {
             userId: row.userId,
             name: row.name,
@@ -161,6 +202,9 @@ async function fetchCampaignRecipients(
             createdAtDate: row.createdAt,
             lastActiveDate: row.lastActive,
             hasPush: typeof row.pushToken === "string" && Expo.isExpoPushToken(row.pushToken),
+            emailStatus: delivery?.emailStatus ?? "none",
+            pushStatus: delivery?.pushStatus ?? "none",
+            lastCampaignSentAt: delivery?.lastCampaignSentAt ?? null,
         };
     });
 }
@@ -292,6 +336,9 @@ export async function previewAdminCampaign(formData: FormData) {
         createdAtDate: new Date(),
         lastActiveDate: new Date(),
         hasPush: false,
+        emailStatus: "none",
+        pushStatus: "none",
+        lastCampaignSentAt: null,
     };
 
     return {
@@ -329,7 +376,17 @@ export async function sendAdminCampaign(formData: FormData) {
         campaign.excludeUserIds.length > 0 ? campaign.excludeUserIds : undefined,
         5000,
     );
-    if (recipients.length === 0) throw new Error("No recipients match this campaign");
+    const skippedAlreadySent = recipients.filter((recipient) => (
+        (campaign.channels.includes("email") && recipient.emailStatus === "sent")
+        || (campaign.channels.includes("push") && recipient.pushStatus === "sent")
+    ));
+    const sendableRecipients = recipients.filter((recipient) => !skippedAlreadySent.some((skipped) => skipped.userId === recipient.userId));
+
+    if (sendableRecipients.length === 0) {
+        throw new Error(skippedAlreadySent.length > 0
+            ? "All matching recipients were already sent according to the database"
+            : "No recipients match this campaign");
+    }
 
     const [createdCampaign] = await db
         .insert(adminCampaigns)
@@ -344,7 +401,7 @@ export async function sendAdminCampaign(formData: FormData) {
             pushBody: campaign.pushBody || null,
             ctaUrl: campaign.ctaUrl || null,
             ctaLabel: campaign.ctaLabel || null,
-            recipientCount: recipients.length,
+            recipientCount: sendableRecipients.length,
             sentByUserId: session.user.id,
             status: "sent",
             sentAt: new Date(),
@@ -364,7 +421,7 @@ export async function sendAdminCampaign(formData: FormData) {
         error: string | null;
     }[] = [];
 
-    for (const recipient of recipients) {
+    for (const recipient of sendableRecipients) {
         let emailStatus: "skipped" | "sent" | "failed" = "skipped";
         let pushStatus: "skipped" | "sent" | "failed" = "skipped";
         const errors: string[] = [];
@@ -463,7 +520,7 @@ export async function sendAdminCampaign(formData: FormData) {
 
     return {
         campaignId: createdCampaign.id,
-        recipientCount: recipients.length,
+        recipientCount: sendableRecipients.length,
         emailSuccessCount,
         emailFailureCount,
         pushSuccessCount,
@@ -476,6 +533,7 @@ export async function sendAdminCampaign(formData: FormData) {
             .filter((outcome) => outcome.emailStatus === "failed" || outcome.pushStatus === "failed")
             .map((outcome) => outcome.userId),
         excludedUserCount: campaign.excludeUserIds.length,
+        skippedAlreadySentCount: skippedAlreadySent.length,
     };
 }
 

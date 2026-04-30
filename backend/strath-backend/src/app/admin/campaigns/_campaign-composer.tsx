@@ -268,7 +268,19 @@ export function CampaignComposer() {
     const [error, setError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
 
-    const selectedCount = selectedIds.size || Math.max((counts?.total || recipients.length) - sentUserIds.size, 0);
+    const dbSentUserIds = useMemo(() => new Set(
+        recipients
+            .filter((recipient) => recipient.emailStatus === "sent" || recipient.pushStatus === "sent")
+            .map((recipient) => recipient.userId),
+    ), [recipients]);
+    const allSentUserIds = useMemo(() => new Set([...dbSentUserIds, ...sentUserIds]), [dbSentUserIds, sentUserIds]);
+    const allFailedUserIds = useMemo(() => new Set([
+        ...recipients
+            .filter((recipient) => (recipient.emailStatus === "failed" || recipient.pushStatus === "failed") && !allSentUserIds.has(recipient.userId))
+            .map((recipient) => recipient.userId),
+        ...Array.from(failedUserIds).filter((userId) => !allSentUserIds.has(userId)),
+    ]), [allSentUserIds, failedUserIds, recipients]);
+    const selectedCount = selectedIds.size || Math.max((counts?.total || recipients.length) - allSentUserIds.size, 0);
     const channelLabel = channels.join(" + ");
     const filteredRecipients = useMemo(() => {
         const query = recipientSearch.trim().toLowerCase();
@@ -292,11 +304,11 @@ export function CampaignComposer() {
             return searchable.includes(query);
         });
     }, [recipientSearch, recipients]);
-    const alreadySentVisibleCount = filteredRecipients.filter((recipient) => sentUserIds.has(recipient.userId)).length;
-    const failedVisibleCount = filteredRecipients.filter((recipient) => failedUserIds.has(recipient.userId) && !sentUserIds.has(recipient.userId)).length;
+    const alreadySentVisibleCount = filteredRecipients.filter((recipient) => allSentUserIds.has(recipient.userId)).length;
+    const failedVisibleCount = filteredRecipients.filter((recipient) => allFailedUserIds.has(recipient.userId) && !allSentUserIds.has(recipient.userId)).length;
     const pendingVisibleCount = filteredRecipients.length - alreadySentVisibleCount - failedVisibleCount;
 
-    const buildFormData = (targetUserIds = Array.from(selectedIds), excludeUserIds = Array.from(sentUserIds)) => {
+    const buildFormData = (targetUserIds = Array.from(selectedIds), excludeUserIds = Array.from(allSentUserIds)) => {
         const data = new FormData();
         data.set("name", name);
         data.set("subject", subject);
@@ -329,6 +341,12 @@ export function CampaignComposer() {
                 if (cancelled) return;
                 setCounts(nextCounts);
                 setRecipients(nextRecipients);
+                setSentUserIds(new Set(nextRecipients
+                    .filter((recipient) => recipient.emailStatus === "sent" || recipient.pushStatus === "sent")
+                    .map((recipient) => recipient.userId)));
+                setFailedUserIds(new Set(nextRecipients
+                    .filter((recipient) => (recipient.emailStatus === "failed" || recipient.pushStatus === "failed") && recipient.emailStatus !== "sent" && recipient.pushStatus !== "sent")
+                    .map((recipient) => recipient.userId)));
             })
             .catch(() => {
                 if (!cancelled) setCounts(null);
@@ -387,7 +405,7 @@ export function CampaignComposer() {
     };
 
     const toggleRecipient = (userId: string) => {
-        if (sentUserIds.has(userId)) return;
+        if (allSentUserIds.has(userId)) return;
         setSelectedIds((current) => {
             const next = new Set(current);
             if (next.has(userId)) next.delete(userId);
@@ -403,17 +421,17 @@ export function CampaignComposer() {
 
         const human = AUDIENCE_OPTIONS.find((option) => option.value === audience)?.label ?? audience;
         const selectedTargets = selectedIds.size > 0
-            ? Array.from(selectedIds).filter((userId) => !sentUserIds.has(userId))
-            : failedUserIds.size > 0
-                ? Array.from(failedUserIds)
+            ? Array.from(selectedIds).filter((userId) => !allSentUserIds.has(userId))
+            : allFailedUserIds.size > 0
+                ? Array.from(allFailedUserIds)
                 : [];
         const sendCount = selectedTargets.length || selectedCount;
         if (!window.confirm(`Send this ${channelLabel} campaign to ${sendCount} not-yet-sent users in "${human}"?`)) return;
 
         startTransition(async () => {
             try {
-                let sendResult = await sendAdminCampaign(buildFormData(selectedTargets, Array.from(sentUserIds)));
-                let nextSentUserIds = new Set([...sentUserIds, ...sendResult.sentUserIds]);
+                let sendResult = await sendAdminCampaign(buildFormData(selectedTargets, Array.from(allSentUserIds)));
+                let nextSentUserIds = new Set([...allSentUserIds, ...sendResult.sentUserIds]);
                 let nextFailedUserIds = new Set(sendResult.failedUserIds);
 
                 if (autoRetry && sendResult.failedUserIds.length > 0) {
@@ -553,26 +571,26 @@ export function CampaignComposer() {
                     <button type="button" onClick={() => {
                         const selectableIds = filteredRecipients
                             .map((recipient) => recipient.userId)
-                            .filter((userId) => !sentUserIds.has(userId));
+                            .filter((userId) => !allSentUserIds.has(userId));
                         setSelectedIds(selectedIds.size === selectableIds.length ? new Set() : new Set(selectableIds));
                     }} className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white">
-                        {selectedIds.size === filteredRecipients.filter((recipient) => !sentUserIds.has(recipient.userId)).length ? "Clear selection" : "Select visible"}
+                        {selectedIds.size === filteredRecipients.filter((recipient) => !allSentUserIds.has(recipient.userId)).length ? "Clear selection" : "Select visible"}
                     </button>
                 </div>
                 <div className="mb-3 grid gap-2 sm:grid-cols-3">
                     <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
                         <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-200">Already sent</p>
-                        <p className="mt-1 text-lg font-bold text-white">{sentUserIds.size}</p>
+                        <p className="mt-1 text-lg font-bold text-white">{allSentUserIds.size}</p>
                         <p className="text-[11px] text-emerald-200/80">{alreadySentVisibleCount} visible</p>
                     </div>
                     <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
                         <p className="text-[10px] font-bold uppercase tracking-wide text-red-200">Failed</p>
-                        <p className="mt-1 text-lg font-bold text-white">{failedUserIds.size}</p>
+                        <p className="mt-1 text-lg font-bold text-white">{allFailedUserIds.size}</p>
                         <p className="text-[11px] text-red-200/80">{failedVisibleCount} visible</p>
                     </div>
                     <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
                         <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Not sent yet</p>
-                        <p className="mt-1 text-lg font-bold text-white">{Math.max((counts?.total || recipients.length) - sentUserIds.size - failedUserIds.size, 0)}</p>
+                        <p className="mt-1 text-lg font-bold text-white">{Math.max((counts?.total || recipients.length) - allSentUserIds.size - allFailedUserIds.size, 0)}</p>
                         <p className="text-[11px] text-gray-500">{pendingVisibleCount} visible</p>
                     </div>
                 </div>
@@ -583,8 +601,8 @@ export function CampaignComposer() {
                         onChange={(event) => setAutoRetry(event.target.checked)}
                     />
                     Auto retry failed recipients once and skip everyone already sent.
-                    {sentUserIds.size > 0 && (
-                        <span className="ml-auto text-emerald-300">{sentUserIds.size} already sent</span>
+                    {allSentUserIds.size > 0 && (
+                        <span className="ml-auto text-emerald-300">{allSentUserIds.size} already sent from DB/session</span>
                     )}
                 </label>
                 <div className="mb-3 flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
@@ -614,11 +632,11 @@ export function CampaignComposer() {
                         </thead>
                         <tbody className="divide-y divide-white/10">
                             {filteredRecipients.map((recipient) => (
-                                <tr key={recipient.userId} className={sentUserIds.has(recipient.userId) ? "bg-emerald-500/5 opacity-70" : "bg-black/10"}>
+                                <tr key={recipient.userId} className={allSentUserIds.has(recipient.userId) ? "bg-emerald-500/5 opacity-70" : "bg-black/10"}>
                                     <td className="px-3 py-3">
                                         <input
                                             type="checkbox"
-                                            disabled={sentUserIds.has(recipient.userId)}
+                                            disabled={allSentUserIds.has(recipient.userId)}
                                             checked={selectedIds.has(recipient.userId)}
                                             onChange={() => toggleRecipient(recipient.userId)}
                                         />
@@ -629,14 +647,14 @@ export function CampaignComposer() {
                                     </td>
                                     <td className="px-3 py-3 text-xs text-gray-300">
                                         <div>{recipient.profileStatus}</div>
-                                        {sentUserIds.has(recipient.userId) && (
+                                        {allSentUserIds.has(recipient.userId) && (
                                             <span className="mt-1 inline-flex rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200">
-                                                Sent
+                                                Sent in DB
                                             </span>
                                         )}
-                                        {failedUserIds.has(recipient.userId) && !sentUserIds.has(recipient.userId) && (
+                                        {allFailedUserIds.has(recipient.userId) && !allSentUserIds.has(recipient.userId) && (
                                             <span className="mt-1 inline-flex rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-200">
-                                                Failed
+                                                Failed in DB
                                             </span>
                                         )}
                                     </td>
@@ -650,11 +668,11 @@ export function CampaignComposer() {
                                         </span>
                                     </td>
                                     <td className="px-3 py-3 text-xs">
-                                        {sentUserIds.has(recipient.userId) ? (
+                                        {allSentUserIds.has(recipient.userId) ? (
                                             <span className="inline-flex rounded-full bg-emerald-500/15 px-2 py-1 font-bold uppercase tracking-wide text-emerald-200">
                                                 Already sent
                                             </span>
-                                        ) : failedUserIds.has(recipient.userId) ? (
+                                        ) : allFailedUserIds.has(recipient.userId) ? (
                                             <span className="inline-flex rounded-full bg-red-500/15 px-2 py-1 font-bold uppercase tracking-wide text-red-200">
                                                 Failed
                                             </span>
@@ -687,7 +705,7 @@ export function CampaignComposer() {
 
             <button type="submit" disabled={isPending || channels.length === 0} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-4 text-sm font-bold text-black transition-colors hover:bg-white/90 disabled:opacity-40">
                 <Send className="size-4" />
-                {isPending ? "Sending campaign..." : failedUserIds.size > 0 ? `Retry ${failedUserIds.size} failed users` : `Send ${channelLabel || "campaign"} to ${selectedCount} users`}
+                {isPending ? "Sending campaign..." : allFailedUserIds.size > 0 ? `Retry ${allFailedUserIds.size} failed users` : `Send ${channelLabel || "campaign"} to ${selectedCount} users`}
             </button>
         </form>
     );
