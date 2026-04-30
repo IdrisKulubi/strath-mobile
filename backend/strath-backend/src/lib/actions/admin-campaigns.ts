@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 import { renderCampaignEmailHtml } from "@/lib/services/admin-campaign-email";
-import { and, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import { Expo, type ExpoPushMessage } from "expo-server-sdk";
 import { revalidatePath } from "next/cache";
 
@@ -69,11 +69,12 @@ function audienceWhereClause(audience: CampaignAudience) {
     }
 }
 
-function combineConditions(audience: CampaignAudience, selectedUserIds?: string[]) {
+function combineConditions(audience: CampaignAudience, selectedUserIds?: string[], excludeUserIds?: string[]) {
     const conditions = [isNull(user.deletedAt)];
     const audienceCondition = audienceWhereClause(audience);
     if (audienceCondition) conditions.push(audienceCondition);
     if (selectedUserIds?.length) conditions.push(inArray(user.id, selectedUserIds));
+    if (excludeUserIds?.length) conditions.push(notInArray(user.id, excludeUserIds));
     return and(...conditions);
 }
 
@@ -110,6 +111,7 @@ function profileStatusFor(row: {
 async function fetchCampaignRecipients(
     audience: CampaignAudience,
     selectedUserIds?: string[],
+    excludeUserIds?: string[],
     limit = 1000,
 ): Promise<CampaignRecipient[]> {
     const rows = await db
@@ -135,7 +137,7 @@ async function fetchCampaignRecipients(
         })
         .from(user)
         .leftJoin(profiles, eq(profiles.userId, user.id))
-        .where(combineConditions(audience, selectedUserIds))
+        .where(combineConditions(audience, selectedUserIds, excludeUserIds))
         .orderBy(desc(user.createdAt))
         .limit(limit);
 
@@ -224,6 +226,7 @@ function campaignFromForm(formData: FormData) {
     const channels = parseJson<CampaignChannel[]>(formData.get("channels"), ["email"]);
     const blocks = parseJson<CampaignBlock[]>(formData.get("contentBlocks"), []);
     const selectedUserIds = parseJson<string[]>(formData.get("selectedUserIds"), []);
+    const excludeUserIds = parseJson<string[]>(formData.get("excludeUserIds"), []);
 
     return {
         name,
@@ -237,6 +240,7 @@ function campaignFromForm(formData: FormData) {
         channels: channels.filter((channel): channel is CampaignChannel => channel === "email" || channel === "push"),
         blocks,
         selectedUserIds: selectedUserIds.filter(Boolean),
+        excludeUserIds: excludeUserIds.filter(Boolean),
     };
 }
 
@@ -264,7 +268,7 @@ export async function getAdminCampaignAudienceCount(audience: CampaignAudience) 
 
 export async function getAdminCampaignRecipients(audience: CampaignAudience, limit = 250) {
     await requireAdmin();
-    const recipients = await fetchCampaignRecipients(audience, undefined, limit);
+    const recipients = await fetchCampaignRecipients(audience, undefined, undefined, limit);
     return recipients.map(publicRecipient);
 }
 
@@ -322,6 +326,7 @@ export async function sendAdminCampaign(formData: FormData) {
     const recipients = await fetchCampaignRecipients(
         campaign.audience,
         campaign.selectedUserIds.length > 0 ? campaign.selectedUserIds : undefined,
+        campaign.excludeUserIds.length > 0 ? campaign.excludeUserIds : undefined,
         5000,
     );
     if (recipients.length === 0) throw new Error("No recipients match this campaign");
@@ -352,6 +357,12 @@ export async function sendAdminCampaign(formData: FormData) {
     let pushFailureCount = 0;
 
     const recipientRows = [];
+    const outcomes: {
+        userId: string;
+        emailStatus: "skipped" | "sent" | "failed";
+        pushStatus: "skipped" | "sent" | "failed";
+        error: string | null;
+    }[] = [];
 
     for (const recipient of recipients) {
         let emailStatus: "skipped" | "sent" | "failed" = "skipped";
@@ -425,6 +436,12 @@ export async function sendAdminCampaign(formData: FormData) {
             pushStatus,
             error: errors.join(" | ") || null,
         });
+        outcomes.push({
+            userId: recipient.userId,
+            emailStatus,
+            pushStatus,
+            error: errors.join(" | ") || null,
+        });
     }
 
     if (recipientRows.length) {
@@ -451,6 +468,14 @@ export async function sendAdminCampaign(formData: FormData) {
         emailFailureCount,
         pushSuccessCount,
         pushFailureCount,
+        outcomes,
+        sentUserIds: outcomes
+            .filter((outcome) => outcome.emailStatus === "sent" || outcome.pushStatus === "sent")
+            .map((outcome) => outcome.userId),
+        failedUserIds: outcomes
+            .filter((outcome) => outcome.emailStatus === "failed" || outcome.pushStatus === "failed")
+            .map((outcome) => outcome.userId),
+        excludedUserCount: campaign.excludeUserIds.length,
     };
 }
 

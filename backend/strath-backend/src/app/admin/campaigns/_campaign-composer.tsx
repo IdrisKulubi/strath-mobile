@@ -38,6 +38,8 @@ type CampaignHistoryItem = {
     createdAt: string;
 };
 
+type SendResult = Awaited<ReturnType<typeof sendAdminCampaign>>;
+
 const AUDIENCE_OPTIONS: AudienceOption[] = [
     { value: "no_profile", label: "Signed up, no profile", description: "Users who created auth accounts but never started profile setup." },
     { value: "profile_incomplete", label: "Profile incomplete", description: "Users with a profile that is not finished yet." },
@@ -259,13 +261,16 @@ export function CampaignComposer() {
     const [recipients, setRecipients] = useState<CampaignRecipientPreview[]>([]);
     const [recipientSearch, setRecipientSearch] = useState("");
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [sentUserIds, setSentUserIds] = useState<Set<string>>(new Set());
+    const [failedUserIds, setFailedUserIds] = useState<Set<string>>(new Set());
+    const [autoRetry, setAutoRetry] = useState(true);
     const [previewHtml, setPreviewHtml] = useState("");
-    const [result, setResult] = useState<string | null>(null);
+    const [result, setResult] = useState<SendResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
     const router = useRouter();
 
-    const selectedCount = selectedIds.size || counts?.total || recipients.length;
+    const selectedCount = selectedIds.size || Math.max((counts?.total || recipients.length) - sentUserIds.size, 0);
     const channelLabel = channels.join(" + ");
     const filteredRecipients = useMemo(() => {
         const query = recipientSearch.trim().toLowerCase();
@@ -290,7 +295,7 @@ export function CampaignComposer() {
         });
     }, [recipientSearch, recipients]);
 
-    const formData = useMemo(() => {
+    const buildFormData = (targetUserIds = Array.from(selectedIds), excludeUserIds = Array.from(sentUserIds)) => {
         const data = new FormData();
         data.set("name", name);
         data.set("subject", subject);
@@ -302,8 +307,14 @@ export function CampaignComposer() {
         data.set("pushBody", pushBody);
         data.set("ctaUrl", ctaUrl);
         data.set("ctaLabel", ctaLabel);
-        data.set("selectedUserIds", JSON.stringify(Array.from(selectedIds)));
+        data.set("selectedUserIds", JSON.stringify(targetUserIds));
+        data.set("excludeUserIds", JSON.stringify(excludeUserIds));
         return data;
+    };
+
+    const formData = useMemo(() => {
+        return buildFormData([], []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [name, subject, previewText, audience, channels, blocks, pushTitle, pushBody, ctaUrl, ctaLabel, selectedIds]);
 
     useEffect(() => {
@@ -355,6 +366,8 @@ export function CampaignComposer() {
         setRecipients([]);
         setRecipientSearch("");
         setSelectedIds(new Set());
+        setSentUserIds(new Set());
+        setFailedUserIds(new Set());
     };
 
     const updateBlock = (index: number, block: CampaignBlock) => {
@@ -373,6 +386,7 @@ export function CampaignComposer() {
     };
 
     const toggleRecipient = (userId: string) => {
+        if (sentUserIds.has(userId)) return;
         setSelectedIds((current) => {
             const next = new Set(current);
             if (next.has(userId)) next.delete(userId);
@@ -387,12 +401,40 @@ export function CampaignComposer() {
         setResult(null);
 
         const human = AUDIENCE_OPTIONS.find((option) => option.value === audience)?.label ?? audience;
-        if (!window.confirm(`Send this ${channelLabel} campaign to ${selectedCount} users in "${human}"?`)) return;
+        const selectedTargets = selectedIds.size > 0
+            ? Array.from(selectedIds).filter((userId) => !sentUserIds.has(userId))
+            : failedUserIds.size > 0
+                ? Array.from(failedUserIds)
+                : [];
+        const sendCount = selectedTargets.length || selectedCount;
+        if (!window.confirm(`Send this ${channelLabel} campaign to ${sendCount} not-yet-sent users in "${human}"?`)) return;
 
         startTransition(async () => {
             try {
-                const sendResult = await sendAdminCampaign(formData);
-                setResult(`Sent to ${sendResult.recipientCount} users. Email: ${sendResult.emailSuccessCount} sent, ${sendResult.emailFailureCount} failed. Push: ${sendResult.pushSuccessCount} sent, ${sendResult.pushFailureCount} failed.`);
+                let sendResult = await sendAdminCampaign(buildFormData(selectedTargets, Array.from(sentUserIds)));
+                let nextSentUserIds = new Set([...sentUserIds, ...sendResult.sentUserIds]);
+                let nextFailedUserIds = new Set(sendResult.failedUserIds);
+
+                if (autoRetry && sendResult.failedUserIds.length > 0) {
+                    const retryResult = await sendAdminCampaign(buildFormData(sendResult.failedUserIds, Array.from(nextSentUserIds)));
+                    nextSentUserIds = new Set([...nextSentUserIds, ...retryResult.sentUserIds]);
+                    nextFailedUserIds = new Set(retryResult.failedUserIds);
+                    sendResult = {
+                        ...retryResult,
+                        recipientCount: sendResult.recipientCount + retryResult.recipientCount,
+                        emailSuccessCount: sendResult.emailSuccessCount + retryResult.emailSuccessCount,
+                        emailFailureCount: retryResult.emailFailureCount,
+                        pushSuccessCount: sendResult.pushSuccessCount + retryResult.pushSuccessCount,
+                        pushFailureCount: retryResult.pushFailureCount,
+                        sentUserIds: Array.from(nextSentUserIds),
+                        failedUserIds: Array.from(nextFailedUserIds),
+                    };
+                }
+
+                setSentUserIds(nextSentUserIds);
+                setFailedUserIds(nextFailedUserIds);
+                setSelectedIds((current) => new Set(Array.from(current).filter((userId) => !nextSentUserIds.has(userId))));
+                setResult(sendResult);
                 router.refresh();
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Failed to send campaign");
@@ -508,10 +550,26 @@ export function CampaignComposer() {
                             Select individual users, or leave everyone unselected to send to the full audience.
                         </p>
                     </div>
-                    <button type="button" onClick={() => setSelectedIds(selectedIds.size === filteredRecipients.length ? new Set() : new Set(filteredRecipients.map((recipient) => recipient.userId)))} className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white">
-                        {selectedIds.size === filteredRecipients.length ? "Clear selection" : "Select visible"}
+                    <button type="button" onClick={() => {
+                        const selectableIds = filteredRecipients
+                            .map((recipient) => recipient.userId)
+                            .filter((userId) => !sentUserIds.has(userId));
+                        setSelectedIds(selectedIds.size === selectableIds.length ? new Set() : new Set(selectableIds));
+                    }} className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white">
+                        {selectedIds.size === filteredRecipients.filter((recipient) => !sentUserIds.has(recipient.userId)).length ? "Clear selection" : "Select visible"}
                     </button>
                 </div>
+                <label className="mb-3 flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-300">
+                    <input
+                        type="checkbox"
+                        checked={autoRetry}
+                        onChange={(event) => setAutoRetry(event.target.checked)}
+                    />
+                    Auto retry failed recipients once and skip everyone already sent.
+                    {sentUserIds.size > 0 && (
+                        <span className="ml-auto text-emerald-300">{sentUserIds.size} already sent</span>
+                    )}
+                </label>
                 <div className="mb-3 flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
                     <Search className="size-4 text-gray-500" />
                     <input
@@ -538,15 +596,32 @@ export function CampaignComposer() {
                         </thead>
                         <tbody className="divide-y divide-white/10">
                             {filteredRecipients.map((recipient) => (
-                                <tr key={recipient.userId} className="bg-black/10">
+                                <tr key={recipient.userId} className={sentUserIds.has(recipient.userId) ? "bg-emerald-500/5 opacity-70" : "bg-black/10"}>
                                     <td className="px-3 py-3">
-                                        <input type="checkbox" checked={selectedIds.has(recipient.userId)} onChange={() => toggleRecipient(recipient.userId)} />
+                                        <input
+                                            type="checkbox"
+                                            disabled={sentUserIds.has(recipient.userId)}
+                                            checked={selectedIds.has(recipient.userId)}
+                                            onChange={() => toggleRecipient(recipient.userId)}
+                                        />
                                     </td>
                                     <td className="px-3 py-3">
                                         <p className="font-semibold text-white">{recipient.name}</p>
                                         <p className="text-xs text-gray-500">{recipient.userId}</p>
                                     </td>
-                                    <td className="px-3 py-3 text-xs text-gray-300">{recipient.profileStatus}</td>
+                                    <td className="px-3 py-3 text-xs text-gray-300">
+                                        <div>{recipient.profileStatus}</div>
+                                        {sentUserIds.has(recipient.userId) && (
+                                            <span className="mt-1 inline-flex rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200">
+                                                Sent
+                                            </span>
+                                        )}
+                                        {failedUserIds.has(recipient.userId) && !sentUserIds.has(recipient.userId) && (
+                                            <span className="mt-1 inline-flex rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-200">
+                                                Failed
+                                            </span>
+                                        )}
+                                    </td>
                                     <td className="px-3 py-3">
                                         <p className="text-xs text-gray-300">{recipient.email}</p>
                                         <p className="text-xs text-gray-500">{recipient.phoneNumber ?? "No phone"}</p>
@@ -571,11 +646,17 @@ export function CampaignComposer() {
             </section>
 
             {error && <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{error}</div>}
-            {result && <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">{result}</div>}
+            {result && (
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+                    Sent to {result.recipientCount} attempts. Email: {result.emailSuccessCount} sent, {result.emailFailureCount} failed.
+                    Push: {result.pushSuccessCount} sent, {result.pushFailureCount} failed.
+                    {result.excludedUserCount > 0 && ` Skipped ${result.excludedUserCount} already-sent users.`}
+                </div>
+            )}
 
             <button type="submit" disabled={isPending || channels.length === 0} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-4 text-sm font-bold text-black transition-colors hover:bg-white/90 disabled:opacity-40">
                 <Send className="size-4" />
-                {isPending ? "Sending campaign..." : `Send ${channelLabel || "campaign"} to ${selectedCount} users`}
+                {isPending ? "Sending campaign..." : failedUserIds.size > 0 ? `Retry ${failedUserIds.size} failed users` : `Send ${channelLabel || "campaign"} to ${selectedCount} users`}
             </button>
         </form>
     );
