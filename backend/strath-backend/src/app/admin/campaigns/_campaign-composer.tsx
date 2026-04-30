@@ -12,7 +12,6 @@ import {
 } from "@/lib/actions/admin-campaigns";
 import { ArrowDown, ArrowUp, ImageIcon, Mail, Plus, Search, Send, Smartphone, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 
 const DEFAULT_APP_STORE_URL = "https://apps.apple.com/ke/app/strathspace/id6757879443";
 
@@ -268,7 +267,6 @@ export function CampaignComposer() {
     const [result, setResult] = useState<SendResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
-    const router = useRouter();
 
     const selectedCount = selectedIds.size || Math.max((counts?.total || recipients.length) - sentUserIds.size, 0);
     const channelLabel = channels.join(" + ");
@@ -294,6 +292,9 @@ export function CampaignComposer() {
             return searchable.includes(query);
         });
     }, [recipientSearch, recipients]);
+    const alreadySentVisibleCount = filteredRecipients.filter((recipient) => sentUserIds.has(recipient.userId)).length;
+    const failedVisibleCount = filteredRecipients.filter((recipient) => failedUserIds.has(recipient.userId) && !sentUserIds.has(recipient.userId)).length;
+    const pendingVisibleCount = filteredRecipients.length - alreadySentVisibleCount - failedVisibleCount;
 
     const buildFormData = (targetUserIds = Array.from(selectedIds), excludeUserIds = Array.from(sentUserIds)) => {
         const data = new FormData();
@@ -435,7 +436,6 @@ export function CampaignComposer() {
                 setFailedUserIds(nextFailedUserIds);
                 setSelectedIds((current) => new Set(Array.from(current).filter((userId) => !nextSentUserIds.has(userId))));
                 setResult(sendResult);
-                router.refresh();
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Failed to send campaign");
             }
@@ -559,6 +559,23 @@ export function CampaignComposer() {
                         {selectedIds.size === filteredRecipients.filter((recipient) => !sentUserIds.has(recipient.userId)).length ? "Clear selection" : "Select visible"}
                     </button>
                 </div>
+                <div className="mb-3 grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-200">Already sent</p>
+                        <p className="mt-1 text-lg font-bold text-white">{sentUserIds.size}</p>
+                        <p className="text-[11px] text-emerald-200/80">{alreadySentVisibleCount} visible</p>
+                    </div>
+                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-red-200">Failed</p>
+                        <p className="mt-1 text-lg font-bold text-white">{failedUserIds.size}</p>
+                        <p className="text-[11px] text-red-200/80">{failedVisibleCount} visible</p>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Not sent yet</p>
+                        <p className="mt-1 text-lg font-bold text-white">{Math.max((counts?.total || recipients.length) - sentUserIds.size - failedUserIds.size, 0)}</p>
+                        <p className="text-[11px] text-gray-500">{pendingVisibleCount} visible</p>
+                    </div>
+                </div>
                 <label className="mb-3 flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-300">
                     <input
                         type="checkbox"
@@ -592,6 +609,7 @@ export function CampaignComposer() {
                                 <th className="px-3 py-2">Status</th>
                                 <th className="px-3 py-2">Contact</th>
                                 <th className="px-3 py-2">Push</th>
+                                <th className="px-3 py-2">Delivery</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/10">
@@ -631,11 +649,24 @@ export function CampaignComposer() {
                                             {recipient.hasPush ? "Enabled" : "Missing"}
                                         </span>
                                     </td>
+                                    <td className="px-3 py-3 text-xs">
+                                        {sentUserIds.has(recipient.userId) ? (
+                                            <span className="inline-flex rounded-full bg-emerald-500/15 px-2 py-1 font-bold uppercase tracking-wide text-emerald-200">
+                                                Already sent
+                                            </span>
+                                        ) : failedUserIds.has(recipient.userId) ? (
+                                            <span className="inline-flex rounded-full bg-red-500/15 px-2 py-1 font-bold uppercase tracking-wide text-red-200">
+                                                Failed
+                                            </span>
+                                        ) : (
+                                            <span className="text-gray-500">Not sent</span>
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                             {filteredRecipients.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="px-3 py-8 text-center text-sm text-gray-500">
+                                    <td colSpan={6} className="px-3 py-8 text-center text-sm text-gray-500">
                                         {recipients.length === 0 ? "No visible recipients yet." : "No recipients match your search."}
                                     </td>
                                 </tr>
