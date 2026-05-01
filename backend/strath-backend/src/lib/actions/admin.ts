@@ -14,7 +14,7 @@ import {
     appFeatureFlags,
     adminBroadcasts,
 } from "@/db/schema";
-import { eq, desc, count, and, or, gte, lt, sql, isNotNull } from "drizzle-orm";
+import { eq, desc, count, and, or, gte, sql, isNotNull } from "drizzle-orm";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 import { revalidatePath } from "next/cache";
 import { sendPushNotification } from "@/lib/notifications";
@@ -338,13 +338,15 @@ export async function getAdminDateLocations(includeInactive = false) {
 export async function getAdminUsers() {
     await requireAdmin();
 
-    const rows = await db
-        .select()
-        .from(user)
-        .orderBy(desc(user.createdAt))
-        .limit(200);
+    const [[{ total }], rows] = await Promise.all([
+        db.select({ total: count() }).from(user),
+        db
+            .select()
+            .from(user)
+            .orderBy(desc(user.createdAt)),
+    ]);
 
-    return Promise.all(
+    const items = await Promise.all(
         rows.map(async (u) => {
             const profile = await db.query.profiles.findFirst({ where: eq(profiles.userId, u.id) });
             const [sentCount, receivedCount, matchCount] = await Promise.all([
@@ -362,15 +364,48 @@ export async function getAdminUsers() {
                 createdAt: u.createdAt.toISOString(),
                 lastActive: u.lastActive.toISOString(),
                 deletedAt: u.deletedAt?.toISOString() ?? null,
+                phoneNumber: profile?.phoneNumber ?? u.phoneNumber,
                 profileComplete: profile?.profileCompleted ?? false,
+                isComplete: profile?.isComplete ?? false,
                 firstName: profile?.firstName ?? null,
-                profilePhoto: profile?.profilePhoto ?? u.image,
+                lastName: profile?.lastName ?? null,
+                profilePhoto: profile?.profilePhoto ?? u.profilePhoto ?? u.image,
+                photos: profile?.photos ?? [],
+                age: profile?.age ?? null,
+                gender: profile?.gender ?? null,
+                bio: profile?.bio ?? null,
+                aboutMe: profile?.aboutMe ?? null,
+                course: profile?.course ?? null,
+                university: profile?.university ?? null,
+                yearOfStudy: profile?.yearOfStudy ?? null,
+                education: profile?.education ?? null,
+                lookingFor: profile?.lookingFor ?? null,
+                currentLocation: profile?.currentLocation ?? null,
+                locationPermissionStatus: profile?.locationPermissionStatus ?? null,
+                interests: profile?.interests ?? [],
+                qualities: profile?.qualities ?? [],
+                prompts: profile?.prompts ?? [],
+                faceVerificationStatus: profile?.faceVerificationStatus ?? null,
+                faceVerifiedAt: profile?.faceVerifiedAt?.toISOString() ?? null,
+                faceVerificationRetryCount: profile?.faceVerificationRetryCount ?? 0,
+                waitlistStatus: profile?.waitlistStatus ?? null,
+                waitlistPosition: profile?.waitlistPosition ?? null,
+                admittedAt: profile?.admittedAt?.toISOString() ?? null,
+                isVisible: profile?.isVisible ?? null,
+                anonymous: profile?.anonymous ?? null,
+                discoveryPaused: profile?.discoveryPaused ?? null,
+                aiConsentGranted: profile?.aiConsentGranted ?? null,
                 sentRequests: sentCount[0].cnt,
                 receivedRequests: receivedCount[0].cnt,
                 dateMatches: matchCount[0].cnt,
             };
         })
     );
+
+    return {
+        total,
+        items,
+    };
 }
 
 // ─── Mutations ────────────────────────────────────────────────────────────────
@@ -457,11 +492,13 @@ export async function scheduleDate(formData: FormData) {
 export async function updateDateMatchStatus(matchId: string, status: string) {
     await requireAdmin();
 
-    const validStatuses = ["pending_setup", "scheduled", "attended", "cancelled", "no_show"];
-    if (!validStatuses.includes(status)) throw new Error("Invalid status");
+    const validStatuses = ["pending_setup", "scheduled", "attended", "cancelled", "no_show"] as const;
+    type DateMatchStatus = (typeof validStatuses)[number];
+    if (!validStatuses.includes(status as DateMatchStatus)) throw new Error("Invalid status");
+    const nextStatus = status as DateMatchStatus;
 
     await db.update(dateMatches)
-        .set({ status: status as any })
+        .set({ status: nextStatus })
         .where(eq(dateMatches.id, matchId));
 
     // Mirror the new admin status onto the linked mutualMatches row so the mobile Dates
