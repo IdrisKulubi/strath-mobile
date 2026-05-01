@@ -1,6 +1,11 @@
 import { getAdminDateRequests } from "@/lib/actions/admin";
 
 const STATUS_COLORS: Record<string, string> = {
+    open_to_meet: "bg-emerald-500/20 text-emerald-300",
+    passed: "bg-red-500/20 text-red-300",
+    mutual: "bg-pink-500/20 text-pink-200",
+    mutual_match: "bg-pink-500/20 text-pink-200",
+    legacy_request: "bg-blue-500/20 text-blue-200",
     pending: "bg-yellow-500/20 text-yellow-300",
     accepted: "bg-green-500/20 text-green-300",
     declined: "bg-red-500/20 text-red-300",
@@ -8,12 +13,61 @@ const STATUS_COLORS: Record<string, string> = {
     cancelled: "bg-orange-500/20 text-orange-300",
 };
 
-const VIBE_EMOJIS: Record<string, string> = {
-    coffee: "☕",
-    walk: "🚶",
-    dinner: "🍽",
-    hangout: "🎮",
-};
+const FILTERS = [
+    { value: "all", label: "All" },
+    { value: "open_to_meet", label: "Open to meet" },
+    { value: "passed", label: "Passed" },
+    { value: "mutual_match", label: "Mutual matches" },
+    { value: "legacy_request", label: "Legacy invites" },
+    { value: "pending", label: "Pending old invites" },
+];
+
+function formatDate(value: string) {
+    return new Date(value).toLocaleDateString("en-KE", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
+function UserCell({
+    user,
+}: {
+    user: Awaited<ReturnType<typeof getAdminDateRequests>>["rows"][number]["fromUser"];
+}) {
+    return (
+        <div className="flex items-center gap-3">
+            {user.profilePhoto ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.profilePhoto} alt="" className="size-9 rounded-full object-cover" />
+            ) : (
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-pink-600 text-xs font-bold text-white">
+                    {user.firstName.charAt(0).toUpperCase()}
+                </div>
+            )}
+            <div>
+                <div className="font-medium text-white">{user.name || user.firstName}</div>
+                {user.email && <div className="max-w-[190px] truncate text-xs text-gray-500">{user.email}</div>}
+                {user.phone && <div className="text-xs text-gray-500">{user.phone}</div>}
+                {(user.university || user.course) && (
+                    <div className="max-w-[210px] truncate text-[11px] text-gray-600">
+                        {[user.course, user.university].filter(Boolean).join(" · ")}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+    return (
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
+            <p className="mt-2 text-2xl font-bold text-white">{value}</p>
+        </div>
+    );
+}
 
 export default async function DateRequestsPage({
     searchParams,
@@ -21,85 +75,97 @@ export default async function DateRequestsPage({
     searchParams: Promise<{ status?: string }>;
 }) {
     const { status } = await searchParams;
-    const rows = await getAdminDateRequests(status);
-
-    const filters = ["all", "pending", "accepted", "declined", "expired", "cancelled"];
+    const { rows, stats } = await getAdminDateRequests(status);
 
     return (
         <div className="p-8">
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-white">Date Requests</h1>
-                <p className="mt-1 text-sm text-gray-400">{rows.length} result{rows.length !== 1 ? "s" : ""}</p>
+                <h1 className="text-2xl font-bold text-white">Match Activity</h1>
+                <p className="mt-1 max-w-3xl text-sm text-gray-400">
+                    Current matching decisions come from candidate pairs. Legacy direct date invites are still shown here when they exist.
+                </p>
+            </div>
+
+            <div className="mb-6 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+                <Stat label="All activity" value={stats.all} />
+                <Stat label="Open to meet" value={stats.openToMeet} />
+                <Stat label="Passed" value={stats.passed} />
+                <Stat label="Mutual matches" value={stats.mutual} />
+                <Stat label="Legacy invites" value={stats.legacy} />
+                <Stat label="Pending pairs" value={stats.pendingPairs} />
             </div>
 
             <div className="mb-6 flex flex-wrap gap-2">
-                {filters.map((f) => (
+                {FILTERS.map((filter) => (
                     <a
-                        key={f}
-                        href={f === "all" ? "/admin/date-requests" : `/admin/date-requests?status=${f}`}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-                            (status ?? "all") === f
+                        key={filter.value}
+                        href={filter.value === "all" ? "/admin/date-requests" : `/admin/date-requests?status=${filter.value}`}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                            (status ?? "all") === filter.value
                                 ? "bg-purple-600 text-white"
                                 : "bg-white/8 text-gray-400 hover:bg-white/12 hover:text-white"
                         }`}
                     >
-                        {f}
+                        {filter.label}
                     </a>
                 ))}
             </div>
 
             <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
                 {rows.length === 0 ? (
-                    <div className="p-12 text-center text-gray-500">No requests found</div>
+                    <div className="p-12 text-center text-gray-500">No match activity found</div>
                 ) : (
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-white/10">
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">From</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">To</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Vibe</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Message</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Status</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Sent</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Actor</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Target</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Activity</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Pair</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Details</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">When</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {rows.map((r, i) => (
+                            {rows.map((row, index) => (
                                 <tr
-                                    key={r.id}
-                                    className={`border-b border-white/5 last:border-0 ${i % 2 === 0 ? "" : "bg-white/2"}`}
+                                    key={row.id}
+                                    className={`border-b border-white/5 last:border-0 ${index % 2 === 0 ? "" : "bg-white/2"}`}
                                 >
                                     <td className="px-4 py-3">
-                                        <div className="font-medium text-white">{r.fromUser.firstName}</div>
-                                        {r.fromUser.email && <div className="max-w-[160px] truncate text-xs text-gray-500">{r.fromUser.email}</div>}
-                                        {r.fromUser.phone && <div className="text-xs text-gray-500">{r.fromUser.phone}</div>}
-                                        {r.fromUser.location && <div className="max-w-[180px] truncate text-xs text-gray-600">{r.fromUser.location}</div>}
+                                        <UserCell user={row.fromUser} />
                                     </td>
                                     <td className="px-4 py-3">
-                                        <div className="font-medium text-white">{r.toUser.firstName}</div>
-                                        {r.toUser.email && <div className="max-w-[160px] truncate text-xs text-gray-500">{r.toUser.email}</div>}
-                                        {r.toUser.phone && <div className="text-xs text-gray-500">{r.toUser.phone}</div>}
-                                        {r.toUser.location && <div className="max-w-[180px] truncate text-xs text-gray-600">{r.toUser.location}</div>}
-                                    </td>
-                                    <td className="px-4 py-3 text-gray-300">
-                                        <span className="capitalize">{VIBE_EMOJIS[r.vibe] ?? ""} {r.vibe}</span>
-                                    </td>
-                                    <td className="max-w-[200px] px-4 py-3 text-gray-400">
-                                        <span className="block truncate">{r.message ?? "-"}</span>
+                                        <UserCell user={row.toUser} />
                                     </td>
                                     <td className="px-4 py-3">
-                                        <span className={`rounded-md px-2 py-1 text-xs font-medium capitalize ${STATUS_COLORS[r.status] ?? ""}`}>
-                                            {r.status}
+                                        <span className={`rounded-md px-2 py-1 text-xs font-medium ${STATUS_COLORS[row.kind] ?? "bg-white/8 text-gray-300"}`}>
+                                            {row.label}
                                         </span>
+                                        <div className="mt-1 text-[11px] text-gray-500">{row.source.replace(/_/g, " ")}</div>
                                     </td>
-                                    <td className="px-4 py-3 text-xs text-gray-500">
-                                        {new Date(r.createdAt).toLocaleDateString("en-KE", {
-                                            month: "short",
-                                            day: "numeric",
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                        })}
+                                    <td className="px-4 py-3 text-xs text-gray-400">
+                                        {row.pairStatus ? (
+                                            <>
+                                                <div className="capitalize">{row.pairStatus.replace(/_/g, " ")}</div>
+                                                {row.compatibilityScore !== null && (
+                                                    <div className="text-gray-500">{row.compatibilityScore}% compatibility</div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <span className="text-gray-500">Direct invite</span>
+                                        )}
                                     </td>
+                                    <td className="max-w-[260px] px-4 py-3 text-xs text-gray-400">
+                                        {row.message ? (
+                                            <span className="block truncate">{row.message}</span>
+                                        ) : row.matchReasons.length > 0 ? (
+                                            <span className="block truncate">{row.matchReasons.join(" · ")}</span>
+                                        ) : (
+                                            <span className="text-gray-500">-</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-xs text-gray-500">{formatDate(row.updatedAt)}</td>
                                 </tr>
                             ))}
                         </tbody>

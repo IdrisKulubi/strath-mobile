@@ -8,6 +8,8 @@ import {
     dateRequests,
     dateMatches,
     dateFeedback,
+    candidatePairs,
+    mutualMatches,
     analyticsEvents,
     dateLocations,
     vibeChecks,
@@ -51,10 +53,16 @@ export async function getAdminMetrics() {
         [{ onCall }],
     ] = await Promise.all([
         db.select({ totalUsers: count() }).from(user),
-        db.select({ totalRequestsAllTime: count() }).from(dateRequests),
-        db.select({ requestsToday: count() }).from(dateRequests).where(gte(dateRequests.createdAt, todayStart)),
-        db.select({ totalAccepted: count() }).from(dateRequests).where(eq(dateRequests.status, "accepted")),
-        db.select({ totalDeclined: count() }).from(dateRequests).where(eq(dateRequests.status, "declined")),
+        db.select({
+            totalRequestsAllTime: sql<number>`coalesce(sum((case when ${candidatePairs.aDecision} <> 'pending' then 1 else 0 end) + (case when ${candidatePairs.bDecision} <> 'pending' then 1 else 0 end)), 0)::int`,
+        }).from(candidatePairs),
+        db.select({
+            requestsToday: sql<number>`coalesce(sum((case when ${candidatePairs.aDecision} <> 'pending' then 1 else 0 end) + (case when ${candidatePairs.bDecision} <> 'pending' then 1 else 0 end)), 0)::int`,
+        }).from(candidatePairs).where(gte(candidatePairs.updatedAt, todayStart)),
+        db.select({ totalAccepted: count() }).from(mutualMatches),
+        db.select({
+            totalDeclined: sql<number>`coalesce(sum((case when ${candidatePairs.aDecision} = 'passed' then 1 else 0 end) + (case when ${candidatePairs.bDecision} = 'passed' then 1 else 0 end)), 0)::int`,
+        }).from(candidatePairs),
         db.select({ pendingSetup: count() }).from(dateMatches).where(
             and(
                 eq(dateMatches.status, "pending_setup"),
@@ -97,43 +105,140 @@ export async function getAdminMetrics() {
 export async function getAdminDateRequests(statusFilter?: string) {
     await requireAdmin();
 
-    const rows = await db
-        .select()
-        .from(dateRequests)
-        .orderBy(desc(dateRequests.createdAt))
-        .limit(100);
+    const [legacyRequests, pairs, mutuals] = await Promise.all([
+        db.select().from(dateRequests).orderBy(desc(dateRequests.createdAt)),
+        db.select().from(candidatePairs).orderBy(desc(candidatePairs.updatedAt)),
+        db.select().from(mutualMatches).orderBy(desc(mutualMatches.createdAt)),
+    ]);
+
+    async function getAdminUserSummary(userId: string) {
+        const profile = await db.query.profiles.findFirst({
+            where: eq(profiles.userId, userId),
+            with: { user: true },
+        });
+        const fallbackUser = profile?.user
+            ? null
+            : await db.query.user.findFirst({ where: eq(user.id, userId) });
+
+        return {
+            id: userId,
+            firstName: profile?.firstName || profile?.user?.name?.split(" ")[0] || fallbackUser?.name?.split(" ")[0] || "Unknown",
+            name: profile ? [profile.firstName, profile.lastName].filter(Boolean).join(" ") : fallbackUser?.name ?? "Unknown",
+            profilePhoto: profile?.profilePhoto ?? profile?.user?.profilePhoto ?? profile?.user?.image ?? fallbackUser?.profilePhoto ?? fallbackUser?.image,
+            email: profile?.user?.email ?? fallbackUser?.email,
+            phone: profile?.phoneNumber ?? profile?.user?.phoneNumber ?? fallbackUser?.phoneNumber,
+            location: profile?.currentLocation,
+            university: profile?.university,
+            course: profile?.course,
+        };
+    }
+
+    const legacyRows = await Promise.all(
+        legacyRequests.map(async (request) => ({
+            id: `legacy-${request.id}`,
+            source: "legacy_request" as const,
+            kind: "legacy_request" as const,
+            label: "Direct invite",
+            status: request.status,
+            decision: null,
+            pairStatus: null,
+            compatibilityScore: null,
+            matchReasons: [] as string[],
+            message: request.message,
+            vibe: request.vibe,
+            createdAt: request.createdAt.toISOString(),
+            updatedAt: request.updatedAt.toISOString(),
+            fromUser: await getAdminUserSummary(request.fromUserId),
+            toUser: await getAdminUserSummary(request.toUserId),
+        })),
+    );
+
+    const decisionRows = (
+        await Promise.all(
+            pairs.flatMap((pair) => {
+                const rows = [];
+                if (pair.aDecision !== "pending") {
+                    rows.push((async () => ({
+                        id: `pair-${pair.id}-a`,
+                        source: "candidate_pair" as const,
+                        kind: pair.aDecision === "open_to_meet" ? "open_to_meet" as const : "passed" as const,
+                        label: pair.aDecision === "open_to_meet" ? "Open to meet" : "Passed",
+                        status: pair.aDecision,
+                        decision: pair.aDecision,
+                        pairStatus: pair.status,
+                        compatibilityScore: pair.compatibilityScore,
+                        matchReasons: pair.matchReasons,
+                        message: null,
+                        vibe: null,
+                        createdAt: pair.createdAt.toISOString(),
+                        updatedAt: pair.updatedAt.toISOString(),
+                        fromUser: await getAdminUserSummary(pair.userAId),
+                        toUser: await getAdminUserSummary(pair.userBId),
+                    }))());
+                }
+                if (pair.bDecision !== "pending") {
+                    rows.push((async () => ({
+                        id: `pair-${pair.id}-b`,
+                        source: "candidate_pair" as const,
+                        kind: pair.bDecision === "open_to_meet" ? "open_to_meet" as const : "passed" as const,
+                        label: pair.bDecision === "open_to_meet" ? "Open to meet" : "Passed",
+                        status: pair.bDecision,
+                        decision: pair.bDecision,
+                        pairStatus: pair.status,
+                        compatibilityScore: pair.compatibilityScore,
+                        matchReasons: pair.matchReasons,
+                        message: null,
+                        vibe: null,
+                        createdAt: pair.createdAt.toISOString(),
+                        updatedAt: pair.updatedAt.toISOString(),
+                        fromUser: await getAdminUserSummary(pair.userBId),
+                        toUser: await getAdminUserSummary(pair.userAId),
+                    }))());
+                }
+                return rows;
+            }),
+        )
+    ).flat();
+
+    const mutualRows = await Promise.all(
+        mutuals.map(async (match) => ({
+            id: `mutual-${match.id}`,
+            source: "mutual_match" as const,
+            kind: "mutual_match" as const,
+            label: "Mutual match",
+            status: match.status,
+            decision: "accepted",
+            pairStatus: match.status,
+            compatibilityScore: null,
+            matchReasons: [] as string[],
+            message: null,
+            vibe: null,
+            createdAt: match.createdAt.toISOString(),
+            updatedAt: match.updatedAt.toISOString(),
+            fromUser: await getAdminUserSummary(match.userAId),
+            toUser: await getAdminUserSummary(match.userBId),
+        })),
+    );
+
+    const rows = [...decisionRows, ...mutualRows, ...legacyRows].sort(
+        (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+    );
 
     const filtered = statusFilter && statusFilter !== "all"
-        ? rows.filter((r) => r.status === statusFilter)
+        ? rows.filter((row) => row.kind === statusFilter || row.status === statusFilter || row.pairStatus === statusFilter)
         : rows;
 
-    return Promise.all(
-        filtered.map(async (r) => {
-            const [fromProfile, toProfile] = await Promise.all([
-                db.query.profiles.findFirst({ where: eq(profiles.userId, r.fromUserId), with: { user: true } }),
-                db.query.profiles.findFirst({ where: eq(profiles.userId, r.toUserId), with: { user: true } }),
-            ]);
-            return {
-                ...r,
-                createdAt: r.createdAt.toISOString(),
-                updatedAt: r.updatedAt.toISOString(),
-                fromUser: {
-                    firstName: fromProfile?.firstName ?? fromProfile?.user?.name?.split(" ")[0] ?? "Unknown",
-                    profilePhoto: fromProfile?.profilePhoto ?? fromProfile?.user?.image,
-                    email: fromProfile?.user?.email,
-                    phone: fromProfile?.phoneNumber ?? fromProfile?.user?.phoneNumber,
-                    location: fromProfile?.currentLocation,
-                },
-                toUser: {
-                    firstName: toProfile?.firstName ?? toProfile?.user?.name?.split(" ")[0] ?? "Unknown",
-                    profilePhoto: toProfile?.profilePhoto ?? toProfile?.user?.image,
-                    email: toProfile?.user?.email,
-                    phone: toProfile?.phoneNumber ?? toProfile?.user?.phoneNumber,
-                    location: toProfile?.currentLocation,
-                },
-            };
-        })
-    );
+    return {
+        rows: filtered,
+        stats: {
+            all: rows.length,
+            openToMeet: decisionRows.filter((row) => row.kind === "open_to_meet").length,
+            passed: decisionRows.filter((row) => row.kind === "passed").length,
+            mutual: mutualRows.length,
+            legacy: legacyRows.length,
+            pendingPairs: pairs.filter((pair) => pair.status === "active" && (pair.aDecision === "pending" || pair.bDecision === "pending")).length,
+        },
+    };
 }
 
 export async function getAdminPendingDates() {
@@ -350,8 +455,18 @@ export async function getAdminUsers() {
         rows.map(async (u) => {
             const profile = await db.query.profiles.findFirst({ where: eq(profiles.userId, u.id) });
             const [sentCount, receivedCount, matchCount] = await Promise.all([
-                db.select({ cnt: count() }).from(dateRequests).where(eq(dateRequests.fromUserId, u.id)),
-                db.select({ cnt: count() }).from(dateRequests).where(eq(dateRequests.toUserId, u.id)),
+                db.select({ cnt: count() }).from(candidatePairs).where(
+                    or(
+                        and(eq(candidatePairs.userAId, u.id), sql`${candidatePairs.aDecision} <> 'pending'`),
+                        and(eq(candidatePairs.userBId, u.id), sql`${candidatePairs.bDecision} <> 'pending'`),
+                    ),
+                ),
+                db.select({ cnt: count() }).from(candidatePairs).where(
+                    or(
+                        and(eq(candidatePairs.userAId, u.id), sql`${candidatePairs.bDecision} <> 'pending'`),
+                        and(eq(candidatePairs.userBId, u.id), sql`${candidatePairs.aDecision} <> 'pending'`),
+                    ),
+                ),
                 db.select({ cnt: count() }).from(dateMatches).where(
                     or(eq(dateMatches.userAId, u.id), eq(dateMatches.userBId, u.id))
                 ),

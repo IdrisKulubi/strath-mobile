@@ -161,8 +161,8 @@ function UserModal({ user, onClose }: { user: AdminUser; onClose: () => void }) 
 
                     <section className="space-y-5">
                         <div className="grid gap-3 sm:grid-cols-3">
-                            <Stat label="Sent requests" value={user.sentRequests} />
-                            <Stat label="Received" value={user.receivedRequests} />
+                            <Stat label="Sent decisions" value={user.sentRequests} />
+                            <Stat label="Received decisions" value={user.receivedRequests} />
                             <Stat label="Date matches" value={user.dateMatches} />
                         </div>
 
@@ -381,7 +381,7 @@ export function UsersExplorer({ users, total }: { users: AdminUser[]; total: num
                                         <div className="text-gray-500">{user.course ?? "No course"}</div>
                                     </td>
                                     <td className="space-y-0.5 px-4 py-3 text-xs text-gray-400">
-                                        <div>{user.sentRequests} sent · {user.receivedRequests} received</div>
+                                        <div>{user.sentRequests} sent decisions · {user.receivedRequests} received</div>
                                         <div className="text-gray-500">{user.dateMatches} date matches</div>
                                     </td>
                                     <td className="px-4 py-3 text-xs text-gray-500">{formatDate(user.lastActive)}</td>

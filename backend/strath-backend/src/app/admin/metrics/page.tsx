@@ -47,16 +47,16 @@ export default async function AdminMetricsPage() {
             rate: "Total signups with complete profile",
         },
         {
-            label: "Date requests sent",
+            label: "Match decisions sent",
             value: metrics.totalRequestsAllTime,
             color: "bg-indigo-500",
             rate: `${metrics.requestsToday} today`,
         },
         {
-            label: "Requests accepted",
+            label: "Mutual matches",
             value: metrics.totalAccepted,
             color: "bg-blue-500",
-            rate: `${metrics.acceptanceRate}% acceptance rate`,
+            rate: `${metrics.acceptanceRate}% mutual rate`,
         },
         {
             label: "Dates scheduled",
@@ -120,7 +120,7 @@ export default async function AdminMetricsPage() {
                     <tbody>
                         {[
                             {
-                                step: "Acceptance rate",
+                                step: "Mutual match rate",
                                 count: metrics.totalAccepted,
                                 base: metrics.totalRequestsAllTime,
                                 target: 30,

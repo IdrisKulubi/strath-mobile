@@ -60,7 +60,7 @@ const groups: NavGroup[] = [
         icon: ClipboardList,
         items: [
             { href: "/admin/verification", label: "Verification", icon: ShieldCheck },
-            { href: "/admin/date-requests", label: "Date Requests", icon: ClipboardList },
+            { href: "/admin/date-requests", label: "Match Activity", icon: ClipboardList },
             { href: "/admin/on-call", label: "On Call", icon: PhoneCall },
             { href: "/admin/pending-dates", label: "Arranging", icon: CalendarClock },
             { href: "/admin/scheduled-dates", label: "Upcoming", icon: CalendarCheck2 },
