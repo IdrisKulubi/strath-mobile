@@ -41,6 +41,8 @@ export async function DELETE(request: NextRequest) {
         await db.update(user)
             .set({ 
                 deletedAt: new Date(),
+                deletedReason: "self_deleted",
+                deletedByUserId: userId,
                 isOnline: false,
             })
             .where(eq(user.id, userId));

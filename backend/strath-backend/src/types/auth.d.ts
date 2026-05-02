@@ -5,6 +5,8 @@ declare module "better-auth" {
     interface User {
         role?: "user" | "admin";
         deletedAt?: Date | null;
+        deletedReason?: "self_deleted" | "admin_suspended" | null;
+        deletedByUserId?: string | null;
         lastActive?: Date;
         isOnline?: boolean;
         profilePhoto?: string | null;

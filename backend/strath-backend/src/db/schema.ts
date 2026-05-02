@@ -58,6 +58,8 @@ export const user = pgTable(
         phoneNumber: text("phone_number"),
         pushToken: text("push_token"),
         deletedAt: timestamp("deleted_at"), // Soft delete - when set, account is marked as deleted
+        deletedReason: text("deleted_reason").$type<"self_deleted" | "admin_suspended" | null>(),
+        deletedByUserId: text("deleted_by_user_id"),
     },
     (table) => ({
         emailIdx: index("user_email_idx").on(table.email),

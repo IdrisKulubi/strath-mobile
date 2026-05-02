@@ -13,6 +13,8 @@ type AdminUser = {
     createdAt: string;
     lastActive: string;
     deletedAt: string | null;
+    deletedReason: "self_deleted" | "admin_suspended" | null;
+    deletedByUserId: string | null;
     phoneNumber: string | null;
     profileComplete: boolean;
     isComplete: boolean;
@@ -49,7 +51,7 @@ type AdminUser = {
     dateMatches: number;
 };
 
-type Filter = "all" | "complete" | "incomplete" | "noPhotos" | "verification" | "waitlisted" | "suspended" | "admins";
+type Filter = "all" | "complete" | "incomplete" | "noPhotos" | "verification" | "waitlisted" | "suspended" | "deleted" | "removed" | "admins";
 
 const FILTERS: { value: Filter; label: string }[] = [
     { value: "all", label: "All" },
@@ -59,6 +61,8 @@ const FILTERS: { value: Filter; label: string }[] = [
     { value: "verification", label: "Verification issues" },
     { value: "waitlisted", label: "Waitlisted" },
     { value: "suspended", label: "Suspended" },
+    { value: "deleted", label: "Self-deleted" },
+    { value: "removed", label: "Removed" },
     { value: "admins", label: "Admins" },
 ];
 
@@ -86,6 +90,27 @@ function allPhotos(user: AdminUser) {
 
 function verificationIssue(user: AdminUser) {
     return ["retry_required", "manual_review", "failed", "blocked"].includes(user.faceVerificationStatus ?? "");
+}
+
+function accountState(user: AdminUser) {
+    if (!user.deletedAt) return "active";
+    if (user.deletedReason === "admin_suspended") return "suspended";
+    if (user.deletedReason === "self_deleted") return "self-deleted";
+    return "removed";
+}
+
+function accountStateLabel(user: AdminUser) {
+    switch (accountState(user)) {
+        case "suspended":
+            return "suspended";
+        case "self-deleted":
+            return "self-deleted";
+        case "removed":
+            return "removed: source unknown";
+        case "active":
+        default:
+            return null;
+    }
 }
 
 function Stat({ label, value, tone = "default" }: { label: string; value: number; tone?: "default" | "good" | "bad" }) {
@@ -123,6 +148,9 @@ function UserModal({ user, onClose }: { user: AdminUser; onClose: () => void }) 
         ["Visible", user.isVisible === null ? "No profile" : user.isVisible ? "Yes" : "No"],
         ["Discovery paused", user.discoveryPaused === null ? "No profile" : user.discoveryPaused ? "Yes" : "No"],
         ["AI consent", user.aiConsentGranted === null ? "No profile" : user.aiConsentGranted ? "Yes" : "No"],
+        ["Account state", accountStateLabel(user) ?? "Active"],
+        ["Removed at", user.deletedAt ? formatDate(user.deletedAt) : "Not set"],
+        ["Removed by", user.deletedByUserId ?? "Not set"],
         ["Created", formatDate(user.createdAt)],
         ["Last active", formatDate(user.lastActive)],
     ];
@@ -238,7 +266,8 @@ export function UsersExplorer({ users, total }: { users: AdminUser[]; total: num
         noPhotos: users.filter((user) => allPhotos(user).length === 0).length,
         verificationIssues: users.filter(verificationIssue).length,
         waitlisted: users.filter((user) => user.waitlistStatus === "waitlisted").length,
-        suspended: users.filter((user) => Boolean(user.deletedAt)).length,
+        suspended: users.filter((user) => accountState(user) === "suspended").length,
+        selfDeleted: users.filter((user) => accountState(user) === "self-deleted").length,
     }), [users]);
 
     const filteredUsers = useMemo(() => {
@@ -253,6 +282,7 @@ export function UsersExplorer({ users, total }: { users: AdminUser[]; total: num
                 user.university,
                 user.faceVerificationStatus,
                 user.waitlistStatus,
+                accountStateLabel(user),
                 user.id,
             ].filter(Boolean).join(" ").toLowerCase().includes(normalized);
 
@@ -270,6 +300,10 @@ export function UsersExplorer({ users, total }: { users: AdminUser[]; total: num
                 case "waitlisted":
                     return user.waitlistStatus === "waitlisted";
                 case "suspended":
+                    return accountState(user) === "suspended";
+                case "deleted":
+                    return accountState(user) === "self-deleted";
+                case "removed":
                     return Boolean(user.deletedAt);
                 case "admins":
                     return user.role === "admin";
@@ -289,6 +323,7 @@ export function UsersExplorer({ users, total }: { users: AdminUser[]; total: num
                 <Stat label="No photos" value={stats.noPhotos} tone="bad" />
                 <Stat label="Verification issues" value={stats.verificationIssues} tone="bad" />
                 <Stat label="Suspended" value={stats.suspended} tone="bad" />
+                <Stat label="Self-deleted" value={stats.selfDeleted} tone="bad" />
             </div>
 
             <div className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -356,7 +391,7 @@ export function UsersExplorer({ users, total }: { users: AdminUser[]; total: num
                                             <div>
                                                 <div className="font-medium leading-tight text-white">
                                                     {fullName(user)}
-                                                    {user.deletedAt && <span className="ml-2 text-xs text-red-400">(suspended)</span>}
+                                                    {accountStateLabel(user) && <span className="ml-2 text-xs text-red-400">({accountStateLabel(user)})</span>}
                                                 </div>
                                                 <div className="max-w-[220px] truncate text-xs text-gray-500">{user.email}</div>
                                                 <div className="text-[11px] text-gray-600">{user.phoneNumber ?? "No phone"} · {user.role ?? "user"}</div>

@@ -77,6 +77,14 @@ export const auth = betterAuth({
                 type: "date",
                 required: false,
             },
+            deletedReason: {
+                type: "string",
+                required: false,
+            },
+            deletedByUserId: {
+                type: "string",
+                required: false,
+            },
         },
     },
 });

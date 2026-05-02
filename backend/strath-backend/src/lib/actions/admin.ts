@@ -479,6 +479,8 @@ export async function getAdminUsers() {
                 createdAt: u.createdAt.toISOString(),
                 lastActive: u.lastActive.toISOString(),
                 deletedAt: u.deletedAt?.toISOString() ?? null,
+                deletedReason: u.deletedReason ?? null,
+                deletedByUserId: u.deletedByUserId ?? null,
                 phoneNumber: profile?.phoneNumber ?? u.phoneNumber,
                 profileComplete: profile?.profileCompleted ?? false,
                 isComplete: profile?.isComplete ?? false,
@@ -1149,13 +1151,21 @@ export async function setUserRole(userId: string, role: "user" | "admin") {
 }
 
 export async function suspendUser(userId: string) {
-    await requireAdmin();
-    await db.update(user).set({ deletedAt: new Date() }).where(eq(user.id, userId));
+    const session = await requireAdmin();
+    await db.update(user).set({
+        deletedAt: new Date(),
+        deletedReason: "admin_suspended",
+        deletedByUserId: session.user.id,
+    }).where(eq(user.id, userId));
     revalidatePath("/admin/users");
 }
 
 export async function reinstateUser(userId: string) {
     await requireAdmin();
-    await db.update(user).set({ deletedAt: null }).where(eq(user.id, userId));
+    await db.update(user).set({
+        deletedAt: null,
+        deletedReason: null,
+        deletedByUserId: null,
+    }).where(eq(user.id, userId));
     revalidatePath("/admin/users");
 }
