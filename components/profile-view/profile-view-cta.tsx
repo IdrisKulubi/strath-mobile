@@ -12,6 +12,7 @@ import { BlockReportModal } from '@/components/discover/block-report-modal';
 
 interface ProfileViewCtaProps {
     onOpenToMeet: () => void;
+    onMaybe?: () => void;
     onPass?: () => void;
     disabled?: boolean;
     completed?: boolean;
@@ -24,10 +25,11 @@ interface ProfileViewCtaProps {
 
 export function ProfileViewCta({
     onOpenToMeet,
+    onMaybe,
     onPass,
     disabled = false,
     completed = false,
-    label = 'Open to Meet',
+    label = 'Interested',
     safetyTarget,
     onSafetyActionComplete,
 }: ProfileViewCtaProps) {
@@ -114,11 +116,20 @@ export function ProfileViewCta({
             ) : null}
 
             {onPass && !completed && !disabled && (
-                <Pressable onPress={onPass} style={styles.passWrap}>
-                    <Text style={[styles.passText, { color: colors.mutedForeground }]}>
-                        Pass
-                    </Text>
-                </Pressable>
+                <View style={styles.secondaryRow}>
+                    {onMaybe ? (
+                        <Pressable onPress={onMaybe} style={styles.secondaryBtn}>
+                            <Text style={[styles.passText, { color: colors.mutedForeground }]}>
+                                Maybe
+                            </Text>
+                        </Pressable>
+                    ) : null}
+                    <Pressable onPress={onPass} style={styles.secondaryBtn}>
+                        <Text style={[styles.passText, { color: colors.mutedForeground }]}>
+                            Pass
+                        </Text>
+                    </Pressable>
+                </View>
             )}
 
             {safetyTarget && blockReportMode ? (
@@ -170,10 +181,15 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '700',
     },
-    passWrap: {
+    secondaryRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 4,
+    },
+    secondaryBtn: {
+        flex: 1,
         alignItems: 'center',
         paddingVertical: 12,
-        marginTop: 4,
     },
     passText: {
         fontSize: 14,

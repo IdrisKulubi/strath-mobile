@@ -445,11 +445,11 @@ export const candidatePairs = pgTable(
         shownToAAt: timestamp("shown_to_a_at").defaultNow().notNull(),
         shownToBAt: timestamp("shown_to_b_at").defaultNow().notNull(),
         aDecision: text("a_decision")
-            .$type<"pending" | "open_to_meet" | "passed">()
+            .$type<"pending" | "open_to_meet" | "maybe" | "passed">()
             .default("pending")
             .notNull(),
         bDecision: text("b_decision")
-            .$type<"pending" | "open_to_meet" | "passed">()
+            .$type<"pending" | "open_to_meet" | "maybe" | "passed">()
             .default("pending")
             .notNull(),
         status: text("status")
@@ -459,6 +459,8 @@ export const candidatePairs = pgTable(
         /** When status is `queued`, introduction goes live at this UTC time (successive calendar days). */
         revealAt: timestamp("reveal_at"),
         expiresAt: timestamp("expires_at").notNull(),
+        reminderSentAt: timestamp("reminder_sent_at"),
+        oneSidedReminderSentAt: timestamp("one_sided_reminder_sent_at"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
     },
@@ -471,6 +473,8 @@ export const candidatePairs = pgTable(
         revealAtIdx: index("candidate_pairs_reveal_at_idx").on(table.status, table.revealAt),
         activeExposureAIdx: index("candidate_pairs_active_exposure_a_idx").on(table.userAId, table.status, table.expiresAt),
         activeExposureBIdx: index("candidate_pairs_active_exposure_b_idx").on(table.userBId, table.status, table.expiresAt),
+        reminderIdx: index("candidate_pairs_reminder_idx").on(table.status, table.expiresAt, table.reminderSentAt),
+        oneSidedReminderIdx: index("candidate_pairs_one_sided_reminder_idx").on(table.status, table.oneSidedReminderSentAt),
     })
 );
 
@@ -489,6 +493,7 @@ export const candidatePairHistory = pgTable(
                 | "generated"
                 | "promoted"
                 | "responded"
+                | "reminder_sent"
                 | "mutual"
                 | "closed"
                 | "expired"

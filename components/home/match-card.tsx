@@ -23,6 +23,7 @@ interface MatchCardProps {
     match: DailyMatch;
     index: number;
     onOpenToMeet: (match: DailyMatch) => void;
+    onMaybe: (match: DailyMatch) => void;
     onPass: (match: DailyMatch) => void;
     onViewProfile?: (match: DailyMatch) => void;
     actionsDisabled?: boolean;
@@ -48,6 +49,7 @@ export function MatchCard({
     match,
     index,
     onOpenToMeet,
+    onMaybe,
     onPass,
     onViewProfile,
     actionsDisabled = false,
@@ -59,10 +61,12 @@ export function MatchCard({
     const tier = getMatchTier(match.compatibilityScore);
 
     const askScale = useSharedValue(1);
+    const maybeScale = useSharedValue(1);
     const skipScale = useSharedValue(1);
     const viewScale = useSharedValue(1);
 
     const askAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: askScale.value }] }));
+    const maybeAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: maybeScale.value }] }));
     const skipAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: skipScale.value }] }));
     const viewAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: viewScale.value }] }));
 
@@ -96,6 +100,14 @@ export function MatchCard({
         });
         onPass(match);
     }, [match, onPass, skipScale]);
+
+    const handleMaybe = useCallback(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        maybeScale.value = withTiming(0.94, { duration: 80 }, () => {
+            maybeScale.value = withSpring(1);
+        });
+        onMaybe(match);
+    }, [match, maybeScale, onMaybe]);
 
     return (
         <Animated.View
@@ -193,7 +205,7 @@ export function MatchCard({
                                     style={StyleSheet.absoluteFill}
                                 >
                                     <View style={styles.ctaAskInner}>
-                                        <Text style={styles.ctaAskText}>Open to Meet</Text>
+                                        <Text style={styles.ctaAskText}>Interested</Text>
                                     </View>
                                 </LinearGradient>
                             )}
@@ -202,17 +214,32 @@ export function MatchCard({
                 </View>
 
                 {match.currentUserDecision === 'pending' && (
-                    <Animated.View style={[styles.skipWrap, skipAnimStyle]}>
+                    <View style={styles.secondaryActions}>
+                    <Animated.View style={[styles.secondaryActionWrap, maybeAnimStyle]}>
+                        <Pressable
+                            onPress={!actionsDisabled ? handleMaybe : undefined}
+                            disabled={actionsDisabled}
+                            style={[styles.secondaryBtn, actionsDisabled && styles.skipBtnDisabled]}
+                        >
+                            <Ionicons name="time-outline" size={15} color={colors.mutedForeground} />
+                            <Text style={[styles.skipText, { color: colors.mutedForeground }]}>
+                                Maybe
+                            </Text>
+                        </Pressable>
+                    </Animated.View>
+                    <Animated.View style={[styles.secondaryActionWrap, skipAnimStyle]}>
                         <Pressable
                             onPress={!actionsDisabled ? handlePass : undefined}
                             disabled={actionsDisabled}
-                            style={[styles.skipBtn, actionsDisabled && styles.skipBtnDisabled]}
+                            style={[styles.secondaryBtn, actionsDisabled && styles.skipBtnDisabled]}
                         >
+                            <Ionicons name="close-outline" size={16} color={colors.mutedForeground} />
                             <Text style={[styles.skipText, { color: colors.mutedForeground }]}>
                                 Pass
                             </Text>
                         </Pressable>
                     </Animated.View>
+                    </View>
                 )}
             </View>
         </Animated.View>
@@ -360,11 +387,21 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '700',
     },
-    skipWrap: {
-        alignItems: 'center',
+    secondaryActions: {
+        flexDirection: 'row',
+        gap: 10,
     },
-    skipBtn: {
-        paddingVertical: 4,
+    secondaryActionWrap: {
+        flex: 1,
+    },
+    secondaryBtn: {
+        minHeight: 40,
+        borderRadius: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 5,
+        paddingVertical: 8,
         paddingHorizontal: 16,
     },
     skipBtnDisabled: {

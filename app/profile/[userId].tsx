@@ -82,7 +82,7 @@ export default function ProfileViewScreen() {
     }, [router]);
 
     const updateProfileDecision = useCallback(
-        (decision: 'open_to_meet' | 'passed') => {
+        (decision: 'open_to_meet' | 'maybe' | 'passed') => {
             if (!userId) return;
             queryClient.setQueryData(
                 ['userProfile', userId],
@@ -140,8 +140,29 @@ export default function ProfileViewScreen() {
         );
     }, [profile?.pairId, respondToPair, toast]);
 
+    const handleMaybe = useCallback(() => {
+        if (!profile?.pairId) return;
+
+        respondToPair.mutate(
+            { pairId: profile.pairId, decision: 'maybe' },
+            {
+                onSuccess: () => {
+                    updateProfileDecision('maybe');
+                    setInfoSheet({ visible: true, type: 'maybe' });
+                },
+                onError: () => {
+                    toast.show({
+                        message: 'Could not save maybe later right now. Please try again.',
+                        variant: 'danger',
+                        position: 'bottom',
+                    });
+                },
+            }
+        );
+    }, [profile?.pairId, respondToPair, toast, updateProfileDecision]);
+
     const handleCloseInfoSheet = useCallback(() => {
-        const wasPass = infoSheet.type === 'pass';
+        const wasPass = infoSheet.type === 'pass' || infoSheet.type === 'maybe';
         setInfoSheet((state) => ({ ...state, visible: false }));
         if (wasPass) {
             router.back();
@@ -410,10 +431,11 @@ export default function ProfileViewScreen() {
 
             <ProfileViewCta
                 onOpenToMeet={handleOpenToMeet}
+                onMaybe={profile.pairId ? handleMaybe : undefined}
                 onPass={profile.pairId ? handlePass : undefined}
                 completed={profile.currentUserDecision !== 'pending'}
                 disabled={!profile.pairId || respondToPair.isPending}
-                label={profile.pairId ? 'Open to Meet' : "Not in today's curated set"}
+                label={profile.pairId ? 'Interested' : "Not in today's curated set"}
                 safetyTarget={{
                     userId: profile.userId,
                     userName: profile.firstName || 'User',

@@ -6,6 +6,7 @@ import {
     getActiveCandidatePairsForUser,
     getHasUpcomingQueuedForUser,
     promoteDueQueuedPairsForUser,
+    DAILY_CANDIDATE_PAIR_LIMIT,
 } from "@/lib/services/candidate-pairs-service";
 import { runPairExpiration } from "@/lib/services/pair-expiration-service";
 import { getActiveMatchHoldForUser } from "@/lib/services/match-hold-service";
@@ -49,8 +50,8 @@ export async function GET(req: NextRequest) {
         let matches = await getActiveCandidatePairsForUser(userId);
         console.log("[daily-matches] active pairs after promotion:", matches.length);
 
-        if (matches.length === 0) {
-            console.log("[daily-matches] no active pairs, generating...", { userId });
+        if (matches.length < DAILY_CANDIDATE_PAIR_LIMIT) {
+            console.log("[daily-matches] topping up active pairs...", { userId, activeCount: matches.length });
             matches = await generateCandidatePairsForUser(userId);
             console.log("[daily-matches] after generate:", matches.length, { userId });
             if (matches.length === 0) {

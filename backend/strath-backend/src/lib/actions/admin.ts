@@ -133,6 +133,16 @@ export async function getAdminDateRequests(statusFilter?: string) {
         };
     }
 
+    function decisionMeta(decision: "open_to_meet" | "maybe" | "passed") {
+        if (decision === "open_to_meet") {
+            return { kind: "open_to_meet" as const, label: "Interested" };
+        }
+        if (decision === "maybe") {
+            return { kind: "maybe" as const, label: "Maybe later" };
+        }
+        return { kind: "passed" as const, label: "Passed" };
+    }
+
     const legacyRows = await Promise.all(
         legacyRequests.map(async (request) => ({
             id: `legacy-${request.id}`,
@@ -158,11 +168,12 @@ export async function getAdminDateRequests(statusFilter?: string) {
             pairs.flatMap((pair) => {
                 const rows = [];
                 if (pair.aDecision !== "pending") {
+                    const meta = decisionMeta(pair.aDecision);
                     rows.push((async () => ({
                         id: `pair-${pair.id}-a`,
                         source: "candidate_pair" as const,
-                        kind: pair.aDecision === "open_to_meet" ? "open_to_meet" as const : "passed" as const,
-                        label: pair.aDecision === "open_to_meet" ? "Open to meet" : "Passed",
+                        kind: meta.kind,
+                        label: meta.label,
                         status: pair.aDecision,
                         decision: pair.aDecision,
                         pairStatus: pair.status,
@@ -177,11 +188,12 @@ export async function getAdminDateRequests(statusFilter?: string) {
                     }))());
                 }
                 if (pair.bDecision !== "pending") {
+                    const meta = decisionMeta(pair.bDecision);
                     rows.push((async () => ({
                         id: `pair-${pair.id}-b`,
                         source: "candidate_pair" as const,
-                        kind: pair.bDecision === "open_to_meet" ? "open_to_meet" as const : "passed" as const,
-                        label: pair.bDecision === "open_to_meet" ? "Open to meet" : "Passed",
+                        kind: meta.kind,
+                        label: meta.label,
                         status: pair.bDecision,
                         decision: pair.bDecision,
                         pairStatus: pair.status,
@@ -233,6 +245,7 @@ export async function getAdminDateRequests(statusFilter?: string) {
         stats: {
             all: rows.length,
             openToMeet: decisionRows.filter((row) => row.kind === "open_to_meet").length,
+            maybe: decisionRows.filter((row) => row.kind === "maybe").length,
             passed: decisionRows.filter((row) => row.kind === "passed").length,
             mutual: mutualRows.length,
             legacy: legacyRows.length,

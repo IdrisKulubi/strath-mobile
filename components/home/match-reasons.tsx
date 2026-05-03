@@ -62,6 +62,14 @@ export function MatchReasons({ reasons }: MatchReasonsProps) {
 
     return (
         <View style={styles.container}>
+            <View style={styles.headerRow}>
+                <Text style={[styles.kicker, { color: colors.mutedForeground }]}>
+                    Why this could work
+                </Text>
+                <Text style={[styles.signalCount, { color: colors.mutedForeground }]}>
+                    {topReasons.length} signal{topReasons.length === 1 ? '' : 's'}
+                </Text>
+            </View>
             <View style={styles.chipsWrap}>
                 {topReasons.map((reason, i) => (
                     <View
@@ -91,6 +99,22 @@ export function MatchReasons({ reasons }: MatchReasonsProps) {
 const styles = StyleSheet.create({
     container: {
         gap: 8,
+    },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    kicker: {
+        fontSize: 11,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+        letterSpacing: 0,
+    },
+    signalCount: {
+        fontSize: 11,
+        fontWeight: '600',
     },
     chipsWrap: {
         flexDirection: 'row',

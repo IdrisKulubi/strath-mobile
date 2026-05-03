@@ -31,7 +31,7 @@ const UNDO_WINDOW_MS = 5000;
 
 interface PendingHomeDecision {
     pairId: string;
-    decision: 'open_to_meet' | 'passed';
+    decision: 'open_to_meet' | 'maybe' | 'passed';
     firstName: string;
     expiresAt: number;
     status: 'undoable' | 'committing';
@@ -102,7 +102,7 @@ export default function HomeScreen() {
                 return [match];
             }
 
-            if (pendingDecision.decision === 'passed') {
+            if (pendingDecision.decision === 'passed' || pendingDecision.decision === 'maybe') {
                 return [];
             }
 
@@ -147,6 +147,12 @@ export default function HomeScreen() {
                     type: 'open_to_meet',
                     firstName: decisionState.firstName,
                 });
+            } else if (decisionState.decision === 'maybe') {
+                setInfoSheet({
+                    visible: true,
+                    type: 'maybe',
+                    firstName: decisionState.firstName,
+                });
             } else {
                 setInfoSheet({
                     visible: true,
@@ -175,6 +181,8 @@ export default function HomeScreen() {
             toast.show({
                 message: decisionState.decision === 'open_to_meet'
                     ? 'Could not save your decision right now. Please try again.'
+                    : decisionState.decision === 'maybe'
+                        ? 'Could not save maybe later right now. Please try again.'
                     : 'Could not pass on this pair right now. Please try again.',
                 variant: 'danger',
             });
@@ -228,6 +236,10 @@ export default function HomeScreen() {
         queueDecision(match, 'open_to_meet');
     }, [queueDecision]);
 
+    const handleMaybe = useCallback((match: DailyMatch) => {
+        queueDecision(match, 'maybe');
+    }, [queueDecision]);
+
     const handlePass = useCallback((match: DailyMatch) => {
         queueDecision(match, 'passed');
     }, [queueDecision]);
@@ -269,6 +281,7 @@ export default function HomeScreen() {
                     <DailyMatchesList
                         matches={displayedMatches}
                         onOpenToMeet={handleOpenToMeet}
+                        onMaybe={handleMaybe}
                         onPass={handlePass}
                         actionsDisabled={!!pendingDecision}
                         onViewProfile={(match) => {

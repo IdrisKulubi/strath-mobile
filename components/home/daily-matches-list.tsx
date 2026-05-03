@@ -6,6 +6,7 @@ import { MatchCard } from './match-card';
 interface DailyMatchesListProps {
     matches: DailyMatch[];
     onOpenToMeet: (match: DailyMatch) => void;
+    onMaybe: (match: DailyMatch) => void;
     onPass: (match: DailyMatch) => void;
     onViewProfile?: (match: DailyMatch) => void;
     actionsDisabled?: boolean;
@@ -15,6 +16,7 @@ interface DailyMatchesListProps {
 export function DailyMatchesList({
     matches,
     onOpenToMeet,
+    onMaybe,
     onPass,
     onViewProfile,
     actionsDisabled = false,
@@ -31,6 +33,7 @@ export function DailyMatchesList({
                     match={match}
                     index={index}
                     onOpenToMeet={onOpenToMeet}
+                    onMaybe={onMaybe}
                     onPass={onPass}
                     onViewProfile={onViewProfile}
                     actionsDisabled={actionsDisabled}

@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 
-export type DecisionSheetType = 'open_to_meet' | 'pass' | 'view_profile' | 'already_responded';
+export type DecisionSheetType = 'open_to_meet' | 'maybe' | 'pass' | 'view_profile' | 'already_responded';
 
 interface DecisionInfoSheetProps {
     visible: boolean;
@@ -36,6 +36,17 @@ const CONTENT: Record<
         primaryColor: '#e91e8c',
         ctaLabel: 'Got it',
     },
+    maybe: {
+        icon: 'time-outline',
+        title: 'Saved for later',
+        steps: [
+            "We'll move this intro out of today's set.",
+            "They won't see this as a pass.",
+            "If the pool is tight, we can recycle this later.",
+        ],
+        primaryColor: '#f59e0b',
+        ctaLabel: 'Got it',
+    },
     pass: {
         icon: 'arrow-forward-circle-outline',
         title: 'Removed from today\'s set 👋',
@@ -53,7 +64,7 @@ const CONTENT: Record<
         steps: [
             'Photos, interests, vibe — the whole package.',
             'Check compatibility and why you matched.',
-            "Tap Open to Meet when you're ready.",
+            "Tap Interested when you're ready.",
         ],
         primaryColor: '#e91e8c',
         ctaLabel: 'View Profile',
@@ -151,6 +162,8 @@ export function DecisionInfoSheet({ visible, type, firstName, onClose }: Decisio
                             <Text style={[styles.title, { color: colors.foreground }]}>
                                 {firstName && type === 'open_to_meet'
                                     ? `Interest sent to ${firstName} 💜`
+                                    : firstName && type === 'maybe'
+                                        ? `${firstName} moved to maybe later`
                                     : firstName && type === 'pass'
                                         ? `${firstName} removed from today's set`
                                         : displayTitle}

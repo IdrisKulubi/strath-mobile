@@ -8,6 +8,8 @@ import {
     generateCandidatePairsForUser,
     getActiveCandidatePairsForUser,
     promoteDueQueuedPairsForUser,
+    sendPendingCandidatePairReminders,
+    DAILY_CANDIDATE_PAIR_LIMIT,
 } from "@/lib/services/candidate-pairs-service";
 import { runPairExpiration } from "@/lib/services/pair-expiration-service";
 
@@ -21,7 +23,9 @@ export async function GET(req: NextRequest) {
         }
 
         const expiration = await runPairExpiration();
+        const reminders = await sendPendingCandidatePairReminders();
         console.log("[cron/candidate-pairs] expired pairs:", expiration.expiredCount);
+        console.log("[cron/candidate-pairs] reminders:", reminders);
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const limitParam = Number(req.nextUrl.searchParams.get("limit") || "0");
         const runLimit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 1000) : undefined;
@@ -44,7 +48,7 @@ export async function GET(req: NextRequest) {
         for (const activeUser of usersToCheck) {
             await promoteDueQueuedPairsForUser(activeUser.id);
             const existingPairs = await getActiveCandidatePairsForUser(activeUser.id);
-            if (existingPairs.length > 0) continue;
+            if (existingPairs.length >= DAILY_CANDIDATE_PAIR_LIMIT) continue;
             const created = await generateCandidatePairsForUser(activeUser.id);
             if (created.length > 0) {
                 generatedFor++;
@@ -56,6 +60,7 @@ export async function GET(req: NextRequest) {
             checkedUsers: usersToCheck.length,
             generatedFor,
             expiration,
+            reminders,
         });
     } catch (error) {
         console.error("[cron/candidate-pairs] Error:", error);

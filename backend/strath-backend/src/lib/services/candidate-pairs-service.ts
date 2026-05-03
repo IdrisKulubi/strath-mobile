@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, inArray, isNotNull, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import db from "@/db/drizzle";
 import { db as readDb } from "@/lib/db";
 import {
@@ -24,11 +24,11 @@ import { resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-serv
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
-export const DAILY_CANDIDATE_PAIR_LIMIT = 1;
+export const DAILY_CANDIDATE_PAIR_LIMIT = Number(process.env.DAILY_CANDIDATE_PAIR_LIMIT) || 2;
 export const ACTIVE_EXPOSURE_CAP = 2;
 
-// Expiry: env CANDIDATE_PAIR_EXPIRY_MINUTES (default 1440 = 24h). Use 5 for testing.
-const EXPIRY_MINUTES = Number(process.env.CANDIDATE_PAIR_EXPIRY_MINUTES) || 1440;
+// Expiry: env CANDIDATE_PAIR_EXPIRY_MINUTES (default 2880 = 48h). Use 5 for testing.
+const EXPIRY_MINUTES = Number(process.env.CANDIDATE_PAIR_EXPIRY_MINUTES) || 2880;
 export const CANDIDATE_PAIR_EXPIRY_HOURS = EXPIRY_MINUTES / 60;
 // Cooldown: when expiry < 1h (testing), use 1-min cooldown. Otherwise 7 days.
 export const EXPIRED_PAIR_COOLDOWN_DAYS = CANDIDATE_PAIR_EXPIRY_HOURS < 1 ? 1 / (24 * 60) : 7;
@@ -53,7 +53,7 @@ function getFairnessRelaxConfig(): FairnessRelaxConfig {
     };
 }
 
-export type CandidateDecision = "pending" | "open_to_meet" | "passed";
+export type CandidateDecision = "pending" | "open_to_meet" | "maybe" | "passed";
 export type CandidatePairStatus = "active" | "queued" | "mutual" | "closed" | "expired";
 export type MutualMatchStatus =
     | "mutual"
@@ -95,6 +95,10 @@ export function resolveCandidatePairStatus(
         return "closed";
     }
 
+    if (aDecision === "maybe" || bDecision === "maybe") {
+        return "expired";
+    }
+
     if (aDecision === "open_to_meet" && bDecision === "open_to_meet") {
         return "mutual";
     }
@@ -111,6 +115,7 @@ export async function recordCandidatePairHistory(
             | "generated"
             | "promoted"
             | "responded"
+            | "reminder_sent"
             | "mutual"
             | "closed"
             | "expired"
@@ -250,9 +255,10 @@ async function getExistingPairMap(userId: string): Promise<Map<string, PairAggre
         if (row.status === "closed" || row.status === "mutual") existing.hasClosedOrMutual = true;
         if (row.status === "active" || row.status === "queued") existing.hasActive = true;
         if (row.status === "expired") {
+            const expiredAt = row.updatedAt ?? row.createdAt;
             existing.oldestExpiredCreatedAt =
-                !existing.oldestExpiredCreatedAt || row.createdAt < existing.oldestExpiredCreatedAt
-                    ? row.createdAt
+                !existing.oldestExpiredCreatedAt || expiredAt > existing.oldestExpiredCreatedAt
+                    ? expiredAt
                     : existing.oldestExpiredCreatedAt;
         }
 
@@ -444,6 +450,135 @@ async function sendNewCandidateMatchPushes(pairId: string, userAId: string, user
     }
 }
 
+async function sendCandidateReminderPush(userId: string, payload: { title: string; body: string; pairId: string }) {
+    const row = await readDb.query.user.findFirst({
+        where: eq(user.id, userId),
+        columns: { pushToken: true },
+    });
+
+    if (!row?.pushToken) return false;
+
+    await sendPushNotification(row.pushToken, {
+        title: payload.title,
+        body: payload.body,
+        data: {
+            type: NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH,
+            pairId: payload.pairId,
+            route: "/(tabs)",
+        },
+    });
+    return true;
+}
+
+export async function sendPendingCandidatePairReminders(now = new Date()) {
+    const oneSidedCutoff = new Date(now.getTime() - 30 * 60 * 1000);
+    const expiringSoonCutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    const oneSidedPairs = await readDb
+        .select()
+        .from(candidatePairs)
+        .where(
+            and(
+                eq(candidatePairs.status, "active"),
+                gt(candidatePairs.expiresAt, now),
+                lte(candidatePairs.updatedAt, oneSidedCutoff),
+                isNull(candidatePairs.oneSidedReminderSentAt),
+                or(
+                    and(eq(candidatePairs.aDecision, "open_to_meet"), eq(candidatePairs.bDecision, "pending")),
+                    and(eq(candidatePairs.bDecision, "open_to_meet"), eq(candidatePairs.aDecision, "pending")),
+                ),
+            ),
+        )
+        .limit(200);
+
+    let oneSidedSent = 0;
+    for (const pair of oneSidedPairs) {
+        const pendingUserId = pair.aDecision === "pending" ? pair.userAId : pair.userBId;
+        const [updated] = await db
+            .update(candidatePairs)
+            .set({ oneSidedReminderSentAt: now })
+            .where(and(eq(candidatePairs.id, pair.id), isNull(candidatePairs.oneSidedReminderSentAt)))
+            .returning({ id: candidatePairs.id });
+
+        if (!updated) continue;
+        const sent = await sendCandidateReminderPush(pendingUserId, {
+            pairId: pair.id,
+            title: "A good intro is waiting",
+            body: "Take a look at today's pick before it closes.",
+        }).catch((error) => {
+            console.error("[candidate-pairs] one-sided reminder failed", { pairId: pair.id, pendingUserId, error });
+            return false;
+        });
+        if (sent) oneSidedSent++;
+
+        await db.insert(candidatePairHistory).values({
+            pairId: pair.id,
+            actorUserId: pendingUserId,
+            eventType: "reminder_sent",
+            fromStatus: pair.status,
+            toStatus: pair.status,
+            metadata: { kind: "one_sided_interest" },
+        }).catch(() => {});
+    }
+
+    const expiringPairs = await readDb
+        .select()
+        .from(candidatePairs)
+        .where(
+            and(
+                eq(candidatePairs.status, "active"),
+                gt(candidatePairs.expiresAt, now),
+                lte(candidatePairs.expiresAt, expiringSoonCutoff),
+                isNull(candidatePairs.reminderSentAt),
+                or(eq(candidatePairs.aDecision, "pending"), eq(candidatePairs.bDecision, "pending")),
+            ),
+        )
+        .limit(200);
+
+    let expiringSent = 0;
+    for (const pair of expiringPairs) {
+        const pendingUserIds = [
+            pair.aDecision === "pending" ? pair.userAId : null,
+            pair.bDecision === "pending" ? pair.userBId : null,
+        ].filter((id): id is string => Boolean(id));
+
+        const [updated] = await db
+            .update(candidatePairs)
+            .set({ reminderSentAt: now })
+            .where(and(eq(candidatePairs.id, pair.id), isNull(candidatePairs.reminderSentAt)))
+            .returning({ id: candidatePairs.id });
+
+        if (!updated) continue;
+
+        for (const pendingUserId of pendingUserIds) {
+            const sent = await sendCandidateReminderPush(pendingUserId, {
+                pairId: pair.id,
+                title: "Your intro closes soon",
+                body: "Still interested? Check today's pick before it expires.",
+            }).catch((error) => {
+                console.error("[candidate-pairs] expiry reminder failed", { pairId: pair.id, pendingUserId, error });
+                return false;
+            });
+            if (sent) expiringSent++;
+        }
+
+        await db.insert(candidatePairHistory).values({
+            pairId: pair.id,
+            eventType: "reminder_sent",
+            fromStatus: pair.status,
+            toStatus: pair.status,
+            metadata: { kind: "expiring_pending", pendingUserCount: pendingUserIds.length },
+        }).catch(() => {});
+    }
+
+    return {
+        oneSidedChecked: oneSidedPairs.length,
+        oneSidedSent,
+        expiringChecked: expiringPairs.length,
+        expiringSent,
+    };
+}
+
 async function userHasQueuedPairsInvolving(userId: string): Promise<boolean> {
     const row = await readDb
         .select({ id: candidatePairs.id })
@@ -494,7 +629,7 @@ async function findPromotableQueuedPairForUser(userId: string, now: Date) {
     for (const row of candidates) {
         const other = getOtherUserId(row, userId);
         const otherActive = await getActiveCandidatePairsForUser(other);
-        if (otherActive.length === 0) {
+        if (otherActive.length < DAILY_CANDIDATE_PAIR_LIMIT) {
             return row;
         }
     }
@@ -508,7 +643,7 @@ async function findPromotableQueuedPairForUser(userId: string, now: Date) {
 export async function promoteDueQueuedPairsForUser(userId: string): Promise<boolean> {
     const now = new Date();
     const selfActive = await getActiveCandidatePairsForUser(userId);
-    if (selfActive.length > 0) {
+    if (selfActive.length >= DAILY_CANDIDATE_PAIR_LIMIT) {
         return false;
     }
 
@@ -573,15 +708,12 @@ export async function generateCandidatePairsForUser(userId: string) {
     await promoteDueQueuedPairsForUser(userId);
 
     const existingActivePairs = await getActiveCandidatePairsForUser(userId);
-    if (existingActivePairs.length > 0) {
+    if (existingActivePairs.length >= DAILY_CANDIDATE_PAIR_LIMIT) {
         console.log("[candidate-pairs] returning existing pairs:", existingActivePairs.length);
         return existingActivePairs;
     }
-
-    if (await userHasQueuedPairsInvolving(userId)) {
-        console.log("[candidate-pairs] skip generate: user still has queued rows (future or blocked)");
-        return [];
-    }
+    const activeSlotsAvailable = Math.max(1, DAILY_CANDIDATE_PAIR_LIMIT - existingActivePairs.length);
+    const hasQueuedPairs = await userHasQueuedPairsInvolving(userId);
 
     const currentProfile = await readDb.query.profiles.findFirst({
         where: eq(profiles.userId, userId),
@@ -696,6 +828,8 @@ export async function generateCandidatePairsForUser(userId: string) {
         oppositePoolCount,
         imbalanceExtraRelaxStep,
         maxQueue: MAX_CANDIDATE_QUEUE_SIZE,
+        activeSlotsAvailable,
+        hasQueuedPairs,
     });
 
     console.log("[candidate-pairs] after reciprocal filter:", reciprocalPoolSize);
@@ -740,7 +874,7 @@ export async function generateCandidatePairsForUser(userId: string) {
                 },
             ),
         )
-        .slice(0, MAX_CANDIDATE_QUEUE_SIZE);
+        .slice(0, hasQueuedPairs ? activeSlotsAvailable : MAX_CANDIDATE_QUEUE_SIZE);
 
     const filteredByExposure = scoredCandidates.filter((e) => e === null).length;
     if (filteredByExposure > 0) {
@@ -797,8 +931,8 @@ export async function generateCandidatePairsForUser(userId: string) {
 
             if (existing) continue;
 
-            const isImmediate = i === 0;
-            const revealAt = isImmediate ? null : addUtcDays(firstRevealBase, i - 1);
+            const isImmediate = i < activeSlotsAvailable;
+            const revealAt = isImmediate ? null : addUtcDays(firstRevealBase, i - activeSlotsAvailable);
             const expiresAt = isImmediate ? activeExpiresAt : placeholderExpiresAtForQueued(revealAt!);
 
             const [pair] = await tx

@@ -15,7 +15,7 @@
  * since any candidate row, by lowering the score bar toward `absoluteFloor` in controlled steps.
  */
 
-export type CandidateDecisionSnapshot = "pending" | "open_to_meet" | "passed";
+export type CandidateDecisionSnapshot = "pending" | "open_to_meet" | "maybe" | "passed";
 
 /** Minimal row shape for computing “users I passed” without DB. */
 export type ClosedPairDecisionRow = {

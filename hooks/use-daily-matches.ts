@@ -17,7 +17,7 @@ export interface DailyMatch {
     personalityTags?: string[];
     course?: string;
     university?: string;
-    currentUserDecision: 'pending' | 'open_to_meet' | 'passed';
+    currentUserDecision: 'pending' | 'open_to_meet' | 'maybe' | 'passed';
     status: 'active' | 'mutual' | 'closed' | 'expired';
     expiresAt: string;
     expiresInMs: number;
@@ -146,7 +146,7 @@ const ALREADY_RESPONDED_MSG = 'You have already responded to this pair';
 export function useRespondToDailyPair() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async (payload: { pairId: string; decision: 'open_to_meet' | 'passed' }) => {
+        mutationFn: async (payload: { pairId: string; decision: 'open_to_meet' | 'maybe' | 'passed' }) => {
             const token = await getAuthToken();
             if (!token) throw new Error('Not authenticated');
             const res = await fetch(`${API_URL}/api/pairs/${payload.pairId}/respond`, {
@@ -163,7 +163,7 @@ export function useRespondToDailyPair() {
             return payload;
         },
         onSuccess: ({ pairId, decision }) => {
-            if (decision === 'passed') {
+            if (decision === 'passed' || decision === 'maybe') {
                 queryClient.setQueryData<DailyMatchesResponse>(['candidatePairs', 'daily'], (prev) =>
                     prev ? { ...prev, matches: prev.matches.filter((m) => m.pairId !== pairId) } : prev
                 );

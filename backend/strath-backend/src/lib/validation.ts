@@ -80,7 +80,7 @@ export const dateRequestRespondSchema = z.object({
 });
 
 export const pairRespondSchema = z.object({
-    decision: z.enum(["open_to_meet", "passed"]),
+    decision: z.enum(["open_to_meet", "maybe", "passed"]),
 });
 
 export const pairGenerationSchema = z.object({

@@ -55,6 +55,11 @@ test("resolveCandidatePairStatus closes on any pass", () => {
     assert.equal(resolveCandidatePairStatus("open_to_meet", "passed"), "closed");
 });
 
+test("resolveCandidatePairStatus recycles maybe without closing the dyad", () => {
+    assert.equal(resolveCandidatePairStatus("maybe", "pending"), "expired");
+    assert.equal(resolveCandidatePairStatus("open_to_meet", "maybe"), "expired");
+});
+
 test("resolveCandidatePairStatus becomes mutual only on double yes", () => {
     assert.equal(resolveCandidatePairStatus("open_to_meet", "open_to_meet"), "mutual");
     assert.equal(resolveCandidatePairStatus("open_to_meet", "pending"), "active");
