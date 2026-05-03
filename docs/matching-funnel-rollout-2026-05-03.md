@@ -25,6 +25,8 @@ The integrity check was clean: every double-interest pair had a linked `mutual_m
 - Active-card rotation now tops up users with fewer than 2 live intros, so pass/maybe decisions open a slot instead of forcing the user to wait for expiry.
 - The hourly cron also tops up users with 0 or 1 active intros, not only users with no active intros.
 - Queued backup intros still work, but a user who already has queued rows receives only enough immediate top-up rows to fill open active slots.
+- Users are capped at 32 candidate decisions per rolling 24 hours via `DAILY_CANDIDATE_DECISION_LIMIT`.
+- `Interested` keeps the intro alive while waiting for the other person's response. `Pass` hard-closes the dyad. `Maybe` removes the card without permanently closing the dyad.
 - The positive action copy changed from "Open to Meet" to "Interested".
 - Added a `maybe` decision. It expires/recycles the pair instead of permanently closing the dyad.
 - Added reminder tracking columns on `candidate_pairs`:
@@ -45,6 +47,7 @@ Pull the same funnel after at least 24 hours and compare:
 - Both-response rate: `pairs_with_both_responses / exposed_pairs`
 - Interest rate: `yes_decisions / total_decisions`
 - Maybe rate: `maybe_decisions / total_decisions`
+- Users hitting the 32-decision cap
 - Mutual conversion: `double_yes_pairs / exposed_pairs`
 - Silent expiry rate: `expired_no_response / exposed_pairs`
 - One-sided expiry rate: `expired_one_yes_pending / exposed_pairs`

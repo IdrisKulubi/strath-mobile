@@ -25,6 +25,7 @@ import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
 export const DAILY_CANDIDATE_PAIR_LIMIT = Number(process.env.DAILY_CANDIDATE_PAIR_LIMIT) || 2;
+export const DAILY_CANDIDATE_DECISION_LIMIT = Number(process.env.DAILY_CANDIDATE_DECISION_LIMIT) || 32;
 export const ACTIVE_EXPOSURE_CAP = 2;
 
 // Expiry: env CANDIDATE_PAIR_EXPIRY_MINUTES (default 2880 = 48h). Use 5 for testing.
@@ -1066,6 +1067,22 @@ export async function getCandidatePairByIdForUser(pairId: string, userId: string
     return pair;
 }
 
+async function getRecentDecisionCountForUser(userId: string, now = new Date()) {
+    const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const [row] = await readDb
+        .select({ count: sql<number>`count(*)::int` })
+        .from(candidatePairHistory)
+        .where(
+            and(
+                eq(candidatePairHistory.actorUserId, userId),
+                gte(candidatePairHistory.createdAt, windowStart),
+                inArray(candidatePairHistory.eventType, ["responded", "mutual", "closed"]),
+            ),
+        );
+
+    return row?.count ?? 0;
+}
+
 export async function findActiveCandidatePairBetweenUsers(userId: string, otherUserId: string) {
     const { userAId, userBId } = canonicalizePairUsers(userId, otherUserId);
     return readDb.query.candidatePairs.findFirst({
@@ -1084,6 +1101,10 @@ export async function respondToCandidatePair(
     decision: Exclude<CandidateDecision, "pending">,
 ) {
     const now = new Date();
+    const decisionsToday = await getRecentDecisionCountForUser(userId, now);
+    if (decisionsToday >= DAILY_CANDIDATE_DECISION_LIMIT) {
+        throw new Error("Daily candidate decision limit reached");
+    }
 
     return db.transaction(async (tx) => {
         const pair = await tx.query.candidatePairs.findFirst({
