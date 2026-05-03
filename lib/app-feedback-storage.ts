@@ -5,6 +5,8 @@ const KEYS = {
     nudgeLastShownAt: 'strathspace_app_feedback_nudge_last_shown_at',
     nudgeDismissedCount: 'strathspace_app_feedback_nudge_dismissed_count',
     firstSeenAt: 'strathspace_app_feedback_first_seen_at',
+    floatingIntroSeenAt: 'strathspace_app_feedback_floating_intro_seen_at',
+    dailyPromptShownOn: 'strathspace_app_feedback_daily_prompt_shown_on',
 } as const;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -49,6 +51,46 @@ export async function markNudgeDismissed(): Promise<void> {
     } catch {
         // noop
     }
+}
+
+async function getString(key: string): Promise<string | null> {
+    try {
+        return await AsyncStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+async function setString(key: string, value: string): Promise<void> {
+    try {
+        await AsyncStorage.setItem(key, value);
+    } catch {
+        // noop
+    }
+}
+
+function getLocalDateKey(date = new Date()): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+export async function hasSeenFloatingFeedbackIntro(): Promise<boolean> {
+    return Boolean(await getNumber(KEYS.floatingIntroSeenAt));
+}
+
+export async function markFloatingFeedbackIntroSeen(): Promise<void> {
+    await setNumber(KEYS.floatingIntroSeenAt, Date.now());
+}
+
+export async function shouldShowDailyFeedbackPrompt(): Promise<boolean> {
+    const shownOn = await getString(KEYS.dailyPromptShownOn);
+    return shownOn !== getLocalDateKey();
+}
+
+export async function markDailyFeedbackPromptShown(): Promise<void> {
+    await setString(KEYS.dailyPromptShownOn, getLocalDateKey());
 }
 
 async function ensureFirstSeen(): Promise<number> {

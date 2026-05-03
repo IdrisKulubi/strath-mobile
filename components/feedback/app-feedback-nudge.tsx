@@ -1,26 +1,30 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Modal,
-    View,
-    StyleSheet,
-    Pressable,
-    Platform,
     Animated,
     Easing,
+    PanResponder,
+    Platform,
+    Pressable,
+    StyleSheet,
+    View,
 } from 'react-native';
-import { useRouter, useSegments } from 'expo-router';
 import { BlurView } from 'expo-blur';
+import { useRouter, useSegments } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
+
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import {
-    isNudgeEligible,
-    markNudgeShown,
-    markNudgeDismissed,
+    markDailyFeedbackPromptShown,
+    shouldShowDailyFeedbackPrompt,
 } from '@/lib/app-feedback-storage';
 
-const CHECK_DELAY_MS = 4000;
+const SHOW_DELAY_MS = 1000;
+const HIDDEN_OFFSET = 220;
+const DISMISS_DRAG_Y = 48;
+const DISMISS_VELOCITY_Y = 0.7;
 
 interface AppFeedbackNudgeProps {
     hasAuthToken: boolean;
@@ -28,33 +32,100 @@ interface AppFeedbackNudgeProps {
 
 export function AppFeedbackNudge({ hasAuthToken }: AppFeedbackNudgeProps) {
     const { colors, colorScheme } = useTheme();
+    const insets = useSafeAreaInsets();
     const router = useRouter();
     const segments = useSegments();
     const isDark = colorScheme === 'dark';
 
     const [visible, setVisible] = useState(false);
-    const hasCheckedRef = useRef(false);
+    const checkedRef = useRef(false);
+    const openedRef = useRef(false);
+    const dismissedRef = useRef(false);
+    const translateY = useRef(new Animated.Value(HIDDEN_OFFSET)).current;
+    const opacity = useRef(new Animated.Value(0)).current;
 
-    const cardTranslate = useRef(new Animated.Value(40)).current;
-    const cardOpacity = useRef(new Animated.Value(0)).current;
-
-    // Only consider showing the nudge while the user is in the main tabs
-    // (not during auth, onboarding, verification, or intro flows).
     const firstSegment = segments[0] ?? '';
     const isInMainApp = firstSegment === '(tabs)';
 
-    useEffect(() => {
-        if (!hasAuthToken || !isInMainApp || hasCheckedRef.current) return;
+    const hide = useCallback((afterHide?: () => void) => {
+        Animated.parallel([
+            Animated.timing(translateY, {
+                toValue: HIDDEN_OFFSET,
+                duration: 260,
+                easing: Easing.in(Easing.cubic),
+                useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+                toValue: 0,
+                duration: 180,
+                easing: Easing.in(Easing.quad),
+                useNativeDriver: true,
+            }),
+        ]).start(({ finished }) => {
+            if (finished) {
+                setVisible(false);
+                afterHide?.();
+            }
+        });
+    }, [opacity, translateY]);
 
-        hasCheckedRef.current = true;
+    const dismiss = useCallback(() => {
+        if (dismissedRef.current) return;
+        dismissedRef.current = true;
+        Haptics.selectionAsync();
+        hide();
+    }, [hide]);
+
+    const panResponder = useMemo(
+        () => PanResponder.create({
+            onMoveShouldSetPanResponder: (_, gestureState) => (
+                Math.abs(gestureState.dy) > 8 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx)
+            ),
+            onPanResponderMove: (_, gestureState) => {
+                translateY.setValue(Math.max(0, gestureState.dy));
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                const shouldDismiss = gestureState.dy > DISMISS_DRAG_Y || gestureState.vy > DISMISS_VELOCITY_Y;
+
+                if (shouldDismiss) {
+                    dismiss();
+                    return;
+                }
+
+                Animated.spring(translateY, {
+                    toValue: 0,
+                    damping: 18,
+                    stiffness: 180,
+                    mass: 0.8,
+                    useNativeDriver: true,
+                }).start();
+            },
+            onPanResponderTerminate: () => {
+                Animated.spring(translateY, {
+                    toValue: 0,
+                    damping: 18,
+                    stiffness: 180,
+                    mass: 0.8,
+                    useNativeDriver: true,
+                }).start();
+            },
+        }),
+        [dismiss, translateY]
+    );
+
+    useEffect(() => {
+        if (!hasAuthToken || !isInMainApp || checkedRef.current) return;
+
+        checkedRef.current = true;
         let cancelled = false;
 
         const timer = setTimeout(async () => {
-            const { eligible } = await isNudgeEligible();
-            if (cancelled || !eligible) return;
-            await markNudgeShown();
+            const shouldShow = await shouldShowDailyFeedbackPrompt();
+            if (cancelled || !shouldShow) return;
+
+            await markDailyFeedbackPromptShown();
             setVisible(true);
-        }, CHECK_DELAY_MS);
+        }, SHOW_DELAY_MS);
 
         return () => {
             cancelled = true;
@@ -63,172 +134,181 @@ export function AppFeedbackNudge({ hasAuthToken }: AppFeedbackNudgeProps) {
     }, [hasAuthToken, isInMainApp]);
 
     useEffect(() => {
-        if (visible) {
-            Animated.parallel([
-                Animated.timing(cardTranslate, {
-                    toValue: 0,
-                    duration: 280,
-                    easing: Easing.out(Easing.cubic),
-                    useNativeDriver: true,
-                }),
-                Animated.timing(cardOpacity, {
-                    toValue: 1,
-                    duration: 220,
-                    useNativeDriver: true,
-                }),
-            ]).start();
-        } else {
-            cardTranslate.setValue(40);
-            cardOpacity.setValue(0);
-        }
-    }, [visible, cardTranslate, cardOpacity]);
+        if (!visible) return;
 
-    const close = useCallback(() => {
-        setVisible(false);
-    }, []);
+        dismissedRef.current = false;
+        translateY.setValue(HIDDEN_OFFSET);
+        opacity.setValue(0);
 
-    const handleShare = useCallback(() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        close();
-        // Small delay so the modal dismiss animation can start before navigating
-        setTimeout(() => {
+        Animated.parallel([
+            Animated.spring(translateY, {
+                toValue: 0,
+                damping: 17,
+                stiffness: 170,
+                mass: 0.85,
+                useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+                toValue: 1,
+                duration: 180,
+                easing: Easing.out(Easing.quad),
+                useNativeDriver: true,
+            }),
+        ]).start();
+    }, [visible, opacity, translateY]);
+
+    const handleOpenFeedback = useCallback(() => {
+        if (openedRef.current) return;
+        openedRef.current = true;
+        dismissedRef.current = true;
+
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        hide(() => {
             router.push('/app-feedback');
-        }, 120);
-    }, [close, router]);
+            openedRef.current = false;
+        });
+    }, [hide, router]);
 
-    const handleNotNow = useCallback(async () => {
-        Haptics.selectionAsync();
-        await markNudgeDismissed();
-        close();
-    }, [close]);
-
-    if (!visible) return null;
+    if (!visible || !hasAuthToken || !isInMainApp) {
+        return null;
+    }
 
     return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="fade"
-            onRequestClose={handleNotNow}
-            statusBarTranslucent
+        <Animated.View
+            pointerEvents="box-none"
+            style={[
+                styles.wrap,
+                {
+                    paddingBottom: Math.max(insets.bottom, 10) + 84,
+                    opacity,
+                    transform: [{ translateY }],
+                },
+            ]}
         >
-            <View style={styles.backdrop}>
-                <Pressable style={StyleSheet.absoluteFill} onPress={handleNotNow} />
-
-                <Animated.View
+            <Animated.View
+                style={styles.sheetShadow}
+                {...panResponder.panHandlers}
+            >
+                <BlurView
+                    intensity={Platform.OS === 'ios' ? 56 : 90}
+                    tint={isDark ? 'dark' : 'light'}
                     style={[
-                        styles.cardWrap,
+                        styles.sheet,
                         {
-                            opacity: cardOpacity,
-                            transform: [{ translateY: cardTranslate }],
+                            backgroundColor: isDark
+                                ? 'rgba(38,25,59,0.96)'
+                                : 'rgba(255,255,255,0.97)',
+                            borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
                         },
                     ]}
                 >
-                    <BlurView
-                        intensity={Platform.OS === 'ios' ? 60 : 100}
-                        tint={isDark ? 'dark' : 'light'}
-                        style={[
-                            styles.card,
-                            {
-                                backgroundColor: isDark
-                                    ? 'rgba(26,13,46,0.92)'
-                                    : 'rgba(255,255,255,0.96)',
-                                borderColor: colors.border,
-                            },
-                        ]}
-                    >
-                        <View style={[styles.iconBubble, { backgroundColor: 'rgba(233,30,140,0.14)' }]}>
-                            <Ionicons name="chatbubble-ellipses" size={26} color={colors.primary} />
+                    <View style={[styles.handle, { backgroundColor: colors.mutedForeground }]} />
+
+                    <View style={styles.contentRow}>
+                        <View style={[styles.iconBubble, { backgroundColor: colors.primary }]}>
+                            <Ionicons name="chatbubble-ellipses" size={21} color="#fff" />
                         </View>
 
-                        <Text style={[styles.title, { color: colors.foreground }]}>
-                            How&apos;s StrathSpace treating you?
-                        </Text>
+                        <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Send feedback"
+                            onPress={handleOpenFeedback}
+                            style={({ pressed }) => [
+                                styles.copyButton,
+                                { opacity: pressed ? 0.78 : 1 },
+                            ]}
+                        >
+                            <Text numberOfLines={1} style={[styles.title, { color: colors.foreground }]}>
+                                Got feedback for us?
+                            </Text>
+                            <Text numberOfLines={2} style={[styles.subtitle, { color: colors.mutedForeground }]}>
+                                Tell us what feels off or we should improve.
+                            </Text>
+                        </Pressable>
 
-                        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                            We&apos;re building this for you. Got a feature idea, bug, or something on your mind? Drop us a quick note — we read every one.
-                        </Text>
-
-                        <View style={styles.actions}>
-                            <Pressable
-                                onPress={handleShare}
-                                style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
-                            >
-                                <Text style={styles.primaryBtnText}>Share feedback</Text>
-                            </Pressable>
-
-                            <Pressable onPress={handleNotNow} style={styles.secondaryBtn}>
-                                <Text style={[styles.secondaryBtnText, { color: colors.mutedForeground }]}>
-                                    Not now
-                                </Text>
-                            </Pressable>
-                        </View>
-                    </BlurView>
-                </Animated.View>
-            </View>
-        </Modal>
+                        <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Dismiss feedback prompt"
+                            hitSlop={10}
+                            onPress={dismiss}
+                            style={styles.closeButton}
+                        >
+                            <Ionicons name="close" size={19} color={colors.mutedForeground} />
+                        </Pressable>
+                    </View>
+                </BlurView>
+            </Animated.View>
+        </Animated.View>
     );
 }
 
 const styles = StyleSheet.create({
-    backdrop: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.45)',
-        justifyContent: 'flex-end',
-        paddingHorizontal: 16,
-        paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    wrap: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 60,
+        elevation: 60,
+        paddingHorizontal: 14,
     },
-    cardWrap: {
-        width: '100%',
+    sheetShadow: {
+        borderRadius: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.24,
+        shadowRadius: 20,
+        elevation: 10,
     },
-    card: {
+    sheet: {
+        minHeight: 92,
         borderRadius: 24,
         borderWidth: 1,
-        padding: 22,
         overflow: 'hidden',
+        paddingHorizontal: 14,
+        paddingTop: 9,
+        paddingBottom: 14,
+    },
+    handle: {
+        width: 42,
+        height: 4,
+        borderRadius: 2,
+        opacity: 0.36,
+        alignSelf: 'center',
+        marginBottom: 11,
+    },
+    contentRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
         gap: 12,
     },
     iconBubble: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 4,
+    },
+    copyButton: {
+        flex: 1,
+        minWidth: 0,
+        gap: 3,
     },
     title: {
-        fontSize: 20,
+        fontSize: 16,
         fontWeight: '800',
-        letterSpacing: -0.2,
-        lineHeight: 26,
-    },
-    subtitle: {
-        fontSize: 14,
         lineHeight: 20,
     },
-    actions: {
-        marginTop: 10,
-        gap: 8,
-    },
-    primaryBtn: {
-        borderRadius: 14,
-        paddingVertical: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: 50,
-    },
-    primaryBtnText: {
-        color: '#fff',
-        fontSize: 15,
-        fontWeight: '700',
-    },
-    secondaryBtn: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 10,
-    },
-    secondaryBtnText: {
-        fontSize: 14,
+    subtitle: {
+        fontSize: 13,
         fontWeight: '500',
+        lineHeight: 18,
+    },
+    closeButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
 });

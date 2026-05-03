@@ -24,7 +24,7 @@ import { resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-serv
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
-export const DAILY_CANDIDATE_PAIR_LIMIT = Number(process.env.DAILY_CANDIDATE_PAIR_LIMIT) || 2;
+export const DAILY_CANDIDATE_PAIR_LIMIT = 1;
 export const DAILY_CANDIDATE_DECISION_LIMIT = Number(process.env.DAILY_CANDIDATE_DECISION_LIMIT) || 32;
 export const ACTIVE_EXPOSURE_CAP = 2;
 
@@ -471,6 +471,33 @@ async function sendCandidateReminderPush(userId: string, payload: { title: strin
     return true;
 }
 
+async function hasActivePendingInterestForUser(userId: string, now = new Date()) {
+    const row = await readDb
+        .select({ id: candidatePairs.id })
+        .from(candidatePairs)
+        .where(
+            and(
+                eq(candidatePairs.status, "active"),
+                gte(candidatePairs.expiresAt, now),
+                or(
+                    and(
+                        eq(candidatePairs.userAId, userId),
+                        eq(candidatePairs.aDecision, "open_to_meet"),
+                        eq(candidatePairs.bDecision, "pending"),
+                    ),
+                    and(
+                        eq(candidatePairs.userBId, userId),
+                        eq(candidatePairs.bDecision, "open_to_meet"),
+                        eq(candidatePairs.aDecision, "pending"),
+                    ),
+                ),
+            ),
+        )
+        .limit(1);
+
+    return row.length > 0;
+}
+
 export async function sendPendingCandidatePairReminders(now = new Date()) {
     const oneSidedCutoff = new Date(now.getTime() - 30 * 60 * 1000);
     const expiringSoonCutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -629,6 +656,9 @@ async function findPromotableQueuedPairForUser(userId: string, now: Date) {
 
     for (const row of candidates) {
         const other = getOtherUserId(row, userId);
+        if (await hasActivePendingInterestForUser(other, now)) {
+            continue;
+        }
         const otherActive = await getActiveCandidatePairsForUser(other);
         if (otherActive.length < DAILY_CANDIDATE_PAIR_LIMIT) {
             return row;
@@ -643,6 +673,10 @@ async function findPromotableQueuedPairForUser(userId: string, now: Date) {
  */
 export async function promoteDueQueuedPairsForUser(userId: string): Promise<boolean> {
     const now = new Date();
+    if (await hasActivePendingInterestForUser(userId, now)) {
+        return false;
+    }
+
     const selfActive = await getActiveCandidatePairsForUser(userId);
     if (selfActive.length >= DAILY_CANDIDATE_PAIR_LIMIT) {
         return false;
@@ -706,9 +740,19 @@ export async function generateCandidatePairsForUser(userId: string) {
         return [];
     }
 
+    if (await hasActivePendingInterestForUser(userId)) {
+        console.log("[candidate-pairs] HOLD: user has pending interest - skip generation", { userId });
+        return getActiveCandidatePairsForUser(userId);
+    }
+
     await promoteDueQueuedPairsForUser(userId);
 
     const existingActivePairs = await getActiveCandidatePairsForUser(userId);
+    if (existingActivePairs.some((pair) => pair.currentUserDecision === "open_to_meet")) {
+        console.log("[candidate-pairs] HOLD: existing active interest - returning hold card", { userId });
+        return existingActivePairs;
+    }
+
     if (existingActivePairs.length >= DAILY_CANDIDATE_PAIR_LIMIT) {
         console.log("[candidate-pairs] returning existing pairs:", existingActivePairs.length);
         return existingActivePairs;
@@ -1051,10 +1095,16 @@ export async function getActiveCandidatePairsForUser(userId: string) {
         }),
     );
 
-    return result
+    const visibleRows = result
         .filter((row): row is NonNullable<typeof row> => Boolean(row))
-        .sort((left, right) => right.compatibilityScore - left.compatibilityScore)
-        .slice(0, DAILY_CANDIDATE_PAIR_LIMIT);
+        .sort((left, right) => right.compatibilityScore - left.compatibilityScore);
+
+    const pendingInterestRows = visibleRows.filter((row) => row.currentUserDecision === "open_to_meet");
+    if (pendingInterestRows.length > 0) {
+        return pendingInterestRows.slice(0, 1);
+    }
+
+    return visibleRows.slice(0, DAILY_CANDIDATE_PAIR_LIMIT);
 }
 
 export async function getCandidatePairByIdForUser(pairId: string, userId: string) {
@@ -1130,6 +1180,32 @@ export async function respondToCandidatePair(
 
         if ((role === "a" && pair.aDecision !== "pending") || (role === "b" && pair.bDecision !== "pending")) {
             throw new Error("You have already responded to this pair");
+        }
+
+        if (decision === "open_to_meet") {
+            const existingPendingInterest = await tx.query.candidatePairs.findFirst({
+                where: and(
+                    ne(candidatePairs.id, pairId),
+                    eq(candidatePairs.status, "active"),
+                    gte(candidatePairs.expiresAt, now),
+                    or(
+                        and(
+                            eq(candidatePairs.userAId, userId),
+                            eq(candidatePairs.aDecision, "open_to_meet"),
+                            eq(candidatePairs.bDecision, "pending"),
+                        ),
+                        and(
+                            eq(candidatePairs.userBId, userId),
+                            eq(candidatePairs.bDecision, "open_to_meet"),
+                            eq(candidatePairs.aDecision, "pending"),
+                        ),
+                    ),
+                ),
+            });
+
+            if (existingPendingInterest) {
+                throw new Error("You already have an active interest waiting for a response");
+            }
         }
 
         const nextADecision = role === "a" ? decision : pair.aDecision;

@@ -67,7 +67,7 @@ function RootLayoutNav({ hasAuthToken }: { hasAuthToken: boolean }) {
         <Stack.Screen name="ui-preview" />
         <Stack.Screen name="profile/[userId]" />
         <Stack.Screen name="feedback/[dateId]" />
-        <Stack.Screen name="app-feedback" />
+        <Stack.Screen name="app-feedback" options={{ presentation: 'modal' }} />
       </Stack>
       <OfflineBanner />
       <AppFeedbackNudge hasAuthToken={hasAuthToken} />
