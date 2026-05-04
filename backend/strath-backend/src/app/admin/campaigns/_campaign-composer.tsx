@@ -50,6 +50,8 @@ const AUDIENCE_OPTIONS: AudienceOption[] = [
     { value: "everyone", label: "Everyone", description: "All non-deleted users." },
 ];
 
+const RECIPIENT_TABLE_LIMIT = 5000;
+
 const DEFAULT_BLOCKS: CampaignBlock[] = [
     { id: "eyebrow-1", type: "eyebrow", text: "Finish your StrathSpace profile" },
     {
@@ -259,6 +261,7 @@ export function CampaignComposer() {
     const [counts, setCounts] = useState<{ total: number; email: number; push: number } | null>(null);
     const [recipients, setRecipients] = useState<CampaignRecipientPreview[]>([]);
     const [recipientSearch, setRecipientSearch] = useState("");
+    const [debouncedRecipientSearch, setDebouncedRecipientSearch] = useState("");
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [sentUserIds, setSentUserIds] = useState<Set<string>>(new Set());
     const [failedUserIds, setFailedUserIds] = useState<Set<string>>(new Set());
@@ -283,31 +286,10 @@ export function CampaignComposer() {
     const retryOnlyMode = autoRetry && allFailedUserIds.size > 0 && selectedIds.size === 0;
     const selectedCount = retryOnlyMode ? allFailedUserIds.size : selectedIds.size || (counts?.total || recipients.length);
     const channelLabel = channels.join(" + ");
-    const filteredRecipients = useMemo(() => {
-        const query = recipientSearch.trim().toLowerCase();
-        if (!query) return recipients;
-
-        return recipients.filter((recipient) => {
-            const searchable = [
-                recipient.name,
-                recipient.firstName,
-                recipient.email,
-                recipient.phoneNumber,
-                recipient.userId,
-                recipient.profileStatus,
-                recipient.faceVerificationStatus,
-                recipient.waitlistStatus,
-            ]
-                .filter(Boolean)
-                .join(" ")
-                .toLowerCase();
-
-            return searchable.includes(query);
-        });
-    }, [recipientSearch, recipients]);
-    const alreadySentVisibleCount = filteredRecipients.filter((recipient) => allSentUserIds.has(recipient.userId)).length;
-    const failedVisibleCount = filteredRecipients.filter((recipient) => allFailedUserIds.has(recipient.userId) && !allSentUserIds.has(recipient.userId)).length;
-    const pendingVisibleCount = filteredRecipients.length - alreadySentVisibleCount - failedVisibleCount;
+    const alreadySentVisibleCount = recipients.filter((recipient) => allSentUserIds.has(recipient.userId)).length;
+    const failedVisibleCount = recipients.filter((recipient) => allFailedUserIds.has(recipient.userId) && !allSentUserIds.has(recipient.userId)).length;
+    const pendingVisibleCount = recipients.length - alreadySentVisibleCount - failedVisibleCount;
+    const isRecipientSearchActive = debouncedRecipientSearch.trim().length > 0;
 
     const buildFormData = (targetUserIds = Array.from(selectedIds), excludeUserIds: string[] = []) => {
         const data = new FormData();
@@ -332,11 +314,22 @@ export function CampaignComposer() {
     }, [name, subject, previewText, audience, channels, blocks, pushTitle, pushBody, ctaUrl, ctaLabel, selectedIds]);
 
     useEffect(() => {
+        const handle = window.setTimeout(() => {
+            setDebouncedRecipientSearch(recipientSearch.trim());
+        }, 300);
+        return () => window.clearTimeout(handle);
+    }, [recipientSearch]);
+
+    useEffect(() => {
         let cancelled = false;
 
         Promise.all([
             getAdminCampaignAudienceCount(audience),
-            getAdminCampaignRecipients(audience, 250),
+            getAdminCampaignRecipients(
+                audience,
+                RECIPIENT_TABLE_LIMIT,
+                debouncedRecipientSearch || undefined,
+            ),
         ])
             .then(([nextCounts, nextRecipients]) => {
                 if (cancelled) return;
@@ -356,7 +349,7 @@ export function CampaignComposer() {
         return () => {
             cancelled = true;
         };
-    }, [audience]);
+    }, [audience, debouncedRecipientSearch]);
 
     useEffect(() => {
         let cancelled = false;
@@ -385,6 +378,7 @@ export function CampaignComposer() {
         setCounts(null);
         setRecipients([]);
         setRecipientSearch("");
+        setDebouncedRecipientSearch("");
         setSelectedIds(new Set());
         setSentUserIds(new Set());
         setFailedUserIds(new Set());
@@ -575,11 +569,11 @@ export function CampaignComposer() {
                         </p>
                     </div>
                     <button type="button" onClick={() => {
-                        const selectableIds = filteredRecipients
+                        const selectableIds = recipients
                             .map((recipient) => recipient.userId);
                         setSelectedIds(selectedIds.size === selectableIds.length ? new Set() : new Set(selectableIds));
                     }} className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white">
-                        {selectedIds.size === filteredRecipients.length ? "Clear selection" : "Select visible"}
+                        {selectedIds.size === recipients.length ? "Clear selection" : "Select visible"}
                     </button>
                 </div>
                 <div className="mb-3 grid gap-2 sm:grid-cols-3">
@@ -610,6 +604,11 @@ export function CampaignComposer() {
                         <span className="ml-auto text-emerald-300">{allSentUserIds.size} already sent, still selectable for new campaigns</span>
                     )}
                 </label>
+                <p className="mb-2 text-[11px] leading-relaxed text-gray-500">
+                    Up to {RECIPIENT_TABLE_LIMIT.toLocaleString()} rows load at once (newest signups first). For a specific address, search by email or name — results come from the whole audience, not only the loaded page.
+                    {" "}
+                    To include every profile state in one send, choose <span className="font-semibold text-gray-400">Everyone</span> above.
+                </p>
                 <div className="mb-3 flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
                     <Search className="size-4 text-gray-500" />
                     <input
@@ -620,7 +619,11 @@ export function CampaignComposer() {
                         className="w-full bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none"
                     />
                     <span className="shrink-0 text-xs text-gray-500">
-                        {filteredRecipients.length}/{recipients.length}
+                        {isRecipientSearchActive
+                            ? `${recipients.length} match${recipients.length === 1 ? "" : "es"}`
+                            : counts && counts.total > recipients.length
+                                ? `${recipients.length}/${counts.total}`
+                                : `${recipients.length}`}
                     </span>
                 </div>
                 <div className="max-h-[360px] overflow-auto rounded-lg border border-white/10">
@@ -636,7 +639,7 @@ export function CampaignComposer() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/10">
-                            {filteredRecipients.map((recipient) => (
+                            {recipients.map((recipient) => (
                                 <tr key={recipient.userId} className={allSentUserIds.has(recipient.userId) ? "bg-emerald-500/5" : "bg-black/10"}>
                                     <td className="px-3 py-3">
                                         <input
@@ -686,10 +689,10 @@ export function CampaignComposer() {
                                     </td>
                                 </tr>
                             ))}
-                            {filteredRecipients.length === 0 && (
+                            {recipients.length === 0 && (
                                 <tr>
                                     <td colSpan={6} className="px-3 py-8 text-center text-sm text-gray-500">
-                                        {recipients.length === 0 ? "No visible recipients yet." : "No recipients match your search."}
+                                        {isRecipientSearchActive ? "No recipients match your search in this audience." : "No recipients in this audience yet."}
                                     </td>
                                 </tr>
                             )}

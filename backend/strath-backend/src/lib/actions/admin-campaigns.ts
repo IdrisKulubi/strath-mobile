@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 import { renderCampaignEmailHtml } from "@/lib/services/admin-campaign-email";
-import { and, count, desc, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, isNotNull, isNull, notInArray, or, sql } from "drizzle-orm";
 import { Expo, type ExpoPushMessage } from "expo-server-sdk";
 import { revalidatePath } from "next/cache";
 
@@ -72,12 +72,33 @@ function audienceWhereClause(audience: CampaignAudience) {
     }
 }
 
-function combineConditions(audience: CampaignAudience, selectedUserIds?: string[], excludeUserIds?: string[]) {
+function combineConditions(
+    audience: CampaignAudience,
+    selectedUserIds?: string[],
+    excludeUserIds?: string[],
+    searchQuery?: string,
+) {
     const conditions = [isNull(user.deletedAt)];
     const audienceCondition = audienceWhereClause(audience);
     if (audienceCondition) conditions.push(audienceCondition);
     if (selectedUserIds?.length) conditions.push(inArray(user.id, selectedUserIds));
     if (excludeUserIds?.length) conditions.push(notInArray(user.id, excludeUserIds));
+    const trimmed = searchQuery?.trim();
+    if (trimmed) {
+        const pattern = `%${trimmed}%`;
+        conditions.push(
+            or(
+                ilike(user.email, pattern),
+                ilike(user.name, pattern),
+                ilike(profiles.firstName, pattern),
+                ilike(user.phoneNumber, pattern),
+                ilike(profiles.phoneNumber, pattern),
+                ilike(user.id, pattern),
+                ilike(profiles.faceVerificationStatus, pattern),
+                ilike(profiles.waitlistStatus, pattern),
+            )!,
+        );
+    }
     return and(...conditions);
 }
 
@@ -115,7 +136,8 @@ async function fetchCampaignRecipients(
     audience: CampaignAudience,
     selectedUserIds?: string[],
     excludeUserIds?: string[],
-    limit = 1000,
+    limit = 5000,
+    searchQuery?: string,
 ): Promise<CampaignRecipient[]> {
     const rows = await db
         .select({
@@ -140,7 +162,7 @@ async function fetchCampaignRecipients(
         })
         .from(user)
         .leftJoin(profiles, eq(profiles.userId, user.id))
-        .where(combineConditions(audience, selectedUserIds, excludeUserIds))
+        .where(combineConditions(audience, selectedUserIds, excludeUserIds, searchQuery))
         .orderBy(desc(user.createdAt))
         .limit(limit);
 
@@ -295,13 +317,13 @@ export async function getAdminCampaignAudienceCount(audience: CampaignAudience) 
         .select({ total: count() })
         .from(user)
         .leftJoin(profiles, eq(profiles.userId, user.id))
-        .where(combineConditions(audience));
+        .where(combineConditions(audience, undefined, undefined, undefined));
 
     const [{ push }] = await db
         .select({ push: count() })
         .from(user)
         .leftJoin(profiles, eq(profiles.userId, user.id))
-        .where(and(combineConditions(audience), isNotNull(user.pushToken)));
+        .where(and(combineConditions(audience, undefined, undefined, undefined), isNotNull(user.pushToken)));
 
     return {
         total,
@@ -310,9 +332,13 @@ export async function getAdminCampaignAudienceCount(audience: CampaignAudience) 
     };
 }
 
-export async function getAdminCampaignRecipients(audience: CampaignAudience, limit = 250) {
+export async function getAdminCampaignRecipients(
+    audience: CampaignAudience,
+    limit = 5000,
+    searchQuery?: string,
+) {
     await requireAdmin();
-    const recipients = await fetchCampaignRecipients(audience, undefined, undefined, limit);
+    const recipients = await fetchCampaignRecipients(audience, undefined, undefined, limit, searchQuery);
     return recipients.map(publicRecipient);
 }
 
