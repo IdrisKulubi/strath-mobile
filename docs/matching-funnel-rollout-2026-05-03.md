@@ -20,6 +20,7 @@ The integrity check was clean: every double-interest pair had a linked `mutual_m
 
 ## Changes
 
+- Manual matchmaking mode is now enabled by default. Home returns a `manual_curation` state instead of candidate cards, and candidate-pair responses are rejected while the team manually curates matches.
 - Candidate pair expiry now defaults to 48 hours via `CANDIDATE_PAIR_EXPIRY_MINUTES` fallback of `2880`.
 - Home now shows up to 2 active candidate cards per 48-hour window.
 - `Interested` now creates a hold for both people: neither side can receive another active intro while one person is waiting for the other person's response.

@@ -10,6 +10,7 @@ import {
 } from "@/lib/services/candidate-pairs-service";
 import { runPairExpiration } from "@/lib/services/pair-expiration-service";
 import { getActiveMatchHoldForUser } from "@/lib/services/match-hold-service";
+import { getManualMatchmakingCopy, isManualMatchmakingModeEnabled } from "@/lib/services/manual-matchmaking-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,17 @@ export async function GET(req: NextRequest) {
 
         const userId = session.user.id;
         console.log("[daily-matches] GET", { userId });
+
+        if (isManualMatchmakingModeEnabled()) {
+            console.log("[daily-matches] manual matchmaking mode active", { userId });
+            return successResponse({
+                mode: "manual_curation" as const,
+                matches: [],
+                hasUpcomingQueued: false,
+                hold: null,
+                manualCuration: getManualMatchmakingCopy(),
+            });
+        }
 
         const expiration = await runPairExpiration();
         if (expiration.expiredCount > 0) {

@@ -1,62 +1,53 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
+import { ManualCuration } from '@/hooks/use-daily-matches';
 
-interface EmptyMatchesProps {
-    allActioned?: boolean;
-    hasUpcomingQueued?: boolean;
+interface ManualCurationCardProps {
+    curation?: ManualCuration | null;
 }
 
-export function EmptyMatches(_props: EmptyMatchesProps) {
+export function ManualCurationCard({ curation }: ManualCurationCardProps) {
     const { colors, isDark } = useTheme();
-    const cardBorder = isDark ? 'rgba(233, 30, 140, 0.28)' : 'rgba(233, 30, 140, 0.2)';
-    const cardInnerBg = isDark ? 'rgba(45, 27, 71, 0.45)' : 'rgba(255, 255, 255, 0.92)';
-    const glowColors = isDark
-        ? (['rgba(233,30,140,0.35)', 'rgba(147,51,234,0.2)'] as const)
-        : (['rgba(233,30,140,0.2)', 'rgba(233,30,140,0.06)'] as const);
+    const title = curation?.title ?? 'We are working on your match';
+    const subtitle = curation?.subtitle
+        ?? 'Our team is reviewing profiles by hand so we can introduce you to someone with real potential. When we find a strong fit, we will send them to you first.';
 
-    const tips = [
-        'We review your profile and preferences',
-        'We look for someone who feels genuinely compatible',
-        'We will notify you when your match is ready',
-    ];
+    const cardBg = isDark ? 'rgba(35, 25, 48, 0.92)' : '#ffffff';
+    const borderColor = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.08)';
+    const gradientColors = isDark
+        ? (['rgba(233,30,140,0.24)', 'rgba(35,25,48,0.04)'] as const)
+        : (['rgba(233,30,140,0.10)', 'rgba(255,255,255,0.4)'] as const);
 
     return (
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.outer}>
-            <View style={[styles.card, { borderColor: cardBorder, backgroundColor: cardInnerBg }]}>
+        <Animated.View entering={FadeInDown.duration(360)} style={styles.outer}>
+            <View style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
                 <LinearGradient
-                    colors={glowColors}
+                    colors={gradientColors}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={styles.cardGlow}
-                    pointerEvents="none"
+                    style={StyleSheet.absoluteFill}
                 />
-
-                <View style={styles.cardContent}>
+                <View style={styles.content}>
                     <View style={[styles.iconBox, { backgroundColor: colors.primary }]}>
                         <Ionicons name="sparkles" size={24} color={colors.primaryForeground} />
                     </View>
 
                     <Text style={[styles.eyebrow, { color: colors.primary }]}>Personal matching is on</Text>
-                    <Text style={[styles.title, { color: colors.foreground }]}>We are working on your match</Text>
-                    <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                        Our team is reviewing profiles by hand so we can introduce you to someone with real potential. When we find a strong fit, we will send them to you first.
-                    </Text>
+                    <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
+                    <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
 
-                    <View style={[styles.tips, { borderTopColor: colors.border }]}>
-                        {tips.map((line) => (
-                            <View key={line} style={styles.tipRow}>
-                                <Ionicons name="checkmark-circle" size={18} color={colors.primary} style={styles.tipIcon} />
-                                <Text style={[styles.tipText, { color: colors.foreground }]}>{line}</Text>
-                            </View>
-                        ))}
+                    <View style={[styles.steps, { borderTopColor: colors.border }]}>
+                        <Step text="We review your profile and preferences" />
+                        <Step text="We look for someone who feels genuinely compatible" />
+                        <Step text="We will notify you when your match is ready" />
                     </View>
 
-                    <View style={[styles.notice, { borderColor: cardBorder }]}>
+                    <View style={[styles.notice, { borderColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.03)' }]}>
                         <Ionicons name="lock-closed-outline" size={16} color={colors.mutedForeground} />
                         <Text style={[styles.noticeText, { color: colors.mutedForeground }]}>
                             You do not need to browse profiles right now. We are handling the search for you.
@@ -65,6 +56,17 @@ export function EmptyMatches(_props: EmptyMatchesProps) {
                 </View>
             </View>
         </Animated.View>
+    );
+}
+
+
+function Step({ text }: { text: string }) {
+    const { colors } = useTheme();
+    return (
+        <View style={styles.stepRow}>
+            <Ionicons name="checkmark-circle" size={18} color={colors.primary} style={styles.stepIcon} />
+            <Text style={[styles.stepText, { color: colors.foreground }]}>{text}</Text>
+        </View>
     );
 }
 
@@ -79,12 +81,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         overflow: 'hidden',
     },
-    cardGlow: {
-        ...StyleSheet.absoluteFillObject,
-        opacity: 0.55,
-    },
-    cardContent: {
-        zIndex: 1,
+    content: {
         paddingHorizontal: 22,
         paddingVertical: 26,
         gap: 12,
@@ -105,28 +102,28 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: 24,
-        fontWeight: '800',
         lineHeight: 30,
+        fontWeight: '800',
     },
     subtitle: {
         fontSize: 15,
         lineHeight: 22,
     },
-    tips: {
+    steps: {
         marginTop: 8,
         paddingTop: 16,
         gap: 12,
         borderTopWidth: StyleSheet.hairlineWidth,
     },
-    tipRow: {
+    stepRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         gap: 10,
     },
-    tipIcon: {
+    stepIcon: {
         marginTop: 1,
     },
-    tipText: {
+    stepText: {
         flex: 1,
         fontSize: 14,
         lineHeight: 20,
@@ -141,7 +138,6 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         paddingHorizontal: 12,
         paddingVertical: 12,
-        backgroundColor: 'rgba(255,255,255,0.04)',
     },
     noticeText: {
         flex: 1,

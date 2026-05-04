@@ -57,12 +57,18 @@ export type MatchHoldCancelReason =
     | 'safety_concern'
     | 'other';
 
+export interface ManualCuration {
+    title: string;
+    subtitle: string;
+}
+
 export interface DailyMatchesResponse {
-    mode: 'matches' | 'hold';
+    mode: 'matches' | 'hold' | 'manual_curation';
     matches: DailyMatch[];
     /** True when a queued introduction is scheduled for a future UTC day (no timer shown). */
     hasUpcomingQueued?: boolean;
     hold?: MatchHold | null;
+    manualCuration?: ManualCuration | null;
 }
 
 export function useDailyMatches() {
@@ -79,11 +85,17 @@ export function useDailyMatches() {
             }
             const json = await res.json();
             const data = json?.data ?? {};
+            const mode = data.mode === 'hold'
+                ? 'hold'
+                : data.mode === 'manual_curation'
+                    ? 'manual_curation'
+                    : 'matches';
             return {
-                mode: data.mode === 'hold' ? 'hold' : 'matches',
+                mode,
                 matches: Array.isArray(data.matches) ? data.matches : [],
                 hasUpcomingQueued: Boolean(data.hasUpcomingQueued),
                 hold: data.hold ?? null,
+                manualCuration: data.manualCuration ?? null,
             };
         },
         staleTime: 60 * 1000,
@@ -94,6 +106,7 @@ export function useDailyMatches() {
                 const ms = new Date(data.hold.autoReleaseAt).getTime() - Date.now();
                 return ms > 0 ? ms : 1000;
             }
+            if (data.mode === 'manual_curation') return false;
             const matches = data.matches ?? [];
             if (matches.length === 0) return false;
             const now = Date.now();

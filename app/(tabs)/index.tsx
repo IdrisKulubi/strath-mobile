@@ -22,6 +22,7 @@ import { HomeHeader } from '@/components/home/home-header';
 import { DailyMatchesList } from '@/components/home/daily-matches-list';
 import { EmptyMatches } from '@/components/home/empty-matches';
 import { DateHoldCard } from '@/components/home/date-hold-card';
+import { ManualCurationCard } from '@/components/home/manual-curation-card';
 import { useToast } from '@/components/ui/toast';
 import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/decision-info-sheet';
 import { PendingDecisionBar } from '@/components/home/pending-decision-bar';
@@ -74,6 +75,8 @@ export default function HomeScreen() {
     const matches = useMemo(() => matchesData?.matches ?? [], [matchesData]);
     const hasUpcomingQueued = matchesData?.hasUpcomingQueued ?? false;
     const hold = matchesData?.mode === 'hold' ? matchesData.hold ?? null : null;
+    const isManualCuration = matchesData?.mode === 'manual_curation';
+    const manualCuration = isManualCuration ? matchesData?.manualCuration ?? null : null;
     const respondToPair = useRespondToDailyPair();
     const [refreshing, setRefreshing] = useState(false);
     const [hasSeenMatchesToday, setHasSeenMatchesToday] = useState(false);
@@ -275,6 +278,8 @@ export default function HomeScreen() {
 
                 {isLoading ? (
                     <HomeSkeleton />
+                ) : isManualCuration ? (
+                    <ManualCurationCard curation={manualCuration} />
                 ) : hold ? (
                     <DateHoldCard hold={hold} />
                 ) : displayedMatches.length > 0 ? (

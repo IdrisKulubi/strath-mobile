@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 import { requireMatchmakingAccess } from "@/lib/services/profile-access";
+import { isManualMatchmakingModeEnabled } from "@/lib/services/manual-matchmaking-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,10 @@ export async function POST(
         const session = await getSessionWithFallback(req);
         if (!session?.user?.id) {
             return errorResponse(new Error("Unauthorized"), 401);
+        }
+
+        if (isManualMatchmakingModeEnabled()) {
+            return errorResponse(new Error("Manual matchmaking is active. We will notify you when your match is ready."), 403);
         }
 
         try {

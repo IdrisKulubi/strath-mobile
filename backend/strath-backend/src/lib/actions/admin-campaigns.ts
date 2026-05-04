@@ -376,16 +376,10 @@ export async function sendAdminCampaign(formData: FormData) {
         campaign.excludeUserIds.length > 0 ? campaign.excludeUserIds : undefined,
         5000,
     );
-    const skippedAlreadySent = recipients.filter((recipient) => (
-        (campaign.channels.includes("email") && recipient.emailStatus === "sent")
-        || (campaign.channels.includes("push") && recipient.pushStatus === "sent")
-    ));
-    const sendableRecipients = recipients.filter((recipient) => !skippedAlreadySent.some((skipped) => skipped.userId === recipient.userId));
+    const sendableRecipients = recipients;
 
     if (sendableRecipients.length === 0) {
-        throw new Error(skippedAlreadySent.length > 0
-            ? "All matching recipients were already sent according to the database"
-            : "No recipients match this campaign");
+        throw new Error("No recipients match this campaign");
     }
 
     const [createdCampaign] = await db
@@ -533,7 +527,7 @@ export async function sendAdminCampaign(formData: FormData) {
             .filter((outcome) => outcome.emailStatus === "failed" || outcome.pushStatus === "failed")
             .map((outcome) => outcome.userId),
         excludedUserCount: campaign.excludeUserIds.length,
-        skippedAlreadySentCount: skippedAlreadySent.length,
+        skippedAlreadySentCount: campaign.excludeUserIds.length,
     };
 }
 
