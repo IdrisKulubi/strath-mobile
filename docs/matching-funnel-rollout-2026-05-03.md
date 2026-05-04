@@ -22,12 +22,12 @@ The integrity check was clean: every double-interest pair had a linked `mutual_m
 
 - Candidate pair expiry now defaults to 48 hours via `CANDIDATE_PAIR_EXPIRY_MINUTES` fallback of `2880`.
 - Home now shows up to 2 active candidate cards per 48-hour window.
-- `Interested` now creates a hold: the user cannot receive another active intro while waiting for the other person's response.
+- `Interested` now creates a hold for both people: neither side can receive another active intro while one person is waiting for the other person's response.
 - Active-card rotation no longer refills beyond those 2 intros. If a user passes the first card, the second card can still be shown. If they pass both cards, they wait until the 48-hour window expires.
 - The hourly cron also tops up users who have no active intro and no pending-interest hold.
 - Queued backup intros still work, but a user who already has queued rows receives only enough immediate top-up rows to fill open active slots.
 - Users are capped at 32 candidate decisions per rolling 24 hours via `DAILY_CANDIDATE_DECISION_LIMIT`.
-- `Interested` keeps the intro alive while waiting for the other person's response. `Pass` hard-closes the dyad. `Maybe` removes the card without permanently closing the dyad.
+- `Interested` keeps the intro alive and reserves both people while waiting for the other person's response. `Pass` hard-closes the dyad. `Maybe` removes the card without permanently closing the dyad.
 - The positive action copy changed from "Open to Meet" to "Interested".
 - Added a `maybe` decision. It expires/recycles the pair instead of permanently closing the dyad.
 - Added reminder tracking columns on `candidate_pairs`:

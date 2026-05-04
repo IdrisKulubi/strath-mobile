@@ -471,7 +471,7 @@ async function sendCandidateReminderPush(userId: string, payload: { title: strin
     return true;
 }
 
-async function hasActivePendingInterestForUser(userId: string, now = new Date()) {
+async function hasActiveOneSidedInterestForUser(userId: string, now = new Date()) {
     const row = await readDb
         .select({ id: candidatePairs.id })
         .from(candidatePairs)
@@ -480,13 +480,15 @@ async function hasActivePendingInterestForUser(userId: string, now = new Date())
                 eq(candidatePairs.status, "active"),
                 gte(candidatePairs.expiresAt, now),
                 or(
+                    eq(candidatePairs.userAId, userId),
+                    eq(candidatePairs.userBId, userId),
+                ),
+                or(
                     and(
-                        eq(candidatePairs.userAId, userId),
                         eq(candidatePairs.aDecision, "open_to_meet"),
                         eq(candidatePairs.bDecision, "pending"),
                     ),
                     and(
-                        eq(candidatePairs.userBId, userId),
                         eq(candidatePairs.bDecision, "open_to_meet"),
                         eq(candidatePairs.aDecision, "pending"),
                     ),
@@ -687,7 +689,7 @@ async function findPromotableQueuedPairForUser(userId: string, now: Date) {
 
     for (const row of candidates) {
         const other = getOtherUserId(row, userId);
-        if (await hasActivePendingInterestForUser(other, now)) {
+        if (await hasActiveOneSidedInterestForUser(other, now)) {
             continue;
         }
         if (await hasOpenSlotClearingWindowForUser(other, now)) {
@@ -707,7 +709,7 @@ async function findPromotableQueuedPairForUser(userId: string, now: Date) {
  */
 export async function promoteDueQueuedPairsForUser(userId: string): Promise<boolean> {
     const now = new Date();
-    if (await hasActivePendingInterestForUser(userId, now)) {
+    if (await hasActiveOneSidedInterestForUser(userId, now)) {
         return false;
     }
 
@@ -778,8 +780,8 @@ export async function generateCandidatePairsForUser(userId: string) {
         return [];
     }
 
-    if (await hasActivePendingInterestForUser(userId)) {
-        console.log("[candidate-pairs] HOLD: user has pending interest - skip generation", { userId });
+    if (await hasActiveOneSidedInterestForUser(userId)) {
+        console.log("[candidate-pairs] HOLD: user has one-sided interest in flight - skip generation", { userId });
         return getActiveCandidatePairsForUser(userId);
     }
 
@@ -1237,13 +1239,15 @@ export async function respondToCandidatePair(
                     eq(candidatePairs.status, "active"),
                     gte(candidatePairs.expiresAt, now),
                     or(
+                        eq(candidatePairs.userAId, userId),
+                        eq(candidatePairs.userBId, userId),
+                    ),
+                    or(
                         and(
-                            eq(candidatePairs.userAId, userId),
                             eq(candidatePairs.aDecision, "open_to_meet"),
                             eq(candidatePairs.bDecision, "pending"),
                         ),
                         and(
-                            eq(candidatePairs.userBId, userId),
                             eq(candidatePairs.bDecision, "open_to_meet"),
                             eq(candidatePairs.aDecision, "pending"),
                         ),
@@ -1252,7 +1256,7 @@ export async function respondToCandidatePair(
             });
 
             if (existingPendingInterest) {
-                throw new Error("You already have an active interest waiting for a response");
+                throw new Error("There is already an active interest waiting for a response");
             }
         }
 
