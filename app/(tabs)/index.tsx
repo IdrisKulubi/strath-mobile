@@ -42,7 +42,7 @@ function HomeSkeleton() {
         <View style={styles.skeletonWrap}>
             <Skeleton style={styles.headerSkeleton} />
             <Skeleton style={styles.subheaderSkeleton} />
-            {[0].map((item) => (
+            {[0, 1].map((item) => (
                 <Skeleton key={item} style={styles.cardSkeleton} />
             ))}
         </View>

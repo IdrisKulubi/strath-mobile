@@ -24,7 +24,7 @@ import { resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-serv
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
-export const DAILY_CANDIDATE_PAIR_LIMIT = 1;
+export const DAILY_CANDIDATE_PAIR_LIMIT = 2;
 export const DAILY_CANDIDATE_DECISION_LIMIT = Number(process.env.DAILY_CANDIDATE_DECISION_LIMIT) || 32;
 export const ACTIVE_EXPOSURE_CAP = 2;
 
@@ -498,6 +498,37 @@ async function hasActivePendingInterestForUser(userId: string, now = new Date())
     return row.length > 0;
 }
 
+async function getOpenSlotClearingWindowForUser(userId: string, now = new Date()) {
+    const rows = await readDb
+        .select({ id: candidatePairs.id, expiresAt: candidatePairs.expiresAt })
+        .from(candidatePairs)
+        .where(
+            and(
+                gte(candidatePairs.expiresAt, now),
+                or(
+                    and(
+                        eq(candidatePairs.userAId, userId),
+                        inArray(candidatePairs.aDecision, ["passed", "maybe"]),
+                        inArray(candidatePairs.status, ["closed", "expired"]),
+                    ),
+                    and(
+                        eq(candidatePairs.userBId, userId),
+                        inArray(candidatePairs.bDecision, ["passed", "maybe"]),
+                        inArray(candidatePairs.status, ["closed", "expired"]),
+                    ),
+                ),
+            ),
+        )
+        .orderBy(desc(candidatePairs.expiresAt))
+        .limit(1);
+
+    return rows[0] ?? null;
+}
+
+async function hasOpenSlotClearingWindowForUser(userId: string, now = new Date()) {
+    return Boolean(await getOpenSlotClearingWindowForUser(userId, now));
+}
+
 export async function sendPendingCandidatePairReminders(now = new Date()) {
     const oneSidedCutoff = new Date(now.getTime() - 30 * 60 * 1000);
     const expiringSoonCutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -659,6 +690,9 @@ async function findPromotableQueuedPairForUser(userId: string, now: Date) {
         if (await hasActivePendingInterestForUser(other, now)) {
             continue;
         }
+        if (await hasOpenSlotClearingWindowForUser(other, now)) {
+            continue;
+        }
         const otherActive = await getActiveCandidatePairsForUser(other);
         if (otherActive.length < DAILY_CANDIDATE_PAIR_LIMIT) {
             return row;
@@ -674,6 +708,10 @@ async function findPromotableQueuedPairForUser(userId: string, now: Date) {
 export async function promoteDueQueuedPairsForUser(userId: string): Promise<boolean> {
     const now = new Date();
     if (await hasActivePendingInterestForUser(userId, now)) {
+        return false;
+    }
+
+    if (await hasOpenSlotClearingWindowForUser(userId, now)) {
         return false;
     }
 
@@ -742,6 +780,16 @@ export async function generateCandidatePairsForUser(userId: string) {
 
     if (await hasActivePendingInterestForUser(userId)) {
         console.log("[candidate-pairs] HOLD: user has pending interest - skip generation", { userId });
+        return getActiveCandidatePairsForUser(userId);
+    }
+
+    const openSlotClearingWindow = await getOpenSlotClearingWindowForUser(userId);
+    if (openSlotClearingWindow) {
+        console.log("[candidate-pairs] WINDOW: pass/maybe already used a slot - skip refill", {
+            userId,
+            pairId: openSlotClearingWindow.id,
+            windowExpiresAt: openSlotClearingWindow.expiresAt,
+        });
         return getActiveCandidatePairsForUser(userId);
     }
 
