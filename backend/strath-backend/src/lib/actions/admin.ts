@@ -16,7 +16,7 @@ import {
     appFeatureFlags,
     adminBroadcasts,
 } from "@/db/schema";
-import { eq, desc, count, and, or, gte, sql, isNotNull } from "drizzle-orm";
+import { eq, desc, count, and, or, gte, sql, isNotNull, inArray, ne } from "drizzle-orm";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 import { revalidatePath } from "next/cache";
 import { sendPushNotification } from "@/lib/notifications";
@@ -464,26 +464,69 @@ export async function getAdminUsers() {
             .orderBy(desc(user.createdAt)),
     ]);
 
-    const items = await Promise.all(
-        rows.map(async (u) => {
-            const profile = await db.query.profiles.findFirst({ where: eq(profiles.userId, u.id) });
-            const [sentCount, receivedCount, matchCount] = await Promise.all([
-                db.select({ cnt: count() }).from(candidatePairs).where(
-                    or(
-                        and(eq(candidatePairs.userAId, u.id), sql`${candidatePairs.aDecision} <> 'pending'`),
-                        and(eq(candidatePairs.userBId, u.id), sql`${candidatePairs.bDecision} <> 'pending'`),
-                    ),
-                ),
-                db.select({ cnt: count() }).from(candidatePairs).where(
-                    or(
-                        and(eq(candidatePairs.userAId, u.id), sql`${candidatePairs.bDecision} <> 'pending'`),
-                        and(eq(candidatePairs.userBId, u.id), sql`${candidatePairs.aDecision} <> 'pending'`),
-                    ),
-                ),
-                db.select({ cnt: count() }).from(dateMatches).where(
-                    or(eq(dateMatches.userAId, u.id), eq(dateMatches.userBId, u.id))
-                ),
-            ]);
+    const userIds = rows.map((u) => u.id);
+    const addCount = (map: Map<string, number>, userId: string, value: number) => {
+        map.set(userId, (map.get(userId) ?? 0) + value);
+    };
+
+    const [
+        profileRows,
+        sentAsA,
+        sentAsB,
+        receivedAsA,
+        receivedAsB,
+        matchesAsA,
+        matchesAsB,
+    ] = userIds.length > 0
+        ? await Promise.all([
+            db.select().from(profiles).where(inArray(profiles.userId, userIds)),
+            db
+                .select({ userId: candidatePairs.userAId, cnt: count() })
+                .from(candidatePairs)
+                .where(and(inArray(candidatePairs.userAId, userIds), ne(candidatePairs.aDecision, "pending")))
+                .groupBy(candidatePairs.userAId),
+            db
+                .select({ userId: candidatePairs.userBId, cnt: count() })
+                .from(candidatePairs)
+                .where(and(inArray(candidatePairs.userBId, userIds), ne(candidatePairs.bDecision, "pending")))
+                .groupBy(candidatePairs.userBId),
+            db
+                .select({ userId: candidatePairs.userAId, cnt: count() })
+                .from(candidatePairs)
+                .where(and(inArray(candidatePairs.userAId, userIds), ne(candidatePairs.bDecision, "pending")))
+                .groupBy(candidatePairs.userAId),
+            db
+                .select({ userId: candidatePairs.userBId, cnt: count() })
+                .from(candidatePairs)
+                .where(and(inArray(candidatePairs.userBId, userIds), ne(candidatePairs.aDecision, "pending")))
+                .groupBy(candidatePairs.userBId),
+            db
+                .select({ userId: dateMatches.userAId, cnt: count() })
+                .from(dateMatches)
+                .where(inArray(dateMatches.userAId, userIds))
+                .groupBy(dateMatches.userAId),
+            db
+                .select({ userId: dateMatches.userBId, cnt: count() })
+                .from(dateMatches)
+                .where(inArray(dateMatches.userBId, userIds))
+                .groupBy(dateMatches.userBId),
+        ])
+        : [[], [], [], [], [], [], []];
+
+    const profileByUserId = new Map(profileRows.map((profile) => [profile.userId, profile]));
+    const sentByUserId = new Map<string, number>();
+    const receivedByUserId = new Map<string, number>();
+    const matchesByUserId = new Map<string, number>();
+
+    for (const row of sentAsA) addCount(sentByUserId, row.userId, row.cnt);
+    for (const row of sentAsB) addCount(sentByUserId, row.userId, row.cnt);
+    for (const row of receivedAsA) addCount(receivedByUserId, row.userId, row.cnt);
+    for (const row of receivedAsB) addCount(receivedByUserId, row.userId, row.cnt);
+    for (const row of matchesAsA) addCount(matchesByUserId, row.userId, row.cnt);
+    for (const row of matchesAsB) addCount(matchesByUserId, row.userId, row.cnt);
+
+    const items = rows.map((u) => {
+            const profile = profileByUserId.get(u.id);
             return {
                 id: u.id,
                 name: u.name,
@@ -525,12 +568,11 @@ export async function getAdminUsers() {
                 anonymous: profile?.anonymous ?? null,
                 discoveryPaused: profile?.discoveryPaused ?? null,
                 aiConsentGranted: profile?.aiConsentGranted ?? null,
-                sentRequests: sentCount[0].cnt,
-                receivedRequests: receivedCount[0].cnt,
-                dateMatches: matchCount[0].cnt,
+                sentRequests: sentByUserId.get(u.id) ?? 0,
+                receivedRequests: receivedByUserId.get(u.id) ?? 0,
+                dateMatches: matchesByUserId.get(u.id) ?? 0,
             };
-        })
-    );
+        });
 
     return {
         total,
