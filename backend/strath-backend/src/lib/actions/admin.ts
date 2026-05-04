@@ -133,12 +133,18 @@ export async function getAdminDateRequests(statusFilter?: string) {
         };
     }
 
-    function decisionMeta(decision: "open_to_meet" | "maybe" | "passed") {
+    function decisionMeta(decision: "open_to_meet" | "maybe" | "passed", pairStatus: string) {
         if (decision === "open_to_meet") {
-            return { kind: "open_to_meet" as const, label: "Interested" };
+            return {
+                kind: "open_to_meet" as const,
+                label: pairStatus === "active" ? "Interested" : "Interest ended",
+            };
         }
         if (decision === "maybe") {
-            return { kind: "maybe" as const, label: "Maybe later" };
+            return {
+                kind: "maybe" as const,
+                label: pairStatus === "active" ? "Maybe later" : "Maybe ended",
+            };
         }
         return { kind: "passed" as const, label: "Passed" };
     }
@@ -168,7 +174,7 @@ export async function getAdminDateRequests(statusFilter?: string) {
             pairs.flatMap((pair) => {
                 const rows = [];
                 if (pair.aDecision !== "pending") {
-                    const meta = decisionMeta(pair.aDecision);
+                    const meta = decisionMeta(pair.aDecision, pair.status);
                     rows.push((async () => ({
                         id: `pair-${pair.id}-a`,
                         source: "candidate_pair" as const,
@@ -188,7 +194,7 @@ export async function getAdminDateRequests(statusFilter?: string) {
                     }))());
                 }
                 if (pair.bDecision !== "pending") {
-                    const meta = decisionMeta(pair.bDecision);
+                    const meta = decisionMeta(pair.bDecision, pair.status);
                     rows.push((async () => ({
                         id: `pair-${pair.id}-b`,
                         source: "candidate_pair" as const,
@@ -217,7 +223,7 @@ export async function getAdminDateRequests(statusFilter?: string) {
             id: `mutual-${match.id}`,
             source: "mutual_match" as const,
             kind: "mutual_match" as const,
-            label: "Mutual match",
+            label: match.status === "cancelled" || match.status === "expired" ? "Mutual ended" : "Mutual match",
             status: match.status,
             decision: "accepted",
             pairStatus: match.status,
