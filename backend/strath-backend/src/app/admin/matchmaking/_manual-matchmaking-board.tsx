@@ -913,8 +913,8 @@ export function ManualMatchmakingBoard({
                 </div>
             )}
 
-            <div className="grid gap-4 2xl:grid-cols-[330px_minmax(0,1fr)_430px]">
-                <section className="sticky top-16 max-h-[calc(100vh-5rem)] overflow-hidden rounded-xl border border-white/10 bg-white/5">
+            <div className="grid gap-4 xl:grid-cols-[300px_minmax(520px,1fr)_390px] 2xl:grid-cols-[330px_minmax(0,1fr)_430px]">
+                <section className="xl:sticky xl:top-16 xl:max-h-[calc(100vh-5rem)] overflow-hidden rounded-xl border border-white/10 bg-white/5">
                     <div className="border-b border-white/10 p-4">
                         <div className="flex items-center justify-between">
                             <h2 className="font-semibold text-white">Person A</h2>
@@ -932,7 +932,7 @@ export function ManualMatchmakingBoard({
                             ))}
                         </div>
                     </div>
-                    <div className="max-h-[calc(100vh-17rem)] overflow-y-auto p-2">
+                    <div className="max-h-[520px] overflow-y-auto p-2 xl:max-h-[calc(100vh-17rem)]">
                         {filteredPool.map((item) => (
                             <button key={item.userId} type="button" onClick={() => loadSuggestions(item.userId)} className={`mb-2 w-full rounded-lg border p-3 text-left ${selectedUserId === item.userId ? "border-pink-400/60 bg-pink-500/15" : "border-white/10 bg-black/20 hover:bg-white/10"}`}>
                                 <div className="flex items-center gap-3">
@@ -956,7 +956,7 @@ export function ManualMatchmakingBoard({
                     </div>
                 </section>
 
-                <main className="sticky top-16 max-h-[calc(100vh-5rem)] overflow-y-auto pr-1">
+                <main className="min-w-0 xl:sticky xl:top-16 xl:max-h-[calc(100vh-5rem)] overflow-y-auto pr-1">
                     <section className="rounded-xl border border-white/10 bg-white/5 p-4">
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                             <div>
@@ -1033,7 +1033,7 @@ export function ManualMatchmakingBoard({
                     </div>
                 </main>
 
-                <aside className="sticky top-16 max-h-[calc(100vh-5rem)] overflow-hidden rounded-xl border border-white/10 bg-white/5">
+                <aside className="xl:sticky xl:top-16 xl:max-h-[calc(100vh-5rem)] overflow-hidden rounded-xl border border-white/10 bg-white/5">
                     <div className="border-b border-white/10 p-4">
                         <div className="flex items-center justify-between">
                             <h2 className="font-semibold text-white">Candidate deck</h2>
