@@ -23,6 +23,7 @@ import {
 import {
     cancelManualCandidatePair,
     createManualCandidatePair,
+    getManualMatchmakingActivity,
     getManualMatchSuggestions,
     markManualMatchCallOutcome,
     type ManualMatchSuggestion,
@@ -651,7 +652,7 @@ export function ManualMatchmakingBoard({
     initialActivity: ActivityItem[];
 }) {
     const [pool] = useState(initialPool);
-    const [activity] = useState(initialActivity);
+    const [activity, setActivity] = useState(initialActivity);
     const [poolQuery, setPoolQuery] = useState("");
     const [poolFilter, setPoolFilter] = useState<PoolFilter>("all");
     const [selectedUserId, setSelectedUserId] = useState(initialPool.find(manualLaunchPool)?.userId ?? initialPool[0]?.userId ?? "");
@@ -697,7 +698,7 @@ export function ManualMatchmakingBoard({
         verified: pool.filter(manualLaunchPool).length,
         available: pool.filter((item) => item.activeState === "available").length,
         sent: activity.filter((item) => item.status !== "closed" && item.status !== "expired").length,
-    }), [activity.length, pool]);
+    }), [activity, pool]);
 
     const courseOptions = useMemo(() => Array.from(new Set(pool.map((item) => item.course).filter(Boolean) as string[])).sort(), [pool]);
     const universityOptions = useMemo(() => Array.from(new Set(pool.map((item) => item.university).filter(Boolean) as string[])).sort(), [pool]);
@@ -827,8 +828,9 @@ export function ManualMatchmakingBoard({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const refreshPageData = () => {
-        window.location.reload();
+    const refreshActivity = async () => {
+        const nextActivity = await getManualMatchmakingActivity();
+        setActivity(nextActivity);
     };
 
     const resetCandidateFilters = () => {
@@ -870,6 +872,7 @@ export function ManualMatchmakingBoard({
                     if (!selectedUser || !selectedCandidate) return;
                     await createManualCandidatePair(selectedUser.userId, selectedCandidate.userId);
                     setMessage("Curated match created and notifications sent.");
+                    setShowSentMatches(true);
                 } else if (adminAction.type === "cancel") {
                     await cancelManualCandidatePair(adminAction.pairId, actionNote.trim() || "Cancelled after admin review");
                     setMessage("Match cancelled. Both people are back in the pool.");
@@ -879,7 +882,7 @@ export function ManualMatchmakingBoard({
                 }
                 setAdminAction(null);
                 setActionNote("");
-                refreshPageData();
+                await refreshActivity();
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Could not update match");
             }

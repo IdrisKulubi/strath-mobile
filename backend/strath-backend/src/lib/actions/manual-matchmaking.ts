@@ -577,7 +577,7 @@ export async function getManualMatchmakingActivity() {
             ),
         )
         .orderBy(desc(candidatePairs.updatedAt))
-        .limit(40);
+        .limit(200);
 
     const userIds = [...new Set(pairs.flatMap((pair) => [pair.userAId, pair.userBId]))];
     const profileRows = userIds.length
