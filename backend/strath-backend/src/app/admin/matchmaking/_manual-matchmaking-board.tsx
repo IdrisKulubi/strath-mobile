@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import {
     BookOpen,
     Check,
+    ChevronDown,
+    ChevronUp,
     Eye,
     ImageIcon,
     Loader2,
@@ -667,6 +669,8 @@ export function ManualMatchmakingBoard({
     const [candidateSort, setCandidateSort] = useState<CandidateSort>("compatibility");
     const [compareMode, setCompareMode] = useState<CompareMode>("photos");
     const [sentQuery, setSentQuery] = useState("");
+    const [showSentMatches, setShowSentMatches] = useState(false);
+    const [showCandidateFilters, setShowCandidateFilters] = useState(false);
     const [suggestions, setSuggestions] = useState<ManualMatchSuggestion[]>([]);
     const [message, setMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -913,7 +917,7 @@ export function ManualMatchmakingBoard({
                 </div>
             )}
 
-            <div className="grid gap-4 xl:grid-cols-[300px_minmax(520px,1fr)_390px] 2xl:grid-cols-[330px_minmax(0,1fr)_430px]">
+            <div className="grid gap-4 xl:grid-cols-[280px_minmax(340px,1fr)_540px] 2xl:grid-cols-[320px_minmax(0,1fr)_600px]">
                 <section className="xl:sticky xl:top-16 xl:max-h-[calc(100vh-5rem)] overflow-hidden rounded-xl border border-white/10 bg-white/5">
                     <div className="border-b border-white/10 p-4">
                         <div className="flex items-center justify-between">
@@ -1033,8 +1037,8 @@ export function ManualMatchmakingBoard({
                     </div>
                 </main>
 
-                <aside className="xl:sticky xl:top-16 xl:max-h-[calc(100vh-5rem)] overflow-hidden rounded-xl border border-white/10 bg-white/5">
-                    <div className="border-b border-white/10 p-4">
+                <aside className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5 xl:sticky xl:top-14 xl:max-h-[calc(100vh-4rem)]">
+                    <div className="shrink-0 border-b border-white/10 p-4">
                         <div className="flex items-center justify-between">
                             <h2 className="font-semibold text-white">Candidate deck</h2>
                             {isPending ? <Loader2 className="size-4 animate-spin text-gray-400" /> : <Sparkles className="size-4 text-pink-300" />}
@@ -1046,81 +1050,103 @@ export function ManualMatchmakingBoard({
                                 </button>
                             ))}
                         </div>
-                        <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-gray-400">
-                            <p>
-                                All shows the opposite-side manual launch pool for {selectedUser ? fullName(selectedUser) : "the selected person"}. Men are capped to the first 100 for this phase.
-                            </p>
-                            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-                                <div className="rounded-md bg-white/5 p-2">
-                                    <p className="font-bold text-white">{candidateCountBreakdown.oppositeSide}</p>
-                                    <p className="mt-0.5 text-[10px] uppercase text-gray-500">opposite side</p>
-                                </div>
-                                <div className="rounded-md bg-white/5 p-2">
-                                    <p className="font-bold text-white">{candidateCountBreakdown.completeVisible}</p>
-                                    <p className="mt-0.5 text-[10px] uppercase text-gray-500">launch pool</p>
-                                </div>
-                                <div className="rounded-md bg-emerald-500/10 p-2">
-                                    <p className="font-bold text-emerald-200">{candidateCountBreakdown.verifiedEligible}</p>
-                                    <p className="mt-0.5 text-[10px] uppercase text-emerald-300/70">deck total</p>
-                                </div>
-                            </div>
+                        <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-400">
+                            <span>
+                                {candidateCountBreakdown.verifiedEligible} eligible from {candidateCountBreakdown.oppositeSide} opposite-side profiles
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setShowCandidateFilters((value) => !value)}
+                                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 px-2 py-1 font-bold text-gray-200 hover:bg-white/10"
+                            >
+                                Filters
+                                {showCandidateFilters ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                            </button>
                         </div>
 
-                        <div className="mt-3 space-y-2">
-                            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-                                <Search className="size-4 text-gray-500" />
-                                <input value={candidateQuery} onChange={(event) => setCandidateQuery(event.target.value)} placeholder="Search candidates..." className="w-full bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <input value={ageMin} onChange={(event) => setAgeMin(event.target.value)} placeholder="Min age" inputMode="numeric" className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white placeholder:text-gray-500 focus:outline-none" />
-                                <input value={ageMax} onChange={(event) => setAgeMax(event.target.value)} placeholder="Max age" inputMode="numeric" className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white placeholder:text-gray-500 focus:outline-none" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <select value={yearFilter} onChange={(event) => setYearFilter(event.target.value)} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white focus:outline-none">
-                                    <option value="">Any year</option>
-                                    {yearOptions.map((year) => <option key={year} value={year}>Year {year}</option>)}
+                        <div className="mt-3 flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                            <Search className="size-4 text-gray-500" />
+                            <input value={candidateQuery} onChange={(event) => setCandidateQuery(event.target.value)} placeholder="Search candidates..." className="w-full bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none" />
+                        </div>
+
+                        {showCandidateFilters && (
+                            <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-black/20 p-3">
+                                <p className="text-xs text-gray-400">
+                                    All shows the opposite-side manual launch pool for {selectedUser ? fullName(selectedUser) : "the selected person"}. Men are capped to the first 100 for this phase.
+                                </p>
+                                <div className="grid grid-cols-3 gap-2 text-center">
+                                    <div className="rounded-md bg-white/5 p-2">
+                                        <p className="font-bold text-white">{candidateCountBreakdown.oppositeSide}</p>
+                                        <p className="mt-0.5 text-[10px] uppercase text-gray-500">opposite side</p>
+                                    </div>
+                                    <div className="rounded-md bg-white/5 p-2">
+                                        <p className="font-bold text-white">{candidateCountBreakdown.completeVisible}</p>
+                                        <p className="mt-0.5 text-[10px] uppercase text-gray-500">launch pool</p>
+                                    </div>
+                                    <div className="rounded-md bg-emerald-500/10 p-2">
+                                        <p className="font-bold text-emerald-200">{candidateCountBreakdown.verifiedEligible}</p>
+                                        <p className="mt-0.5 text-[10px] uppercase text-emerald-300/70">deck total</p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input value={ageMin} onChange={(event) => setAgeMin(event.target.value)} placeholder="Min age" inputMode="numeric" className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white placeholder:text-gray-500 focus:outline-none" />
+                                    <input value={ageMax} onChange={(event) => setAgeMax(event.target.value)} placeholder="Max age" inputMode="numeric" className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white placeholder:text-gray-500 focus:outline-none" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <select value={yearFilter} onChange={(event) => setYearFilter(event.target.value)} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white focus:outline-none">
+                                        <option value="">Any year</option>
+                                        {yearOptions.map((year) => <option key={year} value={year}>Year {year}</option>)}
+                                    </select>
+                                    <select value={candidateStateFilter} onChange={(event) => setCandidateStateFilter(event.target.value as CandidateStateFilter)} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white focus:outline-none">
+                                        <option value="all">Any state</option>
+                                        <option value="available">Available</option>
+                                        <option value="active_pair">Active card</option>
+                                        <option value="mutual_hold">Matched hold</option>
+                                        <option value="unavailable">Unavailable</option>
+                                    </select>
+                                </div>
+                                <select value={courseFilter} onChange={(event) => setCourseFilter(event.target.value)} className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white focus:outline-none">
+                                    <option value="all">Any course</option>
+                                    {courseOptions.map((course) => <option key={course} value={course}>{course}</option>)}
                                 </select>
-                                <select value={candidateStateFilter} onChange={(event) => setCandidateStateFilter(event.target.value as CandidateStateFilter)} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white focus:outline-none">
-                                    <option value="all">Any state</option>
-                                    <option value="available">Available</option>
-                                    <option value="active_pair">Active card</option>
-                                    <option value="mutual_hold">Matched hold</option>
-                                    <option value="unavailable">Unavailable</option>
+                                <select value={universityFilter} onChange={(event) => setUniversityFilter(event.target.value)} className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white focus:outline-none">
+                                    <option value="all">Any university</option>
+                                    {universityOptions.map((university) => <option key={university} value={university}>{university}</option>)}
                                 </select>
+                                <div className="grid grid-cols-[1fr_auto] gap-2">
+                                    <select value={candidateSort} onChange={(event) => setCandidateSort(event.target.value as CandidateSort)} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white focus:outline-none">
+                                        {SORT_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                                    </select>
+                                    <button type="button" onClick={resetCandidateFilters} className="rounded-lg border border-white/10 px-3 py-2 text-gray-300 hover:bg-white/10" title="Reset filters">
+                                        <RotateCcw className="size-4" />
+                                    </button>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-300">
+                                        <input type="checkbox" checked={hasPhotosOnly} onChange={(event) => setHasPhotosOnly(event.target.checked)} />
+                                        Has photos
+                                    </label>
+                                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-300">
+                                        <input type="checkbox" checked={pushOnly} onChange={(event) => setPushOnly(event.target.checked)} />
+                                        Push enabled
+                                    </label>
+                                    <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-200">
+                                        <SlidersHorizontal className="size-3.5" />
+                                        Verified only
+                                    </span>
+                                </div>
                             </div>
-                            <select value={courseFilter} onChange={(event) => setCourseFilter(event.target.value)} className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white focus:outline-none">
-                                <option value="all">Any course</option>
-                                {courseOptions.map((course) => <option key={course} value={course}>{course}</option>)}
-                            </select>
-                            <select value={universityFilter} onChange={(event) => setUniversityFilter(event.target.value)} className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white focus:outline-none">
-                                <option value="all">Any university</option>
-                                {universityOptions.map((university) => <option key={university} value={university}>{university}</option>)}
-                            </select>
-                            <div className="grid grid-cols-[1fr_auto] gap-2">
-                                <select value={candidateSort} onChange={(event) => setCandidateSort(event.target.value as CandidateSort)} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white focus:outline-none">
-                                    {SORT_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                                </select>
-                                <button type="button" onClick={resetCandidateFilters} className="rounded-lg border border-white/10 px-3 py-2 text-gray-300 hover:bg-white/10" title="Reset filters">
-                                    <RotateCcw className="size-4" />
+                        )}
+                        {!showCandidateFilters && (hasPhotosOnly || pushOnly || ageMin || ageMax || yearFilter || courseFilter !== "all" || universityFilter !== "all" || candidateStateFilter !== "all" || candidateSort !== "compatibility") && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                                <span className="rounded-full bg-pink-500/15 px-2 py-1 text-pink-100">Filters active</span>
+                                <button type="button" onClick={resetCandidateFilters} className="rounded-full border border-white/10 px-2 py-1 text-gray-200 hover:bg-white/10">
+                                    Reset
                                 </button>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-300">
-                                    <input type="checkbox" checked={hasPhotosOnly} onChange={(event) => setHasPhotosOnly(event.target.checked)} />
-                                    Has photos
-                                </label>
-                                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-300">
-                                    <input type="checkbox" checked={pushOnly} onChange={(event) => setPushOnly(event.target.checked)} />
-                                    Push enabled
-                                </label>
-                                <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-200">
-                                    <SlidersHorizontal className="size-3.5" />
-                                    Verified only
-                                </span>
-                            </div>
-                        </div>
+                        )}
                     </div>
-                    <div className="max-h-[calc(100vh-31rem)] min-h-[220px] space-y-2 overflow-y-auto p-3">
+                    <div className="min-h-[360px] max-h-[560px] space-y-2 overflow-y-auto p-3 xl:min-h-0 xl:flex-1 xl:max-h-none">
                         {filteredCandidates.map((candidate) => (
                             <CandidateCard
                                 key={candidate.userId}
@@ -1140,65 +1166,80 @@ export function ManualMatchmakingBoard({
                 </aside>
             </div>
 
-            <section className="rounded-xl border border-white/10 bg-white/5 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+            <section className="rounded-xl border border-white/10 bg-white/5">
+                <button
+                    type="button"
+                    onClick={() => setShowSentMatches((value) => !value)}
+                    className="flex w-full flex-wrap items-center justify-between gap-3 p-4 text-left hover:bg-white/[0.03]"
+                >
                     <div>
                         <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Sent</p>
                         <h2 className="text-lg font-bold text-white">Sent matches and calls</h2>
-                    </div>
-                    <div className="flex min-w-[280px] items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-                        <Search className="size-4 text-gray-500" />
-                        <input value={sentQuery} onChange={(event) => setSentQuery(event.target.value)} placeholder="Search sent matches..." className="w-full bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none" />
-                    </div>
-                </div>
-                <div className="mt-4 grid gap-3 xl:grid-cols-2">
-                    {sentActivity.map((item) => (
-                        <article key={item.pairId} className="rounded-xl border border-white/10 bg-black/20 p-4">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                    <h3 className="font-semibold text-white">{item.userAName} + {item.userBName}</h3>
-                                    <p className="mt-1 text-xs text-gray-500">{item.status} - {item.compatibilityScore}% - {formatDate(item.updatedAt)}</p>
-                                </div>
-                                <div className="flex gap-2 text-xs">
-                                    <Pill>{item.aDecision}</Pill>
-                                    <Pill>{item.bDecision}</Pill>
-                                </div>
-                            </div>
-                            <div className="mt-3 grid gap-2 md:grid-cols-2">
-                                <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                                    <p className="text-sm font-semibold text-white">{item.userAName}</p>
-                                    <p className="mt-1 text-xs text-gray-300">{item.userAPhone ?? "No phone"}</p>
-                                    <p className="text-xs text-gray-500">{item.userAEmail ?? "No email"}</p>
-                                </div>
-                                <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                                    <p className="text-sm font-semibold text-white">{item.userBName}</p>
-                                    <p className="mt-1 text-xs text-gray-300">{item.userBPhone ?? "No phone"}</p>
-                                    <p className="text-xs text-gray-500">{item.userBEmail ?? "No email"}</p>
-                                </div>
-                            </div>
-                            <p className="mt-3 line-clamp-2 text-xs text-gray-400">{item.reasons.join(" - ")}</p>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                <button type="button" onClick={() => openMarkCall(item.pairId, "accepted", `${item.userAName} + ${item.userBName}`)} className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 px-2 py-1 text-xs font-semibold text-emerald-200">
-                                    <Check className="size-3" />
-                                    Call accepted
-                                </button>
-                                <button type="button" onClick={() => openMarkCall(item.pairId, "rejected", `${item.userAName} + ${item.userBName}`)} className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 px-2 py-1 text-xs font-semibold text-amber-200">
-                                    <PhoneCall className="size-3" />
-                                    Call rejected
-                                </button>
-                                <button type="button" onClick={() => openCancelPair(item.pairId, `${item.userAName} + ${item.userBName}`)} className="inline-flex items-center gap-1 rounded-md border border-red-500/30 px-2 py-1 text-xs font-semibold text-red-200">
-                                    <X className="size-3" />
-                                    Cancel
-                                </button>
-                            </div>
-                        </article>
-                    ))}
-                    {sentActivity.length === 0 && (
-                        <p className="rounded-lg border border-white/10 bg-black/20 p-4 text-sm text-gray-400">
-                            No sent matches found.
+                        <p className="mt-1 text-xs text-gray-500">
+                            {sentActivity.length} active sent match{sentActivity.length === 1 ? "" : "es"}. Expand only when you need call follow-up.
                         </p>
-                    )}
-                </div>
+                    </div>
+                    <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm font-bold text-gray-200">
+                        {showSentMatches ? "Hide sent" : "Show sent"}
+                        {showSentMatches ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                    </span>
+                </button>
+                {showSentMatches && (
+                    <div className="border-t border-white/10 p-4">
+                        <div className="flex max-w-xl items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                            <Search className="size-4 text-gray-500" />
+                            <input value={sentQuery} onChange={(event) => setSentQuery(event.target.value)} placeholder="Search sent matches..." className="w-full bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none" />
+                        </div>
+                        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                            {sentActivity.map((item) => (
+                                <article key={item.pairId} className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                        <div>
+                                            <h3 className="font-semibold text-white">{item.userAName} + {item.userBName}</h3>
+                                            <p className="mt-1 text-xs text-gray-500">{item.status} - {item.compatibilityScore}% - {formatDate(item.updatedAt)}</p>
+                                        </div>
+                                        <div className="flex gap-2 text-xs">
+                                            <Pill>{item.aDecision}</Pill>
+                                            <Pill>{item.bDecision}</Pill>
+                                        </div>
+                                    </div>
+                                    <div className="mt-3 grid gap-2 md:grid-cols-2">
+                                        <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                                            <p className="text-sm font-semibold text-white">{item.userAName}</p>
+                                            <p className="mt-1 text-xs text-gray-300">{item.userAPhone ?? "No phone"}</p>
+                                            <p className="text-xs text-gray-500">{item.userAEmail ?? "No email"}</p>
+                                        </div>
+                                        <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                                            <p className="text-sm font-semibold text-white">{item.userBName}</p>
+                                            <p className="mt-1 text-xs text-gray-300">{item.userBPhone ?? "No phone"}</p>
+                                            <p className="text-xs text-gray-500">{item.userBEmail ?? "No email"}</p>
+                                        </div>
+                                    </div>
+                                    <p className="mt-3 line-clamp-2 text-xs text-gray-400">{item.reasons.join(" - ")}</p>
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        <button type="button" onClick={() => openMarkCall(item.pairId, "accepted", `${item.userAName} + ${item.userBName}`)} className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 px-2 py-1 text-xs font-semibold text-emerald-200">
+                                            <Check className="size-3" />
+                                            Call accepted
+                                        </button>
+                                        <button type="button" onClick={() => openMarkCall(item.pairId, "rejected", `${item.userAName} + ${item.userBName}`)} className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 px-2 py-1 text-xs font-semibold text-amber-200">
+                                            <PhoneCall className="size-3" />
+                                            Call rejected
+                                        </button>
+                                        <button type="button" onClick={() => openCancelPair(item.pairId, `${item.userAName} + ${item.userBName}`)} className="inline-flex items-center gap-1 rounded-md border border-red-500/30 px-2 py-1 text-xs font-semibold text-red-200">
+                                            <X className="size-3" />
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </article>
+                            ))}
+                            {sentActivity.length === 0 && (
+                                <p className="rounded-lg border border-white/10 bg-black/20 p-4 text-sm text-gray-400">
+                                    No sent matches found.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                )}
             </section>
 
             {adminAction && (
