@@ -99,10 +99,6 @@ function isVerified(profile: ManualMatchmakingProfile) {
     return profile.faceVerificationStatus === "verified" || Boolean(profile.faceVerifiedAt);
 }
 
-function isManualMatchReady(profile: ManualMatchmakingProfile) {
-    return isVerified(profile) && profile.waitlistStatus === "admitted";
-}
-
 function manualLaunchPool(profile: ManualMatchmakingProfile) {
     return profile.waitlistStatus === "admitted" || isVerified(profile);
 }
@@ -321,6 +317,31 @@ function TokenBlock({ title, items, tone = "default" }: { title: string; items: 
     );
 }
 
+function CompactProfileFields({ profile }: { profile: CandidateDeckItem }) {
+    const rows = [
+        { label: "Age", value: profile.age != null ? String(profile.age) : null },
+        { label: "Gender", value: profile.gender?.trim() || null },
+        { label: "Major", value: profile.course?.trim() || null },
+        { label: "Year", value: profile.yearOfStudy != null ? String(profile.yearOfStudy) : null },
+        { label: "University", value: profile.university?.trim() || null },
+    ].filter((row): row is { label: string; value: string } => Boolean(row.value));
+
+    if (rows.length === 0) {
+        return <p className="mt-2 text-sm text-gray-500">No school details</p>;
+    }
+
+    return (
+        <dl className="mt-3 space-y-2">
+            {rows.map(({ label, value }) => (
+                <div key={label} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <dt className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</dt>
+                    <dd className="min-w-0 max-w-full text-sm leading-snug text-gray-200">{value}</dd>
+                </div>
+            ))}
+        </dl>
+    );
+}
+
 function MiniProfileHeader({
     label,
     profile,
@@ -336,48 +357,62 @@ function MiniProfileHeader({
 }) {
     if (!profile) {
         return (
-            <section className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/[0.03] p-5 text-center">
-                <div>
-                    <UserRound className="mx-auto mb-3 size-8 text-gray-500" />
+            <section className="flex min-h-[200px] items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/3 p-6 text-center">
+                <div className="max-w-56">
+                    <UserRound className="mx-auto mb-3 size-9 text-gray-500" />
                     <p className="font-semibold text-white">{label}</p>
-                    <p className="mt-1 text-sm text-gray-500">Choose a profile to fill this slot.</p>
+                    <p className="mt-1 text-sm leading-relaxed text-gray-500">Choose a profile to fill this slot.</p>
                 </div>
             </section>
         );
     }
 
     const photo = allPhotos(profile)[0];
+    const stateLine = stateLabel(profile);
     return (
-        <section className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <div className="flex items-start gap-4">
-                <button type="button" onClick={() => onPhotos(profile)} className="h-32 w-24 overflow-hidden rounded-xl border border-white/10 bg-black/30">
+        <section className="@container flex h-full min-h-0 min-w-0 w-full flex-col rounded-xl border border-white/10 bg-black/25 p-4">
+            <div className="flex w-full min-w-0 flex-col gap-4 @[280px]:flex-row @[280px]:items-start">
+                <button
+                    type="button"
+                    onClick={() => onPhotos(profile)}
+                    className="relative mx-auto aspect-[3/4] h-auto w-full max-w-[11rem] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/40 @[280px]:mx-0 @[280px]:aspect-auto @[280px]:h-36 @[280px]:w-29 @[280px]:max-w-none"
+                >
                     {photo ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={photo} alt={fullName(profile)} className="h-full w-full object-cover" />
                     ) : (
-                        <div className="flex h-full items-center justify-center text-xs text-gray-500">No photo</div>
+                        <div className="flex h-full min-h-[8rem] items-center justify-center text-xs text-gray-500 @[280px]:min-h-0">No photo</div>
+                    )}
+                    {profile.activeState === "active_pair" && (
+                        <span className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/85 to-transparent px-2 pb-2 pt-6 text-left text-[10px] font-bold leading-tight text-amber-100 line-clamp-2">
+                            Active with {profile.activePartnerName ?? "someone"}
+                        </span>
                     )}
                 </button>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 w-full flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                         <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
-                        <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${stateClass(profile.activeState)}`}>
-                            {stateLabel(profile)}
-                        </span>
+                        {profile.activeState !== "active_pair" && (
+                            <span className={`max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${stateClass(profile.activeState)}`}>
+                                {stateLine}
+                            </span>
+                        )}
                         {score !== undefined && (
-                            <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-bold text-emerald-200">{score}%</span>
+                            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-200">{score}%</span>
                         )}
                     </div>
-                    <h2 className="mt-2 truncate text-2xl font-bold text-white">{fullName(profile)}</h2>
-                    <p className="mt-1 text-sm text-gray-400">{[profile.age, profile.gender, profile.course, profile.yearOfStudy ? `Year ${profile.yearOfStudy}` : null, profile.university].filter(Boolean).join(" - ") || "No school details"}</p>
-                    <p className="mt-3 line-clamp-3 text-sm leading-6 text-gray-300">{profile.aboutMe || profile.bio || "No bio yet."}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" onClick={() => onInspect(profile)} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-white hover:bg-white/10">
-                            <Eye className="size-3.5" />
+                    <h2 className="mt-1 text-lg font-bold leading-snug text-white">{fullName(profile)}</h2>
+                    <CompactProfileFields profile={profile} />
+                    {(profile.aboutMe || profile.bio) && (
+                        <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-gray-400">{profile.aboutMe || profile.bio}</p>
+                    )}
+                    <div className="mt-4 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => onInspect(profile)} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs font-semibold text-white hover:bg-white/10">
+                            <Eye className="size-3.5 shrink-0" />
                             Inspect
                         </button>
-                        <button type="button" onClick={() => onPhotos(profile)} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10">
-                            <ImageIcon className="size-3.5" />
+                        <button type="button" onClick={() => onPhotos(profile)} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs font-semibold text-gray-200 hover:bg-white/10">
+                            <ImageIcon className="size-3.5 shrink-0" />
                             Photos
                         </button>
                     </div>
@@ -403,8 +438,8 @@ function CandidateCard({
     const photo = allPhotos(candidate)[0];
     return (
         <article className={`rounded-xl border p-3 transition-colors ${selected ? "border-pink-400/60 bg-pink-500/15" : "border-white/10 bg-black/20 hover:bg-white/10"}`}>
-            <div className="flex items-start gap-3">
-                <button type="button" onClick={onPhotos} className="size-16 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/30">
+            <div className="flex gap-3">
+                <button type="button" onClick={onPhotos} className="size-[76px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/30">
                     {photo ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={photo} alt={fullName(candidate)} className="h-full w-full object-cover" />
@@ -415,37 +450,37 @@ function CandidateCard({
                 <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                            <h3 className="truncate font-semibold text-white">{fullName(candidate)}</h3>
-                            <p className="truncate text-xs text-gray-400">{[candidate.age, candidate.gender, candidate.course, candidate.yearOfStudy ? `Y${candidate.yearOfStudy}` : null].filter(Boolean).join(" - ") || candidate.email}</p>
-                            <p className="truncate text-xs text-gray-500">{candidate.university ?? "No university"}</p>
+                            <h3 className="wrap-break-word font-semibold leading-snug text-white">{fullName(candidate)}</h3>
+                            <p className="mt-0.5 wrap-break-word text-xs leading-snug text-gray-400">{[candidate.age, candidate.gender, candidate.course, candidate.yearOfStudy ? `Y${candidate.yearOfStudy}` : null].filter(Boolean).join(" · ") || candidate.email}</p>
+                            <p className="mt-0.5 wrap-break-word text-xs leading-snug text-gray-500">{candidate.university ?? "No university"}</p>
                         </div>
                         {candidate.compatibilityScore !== undefined ? (
-                            <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-xs font-bold text-emerald-200">{candidate.compatibilityScore}%</span>
+                            <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-1 text-xs font-bold text-emerald-200">{candidate.compatibilityScore}%</span>
                         ) : (
-                            <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold text-gray-400">score after select</span>
+                            <span className="shrink-0 rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold text-gray-400">score after select</span>
                         )}
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${stateClass(candidate.activeState)}`}>{candidate.activeState.replaceAll("_", " ")}</span>
                         {candidate.pushEnabled ? <Pill tone="green">Push</Pill> : <Pill tone="amber">No push</Pill>}
                         {allPhotos(candidate).length > 0 && <Pill>{allPhotos(candidate).length} photos</Pill>}
                     </div>
-                    <p className="mt-2 line-clamp-2 text-xs text-gray-300">{candidate.reasons?.slice(0, 3).join(" - ") || candidate.interests.slice(0, 3).join(" - ") || "Open profile to review fit."}</p>
+                    <p className="mt-2 line-clamp-2 wrap-break-word text-xs leading-relaxed text-gray-300">{candidate.reasons?.slice(0, 3).join(" · ") || candidate.interests.slice(0, 3).join(" · ") || "Open profile to review fit."}</p>
                     {candidate.warnings && candidate.warnings.length > 0 && (
-                        <p className="mt-2 text-xs text-amber-200">{candidate.warnings.join(" - ")}</p>
+                        <p className="mt-2 wrap-break-word text-xs leading-relaxed text-amber-200">{candidate.warnings.join(" · ")}</p>
                     )}
-                    <div className="mt-3 grid grid-cols-3 gap-2">
-                        <button type="button" onClick={onCompare} className="rounded-lg bg-white px-2 py-2 text-xs font-bold text-black hover:bg-white/90">
-                            Compare
-                        </button>
-                        <button type="button" onClick={onPhotos} className="rounded-lg border border-white/10 px-2 py-2 text-xs font-bold text-gray-200 hover:bg-white/10">
-                            Photos
-                        </button>
-                        <button type="button" onClick={onInspect} className="rounded-lg border border-white/10 px-2 py-2 text-xs font-bold text-gray-200 hover:bg-white/10">
-                            Inspect
-                        </button>
-                    </div>
                 </div>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+                <button type="button" onClick={onCompare} className="rounded-lg bg-white px-2 py-2.5 text-xs font-bold text-black hover:bg-white/90">
+                    Compare
+                </button>
+                <button type="button" onClick={onPhotos} className="rounded-lg border border-white/10 px-2 py-2.5 text-xs font-bold text-gray-200 hover:bg-white/10">
+                    Photos
+                </button>
+                <button type="button" onClick={onInspect} className="rounded-lg border border-white/10 px-2 py-2.5 text-xs font-bold text-gray-200 hover:bg-white/10">
+                    Inspect
+                </button>
             </div>
         </article>
     );
@@ -499,7 +534,7 @@ function ComparePanel({
                 {[selectedUser, candidate].map((profile) => (
                     <div key={profile.userId} className="rounded-xl border border-white/10 bg-black/20 p-4">
                         <p className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">{fullName(profile)} bio</p>
-                        <p className="whitespace-pre-wrap text-sm leading-6 text-gray-200">{profile.aboutMe || profile.bio || "No bio yet."}</p>
+                        <p className="whitespace-pre-wrap wrap-break-word text-sm leading-relaxed text-gray-200">{profile.aboutMe || profile.bio || "No bio yet."}</p>
                     </div>
                 ))}
             </section>
@@ -908,22 +943,22 @@ export function ManualMatchmakingBoard({
 
     return (
         <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-4">
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                     <p className="text-xs uppercase tracking-wide text-gray-500">Pool</p>
-                    <p className="mt-1 text-2xl font-bold text-white">{stats.total}</p>
+                    <p className="mt-1 text-xl font-bold text-white">{stats.total}</p>
                 </div>
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
                     <p className="text-xs uppercase tracking-wide text-emerald-200">Verified</p>
-                    <p className="mt-1 text-2xl font-bold text-white">{stats.verified}</p>
+                    <p className="mt-1 text-xl font-bold text-white">{stats.verified}</p>
                 </div>
-                <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-4">
+                <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3">
                     <p className="text-xs uppercase tracking-wide text-sky-200">Available</p>
-                    <p className="mt-1 text-2xl font-bold text-white">{stats.available}</p>
+                    <p className="mt-1 text-xl font-bold text-white">{stats.available}</p>
                 </div>
-                <div className="rounded-xl border border-pink-500/30 bg-pink-500/10 p-4">
+                <div className="rounded-xl border border-pink-500/30 bg-pink-500/10 px-4 py-3">
                     <p className="text-xs uppercase tracking-wide text-pink-200">Sent</p>
-                    <p className="mt-1 text-2xl font-bold text-white">{stats.sent}</p>
+                    <p className="mt-1 text-xl font-bold text-white">{stats.sent}</p>
                 </div>
             </div>
 
@@ -933,8 +968,8 @@ export function ManualMatchmakingBoard({
                 </div>
             )}
 
-            <div className="grid gap-4 xl:grid-cols-[280px_minmax(340px,1fr)_540px] 2xl:grid-cols-[320px_minmax(0,1fr)_600px]">
-                <section className="xl:sticky xl:top-16 xl:max-h-[calc(100vh-5rem)] overflow-hidden rounded-xl border border-white/10 bg-white/5">
+            <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(252px,300px)_minmax(340px,1fr)_minmax(288px,360px)] lg:items-start xl:grid-cols-[minmax(280px,320px)_minmax(400px,1fr)_minmax(300px,400px)]">
+                <section className="overflow-hidden rounded-xl border border-white/10 bg-white/5 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start">
                     <div className="border-b border-white/10 p-4">
                         <div className="flex items-center justify-between">
                             <h2 className="font-semibold text-white">Person A</h2>
@@ -952,7 +987,7 @@ export function ManualMatchmakingBoard({
                             ))}
                         </div>
                     </div>
-                    <div className="max-h-[520px] overflow-y-auto p-2 xl:max-h-[calc(100vh-17rem)]">
+                    <div className="admin-scrollbar max-h-[520px] overflow-y-auto p-2 lg:max-h-[calc(100vh-16rem)]">
                         {filteredPool.map((item) => (
                             <button key={item.userId} type="button" onClick={() => loadSuggestions(item.userId)} className={`mb-2 w-full rounded-lg border p-3 text-left ${selectedUserId === item.userId ? "border-pink-400/60 bg-pink-500/15" : "border-white/10 bg-black/20 hover:bg-white/10"}`}>
                                 <div className="flex items-center gap-3">
@@ -976,92 +1011,99 @@ export function ManualMatchmakingBoard({
                     </div>
                 </section>
 
-                <main className="min-w-0 xl:sticky xl:top-16 xl:max-h-[calc(100vh-5rem)] overflow-y-auto pr-1">
-                    <section className="rounded-xl border border-white/10 bg-white/5 p-4">
-                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Workbench</p>
-                                <h2 className="text-xl font-bold text-white">Compare and send</h2>
-                            </div>
-                            {selectedCandidate && (
-                                <div className="flex flex-wrap gap-2">
-                                    <button type="button" onClick={() => setCompareMode("photos")} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs font-bold text-white hover:bg-white/10">
-                                        <ImageIcon className="size-3.5" />
-                                        Compare photos
-                                    </button>
-                                    <button type="button" onClick={() => selectedUser && setInspectingProfile(selectedUser)} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs font-bold text-white hover:bg-white/10">
-                                        <Eye className="size-3.5" />
-                                        Inspect A
-                                    </button>
-                                    <button type="button" onClick={() => setInspectingProfile(selectedCandidate)} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs font-bold text-white hover:bg-white/10">
-                                        <Eye className="size-3.5" />
-                                        Inspect B
-                                    </button>
-                                    <button type="button" onClick={openCreateMatch} disabled={isPending} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-black hover:bg-white/90 disabled:opacity-50">
-                                        <Send className="size-3.5" />
-                                        Create curated match
-                                    </button>
-                                    <button type="button" onClick={() => setSelectedCandidateId("")} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-gray-200 hover:bg-white/10">
-                                        <X className="size-3.5" />
-                                        Clear
-                                    </button>
+                <main className="@container flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-9rem)] lg:self-start">
+                    <div className="admin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+                        <section className="p-4 sm:p-5">
+                            <div className="mb-4 flex min-w-0 flex-col gap-2 @[480px]:flex-row @[480px]:items-center @[480px]:justify-between @[480px]:gap-x-4 @[480px]:gap-y-2">
+                                <div className="min-w-0 shrink-0">
+                                    <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Workbench</p>
+                                    <h2 className="text-lg font-bold leading-tight text-white">Compare and send</h2>
                                 </div>
-                            )}
-                        </div>
-
-                        <div className="grid gap-3 xl:grid-cols-2">
-                            <MiniProfileHeader label="Person A" profile={selectedUser} onInspect={setInspectingProfile} onPhotos={setPhotoProfile} />
-                            <MiniProfileHeader label="Candidate B" profile={selectedCandidate} score={selectedCandidate?.compatibilityScore} onInspect={setInspectingProfile} onPhotos={setPhotoProfile} />
-                        </div>
-
-                        {selectedUser && selectedCandidate && (
-                            <>
-                                <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                                    <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-                                        <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Shared interests</p>
-                                        <div className="mt-2 flex flex-wrap gap-2">
-                                            {(sharedInterests.length ? sharedInterests : ["None found"]).map((item) => <Pill key={item} tone="green">{item}</Pill>)}
-                                        </div>
-                                    </div>
-                                    <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-                                        <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Shared qualities</p>
-                                        <div className="mt-2 flex flex-wrap gap-2">
-                                            {(sharedQualities.length ? sharedQualities : ["None found"]).map((item) => <Pill key={item} tone="pink">{item}</Pill>)}
-                                        </div>
-                                    </div>
-                                    <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-                                        <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Warnings</p>
-                                        <div className="mt-2 flex flex-wrap gap-2">
-                                            {(selectedCandidate.warnings?.length ? selectedCandidate.warnings : ["No warnings"]).map((item) => <Pill key={item} tone={item === "No warnings" ? "green" : "amber"}>{item}</Pill>)}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="mt-4 flex flex-wrap gap-2">
-                                    {(["photos", "bio", "interests", "answers", "history"] as CompareMode[]).map((mode) => (
-                                        <button key={mode} type="button" onClick={() => setCompareMode(mode)} className={`rounded-lg border px-3 py-2 text-xs font-bold capitalize ${compareMode === mode ? "border-pink-400/60 bg-pink-500/15 text-white" : "border-white/10 bg-black/20 text-gray-300 hover:bg-white/10"}`}>
-                                            {mode}
+                                {selectedCandidate && (
+                                    <div className="flex min-w-0 w-full flex-wrap content-start items-center gap-2 @[480px]:w-auto @[480px]:max-w-[min(100%,42rem)] @[480px]:flex-1 @[480px]:justify-end">
+                                        <button type="button" onClick={() => setCompareMode("photos")} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-white/10 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs">
+                                            <ImageIcon className="size-3.5 shrink-0" />
+                                            Compare photos
                                         </button>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                    </section>
+                                        <button type="button" onClick={() => selectedUser && setInspectingProfile(selectedUser)} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-white/10 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs">
+                                            <Eye className="size-3.5 shrink-0" />
+                                            Inspect A
+                                        </button>
+                                        <button type="button" onClick={() => setInspectingProfile(selectedCandidate)} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-white/10 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs">
+                                            <Eye className="size-3.5 shrink-0" />
+                                            Inspect B
+                                        </button>
+                                        <button type="button" onClick={openCreateMatch} disabled={isPending} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-black hover:bg-white/90 disabled:opacity-50 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs">
+                                            <Send className="size-3.5 shrink-0" />
+                                            Create curated match
+                                        </button>
+                                        <button type="button" onClick={() => setSelectedCandidateId("")} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-gray-200 hover:bg-white/10 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs">
+                                            <X className="size-3.5 shrink-0" />
+                                            Clear
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
 
-                    <div className="mt-4">
-                        <ComparePanel mode={compareMode} selectedUser={selectedUser} candidate={selectedCandidate} reasons={activeReasons} />
+                            <div className="grid min-w-0 grid-cols-1 gap-4 @[700px]:grid-cols-2">
+                                <MiniProfileHeader label="Person A" profile={selectedUser} onInspect={setInspectingProfile} onPhotos={setPhotoProfile} />
+                                <MiniProfileHeader label="Candidate B" profile={selectedCandidate} score={selectedCandidate?.compatibilityScore} onInspect={setInspectingProfile} onPhotos={setPhotoProfile} />
+                            </div>
+
+                            {selectedUser && selectedCandidate && (
+                                <>
+                                    <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                                        <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                            <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Shared interests</p>
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {(sharedInterests.length ? sharedInterests : ["None found"]).map((item) => <Pill key={item} tone="green">{item}</Pill>)}
+                                            </div>
+                                        </div>
+                                        <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                            <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Shared qualities</p>
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {(sharedQualities.length ? sharedQualities : ["None found"]).map((item) => <Pill key={item} tone="pink">{item}</Pill>)}
+                                            </div>
+                                        </div>
+                                        <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                            <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Warnings</p>
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {(selectedCandidate.warnings?.length ? selectedCandidate.warnings : ["No warnings"]).map((item) => <Pill key={item} tone={item === "No warnings" ? "green" : "amber"}>{item}</Pill>)}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 flex flex-wrap gap-2">
+                                        {(["photos", "bio", "interests", "answers", "history"] as CompareMode[]).map((mode) => (
+                                            <button key={mode} type="button" onClick={() => setCompareMode(mode)} className={`rounded-lg border px-3 py-2 text-xs font-bold capitalize ${compareMode === mode ? "border-pink-400/60 bg-pink-500/15 text-white" : "border-white/10 bg-black/20 text-gray-300 hover:bg-white/10"}`}>
+                                                {mode}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </section>
+
+                        <div className="border-t border-white/10 p-4 pb-6 sm:p-5 sm:pb-8">
+                            <ComparePanel mode={compareMode} selectedUser={selectedUser} candidate={selectedCandidate} reasons={activeReasons} />
+                        </div>
                     </div>
                 </main>
 
-                <aside className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5 xl:sticky xl:top-14 xl:max-h-[calc(100vh-4rem)]">
+                <aside className="flex min-h-[560px] flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5 lg:min-h-0 lg:max-h-[calc(100vh-2rem)] lg:sticky lg:top-4 lg:self-start">
                     <div className="shrink-0 border-b border-white/10 p-4">
                         <div className="flex items-center justify-between">
                             <h2 className="font-semibold text-white">Candidate deck</h2>
                             {isPending ? <Loader2 className="size-4 animate-spin text-gray-400" /> : <Sparkles className="size-4 text-pink-300" />}
                         </div>
-                        <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-black/20 p-1">
+                        <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-black/25 p-1">
                             {(["suggested", "all"] as CandidateTab[]).map((tab) => (
-                                <button key={tab} type="button" onClick={() => setCandidateTab(tab)} className={`rounded-md px-3 py-2 text-xs font-bold capitalize ${candidateTab === tab ? "bg-white text-black" : "text-gray-300 hover:bg-white/10"}`}>
+                                <button
+                                    key={tab}
+                                    type="button"
+                                    onClick={() => setCandidateTab(tab)}
+                                    className={`rounded-lg px-3 py-2 text-center text-xs font-bold capitalize transition-colors ${candidateTab === tab ? "bg-white/90 text-gray-950 shadow-sm" : "text-gray-400 hover:bg-white/5 hover:text-gray-200"}`}
+                                >
                                     {tab === "suggested" ? `Suggested (${suggestions.length})` : `All eligible (${allEligibleCandidates.length})`}
                                 </button>
                             ))}
@@ -1162,7 +1204,7 @@ export function ManualMatchmakingBoard({
                             </div>
                         )}
                     </div>
-                    <div className="min-h-[360px] max-h-[560px] space-y-2 overflow-y-auto p-3 xl:min-h-0 xl:flex-1 xl:max-h-none">
+                    <div className="admin-scrollbar flex-1 min-h-0 space-y-3 overflow-y-auto p-3 lg:max-h-[calc(100vh-14rem)]">
                         {filteredCandidates.map((candidate) => (
                             <CandidateCard
                                 key={candidate.userId}
@@ -1186,7 +1228,7 @@ export function ManualMatchmakingBoard({
                 <button
                     type="button"
                     onClick={() => setShowSentMatches((value) => !value)}
-                    className="flex w-full flex-wrap items-center justify-between gap-3 p-4 text-left hover:bg-white/[0.03]"
+                    className="flex w-full flex-wrap items-center justify-between gap-3 p-4 text-left hover:bg-white/3"
                 >
                     <div>
                         <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Sent</p>
