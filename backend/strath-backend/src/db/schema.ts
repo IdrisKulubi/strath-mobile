@@ -465,7 +465,9 @@ export const candidatePairs = pgTable(
         updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
     },
     (table) => ({
-        uniquePairIdx: uniqueIndex("candidate_pairs_unique_pair_status_idx").on(table.userAId, table.userBId, table.status),
+        uniquePairIdx: uniqueIndex("candidate_pairs_unique_pair_status_idx")
+            .on(table.userAId, table.userBId, table.status)
+            .where(sql`${table.status} in ('active', 'queued', 'mutual')`),
         userAIdx: index("candidate_pairs_user_a_idx").on(table.userAId),
         userBIdx: index("candidate_pairs_user_b_idx").on(table.userBId),
         statusIdx: index("candidate_pairs_status_idx").on(table.status),

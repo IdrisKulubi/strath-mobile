@@ -374,6 +374,17 @@ export async function createManualCandidatePair(userAId: string, userBId: string
         });
         if (existing) {
             await tx
+                .delete(candidatePairs)
+                .where(
+                    and(
+                        eq(candidatePairs.userAId, existing.userAId),
+                        eq(candidatePairs.userBId, existing.userBId),
+                        eq(candidatePairs.status, "closed"),
+                        sql`${candidatePairs.id} <> ${existing.id}`,
+                    ),
+                );
+
+            await tx
                 .update(candidatePairs)
                 .set({ status: "closed", updatedAt: now })
                 .where(eq(candidatePairs.id, existing.id));
@@ -456,6 +467,17 @@ export async function cancelManualCandidatePair(pairId: string, reason = "Admin 
         if (!pair) throw new Error("Candidate pair not found");
 
         if (pair.status === "active" || pair.status === "queued") {
+            await tx
+                .delete(candidatePairs)
+                .where(
+                    and(
+                        eq(candidatePairs.userAId, pair.userAId),
+                        eq(candidatePairs.userBId, pair.userBId),
+                        eq(candidatePairs.status, "closed"),
+                        sql`${candidatePairs.id} <> ${pairId}`,
+                    ),
+                );
+
             await tx
                 .update(candidatePairs)
                 .set({ status: "closed", updatedAt: now })
