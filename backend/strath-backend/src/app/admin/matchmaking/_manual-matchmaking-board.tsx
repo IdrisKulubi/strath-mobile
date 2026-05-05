@@ -34,6 +34,10 @@ type CandidateTab = "suggested" | "all";
 type CandidateStateFilter = "all" | ManualMatchmakingProfile["activeState"];
 type CandidateSort = "compatibility" | "newest" | "age_asc" | "age_desc" | "year_asc" | "year_desc" | "name_asc";
 type CompareMode = "photos" | "bio" | "interests" | "answers" | "history";
+type AdminAction =
+    | { type: "create" }
+    | { type: "cancel"; pairId: string; title: string }
+    | { type: "call"; pairId: string; outcome: "accepted" | "rejected"; title: string };
 
 type CandidateDeckItem = ManualMatchmakingProfile & {
     compatibilityScore?: number;
@@ -539,6 +543,96 @@ function ComparePanel({
     );
 }
 
+function ActionModal({
+    action,
+    selectedUser,
+    selectedCandidate,
+    note,
+    isPending,
+    onNoteChange,
+    onClose,
+    onConfirm,
+}: {
+    action: AdminAction;
+    selectedUser: ManualMatchmakingProfile | null;
+    selectedCandidate: CandidateDeckItem | null;
+    note: string;
+    isPending: boolean;
+    onNoteChange: (value: string) => void;
+    onClose: () => void;
+    onConfirm: () => void;
+}) {
+    const isCreate = action.type === "create";
+    const title = isCreate ? "Create curated match" : action.title;
+    let description = "Review this action before applying it.";
+    if (action.type === "create" && selectedUser && selectedCandidate) {
+        description = `Send ${fullName(selectedCandidate)} to ${fullName(selectedUser)} and ${fullName(selectedUser)} to ${fullName(selectedCandidate)}.`;
+    } else if (action.type === "cancel") {
+        description = "Cancel this sent match, remove it from Sent, and return both people to the matching pool.";
+    } else if (action.type === "call") {
+        description = action.outcome === "accepted"
+            ? "Mark the call as accepted and keep these people out of the matching pool."
+            : "Mark this as rejected, cancel the match, and return both people to the pool.";
+    }
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" onClick={onClose}>
+            <section className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#10101c] p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-wide text-pink-200">Confirm action</p>
+                        <h2 className="mt-1 text-2xl font-bold text-white">{title}</h2>
+                        <p className="mt-2 text-sm leading-6 text-gray-300">{description}</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="rounded-lg border border-white/10 p-2 text-gray-300 hover:bg-white/10">
+                        <X className="size-5" />
+                    </button>
+                </div>
+
+                {isCreate && selectedUser && selectedCandidate && (
+                    <div className="mt-4 grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3 sm:grid-cols-2">
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Person A</p>
+                            <p className="mt-1 font-semibold text-white">{fullName(selectedUser)}</p>
+                            <p className="text-xs text-gray-500">{selectedUser.phoneNumber ?? selectedUser.email}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Candidate B</p>
+                            <p className="mt-1 font-semibold text-white">{fullName(selectedCandidate)}</p>
+                            <p className="text-xs text-gray-500">{selectedCandidate.phoneNumber ?? selectedCandidate.email}</p>
+                        </div>
+                    </div>
+                )}
+
+                {!isCreate && (
+                    <label className="mt-4 block">
+                        <span className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                            {action.type === "cancel" ? "Cancellation reason" : "Call notes"}
+                        </span>
+                        <textarea
+                            value={note}
+                            onChange={(event) => onNoteChange(event.target.value)}
+                            rows={4}
+                            className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-gray-500 focus:outline-none"
+                            placeholder={action.type === "cancel" ? "Why are we cancelling this match?" : "What happened on the call?"}
+                        />
+                    </label>
+                )}
+
+                <div className="mt-5 flex justify-end gap-2">
+                    <button type="button" onClick={onClose} className="rounded-lg border border-white/10 px-4 py-2 text-sm font-bold text-gray-200 hover:bg-white/10">
+                        Keep editing
+                    </button>
+                    <button type="button" onClick={onConfirm} disabled={isPending} className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-bold text-black hover:bg-white/90 disabled:opacity-50">
+                        {isPending && <Loader2 className="size-4 animate-spin" />}
+                        Confirm
+                    </button>
+                </div>
+            </section>
+        </div>
+    );
+}
+
 export function ManualMatchmakingBoard({
     initialPool,
     initialActivity,
@@ -550,7 +644,7 @@ export function ManualMatchmakingBoard({
     const [activity] = useState(initialActivity);
     const [poolQuery, setPoolQuery] = useState("");
     const [poolFilter, setPoolFilter] = useState<PoolFilter>("all");
-    const [selectedUserId, setSelectedUserId] = useState(initialPool.find((item) => item.activeState === "available")?.userId ?? initialPool[0]?.userId ?? "");
+    const [selectedUserId, setSelectedUserId] = useState(initialPool.find((item) => item.activeState === "available" && item.profileComplete && item.isVisible !== false && isVerified(item))?.userId ?? "");
     const [selectedCandidateId, setSelectedCandidateId] = useState("");
     const [candidateTab, setCandidateTab] = useState<CandidateTab>("suggested");
     const [candidateQuery, setCandidateQuery] = useState("");
@@ -568,6 +662,8 @@ export function ManualMatchmakingBoard({
     const [suggestions, setSuggestions] = useState<ManualMatchSuggestion[]>([]);
     const [message, setMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [adminAction, setAdminAction] = useState<AdminAction | null>(null);
+    const [actionNote, setActionNote] = useState("");
     const [inspectingProfile, setInspectingProfile] = useState<ManualMatchmakingProfile | null>(null);
     const [photoProfile, setPhotoProfile] = useState<ManualMatchmakingProfile | null>(null);
     const [isPending, startTransition] = useTransition();
@@ -588,16 +684,22 @@ export function ManualMatchmakingBoard({
         total: pool.length,
         verified: pool.filter(isVerified).length,
         available: pool.filter((item) => item.activeState === "available").length,
-        sent: activity.length,
+        sent: activity.filter((item) => item.status !== "closed" && item.status !== "expired").length,
     }), [activity.length, pool]);
 
     const courseOptions = useMemo(() => Array.from(new Set(pool.map((item) => item.course).filter(Boolean) as string[])).sort(), [pool]);
     const universityOptions = useMemo(() => Array.from(new Set(pool.map((item) => item.university).filter(Boolean) as string[])).sort(), [pool]);
     const yearOptions = useMemo(() => Array.from(new Set(pool.map((item) => item.yearOfStudy).filter((item): item is number => typeof item === "number"))).sort((a, b) => a - b), [pool]);
+    const matchablePool = useMemo(() => pool.filter((item) => (
+        item.activeState === "available"
+        && item.profileComplete
+        && item.isVisible !== false
+        && isVerified(item)
+    )), [pool]);
 
     const filteredPool = useMemo(() => {
         const normalized = poolQuery.trim().toLowerCase();
-        return pool.filter((item) => {
+        return matchablePool.filter((item) => {
             const matchesFilter =
                 poolFilter === "all"
                 || (poolFilter === "available" && item.activeState === "available")
@@ -607,7 +709,7 @@ export function ManualMatchmakingBoard({
 
             return matchesFilter && (!normalized || profileSearchText(item).includes(normalized));
         });
-    }, [pool, poolFilter, poolQuery]);
+    }, [matchablePool, poolFilter, poolQuery]);
 
     const allEligibleCandidates = useMemo((): CandidateDeckItem[] => {
         if (!selectedUser) return [];
@@ -617,6 +719,7 @@ export function ManualMatchmakingBoard({
                 && item.profileComplete
                 && item.isVisible !== false
                 && isVerified(item)
+                && item.activeState === "available"
                 && isOppositeSide(selectedUser.gender, item.gender)
             ))
             .map((item) => {
@@ -657,8 +760,9 @@ export function ManualMatchmakingBoard({
 
     const sentActivity = useMemo(() => {
         const normalized = sentQuery.trim().toLowerCase();
-        if (!normalized) return activity;
-        return activity.filter((item) => [
+        const activeSent = activity.filter((item) => item.status !== "closed" && item.status !== "expired");
+        if (!normalized) return activeSent;
+        return activeSent.filter((item) => [
             item.userAName,
             item.userBName,
             item.userAPhone,
@@ -710,50 +814,44 @@ export function ManualMatchmakingBoard({
         setCandidateSort("compatibility");
     };
 
-    const createMatch = () => {
+    const openCreateMatch = () => {
         if (!selectedUser || !selectedCandidate) return;
-        if (!window.confirm(`Create a curated match for ${fullName(selectedUser)} and ${fullName(selectedCandidate)}?`)) return;
-        setError(null);
-        setMessage(null);
-        startTransition(async () => {
-            try {
-                await createManualCandidatePair(selectedUser.userId, selectedCandidate.userId);
-                setMessage("Curated match created and notifications sent.");
-                refreshPageData();
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "Could not create match");
-            }
-        });
+        setActionNote("");
+        setAdminAction({ type: "create" });
     };
 
-    const cancelPair = (pairId: string) => {
-        const reason = window.prompt("Reason for cancelling this match?", "Cancelled after admin review");
-        if (reason === null) return;
-        setError(null);
-        setMessage(null);
-        startTransition(async () => {
-            try {
-                await cancelManualCandidatePair(pairId, reason);
-                setMessage("Match cancelled.");
-                refreshPageData();
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "Could not cancel match");
-            }
-        });
+    const openCancelPair = (pairId: string, title: string) => {
+        setActionNote("Cancelled after admin review");
+        setAdminAction({ type: "cancel", pairId, title });
     };
 
-    const markCall = (pairId: string, outcome: "accepted" | "rejected") => {
-        const notes = window.prompt(outcome === "accepted" ? "Call notes?" : "Why did this not work?", "");
-        if (notes === null) return;
+    const openMarkCall = (pairId: string, outcome: "accepted" | "rejected", title: string) => {
+        setActionNote(outcome === "rejected" ? "Rejected after admin call" : "");
+        setAdminAction({ type: "call", pairId, outcome, title });
+    };
+
+    const runAdminAction = () => {
+        if (!adminAction) return;
         setError(null);
         setMessage(null);
         startTransition(async () => {
             try {
-                await markManualMatchCallOutcome(pairId, outcome, notes);
-                setMessage(outcome === "accepted" ? "Call accepted and match kept on hold." : "Match rejected and cancelled.");
+                if (adminAction.type === "create") {
+                    if (!selectedUser || !selectedCandidate) return;
+                    await createManualCandidatePair(selectedUser.userId, selectedCandidate.userId);
+                    setMessage("Curated match created and notifications sent.");
+                } else if (adminAction.type === "cancel") {
+                    await cancelManualCandidatePair(adminAction.pairId, actionNote.trim() || "Cancelled after admin review");
+                    setMessage("Match cancelled. Both people are back in the pool.");
+                } else {
+                    await markManualMatchCallOutcome(adminAction.pairId, adminAction.outcome, actionNote.trim());
+                    setMessage(adminAction.outcome === "accepted" ? "Call accepted and match kept on hold." : "Match rejected and both people are back in the pool.");
+                }
+                setAdminAction(null);
+                setActionNote("");
                 refreshPageData();
             } catch (err) {
-                setError(err instanceof Error ? err.message : "Could not update call outcome");
+                setError(err instanceof Error ? err.message : "Could not update match");
             }
         });
     };
@@ -853,7 +951,7 @@ export function ManualMatchmakingBoard({
                                         <Eye className="size-3.5" />
                                         Inspect B
                                     </button>
-                                    <button type="button" onClick={createMatch} disabled={isPending} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-black hover:bg-white/90 disabled:opacity-50">
+                                    <button type="button" onClick={openCreateMatch} disabled={isPending} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-black hover:bg-white/90 disabled:opacity-50">
                                         <Send className="size-3.5" />
                                         Create curated match
                                     </button>
@@ -1035,15 +1133,15 @@ export function ManualMatchmakingBoard({
                             </div>
                             <p className="mt-3 line-clamp-2 text-xs text-gray-400">{item.reasons.join(" - ")}</p>
                             <div className="mt-3 flex flex-wrap gap-2">
-                                <button type="button" onClick={() => markCall(item.pairId, "accepted")} className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 px-2 py-1 text-xs font-semibold text-emerald-200">
+                                <button type="button" onClick={() => openMarkCall(item.pairId, "accepted", `${item.userAName} + ${item.userBName}`)} className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 px-2 py-1 text-xs font-semibold text-emerald-200">
                                     <Check className="size-3" />
                                     Call accepted
                                 </button>
-                                <button type="button" onClick={() => markCall(item.pairId, "rejected")} className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 px-2 py-1 text-xs font-semibold text-amber-200">
+                                <button type="button" onClick={() => openMarkCall(item.pairId, "rejected", `${item.userAName} + ${item.userBName}`)} className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 px-2 py-1 text-xs font-semibold text-amber-200">
                                     <PhoneCall className="size-3" />
                                     Call rejected
                                 </button>
-                                <button type="button" onClick={() => cancelPair(item.pairId)} className="inline-flex items-center gap-1 rounded-md border border-red-500/30 px-2 py-1 text-xs font-semibold text-red-200">
+                                <button type="button" onClick={() => openCancelPair(item.pairId, `${item.userAName} + ${item.userBName}`)} className="inline-flex items-center gap-1 rounded-md border border-red-500/30 px-2 py-1 text-xs font-semibold text-red-200">
                                     <X className="size-3" />
                                     Cancel
                                 </button>
@@ -1058,6 +1156,22 @@ export function ManualMatchmakingBoard({
                 </div>
             </section>
 
+            {adminAction && (
+                <ActionModal
+                    action={adminAction}
+                    selectedUser={selectedUser}
+                    selectedCandidate={selectedCandidate}
+                    note={actionNote}
+                    isPending={isPending}
+                    onNoteChange={setActionNote}
+                    onClose={() => {
+                        if (isPending) return;
+                        setAdminAction(null);
+                        setActionNote("");
+                    }}
+                    onConfirm={runAdminAction}
+                />
+            )}
             {inspectingProfile && <ProfileInspector profile={inspectingProfile} onClose={() => setInspectingProfile(null)} />}
             {photoProfile && <PhotoFolder profile={photoProfile} onClose={() => setPhotoProfile(null)} />}
         </div>

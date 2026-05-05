@@ -321,6 +321,7 @@ export async function getManualMatchSuggestions(userId: string) {
         && item.profileComplete
         && item.isVisible !== false
         && isVerifiedForManualSuggestion(item)
+        && item.activeState === "available"
         && isOppositeGenderMatch(selected.gender, item.gender)
     ));
     const suggestions = await Promise.all(
@@ -546,7 +547,12 @@ export async function getManualMatchmakingActivity() {
     const pairs = await readDb
         .select()
         .from(candidatePairs)
-        .where(inArray(candidatePairs.id, [...curatedPairIds]))
+        .where(
+            and(
+                inArray(candidatePairs.id, [...curatedPairIds]),
+                inArray(candidatePairs.status, ["active", "queued", "mutual"]),
+            ),
+        )
         .orderBy(desc(candidatePairs.updatedAt))
         .limit(40);
 
