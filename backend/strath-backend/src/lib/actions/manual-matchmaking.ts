@@ -567,7 +567,7 @@ export async function getManualMatchmakingActivity() {
     const curatedPairIds = await getAdminCuratedPairIds();
     if (curatedPairIds.size === 0) return [];
 
-    const pairs = await readDb
+    const pairs = await db
         .select()
         .from(candidatePairs)
         .where(
@@ -581,7 +581,7 @@ export async function getManualMatchmakingActivity() {
 
     const userIds = [...new Set(pairs.flatMap((pair) => [pair.userAId, pair.userBId]))];
     const profileRows = userIds.length
-        ? await readDb
+        ? await db
             .select({
                 userId: profiles.userId,
                 firstName: profiles.firstName,

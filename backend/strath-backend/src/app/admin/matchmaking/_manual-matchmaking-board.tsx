@@ -828,9 +828,22 @@ export function ManualMatchmakingBoard({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const refreshActivity = async () => {
+    const refreshActivity = async ({ preserveVisible = false }: { preserveVisible?: boolean } = {}) => {
         const nextActivity = await getManualMatchmakingActivity();
-        setActivity(nextActivity);
+        if (!preserveVisible) {
+            setActivity(nextActivity);
+            return;
+        }
+
+        setActivity((current) => {
+            const merged = new Map(nextActivity.map((item) => [item.pairId, item]));
+            for (const item of current) {
+                if (item.status !== "closed" && item.status !== "expired" && !merged.has(item.pairId)) {
+                    merged.set(item.pairId, item);
+                }
+            }
+            return [...merged.values()].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+        });
     };
 
     const resetCandidateFilters = () => {
@@ -882,7 +895,7 @@ export function ManualMatchmakingBoard({
                 }
                 setAdminAction(null);
                 setActionNote("");
-                await refreshActivity();
+                await refreshActivity({ preserveVisible: adminAction.type === "create" });
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Could not update match");
             }
