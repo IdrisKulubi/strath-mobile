@@ -16,7 +16,7 @@ import {
     appFeatureFlags,
     adminBroadcasts,
 } from "@/db/schema";
-import { eq, desc, count, and, or, gte, sql, isNotNull, inArray, ne } from "drizzle-orm";
+import { eq, desc, count, and, or, gte, sql, isNotNull, isNull, inArray, ne } from "drizzle-orm";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 import { revalidatePath } from "next/cache";
 import { sendPushNotification } from "@/lib/notifications";
@@ -938,6 +938,42 @@ export async function getAdminSignupCapStats() {
     return getAdmissionStats();
 }
 
+export async function getAdminWaitlistedProfiles() {
+    await requireAdmin();
+
+    const rows = await db
+        .select({
+            userId: user.id,
+            name: user.name,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            firstName: profiles.firstName,
+            lastName: profiles.lastName,
+            profilePhoneNumber: profiles.phoneNumber,
+            gender: profiles.gender,
+            course: profiles.course,
+            university: profiles.university,
+            waitlistPosition: profiles.waitlistPosition,
+            createdAt: user.createdAt,
+        })
+        .from(profiles)
+        .innerJoin(user, eq(user.id, profiles.userId))
+        .where(and(eq(profiles.waitlistStatus, "waitlisted"), isNull(user.deletedAt)))
+        .orderBy(profiles.gender, profiles.waitlistPosition, user.createdAt);
+
+    return rows.map((row) => ({
+        userId: row.userId,
+        name: [row.firstName, row.lastName].filter(Boolean).join(" ").trim() || row.name,
+        email: row.email,
+        phoneNumber: row.profilePhoneNumber ?? row.phoneNumber,
+        gender: row.gender,
+        course: row.course,
+        university: row.university,
+        waitlistPosition: row.waitlistPosition,
+        createdAt: row.createdAt.toISOString(),
+    }));
+}
+
 export async function updateAdminSignupCapConfig(formData: FormData) {
     const session = await requireAdmin();
 
@@ -993,6 +1029,61 @@ export async function releaseAdminWaitlist(bucket: GenderBucket, countToRelease:
     const result = await releaseFromWaitlist(n, bucket);
     revalidatePath("/admin/feature-flags");
     return result;
+}
+
+export async function admitSpecificUserFromWaitlist(identifier: string) {
+    await requireAdmin();
+
+    const trimmed = identifier.trim();
+    if (!trimmed) throw new Error("Email or user ID is required");
+
+    const isEmail = trimmed.includes("@");
+    const targetUser = await db.query.user.findFirst({
+        where: isEmail ? eq(user.email, trimmed.toLowerCase()) : eq(user.id, trimmed),
+    });
+
+    if (!targetUser) {
+        throw new Error(`No user found for "${trimmed}"`);
+    }
+
+    const targetProfile = await db.query.profiles.findFirst({
+        where: eq(profiles.userId, targetUser.id),
+    });
+
+    if (!targetProfile) {
+        throw new Error("User has no profile yet");
+    }
+
+    const now = new Date();
+    await db
+        .update(profiles)
+        .set({
+            waitlistStatus: "admitted",
+            waitlistPosition: null,
+            admittedAt: now,
+            updatedAt: now,
+        })
+        .where(eq(profiles.userId, targetUser.id));
+
+    if (targetUser.pushToken) {
+        sendPushNotification(targetUser.pushToken, {
+            title: "You're in",
+            body: "A spot opened up on StrathSpace. We'll start curating your match.",
+            data: { type: NOTIFICATION_TYPES.ADMITTED_FROM_WAITLIST },
+        }).catch((err) => {
+            console.error("[admin] Failed to notify specifically admitted user:", err);
+        });
+    }
+
+    revalidatePath("/admin/feature-flags");
+    revalidatePath("/admin/users");
+
+    return {
+        email: targetUser.email,
+        userId: targetUser.id,
+        previousStatus: targetProfile.waitlistStatus,
+        admittedAt: now.toISOString(),
+    };
 }
 
 export async function openAppToEveryone() {

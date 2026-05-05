@@ -1,12 +1,13 @@
-import { getAdminFeatureFlags, getAdminSignupCapStats } from "@/lib/actions/admin";
+import { getAdminFeatureFlags, getAdminSignupCapStats, getAdminWaitlistedProfiles } from "@/lib/actions/admin";
 import { APP_FEATURE_KEYS } from "@/lib/feature-flags";
 
 import { FeatureFlagToggle, SignupCapPanel } from "./_actions";
 
 export default async function AdminFeatureFlagsPage() {
-    const [flags, stats] = await Promise.all([
+    const [flags, stats, waitlistedProfiles] = await Promise.all([
         getAdminFeatureFlags(),
         getAdminSignupCapStats(),
+        getAdminWaitlistedProfiles(),
     ]);
 
     return (
@@ -61,7 +62,7 @@ export default async function AdminFeatureFlagsPage() {
 
                             {isSignupCap && (
                                 <div className="mt-6 border-t border-white/10 pt-6">
-                                    <SignupCapPanel stats={stats} enabled={flag.enabled} />
+                                    <SignupCapPanel stats={stats} enabled={flag.enabled} waitlistedProfiles={waitlistedProfiles} />
                                 </div>
                             )}
                         </div>

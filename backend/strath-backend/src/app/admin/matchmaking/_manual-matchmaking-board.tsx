@@ -96,6 +96,14 @@ function isVerified(profile: ManualMatchmakingProfile) {
     return profile.faceVerificationStatus === "verified" || Boolean(profile.faceVerifiedAt);
 }
 
+function isManualMatchReady(profile: ManualMatchmakingProfile) {
+    return isVerified(profile) && profile.waitlistStatus === "admitted";
+}
+
+function manualLaunchPool(profile: ManualMatchmakingProfile) {
+    return profile.waitlistStatus === "admitted" || isVerified(profile);
+}
+
 function stateLabel(profile: ManualMatchmakingProfile) {
     if (profile.activeState === "available") return "Available";
     if (profile.activeState === "active_pair") return `Active with ${profile.activePartnerName ?? "someone"}`;
@@ -644,7 +652,7 @@ export function ManualMatchmakingBoard({
     const [activity] = useState(initialActivity);
     const [poolQuery, setPoolQuery] = useState("");
     const [poolFilter, setPoolFilter] = useState<PoolFilter>("all");
-    const [selectedUserId, setSelectedUserId] = useState(initialPool.find((item) => item.activeState === "available" && item.profileComplete && item.isVisible !== false && isVerified(item))?.userId ?? "");
+    const [selectedUserId, setSelectedUserId] = useState(initialPool.find(manualLaunchPool)?.userId ?? initialPool[0]?.userId ?? "");
     const [selectedCandidateId, setSelectedCandidateId] = useState("");
     const [candidateTab, setCandidateTab] = useState<CandidateTab>("suggested");
     const [candidateQuery, setCandidateQuery] = useState("");
@@ -682,7 +690,7 @@ export function ManualMatchmakingBoard({
 
     const stats = useMemo(() => ({
         total: pool.length,
-        verified: pool.filter(isVerified).length,
+        verified: pool.filter(manualLaunchPool).length,
         available: pool.filter((item) => item.activeState === "available").length,
         sent: activity.filter((item) => item.status !== "closed" && item.status !== "expired").length,
     }), [activity.length, pool]);
@@ -691,10 +699,7 @@ export function ManualMatchmakingBoard({
     const universityOptions = useMemo(() => Array.from(new Set(pool.map((item) => item.university).filter(Boolean) as string[])).sort(), [pool]);
     const yearOptions = useMemo(() => Array.from(new Set(pool.map((item) => item.yearOfStudy).filter((item): item is number => typeof item === "number"))).sort((a, b) => a - b), [pool]);
     const matchablePool = useMemo(() => pool.filter((item) => (
-        item.activeState === "available"
-        && item.profileComplete
-        && item.isVisible !== false
-        && isVerified(item)
+        manualLaunchPool(item)
     )), [pool]);
 
     const filteredPool = useMemo(() => {
@@ -713,20 +718,41 @@ export function ManualMatchmakingBoard({
 
     const allEligibleCandidates = useMemo((): CandidateDeckItem[] => {
         if (!selectedUser) return [];
-        return pool
+        const candidates = pool
             .filter((item) => (
                 item.userId !== selectedUser.userId
-                && item.profileComplete
-                && item.isVisible !== false
-                && isVerified(item)
-                && item.activeState === "available"
+                && manualLaunchPool(item)
                 && isOppositeSide(selectedUser.gender, item.gender)
             ))
             .map((item) => {
                 const suggested = suggestionById.get(item.userId);
                 return suggested ? { ...item, compatibilityScore: suggested.compatibilityScore, reasons: suggested.reasons, warnings: suggested.warnings } : item;
             });
+        const selectedGender = normalizeGender(selectedUser.gender);
+        if (selectedGender === "female") {
+            return candidates.slice(0, 100);
+        }
+        return candidates;
     }, [pool, selectedUser, suggestionById]);
+
+    const candidateCountBreakdown = useMemo(() => {
+        if (!selectedUser) {
+            return { oppositeSide: 0, completeVisible: 0, verifiedEligible: 0 };
+        }
+        const oppositeSide = pool.filter((item) => (
+            item.userId !== selectedUser.userId
+            && isOppositeSide(selectedUser.gender, item.gender)
+        ));
+        const admitted = oppositeSide.filter(manualLaunchPool);
+        const verifiedEligible = admitted;
+        const selectedGender = normalizeGender(selectedUser.gender);
+        const cappedEligible = selectedGender === "female" ? verifiedEligible.slice(0, 100) : verifiedEligible;
+        return {
+            oppositeSide: oppositeSide.length,
+            completeVisible: admitted.length,
+            verifiedEligible: cappedEligible.length,
+        };
+    }, [pool, selectedUser]);
 
     const rawCandidates = candidateTab === "suggested" ? suggestions : allEligibleCandidates;
 
@@ -1016,9 +1042,28 @@ export function ManualMatchmakingBoard({
                         <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-black/20 p-1">
                             {(["suggested", "all"] as CandidateTab[]).map((tab) => (
                                 <button key={tab} type="button" onClick={() => setCandidateTab(tab)} className={`rounded-md px-3 py-2 text-xs font-bold capitalize ${candidateTab === tab ? "bg-white text-black" : "text-gray-300 hover:bg-white/10"}`}>
-                                    {tab === "suggested" ? `Suggested (${suggestions.length})` : `All (${allEligibleCandidates.length})`}
+                                    {tab === "suggested" ? `Suggested (${suggestions.length})` : `All eligible (${allEligibleCandidates.length})`}
                                 </button>
                             ))}
+                        </div>
+                        <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-gray-400">
+                            <p>
+                                All shows the opposite-side manual launch pool for {selectedUser ? fullName(selectedUser) : "the selected person"}. Men are capped to the first 100 for this phase.
+                            </p>
+                            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                                <div className="rounded-md bg-white/5 p-2">
+                                    <p className="font-bold text-white">{candidateCountBreakdown.oppositeSide}</p>
+                                    <p className="mt-0.5 text-[10px] uppercase text-gray-500">opposite side</p>
+                                </div>
+                                <div className="rounded-md bg-white/5 p-2">
+                                    <p className="font-bold text-white">{candidateCountBreakdown.completeVisible}</p>
+                                    <p className="mt-0.5 text-[10px] uppercase text-gray-500">launch pool</p>
+                                </div>
+                                <div className="rounded-md bg-emerald-500/10 p-2">
+                                    <p className="font-bold text-emerald-200">{candidateCountBreakdown.verifiedEligible}</p>
+                                    <p className="mt-0.5 text-[10px] uppercase text-emerald-300/70">deck total</p>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="mt-3 space-y-2">

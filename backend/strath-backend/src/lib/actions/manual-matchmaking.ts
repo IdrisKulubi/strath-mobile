@@ -101,6 +101,10 @@ function isVerifiedForManualSuggestion(profile: Pick<ManualMatchmakingProfile, "
     return profile.faceVerificationStatus === "verified" || Boolean(profile.faceVerifiedAt);
 }
 
+function isManualMatchReady(profile: Pick<ManualMatchmakingProfile, "faceVerificationStatus" | "faceVerifiedAt" | "waitlistStatus">) {
+    return profile.waitlistStatus === "admitted" || isVerifiedForManualSuggestion(profile);
+}
+
 async function getAdminCuratedPairIds() {
     const rows = await readDb
         .select({ pairId: candidatePairHistory.pairId })
@@ -318,10 +322,7 @@ export async function getManualMatchSuggestions(userId: string) {
 
     const candidates = pool.filter((item) => (
         item.userId !== userId
-        && item.profileComplete
-        && item.isVisible !== false
-        && isVerifiedForManualSuggestion(item)
-        && item.activeState === "available"
+        && isManualMatchReady(item)
         && isOppositeGenderMatch(selected.gender, item.gender)
     ));
     const suggestions = await Promise.all(
