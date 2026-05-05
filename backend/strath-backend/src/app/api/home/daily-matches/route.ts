@@ -3,6 +3,7 @@ import { successResponse, errorResponse } from "@/lib/api-response";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
 import {
     generateCandidatePairsForUser,
+    getActiveAdminCuratedCandidatePairsForUser,
     getActiveCandidatePairsForUser,
     getHasUpcomingQueuedForUser,
     promoteDueQueuedPairsForUser,
@@ -25,6 +26,16 @@ export async function GET(req: NextRequest) {
         console.log("[daily-matches] GET", { userId });
 
         if (isManualMatchmakingModeEnabled()) {
+            const curatedMatches = await getActiveAdminCuratedCandidatePairsForUser(userId);
+            if (curatedMatches.length > 0) {
+                return successResponse({
+                    mode: "matches" as const,
+                    matches: curatedMatches,
+                    hasUpcomingQueued: false,
+                    hold: null,
+                });
+            }
+
             console.log("[daily-matches] manual matchmaking mode active", { userId });
             return successResponse({
                 mode: "manual_curation" as const,

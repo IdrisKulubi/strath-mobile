@@ -48,6 +48,7 @@ const AUDIENCE_OPTIONS: AudienceOption[] = [
     { value: "admitted", label: "Admitted", description: "Users currently admitted into the app." },
     { value: "push_enabled", label: "Push enabled", description: "Users who can receive app notifications." },
     { value: "everyone", label: "Everyone", description: "All non-deleted users." },
+    { value: "all_users", label: "All users, including deleted", description: "Every stored account email, including self-deleted users." },
 ];
 
 const RECIPIENT_TABLE_LIMIT = 5000;

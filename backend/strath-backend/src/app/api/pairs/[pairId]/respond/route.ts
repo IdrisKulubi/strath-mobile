@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
 import { pairRespondSchema } from "@/lib/validation";
-import { respondToCandidatePair } from "@/lib/services/candidate-pairs-service";
+import { isAdminCuratedCandidatePair, respondToCandidatePair } from "@/lib/services/candidate-pairs-service";
 import { profiles, user as userTable } from "@/db/schema";
 import { db } from "@/lib/db";
 import { sendPushNotification } from "@/lib/notifications";
@@ -23,10 +23,6 @@ export async function POST(
             return errorResponse(new Error("Unauthorized"), 401);
         }
 
-        if (isManualMatchmakingModeEnabled()) {
-            return errorResponse(new Error("Manual matchmaking is active. We will notify you when your match is ready."), 403);
-        }
-
         try {
             await requireMatchmakingAccess(session.user.id);
         } catch (accessError) {
@@ -38,10 +34,17 @@ export async function POST(
             return errorResponse(new Error("Missing pair id"), 400);
         }
 
+        const isCuratedPair = await isAdminCuratedCandidatePair(pairId);
+        if (isManualMatchmakingModeEnabled() && !isCuratedPair) {
+            return errorResponse(new Error("Manual matchmaking is active. We will notify you when your match is ready."), 403);
+        }
+
         const body = await req.json();
         const { decision } = pairRespondSchema.parse(body);
 
-        const result = await respondToCandidatePair(pairId, session.user.id, decision);
+        const result = await respondToCandidatePair(pairId, session.user.id, decision, {
+            allowConcurrentInterest: isCuratedPair,
+        });
 
         if (result.mutual) {
             const [userA, userB, profileA, profileB] = await Promise.all([

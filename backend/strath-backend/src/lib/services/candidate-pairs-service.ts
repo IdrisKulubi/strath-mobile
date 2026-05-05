@@ -1104,6 +1104,69 @@ export async function getActiveCandidatePairsForUser(userId: string) {
         )
         .orderBy(desc(candidatePairs.compatibilityScore), desc(candidatePairs.createdAt));
 
+    return formatCandidatePairRowsForUser(userId, rows, now, matchExcludedUserIds);
+}
+
+export async function isAdminCuratedCandidatePair(pairId: string) {
+    const [row] = await readDb
+        .select({ id: candidatePairHistory.id })
+        .from(candidatePairHistory)
+        .where(
+            and(
+                eq(candidatePairHistory.pairId, pairId),
+                eq(candidatePairHistory.eventType, "generated"),
+                sql`${candidatePairHistory.metadata}->>'source' = 'admin_curated'`,
+            ),
+        )
+        .limit(1);
+
+    return Boolean(row);
+}
+
+export async function getActiveAdminCuratedCandidatePairsForUser(userId: string) {
+    const now = new Date();
+    const expiryMs = CANDIDATE_PAIR_EXPIRY_HOURS * 60 * 60 * 1000;
+    const createdAtCutoff = new Date(now.getTime() - expiryMs);
+
+    const curatedRows = await readDb
+        .select({ pairId: candidatePairHistory.pairId })
+        .from(candidatePairHistory)
+        .where(
+            and(
+                eq(candidatePairHistory.eventType, "generated"),
+                sql`${candidatePairHistory.metadata}->>'source' = 'admin_curated'`,
+            ),
+        );
+
+    const curatedPairIds = [...new Set(curatedRows.map((row) => row.pairId))];
+    if (curatedPairIds.length === 0) return [];
+
+    const rows = await readDb
+        .select()
+        .from(candidatePairs)
+        .where(
+            and(
+                inArray(candidatePairs.id, curatedPairIds),
+                eq(candidatePairs.status, "active"),
+                gte(candidatePairs.expiresAt, now),
+                gte(candidatePairs.createdAt, createdAtCutoff),
+                or(
+                    eq(candidatePairs.userAId, userId),
+                    eq(candidatePairs.userBId, userId),
+                ),
+            ),
+        )
+        .orderBy(desc(candidatePairs.compatibilityScore), desc(candidatePairs.createdAt));
+
+    return formatCandidatePairRowsForUser(userId, rows, now, new Set());
+}
+
+async function formatCandidatePairRowsForUser(
+    userId: string,
+    rows: CandidatePairRow[],
+    now: Date,
+    matchExcludedUserIds: Set<string>,
+) {
     const result = await Promise.all(
         rows.map(async (pair) => {
             const otherUserId = getOtherUserId(pair, userId);
@@ -1199,6 +1262,7 @@ export async function respondToCandidatePair(
     pairId: string,
     userId: string,
     decision: Exclude<CandidateDecision, "pending">,
+    options?: { allowConcurrentInterest?: boolean },
 ) {
     const now = new Date();
     const decisionsToday = await getRecentDecisionCountForUser(userId, now);
@@ -1232,7 +1296,7 @@ export async function respondToCandidatePair(
             throw new Error("You have already responded to this pair");
         }
 
-        if (decision === "open_to_meet") {
+        if (decision === "open_to_meet" && !options?.allowConcurrentInterest) {
             const existingPendingInterest = await tx.query.candidatePairs.findFirst({
                 where: and(
                     ne(candidatePairs.id, pairId),

@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 
 export type CampaignAudience =
     | "everyone"
+    | "all_users"
     | "no_profile"
     | "profile_incomplete"
     | "needs_verification"
@@ -67,6 +68,7 @@ function audienceWhereClause(audience: CampaignAudience) {
         case "push_enabled":
             return isNotNull(user.pushToken);
         case "everyone":
+        case "all_users":
         default:
             return undefined;
     }
@@ -78,7 +80,7 @@ function combineConditions(
     excludeUserIds?: string[],
     searchQuery?: string,
 ) {
-    const conditions = [isNull(user.deletedAt)];
+    const conditions = audience === "all_users" ? [] : [isNull(user.deletedAt)];
     const audienceCondition = audienceWhereClause(audience);
     if (audienceCondition) conditions.push(audienceCondition);
     if (selectedUserIds?.length) conditions.push(inArray(user.id, selectedUserIds));
@@ -99,7 +101,7 @@ function combineConditions(
             )!,
         );
     }
-    return and(...conditions);
+    return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
 function parseJson<T>(value: FormDataEntryValue | null, fallback: T): T {
