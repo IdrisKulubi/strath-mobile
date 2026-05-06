@@ -29,26 +29,24 @@ export async function POST(req: NextRequest) {
         // can filter without another column change. Keeps schema stable.
         const taggedMessage = `[${parsed.category}] ${parsed.message}`;
 
-        let name: string | null = null;
-        let phoneNumber: string | null = null;
+        const profile = await db.query.profiles.findFirst({
+            where: eq(profiles.userId, session.user.id),
+            with: { user: true },
+        });
 
-        if (!parsed.anonymous) {
-            const profile = await db.query.profiles.findFirst({
-                where: eq(profiles.userId, session.user.id),
-                with: { user: true },
-            });
+        const first = profile?.firstName?.trim();
+        const last = profile?.lastName?.trim();
+        const name =
+            [first, last].filter(Boolean).join(" ") ||
+            profile?.user?.name ||
+            null;
 
-            const first = profile?.firstName?.trim();
-            const last = profile?.lastName?.trim();
-            name =
-                [first, last].filter(Boolean).join(" ") ||
-                profile?.user?.name ||
-                null;
-            phoneNumber = profile?.phoneNumber ?? null;
-        }
+        // Anonymous only hides phone from the stored row; user id + name are always kept for support.
+        const phoneNumber = parsed.anonymous ? null : (profile?.phoneNumber ?? null);
 
         await db.insert(feedbacks).values({
             id: crypto.randomUUID(),
+            userId: session.user.id,
             name,
             phoneNumber,
             message: taggedMessage,

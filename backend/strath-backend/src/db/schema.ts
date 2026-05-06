@@ -659,14 +659,21 @@ export const mutualMatches = pgTable(
     })
 );
 
-export const feedbacks = pgTable("feedbacks", {
-    id: text("id").primaryKey().notNull(),
-    name: text("name"),
-    phoneNumber: text("phone_number"),
-    message: text("message").notNull(),
-    status: text("status").notNull().default("new"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const feedbacks = pgTable(
+    "feedbacks",
+    {
+        id: text("id").primaryKey().notNull(),
+        userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+        name: text("name"),
+        phoneNumber: text("phone_number"),
+        message: text("message").notNull(),
+        status: text("status").notNull().default("new"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdIdx: index("feedbacks_user_id_idx").on(table.userId),
+    })
+);
 
 // Messages
 export const messages = pgTable(
