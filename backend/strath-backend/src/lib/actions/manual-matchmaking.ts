@@ -105,9 +105,8 @@ function isManualMatchReady(profile: Pick<ManualMatchmakingProfile, "faceVerific
     return profile.waitlistStatus === "admitted" || isVerifiedForManualSuggestion(profile);
 }
 
-function manualAvailabilityIssue(profile: Pick<ManualMatchmakingProfile, "profileComplete" | "isVisible" | "discoveryPaused">) {
+function manualAvailabilityIssue(profile: Pick<ManualMatchmakingProfile, "profileComplete">) {
     if (!profile.profileComplete) return "profile is incomplete";
-    if (profile.isVisible === false) return profile.discoveryPaused ? "discovery is paused" : "profile is hidden";
     return null;
 }
 
@@ -267,9 +266,9 @@ async function getPoolData() {
             ? "mutual_hold"
             : activePair
                 ? "active_pair"
-                : !profileComplete || row.isVisible === false
-                    ? "unavailable"
-                    : "available";
+            : !profileComplete
+                ? "unavailable"
+                : "available";
 
         return {
             userId: row.userId,
