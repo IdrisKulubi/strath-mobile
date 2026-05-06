@@ -15,6 +15,7 @@ import {
     vibeChecks,
     appFeatureFlags,
     adminBroadcasts,
+    candidatePairHistory,
 } from "@/db/schema";
 import { eq, desc, count, and, or, gte, sql, isNotNull, isNull, inArray, ne } from "drizzle-orm";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
@@ -105,11 +106,18 @@ export async function getAdminMetrics() {
 export async function getAdminDateRequests(statusFilter?: string) {
     await requireAdmin();
 
-    const [legacyRequests, pairs, mutuals] = await Promise.all([
+    const [legacyRequests, pairs, mutuals, archivedPairRows] = await Promise.all([
         db.select().from(dateRequests).orderBy(desc(dateRequests.createdAt)),
         db.select().from(candidatePairs).orderBy(desc(candidatePairs.updatedAt)),
         db.select().from(mutualMatches).orderBy(desc(mutualMatches.createdAt)),
+        db
+            .select({ pairId: candidatePairHistory.pairId })
+            .from(candidatePairHistory)
+            .where(sql`${candidatePairHistory.metadata}->>'source' = 'admin_activity_archive'`),
     ]);
+    const archivedPairIds = new Set(archivedPairRows.map((row) => row.pairId));
+    const visiblePairs = pairs.filter((pair) => !archivedPairIds.has(pair.id));
+    const visibleMutuals = mutuals.filter((match) => !archivedPairIds.has(match.candidatePairId));
 
     async function getAdminUserSummary(userId: string) {
         const profile = await db.query.profiles.findFirst({
@@ -152,6 +160,7 @@ export async function getAdminDateRequests(statusFilter?: string) {
     const legacyRows = await Promise.all(
         legacyRequests.map(async (request) => ({
             id: `legacy-${request.id}`,
+            pairId: null,
             source: "legacy_request" as const,
             kind: "legacy_request" as const,
             label: "Direct invite",
@@ -171,12 +180,13 @@ export async function getAdminDateRequests(statusFilter?: string) {
 
     const decisionRows = (
         await Promise.all(
-            pairs.flatMap((pair) => {
+            visiblePairs.flatMap((pair) => {
                 const rows = [];
                 if (pair.aDecision !== "pending") {
                     const meta = decisionMeta(pair.aDecision, pair.status);
                     rows.push((async () => ({
                         id: `pair-${pair.id}-a`,
+                        pairId: pair.id,
                         source: "candidate_pair" as const,
                         kind: meta.kind,
                         label: meta.label,
@@ -197,6 +207,7 @@ export async function getAdminDateRequests(statusFilter?: string) {
                     const meta = decisionMeta(pair.bDecision, pair.status);
                     rows.push((async () => ({
                         id: `pair-${pair.id}-b`,
+                        pairId: pair.id,
                         source: "candidate_pair" as const,
                         kind: meta.kind,
                         label: meta.label,
@@ -219,8 +230,9 @@ export async function getAdminDateRequests(statusFilter?: string) {
     ).flat();
 
     const mutualRows = await Promise.all(
-        mutuals.map(async (match) => ({
+        visibleMutuals.map(async (match) => ({
             id: `mutual-${match.id}`,
+            pairId: match.candidatePairId,
             source: "mutual_match" as const,
             kind: "mutual_match" as const,
             label: match.status === "cancelled" || match.status === "expired" ? "Mutual ended" : "Mutual match",
@@ -255,9 +267,34 @@ export async function getAdminDateRequests(statusFilter?: string) {
             passed: decisionRows.filter((row) => row.kind === "passed").length,
             mutual: mutualRows.length,
             legacy: legacyRows.length,
-            pendingPairs: pairs.filter((pair) => pair.status === "active" && (pair.aDecision === "pending" || pair.bDecision === "pending")).length,
+            pendingPairs: visiblePairs.filter((pair) => pair.status === "active" && (pair.aDecision === "pending" || pair.bDecision === "pending")).length,
         },
     };
+}
+
+export async function archiveAdminMatchActivity(pairId: string) {
+    const session = await requireAdmin();
+    if (!pairId) throw new Error("Missing pair id");
+
+    const pair = await db.query.candidatePairs.findFirst({
+        where: eq(candidatePairs.id, pairId),
+    });
+    if (!pair) throw new Error("Candidate pair not found");
+
+    await db.insert(candidatePairHistory).values({
+        pairId,
+        actorUserId: session.user.id,
+        eventType: "closed",
+        fromStatus: pair.status,
+        toStatus: pair.status,
+        metadata: {
+            source: "admin_activity_archive",
+            adminUserId: session.user.id,
+        },
+    });
+
+    revalidatePath("/admin/date-requests");
+    return { ok: true };
 }
 
 export async function getAdminPendingDates() {

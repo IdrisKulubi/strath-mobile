@@ -1,4 +1,4 @@
-import { getAdminDateRequests } from "@/lib/actions/admin";
+import { archiveAdminMatchActivity, getAdminDateRequests } from "@/lib/actions/admin";
 
 const STATUS_COLORS: Record<string, string> = {
     open_to_meet: "bg-emerald-500/20 text-emerald-300",
@@ -127,6 +127,7 @@ export default async function DateRequestsPage({
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Pair</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Details</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">When</th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400">Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -169,6 +170,25 @@ export default async function DateRequestsPage({
                                         )}
                                     </td>
                                     <td className="px-4 py-3 text-xs text-gray-500">{formatDate(row.updatedAt)}</td>
+                                    <td className="px-4 py-3 text-right">
+                                        {row.pairId ? (
+                                            <form
+                                                action={async () => {
+                                                    "use server";
+                                                    await archiveAdminMatchActivity(row.pairId);
+                                                }}
+                                            >
+                                                <button
+                                                    type="submit"
+                                                    className="rounded-md border border-red-500/30 px-2 py-1 text-xs font-semibold text-red-200 hover:bg-red-500/10"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </form>
+                                        ) : (
+                                            <span className="text-xs text-gray-600">-</span>
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
