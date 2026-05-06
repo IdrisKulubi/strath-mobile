@@ -27,6 +27,7 @@ import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 export const DAILY_CANDIDATE_PAIR_LIMIT = 2;
 export const DAILY_CANDIDATE_DECISION_LIMIT = Number(process.env.DAILY_CANDIDATE_DECISION_LIMIT) || 32;
 export const ACTIVE_EXPOSURE_CAP = 2;
+export const MANUAL_CURATED_PAIR_EXPIRES_AT = new Date("2099-12-31T23:59:59.000Z");
 
 // Expiry: env CANDIDATE_PAIR_EXPIRY_MINUTES (default 2880 = 48h). Use 5 for testing.
 const EXPIRY_MINUTES = Number(process.env.CANDIDATE_PAIR_EXPIRY_MINUTES) || 2880;
@@ -148,6 +149,12 @@ export async function expireCandidatePairs(now = new Date()) {
             .where(
                 and(
                     eq(candidatePairs.status, "active"),
+                    sql`not exists (
+                        select 1 from ${candidatePairHistory}
+                        where ${candidatePairHistory.pairId} = ${candidatePairs.id}
+                        and ${candidatePairHistory.eventType} = 'generated'
+                        and ${candidatePairHistory.metadata}->>'source' = 'admin_curated'
+                    )`,
                     or(
                         lt(candidatePairs.expiresAt, now),
                         lt(candidatePairs.createdAt, createdAtCutoff),
@@ -1125,8 +1132,6 @@ export async function isAdminCuratedCandidatePair(pairId: string) {
 
 export async function getActiveAdminCuratedCandidatePairsForUser(userId: string) {
     const now = new Date();
-    const expiryMs = CANDIDATE_PAIR_EXPIRY_HOURS * 60 * 60 * 1000;
-    const createdAtCutoff = new Date(now.getTime() - expiryMs);
 
     const curatedRows = await readDb
         .select({ pairId: candidatePairHistory.pairId })
@@ -1148,8 +1153,6 @@ export async function getActiveAdminCuratedCandidatePairsForUser(userId: string)
             and(
                 inArray(candidatePairs.id, curatedPairIds),
                 eq(candidatePairs.status, "active"),
-                gte(candidatePairs.expiresAt, now),
-                gte(candidatePairs.createdAt, createdAtCutoff),
                 or(
                     eq(candidatePairs.userAId, userId),
                     eq(candidatePairs.userBId, userId),
@@ -1288,7 +1291,15 @@ export async function respondToCandidatePair(
             throw new Error("This pair is no longer active");
         }
 
-        if (pair.expiresAt < now) {
+        const adminCuratedPair = await tx.query.candidatePairHistory.findFirst({
+            where: and(
+                eq(candidatePairHistory.pairId, pairId),
+                eq(candidatePairHistory.eventType, "generated"),
+                sql`${candidatePairHistory.metadata}->>'source' = 'admin_curated'`,
+            ),
+        });
+
+        if (!adminCuratedPair && pair.expiresAt < now) {
             throw new Error("This pair has expired");
         }
 

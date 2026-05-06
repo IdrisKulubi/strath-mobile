@@ -103,11 +103,17 @@ function manualLaunchPool(profile: ManualMatchmakingProfile) {
     return profile.waitlistStatus === "admitted" || isVerified(profile);
 }
 
+function unavailableReason(profile: ManualMatchmakingProfile) {
+    if (!profile.profileComplete) return "Incomplete profile";
+    if (profile.isVisible === false) return profile.discoveryPaused ? "Discovery paused" : "Hidden profile";
+    return "Unavailable";
+}
+
 function stateLabel(profile: ManualMatchmakingProfile) {
     if (profile.activeState === "available") return "Available";
     if (profile.activeState === "active_pair") return `Active with ${profile.activePartnerName ?? "someone"}`;
     if (profile.activeState === "mutual_hold") return `Matched with ${profile.activePartnerName ?? "someone"}`;
-    return "Incomplete or hidden";
+    return unavailableReason(profile);
 }
 
 function stateClass(state: ManualMatchmakingProfile["activeState"]) {

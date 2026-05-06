@@ -59,7 +59,7 @@ async function main() {
 
     const pair = [...pairs].sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())[0];
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    const expiresAt = new Date("2099-12-31T23:59:59.000Z");
     const praiseIsA = pair.userAId === praise.userId;
 
     const nextADecision = praiseIsA ? "open_to_meet" : "pending";

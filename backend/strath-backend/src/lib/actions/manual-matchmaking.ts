@@ -8,7 +8,7 @@ import db from "@/db/drizzle";
 import { db as readDb } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin-auth";
 import {
-    CANDIDATE_PAIR_EXPIRY_HOURS,
+    MANUAL_CURATED_PAIR_EXPIRES_AT,
     canonicalizePairUsers,
     recordCandidatePairHistory,
 } from "@/lib/services/candidate-pairs-service";
@@ -103,6 +103,12 @@ function isVerifiedForManualSuggestion(profile: Pick<ManualMatchmakingProfile, "
 
 function isManualMatchReady(profile: Pick<ManualMatchmakingProfile, "faceVerificationStatus" | "faceVerifiedAt" | "waitlistStatus">) {
     return profile.waitlistStatus === "admitted" || isVerifiedForManualSuggestion(profile);
+}
+
+function manualAvailabilityIssue(profile: Pick<ManualMatchmakingProfile, "profileComplete" | "isVisible" | "discoveryPaused">) {
+    if (!profile.profileComplete) return "profile is incomplete";
+    if (profile.isVisible === false) return profile.discoveryPaused ? "discovery is paused" : "profile is hidden";
+    return null;
 }
 
 async function getAdminCuratedPairIds() {
@@ -356,13 +362,15 @@ export async function createManualCandidatePair(userAId: string, userBId: string
     const first = pool.find((item) => item.userId === userAId);
     const second = pool.find((item) => item.userId === userBId);
     if (!first || !second) throw new Error("Could not find both users");
-    if (!first.profileComplete || first.isVisible === false) throw new Error(`${displayName(first, first.name)} has an incomplete or hidden profile`);
-    if (!second.profileComplete || second.isVisible === false) throw new Error(`${displayName(second, second.name)} has an incomplete or hidden profile`);
+    const firstIssue = manualAvailabilityIssue(first);
+    const secondIssue = manualAvailabilityIssue(second);
+    if (firstIssue) throw new Error(`${displayName(first, first.name)} cannot be matched because ${firstIssue}`);
+    if (secondIssue) throw new Error(`${displayName(second, second.name)} cannot be matched because ${secondIssue}`);
 
     const { userAId: canonicalAId, userBId: canonicalBId } = canonicalizePairUsers(userAId, userBId);
     const compatibility = await computeCompatibility(canonicalAId, canonicalBId);
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + CANDIDATE_PAIR_EXPIRY_HOURS * 60 * 60 * 1000);
+    const expiresAt = MANUAL_CURATED_PAIR_EXPIRES_AT;
 
     const [created] = await db.transaction(async (tx) => {
         const existing = await tx.query.candidatePairs.findFirst({
