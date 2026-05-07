@@ -22,6 +22,30 @@ import { setCachedProfile } from '@/lib/session-cache';
 
 // Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=Personality, 8=Lifestyle, 9=OpeningLine, 10=ProfileDetails, 11=Celebration
 type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+const PROMPT_RESPONSE_MAX_LENGTH = 150;
+
+const getProfileSetupErrorMessage = (responseData: any, status: number) => {
+    const serverMessage =
+        typeof responseData?.message === 'string'
+            ? responseData.message
+            : typeof responseData?.error === 'string'
+            ? responseData.error
+            : '';
+
+    const promptIssues = Array.isArray(responseData?.details)
+        ? responseData.details.filter((issue: any) => Array.isArray(issue?.path) && issue.path[0] === 'prompts')
+        : [];
+
+    if (promptIssues.some((issue: any) => issue?.code === 'too_big' || String(issue?.message || '').includes('150'))) {
+        return 'One of your prompt answers is too long. Please keep each answer under 150 characters.';
+    }
+
+    if (serverMessage.includes('prompts') && serverMessage.includes('150')) {
+        return 'One of your prompt answers is too long. Please keep each answer under 150 characters.';
+    }
+
+    return serverMessage || `We could not save your profile right now. Please try again. (${status})`;
+};
 
 export default function OnboardingScreen() {
     const router = useRouter();
@@ -258,8 +282,16 @@ export default function OnboardingScreen() {
                 personalityType: formData.personalityType,
             });
             
+            const sanitizedPrompts = (formData.prompts || [])
+                .filter((prompt) => prompt.promptId && prompt.response)
+                .map((prompt) => ({
+                    ...prompt,
+                    response: prompt.response.trim().slice(0, PROMPT_RESPONSE_MAX_LENGTH),
+                }));
+
             const payload = {
                 ...formData,
+                prompts: sanitizedPrompts,
                 photos: uploadedPhotos,
                 profilePhoto: uploadedPhotos[0] ?? undefined,
                 age: formData.age ? parseInt(String(formData.age)) : undefined,
@@ -322,8 +354,7 @@ export default function OnboardingScreen() {
                     return;
                 }
                 
-                const errorMessage = responseData.error || responseData.message || `Server error: ${response.status}`;
-                throw new Error(errorMessage);
+                throw new Error(getProfileSetupErrorMessage(responseData, response.status));
             }
 
             console.log('[Onboarding] Profile saved successfully!');

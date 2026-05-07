@@ -403,7 +403,7 @@ export function LaunchCelebration({
                     <Animated.View entering={ZoomIn.delay(1500)} style={styles.statsContainer}>
                         <View style={styles.statItem}>
                             <Rocket size={24} color="#ec4899" weight="fill" />
-                            <Text style={styles.statText}>Profile is live!</Text>
+                            <Text style={styles.statText}>{hasError ? 'Profile not saved yet' : 'Profile is live!'}</Text>
                         </View>
                     </Animated.View>
                 )}

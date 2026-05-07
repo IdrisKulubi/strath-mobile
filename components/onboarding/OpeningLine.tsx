@@ -38,6 +38,8 @@ const PROMPT_OPTIONS = [
     "If I could have dinner with anyone...",
 ];
 
+const PROMPT_RESPONSE_MAX_LENGTH = 150;
+
 const PromptChip = ({
     prompt,
     isSelected,
@@ -167,7 +169,7 @@ export function OpeningLine({ prompts, aboutMe, onUpdate, onComplete }: OpeningL
                             placeholder="Your answer here..."
                             placeholderTextColor="#64748b"
                             multiline
-                            maxLength={200}
+                            maxLength={PROMPT_RESPONSE_MAX_LENGTH}
                             value={answer}
                             onChangeText={setAnswer}
                             autoFocus
@@ -175,7 +177,7 @@ export function OpeningLine({ prompts, aboutMe, onUpdate, onComplete }: OpeningL
 
                         <View style={styles.charCount}>
                             <Text style={[styles.charCountText, answer.length >= 10 && styles.charCountValid]}>
-                                {answer.length}/200
+                                {answer.length}/{PROMPT_RESPONSE_MAX_LENGTH}
                             </Text>
                             {answer.length < 10 && (
                                 <Text style={styles.charCountHint}>Min 10 characters</Text>

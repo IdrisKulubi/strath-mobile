@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const PROMPT_RESPONSE_MAX_LENGTH = 150;
+
 export const updateProfileSchema = z.object({
     bio: z.string().max(500).nullable().optional(),
     age: z.number().min(18).max(100).nullable().optional(),
@@ -41,7 +43,9 @@ export const updateProfileSchema = z.object({
     qualities: z.array(z.string()).nullable().optional(),
     prompts: z.array(z.object({
         promptId: z.string(),
-        response: z.string().max(150),
+        response: z.string()
+            .trim()
+            .max(PROMPT_RESPONSE_MAX_LENGTH, `Prompt answers must be ${PROMPT_RESPONSE_MAX_LENGTH} characters or fewer.`),
     })).nullable().optional(),
     aboutMe: z.string().max(500).nullable().optional(),
     height: z.string().nullable().optional(),

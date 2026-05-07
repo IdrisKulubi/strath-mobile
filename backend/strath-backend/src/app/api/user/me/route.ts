@@ -10,6 +10,24 @@ import { admitOrWaitlist, getWaitlistViewFor } from "@/lib/services/admission-se
 import { getSessionWithBearerFallback } from "@/lib/security";
 import { ZodError } from "zod";
 
+function formatProfileValidationError(error: ZodError) {
+    const promptResponseIssue = error.issues.find(
+        (issue) => issue.path[0] === "prompts" && issue.path[2] === "response",
+    );
+
+    if (promptResponseIssue) {
+        return "One of your prompt answers is too long. Please keep each answer under 150 characters.";
+    }
+
+    const issue = error.issues[0];
+    if (!issue) {
+        return "Some profile details need a quick fix before we can save them.";
+    }
+
+    const field = issue.path.length > 0 ? issue.path.join(".") : "profile";
+    return `Please check ${field}: ${issue.message}`;
+}
+
 export async function GET(req: NextRequest) {
     try {
         const session = await getSessionWithBearerFallback(req);
@@ -187,8 +205,7 @@ export async function PATCH(req: NextRequest) {
         
         // Check for Zod validation errors
         if (error instanceof ZodError) {
-            const message = error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ') || 'Validation error';
-            return errorResponse(new Error(message), 400);
+            return errorResponse(new Error(formatProfileValidationError(error)), 400);
         }
         
         return errorResponse(error);
