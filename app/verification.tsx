@@ -295,7 +295,8 @@ export default function VerificationScreen() {
         try {
             const shouldRetryLatest =
                 latestSession?.status === 'retry_required' || latestSession?.status === 'failed';
-            const canReuseLatestSession = latestSession?.status === 'pending_capture';
+            const canReuseLatestSession =
+                latestSession?.status === 'pending_capture' && !isVerificationSessionExpired(latestSession);
 
             let session = null;
 
@@ -1194,6 +1195,14 @@ function getVerificationRetryGuidance(input: {
 
 function isCannotRetrySessionError(error: unknown) {
     return error instanceof Error && error.message.toLowerCase().includes('cannot be retried');
+}
+
+function isVerificationSessionExpired(session: FaceVerificationSession | null | undefined) {
+    if (!session?.expiresAt) {
+        return false;
+    }
+
+    return new Date(session.expiresAt).getTime() <= Date.now();
 }
 
 const PHOTO_RELATED_REASON_CODES = new Set([

@@ -44,6 +44,29 @@ export async function getLatestFaceVerificationSession(userId: string) {
     });
 }
 
+export async function getLatestUsableFaceVerificationSession(userId: string) {
+    const latestSession = await getLatestFaceVerificationSession(userId);
+
+    if (
+        latestSession
+        && latestSession.status === FACE_VERIFICATION_STATUSES.PENDING_CAPTURE
+        && isFaceVerificationExpired(latestSession.expiresAt)
+    ) {
+        await expireActiveFaceVerificationSession(latestSession.id, latestSession.status);
+        return createFaceVerificationSession(userId, { resetActiveSession: false });
+    }
+
+    if (
+        latestSession
+        && latestSession.status === FACE_VERIFICATION_STATUSES.PROCESSING
+        && isFaceVerificationExpired(latestSession.expiresAt)
+    ) {
+        return expireActiveFaceVerificationSession(latestSession.id, latestSession.status);
+    }
+
+    return latestSession;
+}
+
 export async function getFaceVerificationSessionByIdForUser(userId: string, sessionId: string) {
     return db.query.faceVerificationSessions.findFirst({
         where: and(
@@ -167,7 +190,7 @@ export async function createFaceVerificationUploadTargets(
     userId: string,
     input: CreateFaceVerificationUploadTargetsInput,
 ) {
-    const session = await requireMutableSession(userId, input.sessionId);
+    const session = await getMutableSessionForCapture(userId, input.sessionId);
 
     const targets: UploadTarget[] = [];
     const nextKeys = [...session.selfieAssetKeys];
@@ -406,7 +429,32 @@ async function requireMutableSession(userId: string, sessionId: string) {
     }
 
     if (session.expiresAt <= new Date()) {
+        await expireActiveFaceVerificationSession(session.id, session.status);
         throw new Error("Verification session has expired. Please start a new attempt.");
+    }
+
+    return session;
+}
+
+async function getMutableSessionForCapture(userId: string, sessionId: string) {
+    const session = await db.query.faceVerificationSessions.findFirst({
+        where: and(
+            eq(faceVerificationSessions.id, sessionId),
+            eq(faceVerificationSessions.userId, userId),
+        ),
+    });
+
+    if (!session) {
+        throw new Error("Verification session not found.");
+    }
+
+    if (session.status !== FACE_VERIFICATION_STATUSES.PENDING_CAPTURE) {
+        throw new Error(`Verification session is not accepting captures. Current status: ${session.status}`);
+    }
+
+    if (session.expiresAt <= new Date()) {
+        await expireActiveFaceVerificationSession(session.id, session.status);
+        return createFaceVerificationSession(userId, { resetActiveSession: false });
     }
 
     return session;

@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { errorResponse, successResponse } from "@/lib/api-response";
 import {
     createFaceVerificationSession,
-    getLatestFaceVerificationSession,
+    getLatestUsableFaceVerificationSession,
 } from "@/lib/services/face-verification-service";
 import { createFaceVerificationSessionSchema } from "@/lib/validation/face-verification";
 import { getSessionWithBearerFallback } from "@/lib/security";
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
 
-        const verificationSession = await getLatestFaceVerificationSession(session.user.id);
+        const verificationSession = await getLatestUsableFaceVerificationSession(session.user.id);
         return successResponse(verificationSession);
     } catch (error) {
         return errorResponse(error);

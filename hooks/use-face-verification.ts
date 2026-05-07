@@ -212,7 +212,7 @@ export function useFaceVerification() {
             const blob = await blobResponse.blob();
             const contentType = normalizedSelfie.contentType;
 
-            const { uploadTargets } = await requestUploadTargets(sessionId, contentType);
+            const { session, uploadTargets } = await requestUploadTargets(sessionId, contentType);
             const target = uploadTargets[0];
 
             const uploadResponse = await fetch(target.signedUrl, {
@@ -227,7 +227,7 @@ export function useFaceVerification() {
                 throw new Error('Failed to upload verification selfie');
             }
 
-            return submitSession(sessionId, profilePhotoUrls);
+            return submitSession(session.id, profilePhotoUrls);
         },
         onSuccess: (data) => {
             queryClient.setQueryData(['face-verification', 'latest-session'], data.session);
