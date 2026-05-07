@@ -31,6 +31,7 @@ import {
     type ManualMatchSuggestion,
     type ManualMatchmakingProfile,
 } from "@/lib/actions/manual-matchmaking";
+import { hasCompletedInitialFaceVerification } from "@/lib/matchmaking-pool-eligibility";
 
 type ActivityItem = Awaited<ReturnType<typeof import("@/lib/actions/manual-matchmaking").getManualMatchmakingActivity>>[number];
 
@@ -97,12 +98,8 @@ function isOppositeSide(selectedGender: string | null, candidateGender: string |
     return true;
 }
 
-function isVerified(profile: ManualMatchmakingProfile) {
-    return profile.faceVerificationStatus === "verified" || Boolean(profile.faceVerifiedAt);
-}
-
 function manualLaunchPool(profile: ManualMatchmakingProfile) {
-    return profile.waitlistStatus === "admitted" || isVerified(profile);
+    return hasCompletedInitialFaceVerification(profile);
 }
 
 function isProfileWaitlisted(profile: Pick<ManualMatchmakingProfile, "waitlistStatus"> | null | undefined) {
@@ -861,13 +858,13 @@ export function ManualMatchmakingBoard({
             item.userId !== selectedUser.userId
             && isOppositeSide(selectedUser.gender, item.gender)
         ));
-        const admitted = oppositeSide.filter(manualLaunchPool);
-        const verifiedEligible = admitted;
+        const eligibleOpposite = oppositeSide.filter(manualLaunchPool);
+        const verifiedEligible = eligibleOpposite;
         const selectedGender = normalizeGender(selectedUser.gender);
         const cappedEligible = selectedGender === "female" ? verifiedEligible.slice(0, 100) : verifiedEligible;
         return {
             oppositeSide: oppositeSide.length,
-            completeVisible: admitted.length,
+            completeVisible: eligibleOpposite.length,
             verifiedEligible: cappedEligible.length,
         };
     }, [pool, selectedUser]);
@@ -1089,7 +1086,7 @@ export function ManualMatchmakingBoard({
                                 </div>
                                 <div className="mt-2 flex items-center justify-between gap-2">
                                     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${stateClass(item.activeState)}`}>{item.activeState.replaceAll("_", " ")}</span>
-                                    {isVerified(item) ? <span className="text-xs text-emerald-300">verified</span> : <span className="text-xs text-gray-500">unverified</span>}
+                                    {hasCompletedInitialFaceVerification(item) ? <span className="text-xs text-emerald-300">verified</span> : <span className="text-xs text-gray-500">unverified</span>}
                                 </div>
                             </button>
                         ))}

@@ -13,6 +13,7 @@ import {
     recordCandidatePairHistory,
 } from "@/lib/services/candidate-pairs-service";
 import { resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
+import { hasCompletedInitialFaceVerification } from "@/lib/matchmaking-pool-eligibility";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
@@ -98,12 +99,11 @@ function isOppositeGenderMatch(selectedGender: string | null, candidateGender: s
     return true;
 }
 
-function isVerifiedForManualSuggestion(profile: Pick<ManualMatchmakingProfile, "faceVerificationStatus" | "faceVerifiedAt">) {
-    return profile.faceVerificationStatus === "verified" || Boolean(profile.faceVerifiedAt);
-}
-
 function isManualMatchReady(profile: Pick<ManualMatchmakingProfile, "faceVerificationStatus" | "faceVerifiedAt" | "waitlistStatus">) {
-    return profile.waitlistStatus === "admitted" || isVerifiedForManualSuggestion(profile);
+    if (profile.waitlistStatus === "waitlisted") {
+        return false;
+    }
+    return hasCompletedInitialFaceVerification(profile);
 }
 
 function manualAvailabilityIssue(profile: Pick<ManualMatchmakingProfile, "profileComplete">) {
@@ -173,7 +173,11 @@ async function getPoolData() {
         .where(isNull(user.deletedAt))
         .orderBy(desc(user.lastActive), desc(user.createdAt));
 
-    const eligibleRows = rows.filter((row) => !matchExcludedUserIds.has(row.userId));
+    const eligibleRows = rows.filter(
+        (row) =>
+            !matchExcludedUserIds.has(row.userId) &&
+            hasCompletedInitialFaceVerification(row),
+    );
 
     const userIds = eligibleRows.map((row) => row.userId);
     const now = new Date();
