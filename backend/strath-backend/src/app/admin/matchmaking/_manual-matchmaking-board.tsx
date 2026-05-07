@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
     BookOpen,
@@ -20,6 +21,7 @@ import {
     X,
 } from "lucide-react";
 
+import { admitSpecificUserFromWaitlist } from "@/lib/actions/admin";
 import {
     cancelManualCandidatePair,
     createManualCandidatePair,
@@ -101,6 +103,10 @@ function isVerified(profile: ManualMatchmakingProfile) {
 
 function manualLaunchPool(profile: ManualMatchmakingProfile) {
     return profile.waitlistStatus === "admitted" || isVerified(profile);
+}
+
+function isProfileWaitlisted(profile: Pick<ManualMatchmakingProfile, "waitlistStatus"> | null | undefined) {
+    return profile?.waitlistStatus === "waitlisted";
 }
 
 function unavailableReason(profile: ManualMatchmakingProfile) {
@@ -616,6 +622,17 @@ function ActionModal({
 }) {
     const isCreate = action.type === "create";
     const title = isCreate ? "Create curated match" : action.title;
+    const waitlistedParties =
+        isCreate && selectedUser && selectedCandidate
+            ? [
+                  isProfileWaitlisted(selectedUser)
+                      ? ({ side: "Person A" as const, name: fullName(selectedUser) })
+                      : null,
+                  isProfileWaitlisted(selectedCandidate)
+                      ? ({ side: "Candidate B" as const, name: fullName(selectedCandidate) })
+                      : null,
+              ].filter((item): item is { side: "Person A" | "Candidate B"; name: string } => item !== null)
+            : [];
     let description = "Review this action before applying it.";
     if (action.type === "create" && selectedUser && selectedCandidate) {
         description = `Send ${fullName(selectedCandidate)} to ${fullName(selectedUser)} and ${fullName(selectedUser)} to ${fullName(selectedCandidate)}.`;
@@ -642,18 +659,64 @@ function ActionModal({
                 </div>
 
                 {isCreate && selectedUser && selectedCandidate && (
-                    <div className="mt-4 grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3 sm:grid-cols-2">
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Person A</p>
-                            <p className="mt-1 font-semibold text-white">{fullName(selectedUser)}</p>
-                            <p className="text-xs text-gray-500">{selectedUser.phoneNumber ?? selectedUser.email}</p>
+                    <>
+                        {waitlistedParties.length > 0 && (
+                            <div className="mt-4 rounded-xl border border-amber-500/35 bg-amber-500/10 p-4">
+                                <p className="text-xs font-bold uppercase tracking-wide text-amber-200">Waitlist</p>
+                                <p className="mt-2 text-sm leading-6 text-amber-50">
+                                    {waitlistedParties.length === 1 ? (
+                                        <>
+                                            <span className="font-semibold">{waitlistedParties[0].name}</span> ({waitlistedParties[0].side}) is still on the
+                                            waitlist. They must be admitted before this match is sent. Confirming will admit them, then create the curated
+                                            match and send notifications.
+                                        </>
+                                    ) : (
+                                        <>
+                                            Both people are on the waitlist:{" "}
+                                            <span className="font-semibold">
+                                                {waitlistedParties.map((p, i) => (
+                                                    <span key={p.side}>
+                                                        {i > 0 ? " and " : ""}
+                                                        {p.name} ({p.side})
+                                                    </span>
+                                                ))}
+                                            </span>
+                                            . Confirming will admit both, then create the curated match and send notifications.
+                                        </>
+                                    )}
+                                </p>
+                                <ul className="mt-3 list-inside list-disc text-sm text-amber-100/90">
+                                    {waitlistedParties.map((party) => (
+                                        <li key={party.side}>
+                                            {party.side}: {party.name}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                        <div className="mt-4 grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3 sm:grid-cols-2">
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Person A</p>
+                                <p className="mt-1 font-semibold text-white">{fullName(selectedUser)}</p>
+                                <p className="text-xs text-gray-500">{selectedUser.phoneNumber ?? selectedUser.email}</p>
+                                {isProfileWaitlisted(selectedUser) ? (
+                                    <span className="mt-2 inline-block rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-200">
+                                        Waitlisted
+                                    </span>
+                                ) : null}
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Candidate B</p>
+                                <p className="mt-1 font-semibold text-white">{fullName(selectedCandidate)}</p>
+                                <p className="text-xs text-gray-500">{selectedCandidate.phoneNumber ?? selectedCandidate.email}</p>
+                                {isProfileWaitlisted(selectedCandidate) ? (
+                                    <span className="mt-2 inline-block rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-200">
+                                        Waitlisted
+                                    </span>
+                                ) : null}
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Candidate B</p>
-                            <p className="mt-1 font-semibold text-white">{fullName(selectedCandidate)}</p>
-                            <p className="text-xs text-gray-500">{selectedCandidate.phoneNumber ?? selectedCandidate.email}</p>
-                        </div>
-                    </div>
+                    </>
                 )}
 
                 {!isCreate && (
@@ -677,7 +740,7 @@ function ActionModal({
                     </button>
                     <button type="button" onClick={onConfirm} disabled={isPending} className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-bold text-black hover:bg-white/90 disabled:opacity-50">
                         {isPending && <Loader2 className="size-4 animate-spin" />}
-                        Confirm
+                        {isCreate && waitlistedParties.length > 0 ? "Admit from waitlist & create match" : "Confirm"}
                     </button>
                 </div>
             </section>
@@ -692,8 +755,17 @@ export function ManualMatchmakingBoard({
     initialPool: ManualMatchmakingProfile[];
     initialActivity: ActivityItem[];
 }) {
-    const [pool] = useState(initialPool);
+    const router = useRouter();
+    const [pool, setPool] = useState(initialPool);
     const [activity, setActivity] = useState(initialActivity);
+
+    useEffect(() => {
+        setPool(initialPool);
+    }, [initialPool]);
+
+    useEffect(() => {
+        setActivity(initialActivity);
+    }, [initialActivity]);
     const [poolQuery, setPoolQuery] = useState("");
     const [poolFilter, setPoolFilter] = useState<PoolFilter>("all");
     const [selectedUserId, setSelectedUserId] = useState(initialPool.find(manualLaunchPool)?.userId ?? initialPool[0]?.userId ?? "");
@@ -924,9 +996,16 @@ export function ManualMatchmakingBoard({
             try {
                 if (adminAction.type === "create") {
                     if (!selectedUser || !selectedCandidate) return;
+                    const pair = [selectedUser, selectedCandidate];
+                    for (const person of pair) {
+                        if (person.waitlistStatus === "waitlisted") {
+                            await admitSpecificUserFromWaitlist(person.userId);
+                        }
+                    }
                     await createManualCandidatePair(selectedUser.userId, selectedCandidate.userId);
                     setMessage("Curated match created and notifications sent.");
                     setShowSentMatches(true);
+                    router.refresh();
                 } else if (adminAction.type === "cancel") {
                     await cancelManualCandidatePair(adminAction.pairId, actionNote.trim() || "Cancelled after admin review");
                     setMessage("Match cancelled. Both people are back in the pool.");

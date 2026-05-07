@@ -1114,6 +1114,7 @@ export async function admitSpecificUserFromWaitlist(identifier: string) {
 
     revalidatePath("/admin/feature-flags");
     revalidatePath("/admin/users");
+    revalidatePath("/admin/matchmaking");
 
     return {
         email: targetUser.email,
