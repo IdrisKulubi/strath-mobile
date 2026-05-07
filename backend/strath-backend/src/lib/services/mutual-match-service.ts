@@ -23,6 +23,7 @@ export async function bridgeMutualToBeingArranged(input: {
     user1Id: string;
     user2Id: string;
     candidatePairId?: string | null;
+    mutualMatchId?: string | null;
 }): Promise<{
     mutualMatchId: string;
     dateMatchId: string;
@@ -30,18 +31,23 @@ export async function bridgeMutualToBeingArranged(input: {
 } | null> {
     const { user1Id, user2Id } = input;
 
-    const mutualRow = await db.query.mutualMatches.findFirst({
-        where: or(
-            and(eq(mutualMatches.userAId, user1Id), eq(mutualMatches.userBId, user2Id)),
-            and(eq(mutualMatches.userAId, user2Id), eq(mutualMatches.userBId, user1Id)),
-        ),
-        orderBy: (m, { desc }) => [desc(m.createdAt)],
-    });
+    const mutualRow = input.mutualMatchId
+        ? await db.query.mutualMatches.findFirst({
+              where: eq(mutualMatches.id, input.mutualMatchId),
+          })
+        : await db.query.mutualMatches.findFirst({
+              where: or(
+                  and(eq(mutualMatches.userAId, user1Id), eq(mutualMatches.userBId, user2Id)),
+                  and(eq(mutualMatches.userAId, user2Id), eq(mutualMatches.userBId, user1Id)),
+              ),
+              orderBy: (m, { desc }) => [desc(m.createdAt)],
+          });
 
     if (!mutualRow) {
         console.warn("[mutual-match] bridgeMutualToBeingArranged: no mutualMatches row", {
             user1Id,
             user2Id,
+            mutualMatchId: input.mutualMatchId ?? null,
         });
         return null;
     }

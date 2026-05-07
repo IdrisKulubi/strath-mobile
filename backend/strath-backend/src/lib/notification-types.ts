@@ -18,6 +18,7 @@ export const NOTIFICATION_TYPES = {
     DATE_REQUEST_DECLINED: 'date_request_declined',
     MUTUAL_MATCH: 'mutual_match',
     CALL_REMINDER: 'call_reminder',
+    DATE_ARRANGING: 'date_arranging',
     DATE_SCHEDULED: 'date_scheduled',
     FEEDBACK_PROMPT: 'feedback_prompt',
     DATE_CANCELLED: 'date_cancelled',

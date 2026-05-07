@@ -1,4 +1,4 @@
-import { archiveAdminMatchActivity, getAdminDateRequests } from "@/lib/actions/admin";
+import { archiveAdminMatchActivity, getAdminDateRequests, moveMutualMatchToArranging } from "@/lib/actions/admin";
 
 const STATUS_COLORS: Record<string, string> = {
     open_to_meet: "bg-emerald-500/20 text-emerald-300",
@@ -171,20 +171,39 @@ export default async function DateRequestsPage({
                                     </td>
                                     <td className="px-4 py-3 text-xs text-gray-500">{formatDate(row.updatedAt)}</td>
                                     <td className="px-4 py-3 text-right">
-                                        {row.pairId ? (
-                                            <form
-                                                action={async () => {
-                                                    "use server";
-                                                    await archiveAdminMatchActivity(row.pairId);
-                                                }}
-                                            >
-                                                <button
-                                                    type="submit"
-                                                    className="rounded-md border border-red-500/30 px-2 py-1 text-xs font-semibold text-red-200 hover:bg-red-500/10"
-                                                >
-                                                    Delete
-                                                </button>
-                                            </form>
+                                        {row.pairId || row.mutualMatchId ? (
+                                            <div className="flex flex-col items-end gap-2">
+                                                {row.mutualMatchId && (row.status === "mutual" || row.status === "call_pending") && (
+                                                    <form
+                                                        action={async () => {
+                                                            "use server";
+                                                            await moveMutualMatchToArranging(row.mutualMatchId);
+                                                        }}
+                                                    >
+                                                        <button
+                                                            type="submit"
+                                                            className="rounded-md border border-amber-400/35 px-2 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-500/10"
+                                                        >
+                                                            Move to Arranging
+                                                        </button>
+                                                    </form>
+                                                )}
+                                                {row.pairId ? (
+                                                    <form
+                                                        action={async () => {
+                                                            "use server";
+                                                            await archiveAdminMatchActivity(row.pairId);
+                                                        }}
+                                                    >
+                                                        <button
+                                                            type="submit"
+                                                            className="rounded-md border border-red-500/30 px-2 py-1 text-xs font-semibold text-red-200 hover:bg-red-500/10"
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </form>
+                                                ) : null}
+                                            </div>
                                         ) : (
                                             <span className="text-xs text-gray-600">-</span>
                                         )}

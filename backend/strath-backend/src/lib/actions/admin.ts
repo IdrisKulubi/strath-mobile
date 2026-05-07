@@ -30,7 +30,7 @@ import {
     releaseFromWaitlist,
     type GenderBucket,
 } from "@/lib/services/admission-service";
-import { syncMutualMatchFromDateMatch } from "@/lib/services/mutual-match-service";
+import { bridgeMutualToBeingArranged, syncMutualMatchFromDateMatch } from "@/lib/services/mutual-match-service";
 import { Expo, type ExpoPushMessage } from "expo-server-sdk";
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -161,6 +161,7 @@ export async function getAdminDateRequests(statusFilter?: string) {
         legacyRequests.map(async (request) => ({
             id: `legacy-${request.id}`,
             pairId: null,
+            mutualMatchId: null,
             source: "legacy_request" as const,
             kind: "legacy_request" as const,
             label: "Direct invite",
@@ -187,6 +188,7 @@ export async function getAdminDateRequests(statusFilter?: string) {
                     rows.push((async () => ({
                         id: `pair-${pair.id}-a`,
                         pairId: pair.id,
+                        mutualMatchId: null,
                         source: "candidate_pair" as const,
                         kind: meta.kind,
                         label: meta.label,
@@ -208,6 +210,7 @@ export async function getAdminDateRequests(statusFilter?: string) {
                     rows.push((async () => ({
                         id: `pair-${pair.id}-b`,
                         pairId: pair.id,
+                        mutualMatchId: null,
                         source: "candidate_pair" as const,
                         kind: meta.kind,
                         label: meta.label,
@@ -233,6 +236,7 @@ export async function getAdminDateRequests(statusFilter?: string) {
         visibleMutuals.map(async (match) => ({
             id: `mutual-${match.id}`,
             pairId: match.candidatePairId,
+            mutualMatchId: match.id,
             source: "mutual_match" as const,
             kind: "mutual_match" as const,
             label: match.status === "cancelled" || match.status === "expired" ? "Mutual ended" : "Mutual match",
@@ -295,6 +299,102 @@ export async function archiveAdminMatchActivity(pairId: string) {
 
     revalidatePath("/admin/date-requests");
     return { ok: true };
+}
+
+export async function moveMutualMatchToArranging(mutualMatchId: string) {
+    const session = await requireAdmin();
+    if (!mutualMatchId) throw new Error("Missing mutual match id");
+
+    const mutual = await db.query.mutualMatches.findFirst({
+        where: eq(mutualMatches.id, mutualMatchId),
+    });
+    if (!mutual) throw new Error("Mutual match not found");
+
+    const movableStatuses = ["mutual", "call_pending", "being_arranged"] as const;
+    if (!movableStatuses.includes(mutual.status as (typeof movableStatuses)[number])) {
+        throw new Error(`This match is already ${mutual.status.replace(/_/g, " ")} and cannot be moved to Arranging.`);
+    }
+
+    const bridgeResult = await bridgeMutualToBeingArranged({
+        user1Id: mutual.userAId,
+        user2Id: mutual.userBId,
+        candidatePairId: mutual.candidatePairId,
+        mutualMatchId: mutual.id,
+    });
+    if (!bridgeResult) throw new Error("Could not move this match to Arranging");
+    const didMoveToArranging = mutual.status !== "being_arranged";
+
+    if (mutual.candidatePairId && didMoveToArranging) {
+        await db.insert(candidatePairHistory).values({
+            pairId: mutual.candidatePairId,
+            actorUserId: session.user.id,
+            eventType: "bridged_to_date",
+            fromStatus: "mutual",
+            toStatus: "mutual",
+            metadata: {
+                source: "admin_move_to_arranging",
+                adminUserId: session.user.id,
+                mutualMatchId: mutual.id,
+                dateMatchId: bridgeResult.dateMatchId,
+                previousMutualStatus: mutual.status,
+            },
+        });
+    }
+
+    const [userA, userB, profileA, profileB] = await Promise.all([
+        db.query.user.findFirst({ where: eq(user.id, mutual.userAId) }),
+        db.query.user.findFirst({ where: eq(user.id, mutual.userBId) }),
+        db.query.profiles.findFirst({ where: eq(profiles.userId, mutual.userAId) }),
+        db.query.profiles.findFirst({ where: eq(profiles.userId, mutual.userBId) }),
+    ]);
+
+    const nameA = profileA?.firstName ?? userA?.name?.split(" ")[0] ?? "your match";
+    const nameB = profileB?.firstName ?? userB?.name?.split(" ")[0] ?? "your match";
+
+    if (didMoveToArranging) {
+        const pushData = {
+            type: NOTIFICATION_TYPES.DATE_ARRANGING,
+            mutualMatchId: mutual.id,
+            pairId: mutual.candidatePairId ?? undefined,
+            dateId: bridgeResult.dateMatchId,
+            route: "/(tabs)/dates",
+        };
+
+        await Promise.all([
+            userA?.pushToken
+                ? sendPushNotification(userA.pushToken, {
+                      title: "We're arranging your date",
+                      body: `Your match with ${nameB} is now with the team. We'll reach out soon with the plan.`,
+                      data: pushData,
+                  }).catch((error) => {
+                      console.error("[admin.moveMutualMatchToArranging] push failed for userA", {
+                          mutualMatchId: mutual.id,
+                          userId: mutual.userAId,
+                          error,
+                      });
+                  })
+                : Promise.resolve(),
+            userB?.pushToken
+                ? sendPushNotification(userB.pushToken, {
+                      title: "We're arranging your date",
+                      body: `Your match with ${nameA} is now with the team. We'll reach out soon with the plan.`,
+                      data: pushData,
+                  }).catch((error) => {
+                      console.error("[admin.moveMutualMatchToArranging] push failed for userB", {
+                          mutualMatchId: mutual.id,
+                          userId: mutual.userBId,
+                          error,
+                      });
+                  })
+                : Promise.resolve(),
+        ]);
+    }
+
+    revalidatePath("/admin/date-requests");
+    revalidatePath("/admin/pending-dates");
+    revalidatePath("/admin");
+
+    return { ok: true, dateMatchId: bridgeResult.dateMatchId };
 }
 
 export async function getAdminPendingDates() {
