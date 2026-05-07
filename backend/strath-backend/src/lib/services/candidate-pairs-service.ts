@@ -1131,6 +1131,11 @@ export async function isAdminCuratedCandidatePair(pairId: string) {
 }
 
 export async function getActiveAdminCuratedCandidatePairsForUser(userId: string) {
+    const matchExcludedUserIds = await resolveMatchExcludedUserIds();
+    if (matchExcludedUserIds.has(userId)) {
+        return [];
+    }
+
     const now = new Date();
 
     const curatedRows = await readDb
@@ -1161,7 +1166,7 @@ export async function getActiveAdminCuratedCandidatePairsForUser(userId: string)
         )
         .orderBy(desc(candidatePairs.compatibilityScore), desc(candidatePairs.createdAt));
 
-    return formatCandidatePairRowsForUser(userId, rows, now, new Set());
+    return formatCandidatePairRowsForUser(userId, rows, now, matchExcludedUserIds);
 }
 
 async function formatCandidatePairRowsForUser(

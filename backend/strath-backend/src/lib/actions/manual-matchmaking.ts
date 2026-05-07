@@ -12,6 +12,7 @@ import {
     canonicalizePairUsers,
     recordCandidatePairHistory,
 } from "@/lib/services/candidate-pairs-service";
+import { resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
@@ -125,6 +126,8 @@ async function getAdminCuratedPairIds() {
 }
 
 async function getPoolData() {
+    const matchExcludedUserIds = await resolveMatchExcludedUserIds();
+
     const rows = await readDb
         .select({
             userId: user.id,
@@ -170,7 +173,9 @@ async function getPoolData() {
         .where(isNull(user.deletedAt))
         .orderBy(desc(user.lastActive), desc(user.createdAt));
 
-    const userIds = rows.map((row) => row.userId);
+    const eligibleRows = rows.filter((row) => !matchExcludedUserIds.has(row.userId));
+
+    const userIds = eligibleRows.map((row) => row.userId);
     const now = new Date();
 
     const [busyPairs, activeMutuals, allPairs] = userIds.length > 0
@@ -213,7 +218,7 @@ async function getPoolData() {
         : [[], [], []];
 
     const profileNameByUserId = new Map<string, string>();
-    for (const row of rows) {
+    for (const row of eligibleRows) {
         profileNameByUserId.set(row.userId, displayName(row, row.name));
     }
 
@@ -252,7 +257,7 @@ async function getPoolData() {
         }
     }
 
-    const items = rows.map((row): ManualMatchmakingProfile => {
+    const items = eligibleRows.map((row): ManualMatchmakingProfile => {
         const activePair = activePairByUserId.get(row.userId);
         const activeMutual = activeMutualByUserId.get(row.userId);
         const partnerId = activeMutual
@@ -355,6 +360,11 @@ export async function createManualCandidatePair(userAId: string, userBId: string
     const session = await requireAdmin();
     if (!userAId || !userBId || userAId === userBId) {
         throw new Error("Choose two different users");
+    }
+
+    const excludedFromPool = await resolveMatchExcludedUserIds();
+    if (excludedFromPool.has(userAId) || excludedFromPool.has(userBId)) {
+        throw new Error("Staff or admin accounts cannot be added to the matchmaking pool.");
     }
 
     const pool = await getPoolData();

@@ -1336,6 +1336,7 @@ export async function resetUserAdmission(identifier: string) {
 export async function setUserRole(userId: string, role: "user" | "admin") {
     await requireAdmin();
     await db.update(user).set({ role }).where(eq(user.id, userId));
+    await db.update(profiles).set({ role }).where(eq(profiles.userId, userId));
     revalidatePath("/admin/users");
 }
 
