@@ -1,32 +1,14 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { profiles, candidatePairs } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { canonicalizePairUsers } from "@/lib/services/candidate-pairs-service";
+import { canViewUserProfile } from "@/lib/services/profile-view-access";
+import { getSessionWithBearerFallback } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
-
-async function getSessionWithFallback(req: NextRequest) {
-    let session = await auth.api.getSession({ headers: req.headers });
-    if (!session) {
-        const authHeader = req.headers.get("authorization");
-        if (authHeader?.startsWith("Bearer ")) {
-            const token = authHeader.split(" ")[1];
-            const { session: sessionTable } = await import("@/db/schema");
-            const dbSession = await db.query.session.findFirst({
-                where: eq(sessionTable.token, token),
-                with: { user: true },
-            });
-            if (dbSession && dbSession.expiresAt > new Date()) {
-                session = { session: dbSession, user: dbSession.user } as any;
-            }
-        }
-    }
-    return session;
-}
 
 /**
  * GET /api/matches/compatibility/[userId]
@@ -39,7 +21,7 @@ export async function GET(
     { params }: { params: Promise<{ userId: string }> }
 ) {
     try {
-        const session = await getSessionWithFallback(req);
+        const session = await getSessionWithBearerFallback(req);
         if (!session?.user?.id) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
@@ -53,7 +35,17 @@ export async function GET(
             where: eq(profiles.userId, targetUserId),
         });
 
-        if (!targetProfile || !targetProfile.isVisible) {
+        if (!targetProfile) {
+            return errorResponse(new Error("User not found"), 404);
+        }
+
+        const canViewProfile = await canViewUserProfile({
+            viewerUserId: session.user.id,
+            targetUserId,
+            targetIsVisible: targetProfile.isVisible,
+        });
+
+        if (!canViewProfile) {
             return errorResponse(new Error("User not found"), 404);
         }
 
