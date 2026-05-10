@@ -57,3 +57,22 @@ export async function resolveMatchExcludedUserIds(): Promise<Set<string>> {
 
     return out;
 }
+
+/**
+ * Temporary QA escape hatch: admins remain excluded as candidates, but can act
+ * as viewers so the mobile daily-match and shortlist UI can be reviewed.
+ */
+export async function isTemporaryAdminMatchPreviewUser(userId: string): Promise<boolean> {
+    const [userRow, profileRow] = await Promise.all([
+        readDb.query.user.findFirst({
+            where: eq(user.id, userId),
+            columns: { role: true },
+        }),
+        readDb.query.profiles.findFirst({
+            where: eq(profiles.userId, userId),
+            columns: { role: true },
+        }),
+    ]);
+
+    return userRow?.role === "admin" || profileRow?.role === "admin";
+}

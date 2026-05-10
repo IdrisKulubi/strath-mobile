@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { successResponse, errorResponse } from "@/lib/api-response";
-import { getSessionWithBearerFallback } from "@/lib/security";
+import { getSessionWithBearerFallback, isAdminSession } from "@/lib/security";
 import { requireMatchmakingAccess } from "@/lib/services/profile-access";
 import { getDailyRecommendations } from "@/lib/services/match-intelligence-service";
 
@@ -14,10 +14,12 @@ export async function GET(req: NextRequest) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
 
-        try {
-            await requireMatchmakingAccess(session.user.id);
-        } catch (accessError) {
-            return errorResponse(accessError, accessError instanceof Error && accessError.message === "Profile not found" ? 404 : 403);
+        if (!isAdminSession(session)) {
+            try {
+                await requireMatchmakingAccess(session.user.id);
+            } catch (accessError) {
+                return errorResponse(accessError, accessError instanceof Error && accessError.message === "Profile not found" ? 404 : 403);
+            }
         }
 
         const recommendations = await getDailyRecommendations(session.user.id);

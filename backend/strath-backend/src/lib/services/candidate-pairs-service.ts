@@ -20,7 +20,7 @@ import {
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
 import { expireQueuedPairsForUser, isUserOnMatchHold } from "@/lib/services/match-hold-service";
-import { resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
+import { isTemporaryAdminMatchPreviewUser, resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
@@ -838,7 +838,8 @@ export async function generateCandidatePairsForUser(userId: string) {
     }
 
     const matchExcludedUserIds = await resolveMatchExcludedUserIds();
-    if (matchExcludedUserIds.has(userId)) {
+    const allowAdminPreview = matchExcludedUserIds.has(userId) && await isTemporaryAdminMatchPreviewUser(userId);
+    if (matchExcludedUserIds.has(userId) && !allowAdminPreview) {
         console.log("[candidate-pairs] SKIP: user excluded from daily matchmaking (admin / staff list)", {
             userId,
         });
@@ -1087,7 +1088,7 @@ export async function generateCandidatePairsForUser(userId: string) {
 
 export async function getActiveCandidatePairsForUser(userId: string) {
     const matchExcludedUserIds = await resolveMatchExcludedUserIds();
-    if (matchExcludedUserIds.has(userId)) {
+    if (matchExcludedUserIds.has(userId) && !(await isTemporaryAdminMatchPreviewUser(userId))) {
         return [];
     }
 
@@ -1132,7 +1133,7 @@ export async function isAdminCuratedCandidatePair(pairId: string) {
 
 export async function getActiveAdminCuratedCandidatePairsForUser(userId: string) {
     const matchExcludedUserIds = await resolveMatchExcludedUserIds();
-    if (matchExcludedUserIds.has(userId)) {
+    if (matchExcludedUserIds.has(userId) && !(await isTemporaryAdminMatchPreviewUser(userId))) {
         return [];
     }
 
