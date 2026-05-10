@@ -20,9 +20,9 @@ export function EmptyMatches(_props: EmptyMatchesProps) {
         : (['rgba(233,30,140,0.2)', 'rgba(233,30,140,0.06)'] as const);
 
     const tips = [
-        'We review your profile and preferences',
-        'We look for someone who feels genuinely compatible',
-        'We will notify you when your match is ready',
+        "That is today's shortlist",
+        'Your next set refreshes tomorrow',
+        "Your choices help us improve tomorrow's picks",
     ];
 
     return (
@@ -41,10 +41,10 @@ export function EmptyMatches(_props: EmptyMatchesProps) {
                         <Ionicons name="sparkles" size={24} color={colors.primaryForeground} />
                     </View>
 
-                    <Text style={[styles.eyebrow, { color: colors.primary }]}>Personal matching is on</Text>
-                    <Text style={[styles.title, { color: colors.foreground }]}>We are working on your match</Text>
+                    <Text style={[styles.eyebrow, { color: colors.primary }]}>Daily shortlist is on</Text>
+                    <Text style={[styles.title, { color: colors.foreground }]}>That is today&apos;s shortlist</Text>
                     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                        Our team is reviewing profiles by hand so we can introduce you to someone with real potential. When we find a strong fit, we will send them to you first.
+                        We keep the set small on purpose. Make your picks today and we will use those signals to sharpen tomorrow&apos;s five.
                     </Text>
 
                     <View style={[styles.tips, { borderTopColor: colors.border }]}>
@@ -59,7 +59,7 @@ export function EmptyMatches(_props: EmptyMatchesProps) {
                     <View style={[styles.notice, { borderColor: cardBorder }]}>
                         <Ionicons name="lock-closed-outline" size={16} color={colors.mutedForeground} />
                         <Text style={[styles.noticeText, { color: colors.mutedForeground }]}>
-                            You do not need to browse profiles right now. We are handling the search for you.
+                            Passing today&apos;s profiles does not unlock more. The next trusted set arrives tomorrow.
                         </Text>
                     </View>
                 </View>

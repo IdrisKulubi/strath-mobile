@@ -11,11 +11,10 @@ interface ManualCurationCardProps {
     curation?: ManualCuration | null;
 }
 
-export function ManualCurationCard({ curation }: ManualCurationCardProps) {
+export function ManualCurationCard(_props: ManualCurationCardProps) {
     const { colors, isDark } = useTheme();
-    const title = curation?.title ?? 'We are working on your match';
-    const subtitle = curation?.subtitle
-        ?? 'Our team is reviewing profiles by hand so we can introduce you to someone with real potential. When we find a strong fit, we will send them to you first.';
+    const title = 'Your next shortlist is getting ready';
+    const subtitle = "We are checking today's signals and compatibility patterns so your next five feel worth your attention.";
 
     const cardBg = isDark ? 'rgba(35, 25, 48, 0.92)' : '#ffffff';
     const borderColor = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.08)';
@@ -37,20 +36,20 @@ export function ManualCurationCard({ curation }: ManualCurationCardProps) {
                         <Ionicons name="sparkles" size={24} color={colors.primaryForeground} />
                     </View>
 
-                    <Text style={[styles.eyebrow, { color: colors.primary }]}>Personal matching is on</Text>
+                    <Text style={[styles.eyebrow, { color: colors.primary }]}>Daily shortlist is on</Text>
                     <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
                     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
 
                     <View style={[styles.steps, { borderTopColor: colors.border }]}>
-                        <Step text="We review your profile and preferences" />
-                        <Step text="We look for someone who feels genuinely compatible" />
-                        <Step text="We will notify you when your match is ready" />
+                        <Step text="Your profile and intent signals are up to date" />
+                        <Step text="The system is ranking a small trusted set" />
+                        <Step text="Your next five refresh when they are ready" />
                     </View>
 
                     <View style={[styles.notice, { borderColor, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.03)' }]}>
                         <Ionicons name="lock-closed-outline" size={16} color={colors.mutedForeground} />
                         <Text style={[styles.noticeText, { color: colors.mutedForeground }]}>
-                            You do not need to browse profiles right now. We are handling the search for you.
+                            There is no profile browsing queue. Trustless keeps discovery focused so each shortlist matters.
                         </Text>
                     </View>
                 </View>

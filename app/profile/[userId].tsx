@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     View,
     StyleSheet,
@@ -15,6 +15,12 @@ import { useToast } from '@/components/ui/toast';
 import { useTheme } from '@/hooks/use-theme';
 import { useUserProfile } from '@/hooks/use-user-profile';
 import { useRespondToDailyPair } from '@/hooks/use-daily-matches';
+import {
+    MatchType,
+    RecommendationSource,
+    useRecommendationDecision,
+    useRecommendationEvent,
+} from '@/hooks/use-match-discovery';
 import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/decision-info-sheet';
 import { ProfilePhotos } from '@/components/profile-view/profile-photos';
 import { ProfilePhotoViewer } from '@/components/profile-view/profile-photo-viewer';
@@ -46,6 +52,12 @@ import {
 } from '@/components/profile-view/profile-view-sections';
 
 const ALREADY_RESPONDED_MSG = 'You have already responded to this pair';
+const RECOMMENDATION_SOURCES: RecommendationSource[] = ['daily_recommendations', 'admin_curated', 'available_now'];
+const MATCH_TYPES: MatchType[] = ['similarity', 'complementary', 'discovery', 'high_activity', 'admin_curated'];
+
+function getSingleParam(value: string | string[] | undefined) {
+    return Array.isArray(value) ? value[0] : value;
+}
 
 function ProfileSkeleton() {
     return (
@@ -62,7 +74,10 @@ function ProfileSkeleton() {
 }
 
 export default function ProfileViewScreen() {
-    const { userId } = useLocalSearchParams<{ userId: string }>();
+    const params = useLocalSearchParams<{ userId: string; source?: string; matchType?: string }>();
+    const userId = getSingleParam(params.userId);
+    const sourceParam = getSingleParam(params.source);
+    const matchTypeParam = getSingleParam(params.matchType);
     const router = useRouter();
     const queryClient = useQueryClient();
     const toast = useToast();
@@ -71,11 +86,40 @@ export default function ProfileViewScreen() {
 
     const { data: profile, isLoading } = useUserProfile(userId ?? '');
     const respondToPair = useRespondToDailyPair();
+    const recommendationDecision = useRecommendationDecision();
+    const recommendationEvent = useRecommendationEvent();
+    const hasLoggedProfileView = useRef(false);
     const [fullScreenPhotoUri, setFullScreenPhotoUri] = useState<string | null>(null);
     const [infoSheet, setInfoSheet] = useState<{ visible: boolean; type: DecisionSheetType }>({
         visible: false,
         type: 'open_to_meet',
     });
+
+    const recommendationSource = useMemo<RecommendationSource | null>(() => (
+        sourceParam && RECOMMENDATION_SOURCES.includes(sourceParam as RecommendationSource)
+            ? sourceParam as RecommendationSource
+            : null
+    ), [sourceParam]);
+    const recommendationMatchType = useMemo<MatchType | undefined>(() => (
+        matchTypeParam && MATCH_TYPES.includes(matchTypeParam as MatchType)
+            ? matchTypeParam as MatchType
+            : undefined
+    ), [matchTypeParam]);
+    const canUseRecommendationDecision = Boolean(recommendationSource && userId);
+
+    useEffect(() => {
+        if (!userId || !recommendationSource || hasLoggedProfileView.current) {
+            return;
+        }
+
+        hasLoggedProfileView.current = true;
+        recommendationEvent.mutate({
+            candidateUserId: userId,
+            source: recommendationSource,
+            matchType: recommendationMatchType,
+            event: 'viewed',
+        });
+    }, [recommendationEvent, recommendationMatchType, recommendationSource, userId]);
 
     const handleBack = useCallback(() => {
         router.back();
@@ -94,7 +138,32 @@ export default function ProfileViewScreen() {
     );
 
     const handleOpenToMeet = useCallback(() => {
-        if (!profile?.pairId) return;
+        if (!profile?.pairId) {
+            if (!canUseRecommendationDecision || !userId || !recommendationSource) return;
+
+            recommendationDecision.mutate(
+                {
+                    candidateUserId: userId,
+                    decision: 'open_to_meet',
+                    source: recommendationSource,
+                    matchType: recommendationMatchType,
+                },
+                {
+                    onSuccess: () => {
+                        updateProfileDecision('open_to_meet');
+                        setInfoSheet({ visible: true, type: 'open_to_meet' });
+                    },
+                    onError: () => {
+                        toast.show({
+                            message: 'Could not save your decision right now. Please try again.',
+                            variant: 'danger',
+                            position: 'bottom',
+                        });
+                    },
+                }
+            );
+            return;
+        }
 
         respondToPair.mutate(
             { pairId: profile.pairId, decision: 'open_to_meet' },
@@ -118,10 +187,45 @@ export default function ProfileViewScreen() {
                 },
             }
         );
-    }, [profile?.pairId, respondToPair, toast, updateProfileDecision]);
+    }, [
+        canUseRecommendationDecision,
+        profile?.pairId,
+        recommendationDecision,
+        recommendationMatchType,
+        recommendationSource,
+        respondToPair,
+        toast,
+        updateProfileDecision,
+        userId,
+    ]);
 
     const handlePass = useCallback(() => {
-        if (!profile?.pairId) return;
+        if (!profile?.pairId) {
+            if (!canUseRecommendationDecision || !userId || !recommendationSource) return;
+
+            recommendationDecision.mutate(
+                {
+                    candidateUserId: userId,
+                    decision: 'passed',
+                    source: recommendationSource,
+                    matchType: recommendationMatchType,
+                },
+                {
+                    onSuccess: () => {
+                        updateProfileDecision('passed');
+                        setInfoSheet({ visible: true, type: 'pass' });
+                    },
+                    onError: () => {
+                        toast.show({
+                            message: 'Could not pass right now. Please try again.',
+                            variant: 'danger',
+                            position: 'bottom',
+                        });
+                    },
+                }
+            );
+            return;
+        }
 
         respondToPair.mutate(
             { pairId: profile.pairId, decision: 'passed' },
@@ -138,10 +242,45 @@ export default function ProfileViewScreen() {
                 },
             }
         );
-    }, [profile?.pairId, respondToPair, toast]);
+    }, [
+        canUseRecommendationDecision,
+        profile?.pairId,
+        recommendationDecision,
+        recommendationMatchType,
+        recommendationSource,
+        respondToPair,
+        toast,
+        updateProfileDecision,
+        userId,
+    ]);
 
     const handleMaybe = useCallback(() => {
-        if (!profile?.pairId) return;
+        if (!profile?.pairId) {
+            if (!canUseRecommendationDecision || !userId || !recommendationSource) return;
+
+            recommendationDecision.mutate(
+                {
+                    candidateUserId: userId,
+                    decision: 'maybe',
+                    source: recommendationSource,
+                    matchType: recommendationMatchType,
+                },
+                {
+                    onSuccess: () => {
+                        updateProfileDecision('maybe');
+                        setInfoSheet({ visible: true, type: 'maybe' });
+                    },
+                    onError: () => {
+                        toast.show({
+                            message: 'Could not save maybe later right now. Please try again.',
+                            variant: 'danger',
+                            position: 'bottom',
+                        });
+                    },
+                }
+            );
+            return;
+        }
 
         respondToPair.mutate(
             { pairId: profile.pairId, decision: 'maybe' },
@@ -159,7 +298,17 @@ export default function ProfileViewScreen() {
                 },
             }
         );
-    }, [profile?.pairId, respondToPair, toast, updateProfileDecision]);
+    }, [
+        canUseRecommendationDecision,
+        profile?.pairId,
+        recommendationDecision,
+        recommendationMatchType,
+        recommendationSource,
+        respondToPair,
+        toast,
+        updateProfileDecision,
+        userId,
+    ]);
 
     const handleCloseInfoSheet = useCallback(() => {
         const wasPass = infoSheet.type === 'pass' || infoSheet.type === 'maybe';
@@ -431,11 +580,11 @@ export default function ProfileViewScreen() {
 
             <ProfileViewCta
                 onOpenToMeet={handleOpenToMeet}
-                onMaybe={profile.pairId ? handleMaybe : undefined}
-                onPass={profile.pairId ? handlePass : undefined}
+                onMaybe={profile.pairId || canUseRecommendationDecision ? handleMaybe : undefined}
+                onPass={profile.pairId || canUseRecommendationDecision ? handlePass : undefined}
                 completed={profile.currentUserDecision !== 'pending'}
-                disabled={!profile.pairId || respondToPair.isPending}
-                label={profile.pairId ? 'Interested' : "Not in today's curated set"}
+                disabled={(!profile.pairId && !canUseRecommendationDecision) || respondToPair.isPending || recommendationDecision.isPending}
+                label={profile.pairId || canUseRecommendationDecision ? 'Interested' : "Not in today's curated set"}
                 safetyTarget={{
                     userId: profile.userId,
                     userName: profile.firstName || 'User',

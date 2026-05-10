@@ -27,6 +27,13 @@ import { useToast } from '@/components/ui/toast';
 import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/decision-info-sheet';
 import { PendingDecisionBar } from '@/components/home/pending-decision-bar';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
+import { DailyRecommendationsPreview } from '@/components/discovery/daily-recommendations-preview';
+import { MatchPreferencePanel } from '@/components/discovery/match-preference-panel';
+import {
+    RankedRecommendation,
+    RecommendationDecision,
+    useRecommendationDecision,
+} from '@/hooks/use-match-discovery';
 
 const UNDO_WINDOW_MS = 5000;
 
@@ -78,6 +85,7 @@ export default function HomeScreen() {
     const isManualCuration = matchesData?.mode === 'manual_curation';
     const manualCuration = isManualCuration ? matchesData?.manualCuration ?? null : null;
     const respondToPair = useRespondToDailyPair();
+    const recommendationDecision = useRecommendationDecision();
     const [refreshing, setRefreshing] = useState(false);
     const [hasSeenMatchesToday, setHasSeenMatchesToday] = useState(false);
     const [pendingDecision, setPendingDecision] = useState<PendingHomeDecision | null>(null);
@@ -252,6 +260,43 @@ export default function HomeScreen() {
         setPendingDecision(null);
     }, [clearPendingCommitTimeout]);
 
+    const handleViewRecommendationProfile = useCallback((recommendation: RankedRecommendation) => {
+        router.push({
+            pathname: '/profile/[userId]',
+            params: {
+                userId: recommendation.candidateUserId,
+                source: 'daily_recommendations',
+                matchType: recommendation.matchType,
+            },
+        });
+    }, [router]);
+
+    const handleRecommendationDecision = useCallback(async (
+        recommendation: RankedRecommendation,
+        decision: RecommendationDecision
+    ) => {
+        try {
+            await recommendationDecision.mutateAsync({
+                candidateUserId: recommendation.candidateUserId,
+                decision,
+                source: 'daily_recommendations',
+                matchType: recommendation.matchType,
+            });
+
+            const firstName = recommendation.profilePreview.firstName;
+            setInfoSheet({
+                visible: true,
+                type: decision === 'passed' ? 'pass' : decision,
+                firstName,
+            });
+        } catch {
+            toast.show({
+                message: 'Could not save that recommendation decision right now. Please try again.',
+                variant: 'danger',
+            });
+        }
+    }, [recommendationDecision, toast]);
+
     useEffect(() => {
         return () => {
             clearPendingCommitTimeout();
@@ -275,6 +320,16 @@ export default function HomeScreen() {
                     firstName={profile?.firstName}
                     matchCount={displayedMatches.length}
                 />
+
+                <MatchPreferencePanel />
+
+                {!isLoading && !isManualCuration && !hold ? (
+                    <DailyRecommendationsPreview
+                        onViewProfile={handleViewRecommendationProfile}
+                        onDecision={handleRecommendationDecision}
+                        actionsDisabled={!!pendingDecision || recommendationDecision.isPending}
+                    />
+                ) : null}
 
                 {isLoading ? (
                     <HomeSkeleton />
