@@ -10,7 +10,6 @@ const MODES: PreferenceMode[] = [
   'different_from_me',
   'surprise_me',
   'active_only',
-  'serious_matches',
 ];
 
 const AVAILABILITY: {
