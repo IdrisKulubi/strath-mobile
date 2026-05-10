@@ -1,5 +1,5 @@
 export function isManualMatchmakingModeEnabled() {
-    return process.env.MANUAL_MATCHMAKING_MODE !== "false";
+    return false;
 }
 
 export function getManualMatchmakingCopy() {

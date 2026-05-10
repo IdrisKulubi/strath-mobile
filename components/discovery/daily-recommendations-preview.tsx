@@ -1,68 +1,35 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 import {
   RankedRecommendation,
   RecommendationDecision,
-  useDailyRecommendations,
-  useRecommendationEvent,
 } from '@/hooks/use-match-discovery';
 import { DiscoveryProfileCard } from '@/components/discovery/discovery-profile-card';
+import { EmptyMatches } from '@/components/home/empty-matches';
 
 interface DailyRecommendationsPreviewProps {
+  recommendations: RankedRecommendation[];
+  isError?: boolean;
   onViewProfile: (recommendation: RankedRecommendation) => void;
   onDecision: (recommendation: RankedRecommendation, decision: RecommendationDecision) => void;
   actionsDisabled?: boolean;
 }
 
 export function DailyRecommendationsPreview({
+  recommendations: rawRecommendations,
+  isError,
   onViewProfile,
   onDecision,
   actionsDisabled,
 }: DailyRecommendationsPreviewProps) {
   const { colors } = useTheme();
-  const { data, isLoading, isError } = useDailyRecommendations();
-  const recommendations = useMemo(() => (data?.recommendations ?? []).slice(0, 5), [data?.recommendations]);
-  const recommendationEvent = useRecommendationEvent();
-  const shownEventIds = useRef(new Set<string>());
-
-  useEffect(() => {
-    recommendations.forEach((recommendation) => {
-      if (shownEventIds.current.has(recommendation.candidateUserId)) {
-        return;
-      }
-
-      shownEventIds.current.add(recommendation.candidateUserId);
-      recommendationEvent.mutate({
-        candidateUserId: recommendation.candidateUserId,
-        source: 'daily_recommendations',
-        matchType: recommendation.matchType,
-        event: 'shown',
-      });
-    });
-  }, [recommendationEvent, recommendations]);
+  const recommendations = useMemo(() => rawRecommendations.slice(0, 5), [rawRecommendations]);
 
   if (isError) return null;
 
-  if (isLoading) {
-    return (
-      <View style={styles.section}>
-        <View style={styles.header}>
-          <Skeleton style={styles.titleSkeleton} />
-          <Skeleton style={styles.subtitleSkeleton} />
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-          {[0, 1].map((item) => (
-            <Skeleton key={item} style={styles.cardSkeleton} />
-          ))}
-        </ScrollView>
-      </View>
-    );
-  }
-
-  if (recommendations.length === 0) return null;
+  if (recommendations.length === 0) return <EmptyMatches />;
 
   return (
     <View style={styles.section}>
@@ -111,21 +78,5 @@ const styles = StyleSheet.create({
   row: {
     paddingHorizontal: 16,
     paddingBottom: 4,
-  },
-  titleSkeleton: {
-    width: 220,
-    height: 24,
-    borderRadius: 8,
-  },
-  subtitleSkeleton: {
-    width: 260,
-    height: 14,
-    borderRadius: 8,
-  },
-  cardSkeleton: {
-    width: 260,
-    height: 430,
-    borderRadius: 24,
-    marginRight: 12,
   },
 });

@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, notInArray, or, sql } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import { db as readDb } from "@/lib/db";
@@ -108,6 +108,10 @@ export interface PreferenceInput {
 const DEFAULT_PREFERENCE_MODE: PreferenceMode = "surprise_me";
 const DAILY_LIMIT = 5;
 const MAX_BROWSE_LIMIT = 50;
+
+function startOfUtcDay(date = new Date()) {
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
 function clampScore(value: number) {
     return Math.max(0, Math.min(100, Math.round(value)));
 }
@@ -693,6 +697,92 @@ function applyDailyMix(ranked: RankedRecommendation[], preferenceMode: Preferenc
     return selected.slice(0, DAILY_LIMIT);
 }
 
+async function getTodaysStableDailyRecommendations(userId: string): Promise<RankedRecommendation[]> {
+    const todayStart = startOfUtcDay();
+    const rows = await readDb
+        .select()
+        .from(recommendationEvents)
+        .where(
+            and(
+                eq(recommendationEvents.viewerUserId, userId),
+                eq(recommendationEvents.source, "daily_recommendations"),
+                eq(recommendationEvents.decision, "shown"),
+                gte(recommendationEvents.shownAt, todayStart),
+            ),
+        )
+        .orderBy(asc(recommendationEvents.shownAt));
+
+    const uniqueRows = rows.filter((row, index, all) =>
+        all.findIndex((candidate) => candidate.candidateUserId === row.candidateUserId) === index,
+    ).slice(0, DAILY_LIMIT);
+
+    if (uniqueRows.length === 0) return [];
+
+    const candidateUserIds = uniqueRows.map((row) => row.candidateUserId);
+    const [viewerProfile, candidateProfiles] = await Promise.all([
+        readDb.query.profiles.findFirst({ where: eq(profiles.userId, userId) }),
+        readDb.query.profiles.findMany({
+            where: inArray(profiles.userId, candidateUserIds),
+            with: { user: true },
+        }),
+    ]);
+    if (!viewerProfile) return [];
+
+    const byUserId = new Map(candidateProfiles.map((profile) => [profile.userId, profile]));
+    const stable = uniqueRows.flatMap((event) => {
+        const candidate = byUserId.get(event.candidateUserId);
+        if (!candidate || candidate.user?.deletedAt) return [];
+
+        const compatibility = scoreProfilePair(viewerProfile, candidate);
+        const matchType = event.matchType ?? classifyMatchType({
+            preferenceMode: DEFAULT_PREFERENCE_MODE,
+            compatibilityScore: event.compatibilityScore ?? compatibility.score,
+            activityScore: event.activityScore ?? scoreActivityFromDate(candidate.user?.lastActive ?? candidate.lastActive),
+            responseScore: event.responseScore ?? 55,
+            diversityScore: event.diversityScore ?? scoreDiversity(viewerProfile, candidate),
+        });
+        const compatibilityScore = event.compatibilityScore ?? compatibility.score;
+        const activityScore = event.activityScore ?? scoreActivityFromDate(candidate.user?.lastActive ?? candidate.lastActive);
+        const responseScore = event.responseScore ?? 55;
+        const diversityScore = event.diversityScore ?? scoreDiversity(viewerProfile, candidate);
+        const profileQualityScore = scoreProfileQuality(candidate);
+        const reasons = buildReason(matchType, { activityScore, compatibilityScore, diversityScore, profileQualityScore }, compatibility.reasons);
+
+        return [{
+            candidateUserId: candidate.userId,
+            finalScore: event.finalScore ?? compatibilityScore,
+            matchType,
+            compatibilityScore,
+            activityScore,
+            responseScore,
+            availabilityScore: 0,
+            diversityScore,
+            mutualProbabilityScore: event.mutualProbabilityScore ?? compatibilityScore,
+            preferenceFitScore: event.finalScore ?? compatibilityScore,
+            profileQualityScore,
+            reason: reasons.join(", "),
+            reasons,
+            activityStatus: activityStatusFromScore(activityScore),
+            profilePreview: toPreview(candidate),
+        }];
+    });
+
+    console.log("[match-intelligence] reusing stable daily shortlist", {
+        userId,
+        todayStart: todayStart.toISOString(),
+        eventCount: rows.length,
+        reusedCount: stable.length,
+        candidates: stable.map((item) => ({
+            candidateUserId: item.candidateUserId,
+            firstName: item.profilePreview.firstName,
+            finalScore: item.finalScore,
+            matchType: item.matchType,
+        })),
+    });
+
+    return stable;
+}
+
 export async function getDailyRecommendations(userId: string) {
     const preference = await getOrCreateMatchPreferences(userId);
     const hold = await getActiveMatchHoldForUser(userId);
@@ -707,8 +797,25 @@ export async function getDailyRecommendations(userId: string) {
         };
     }
 
+    const stableRecommendations = await getTodaysStableDailyRecommendations(userId);
+    if (stableRecommendations.length >= DAILY_LIMIT) {
+        return {
+            userId,
+            generatedAt: new Date().toISOString(),
+            preferenceMode: preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE,
+            mode: "recommendations" as const,
+            hold: null,
+            recommendations: stableRecommendations,
+        };
+    }
+
     const ranked = await rankCandidates(userId);
-    const recommendations = applyDailyMix(ranked, preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE);
+    const stableIds = new Set(stableRecommendations.map((item) => item.candidateUserId));
+    const nextRecommendations = applyDailyMix(
+        ranked.filter((item) => !stableIds.has(item.candidateUserId)),
+        preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE,
+    );
+    const recommendations = [...stableRecommendations, ...nextRecommendations].slice(0, DAILY_LIMIT);
     console.log("[match-intelligence] daily mix", {
         userId,
         preferenceMode: preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE,
@@ -722,7 +829,7 @@ export async function getDailyRecommendations(userId: string) {
             reason: item.reason,
         })),
     });
-    await logShownRecommendations(userId, "daily_recommendations", recommendations);
+    await logShownRecommendations(userId, "daily_recommendations", nextRecommendations);
 
     return {
         userId,
