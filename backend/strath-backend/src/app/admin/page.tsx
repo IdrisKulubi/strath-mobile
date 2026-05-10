@@ -1,4 +1,7 @@
-import { getAdminMetrics, getAdminOnCallSessions, getAdminPendingDates } from "@/lib/actions/admin";
+import { getAdminFeatureFlags, getAdminMetrics, getAdminOnCallSessions, getAdminPendingDates } from "@/lib/actions/admin";
+import { APP_FEATURE_KEYS } from "@/lib/feature-flags";
+
+import { FeatureFlagToggle } from "./feature-flags/_actions";
 
 function MetricCard({
     label,
@@ -21,11 +24,13 @@ function MetricCard({
 }
 
 export default async function AdminOverviewPage() {
-    const [metrics, pending, onCall] = await Promise.all([
+    const [metrics, pending, onCall, flags] = await Promise.all([
         getAdminMetrics(),
         getAdminPendingDates(),
         getAdminOnCallSessions(),
+        getAdminFeatureFlags(),
     ]);
+    const adminMatchPreviewFlag = flags.find((flag) => flag.key === APP_FEATURE_KEYS.adminMatchPreviewEnabled);
 
     return (
         <div className="p-8">
@@ -33,6 +38,36 @@ export default async function AdminOverviewPage() {
                 <h1 className="text-2xl font-bold text-white">Overview</h1>
                 <p className="mt-1 text-sm text-gray-400">Live stats across the platform</p>
             </div>
+
+            {adminMatchPreviewFlag && (
+                <div className="mb-8 rounded-xl border border-pink-500/30 bg-pink-500/10 p-5">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <div className="mb-2 flex items-center gap-3">
+                                <h2 className="text-sm font-semibold uppercase tracking-wide text-pink-200">
+                                    Admin Match Preview
+                                </h2>
+                                <span
+                                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                                        adminMatchPreviewFlag.enabled
+                                            ? "bg-emerald-500/20 text-emerald-300"
+                                            : "bg-white/10 text-gray-400"
+                                    }`}
+                                >
+                                    {adminMatchPreviewFlag.enabled ? "Enabled" : "Disabled"}
+                                </span>
+                            </div>
+                            <p className="max-w-2xl text-sm leading-6 text-gray-300">
+                                Enable this while testing discovery so admin accounts can receive the daily five. Disable it to keep admins fully removed from the matching pool.
+                            </p>
+                        </div>
+                        <FeatureFlagToggle
+                            flagKey={adminMatchPreviewFlag.key}
+                            enabled={adminMatchPreviewFlag.enabled}
+                        />
+                    </div>
+                </div>
+            )}
 
             <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
                 <MetricCard label="Total Users" value={metrics.totalUsers} />

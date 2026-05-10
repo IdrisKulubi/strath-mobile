@@ -1013,11 +1013,14 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
         "Allow the demo login button and demo session endpoint for App Review.",
     [APP_FEATURE_KEYS.signupCapEnabled]:
         "Gate new signups behind per-gender capacity limits during soft launch.",
+    [APP_FEATURE_KEYS.adminMatchPreviewEnabled]:
+        "Let admin accounts receive daily discovery results for QA while keeping admins out of normal users' candidate pools.",
 };
 
 const FLAG_LABELS: Record<string, string> = {
     [APP_FEATURE_KEYS.demoLoginEnabled]: "Demo Login",
     [APP_FEATURE_KEYS.signupCapEnabled]: "Signup Cap (Soft Launch)",
+    [APP_FEATURE_KEYS.adminMatchPreviewEnabled]: "Admin Match Preview",
 };
 
 const SUPPORTED_FLAG_KEYS = new Set<string>(Object.values(APP_FEATURE_KEYS));

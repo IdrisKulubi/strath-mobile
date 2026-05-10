@@ -24,7 +24,7 @@ import {
 } from "@/lib/services/candidate-pairs-service";
 import { FACE_VERIFICATION_STATUSES } from "@/lib/services/face-verification-policy";
 import { getActiveMatchHoldForUser, isUserOnMatchHold } from "@/lib/services/match-hold-service";
-import { isTemporaryAdminMatchPreviewUser, resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
+import { isAdminMatchPreviewUser, resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
 import { scoreProfilePair } from "@/lib/services/match-ranking";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
@@ -506,7 +506,14 @@ async function getEligibleCandidateProfiles(viewerUserId: string, filters: Brows
         getUsersIPassedIds(viewerUserId),
         getExistingDyadIds(viewerUserId),
     ]);
-    const allowAdminPreview = poolExcludedIds.has(viewerUserId) && await isTemporaryAdminMatchPreviewUser(viewerUserId);
+    const allowAdminPreview = poolExcludedIds.has(viewerUserId) && await isAdminMatchPreviewUser(viewerUserId);
+    if (poolExcludedIds.has(viewerUserId) && !allowAdminPreview) {
+        console.log("[match-intelligence] viewer excluded from discovery pool", {
+            viewerUserId,
+            reason: "admin_or_staff_pool_exclusion",
+        });
+        return { viewerProfile, candidates: [] as CandidateProfile[] };
+    }
 
     const excludedIds = unique([
         viewerUserId,

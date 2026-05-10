@@ -2,6 +2,7 @@ import { eq, or, sql } from "drizzle-orm";
 
 import { db as readDb } from "@/lib/db";
 import { profiles, user } from "@/db/schema";
+import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
 
 /**
  * Accounts that must never participate in automated daily introductions or
@@ -58,11 +59,10 @@ export async function resolveMatchExcludedUserIds(): Promise<Set<string>> {
     return out;
 }
 
-/**
- * Temporary QA escape hatch: admins remain excluded as candidates, but can act
- * as viewers so the mobile daily-match and shortlist UI can be reviewed.
- */
-export async function isTemporaryAdminMatchPreviewUser(userId: string): Promise<boolean> {
+export async function isAdminMatchPreviewUser(userId: string): Promise<boolean> {
+    const enabled = await isFeatureEnabled(APP_FEATURE_KEYS.adminMatchPreviewEnabled, false);
+    if (!enabled) return false;
+
     const [userRow, profileRow] = await Promise.all([
         readDb.query.user.findFirst({
             where: eq(user.id, userId),
