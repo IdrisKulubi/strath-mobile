@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { profiles, candidatePairs } from "@/db/schema";
+import { profiles, candidatePairs, userMatchInterests } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
@@ -51,7 +51,7 @@ export async function GET(
 
         const { userAId, userBId } = canonicalizePairUsers(session.user.id, targetUserId);
 
-        const [{ score, reasons }, activePair] = await Promise.all([
+        const [{ score, reasons }, activePair, directedInterest] = await Promise.all([
             computeCompatibility(session.user.id, targetUserId),
             db.query.candidatePairs.findFirst({
                 where: and(
@@ -60,16 +60,26 @@ export async function GET(
                     inArray(candidatePairs.status, ["active", "mutual"])
                 ),
             }),
+            db.query.userMatchInterests.findFirst({
+                where: and(
+                    eq(userMatchInterests.viewerUserId, session.user.id),
+                    eq(userMatchInterests.candidateUserId, targetUserId),
+                ),
+            }),
         ]);
+
+        const pairDecision =
+            activePair?.userAId === session.user.id
+                ? activePair.aDecision
+                : activePair?.bDecision;
 
         return successResponse({
             score,
             reasons: reasons.length > 0 ? reasons : ["Potential match"],
             pairId: activePair?.id ?? null,
-            currentUserDecision:
-                activePair?.userAId === session.user.id
-                    ? activePair.aDecision
-                    : activePair?.bDecision ?? "pending",
+            currentUserDecision: pairDecision && pairDecision !== "pending"
+                ? pairDecision
+                : directedInterest?.decision ?? pairDecision ?? "pending",
         });
     } catch (error) {
         console.error("[matches/compatibility/[userId]] Error:", error);

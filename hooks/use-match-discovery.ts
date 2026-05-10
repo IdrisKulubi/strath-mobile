@@ -21,6 +21,7 @@ export type RecommendationSource =
   | 'available_now';
 
 export type RecommendationDecision = 'open_to_meet' | 'maybe' | 'passed';
+export type CurrentRecommendationDecision = 'pending' | RecommendationDecision;
 
 export interface MatchPreferences {
   id: string;
@@ -50,6 +51,7 @@ export interface RecommendationProfilePreview {
 
 export interface RankedRecommendation {
   candidateUserId: string;
+  currentUserDecision: CurrentRecommendationDecision;
   finalScore: number;
   matchType: MatchType;
   compatibilityScore: number;

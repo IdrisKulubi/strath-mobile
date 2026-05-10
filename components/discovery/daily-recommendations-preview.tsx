@@ -49,7 +49,10 @@ export function DailyRecommendationsPreview({
             recommendation={recommendation}
             variant="compact"
             actionsDisabled={actionsDisabled}
-            savedDecision={savedDecisions?.[recommendation.candidateUserId]}
+            savedDecision={
+              savedDecisions?.[recommendation.candidateUserId]
+              ?? (recommendation.currentUserDecision === 'pending' ? undefined : recommendation.currentUserDecision)
+            }
             onViewProfile={onViewProfile}
             onDecision={onDecision}
           />

@@ -50,6 +50,7 @@ export type RecommendationSource =
     | "available_now";
 
 export type RecommendationDecision = "shown" | "viewed" | "open_to_meet" | "maybe" | "passed" | "ignored";
+export type CurrentRecommendationDecision = "pending" | Exclude<RecommendationDecision, "shown" | "viewed" | "ignored">;
 
 export type BrowseMode = "similar" | "different" | "new" | "available";
 
@@ -73,6 +74,7 @@ export interface BrowseFilters {
 
 export interface RankedRecommendation {
     candidateUserId: string;
+    currentUserDecision: CurrentRecommendationDecision;
     finalScore: number;
     matchType: MatchType;
     compatibilityScore: number;
@@ -475,6 +477,23 @@ async function getIncomingOpenInterestMap(viewerUserId: string, candidateUserIds
     return new Map(rows.map((row) => [row.viewerUserId, row.decidedAt]));
 }
 
+async function getViewerDecisionMap(viewerUserId: string, candidateUserIds: string[]) {
+    if (candidateUserIds.length === 0) return new Map<string, CurrentRecommendationDecision>();
+    const rows = await readDb
+        .select({
+            candidateUserId: userMatchInterests.candidateUserId,
+            decision: userMatchInterests.decision,
+        })
+        .from(userMatchInterests)
+        .where(
+            and(
+                eq(userMatchInterests.viewerUserId, viewerUserId),
+                inArray(userMatchInterests.candidateUserId, candidateUserIds),
+            ),
+        );
+    return new Map(rows.map((row) => [row.candidateUserId, row.decision]));
+}
+
 async function getEligibleCandidateProfiles(viewerUserId: string, filters: BrowseFilters = {}) {
     const viewerProfile = await readDb.query.profiles.findFirst({
         where: eq(profiles.userId, viewerUserId),
@@ -567,12 +586,13 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
     }
 
     const candidateUserIds = candidates.map((candidate) => candidate.userId);
-    const [candidatePreferences, candidateSignals, exposureCounts, holdEntries, incomingInterestMap] = await Promise.all([
+    const [candidatePreferences, candidateSignals, exposureCounts, holdEntries, incomingInterestMap, viewerDecisionMap] = await Promise.all([
         getCandidatePreferences(candidateUserIds),
         getCandidateSignals(candidateUserIds),
         getRecentExposureCounts(viewerUserId),
         Promise.all(candidateUserIds.map(async (candidateUserId) => [candidateUserId, await isUserOnMatchHold(candidateUserId)] as const)),
         getIncomingOpenInterestMap(viewerUserId, candidateUserIds),
+        getViewerDecisionMap(viewerUserId, candidateUserIds),
     ]);
     const usersOnHold = new Set(holdEntries.filter(([, onHold]) => onHold).map(([candidateUserId]) => candidateUserId));
 
@@ -590,6 +610,7 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
         candidateCount: candidates.length,
         usersOnHoldCount: usersOnHold.size,
         incomingOpenInterestCount: incomingInterestMap.size,
+        existingDecisionCount: viewerDecisionMap.size,
         preferenceMode: preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE,
         modePreference,
     });
@@ -669,6 +690,7 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
 
         return {
             candidateUserId: candidate.userId,
+            currentUserDecision: viewerDecisionMap.get(candidate.userId) ?? "pending",
             finalScore,
             matchType,
             compatibilityScore,
@@ -757,12 +779,13 @@ async function getTodaysStableDailyRecommendations(userId: string): Promise<Rank
     if (uniqueRows.length === 0) return [];
 
     const candidateUserIds = uniqueRows.map((row) => row.candidateUserId);
-    const [viewerProfile, candidateProfiles] = await Promise.all([
+    const [viewerProfile, candidateProfiles, decisionMap] = await Promise.all([
         readDb.query.profiles.findFirst({ where: eq(profiles.userId, userId) }),
         readDb.query.profiles.findMany({
             where: inArray(profiles.userId, candidateUserIds),
             with: { user: true },
         }),
+        getViewerDecisionMap(userId, candidateUserIds),
     ]);
     if (!viewerProfile) return [];
 
@@ -788,6 +811,7 @@ async function getTodaysStableDailyRecommendations(userId: string): Promise<Rank
 
         return [{
             candidateUserId: candidate.userId,
+            currentUserDecision: decisionMap.get(candidate.userId) ?? "pending",
             finalScore: event.finalScore ?? compatibilityScore,
             matchType,
             compatibilityScore,

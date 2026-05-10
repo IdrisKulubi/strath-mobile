@@ -99,6 +99,20 @@ export default function HomeScreen() {
                 ...current,
                 [recommendation.candidateUserId]: decision,
             }));
+            queryClient.setQueryData(
+                ['recommendations', 'daily'],
+                (old: { recommendations?: RankedRecommendation[] } | undefined) =>
+                    old?.recommendations
+                        ? {
+                            ...old,
+                            recommendations: old.recommendations.map((item) =>
+                                item.candidateUserId === recommendation.candidateUserId
+                                    ? { ...item, currentUserDecision: decision }
+                                    : item
+                            ),
+                        }
+                        : old
+            );
 
             const firstName = recommendation.profilePreview.firstName;
             const message = result.mutualMatchCreated
