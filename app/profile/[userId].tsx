@@ -149,8 +149,15 @@ export default function ProfileViewScreen() {
                     matchType: recommendationMatchType,
                 },
                 {
-                    onSuccess: () => {
+                    onSuccess: ({ result }) => {
                         updateProfileDecision('open_to_meet');
+                        toast.show({
+                            message: result.mutualMatchCreated
+                                ? "It's mutual. Check Dates."
+                                : "Interest saved. We'll tell you if it becomes mutual.",
+                            variant: 'success',
+                            position: 'bottom',
+                        });
                         setInfoSheet({ visible: true, type: 'open_to_meet' });
                     },
                     onError: () => {
@@ -213,6 +220,11 @@ export default function ProfileViewScreen() {
                 {
                     onSuccess: () => {
                         updateProfileDecision('passed');
+                        toast.show({
+                            message: 'Passed. Tomorrow\'s picks will learn from this.',
+                            variant: 'default',
+                            position: 'bottom',
+                        });
                         setInfoSheet({ visible: true, type: 'pass' });
                     },
                     onError: () => {
@@ -268,6 +280,11 @@ export default function ProfileViewScreen() {
                 {
                     onSuccess: () => {
                         updateProfileDecision('maybe');
+                        toast.show({
+                            message: 'Saved for later.',
+                            variant: 'success',
+                            position: 'bottom',
+                        });
                         setInfoSheet({ visible: true, type: 'maybe' });
                     },
                     onError: () => {

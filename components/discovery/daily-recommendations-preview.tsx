@@ -12,6 +12,7 @@ import { EmptyMatches } from '@/components/home/empty-matches';
 interface DailyRecommendationsPreviewProps {
   recommendations: RankedRecommendation[];
   isError?: boolean;
+  savedDecisions?: Record<string, RecommendationDecision>;
   onViewProfile: (recommendation: RankedRecommendation) => void;
   onDecision: (recommendation: RankedRecommendation, decision: RecommendationDecision) => void;
   actionsDisabled?: boolean;
@@ -20,6 +21,7 @@ interface DailyRecommendationsPreviewProps {
 export function DailyRecommendationsPreview({
   recommendations: rawRecommendations,
   isError,
+  savedDecisions,
   onViewProfile,
   onDecision,
   actionsDisabled,
@@ -47,6 +49,7 @@ export function DailyRecommendationsPreview({
             recommendation={recommendation}
             variant="compact"
             actionsDisabled={actionsDisabled}
+            savedDecision={savedDecisions?.[recommendation.candidateUserId]}
             onViewProfile={onViewProfile}
             onDecision={onDecision}
           />

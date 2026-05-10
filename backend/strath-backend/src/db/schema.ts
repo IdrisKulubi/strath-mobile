@@ -610,6 +610,41 @@ export const recommendationEvents = pgTable(
     })
 );
 
+// Directed recommendation decisions — one-way until both sides independently show interest.
+export const userMatchInterests = pgTable(
+    "user_match_interests",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        viewerUserId: text("viewer_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        candidateUserId: text("candidate_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        decision: text("decision")
+            .$type<"open_to_meet" | "maybe" | "passed">()
+            .notNull(),
+        source: text("source")
+            .$type<"daily_recommendations" | "browse" | "admin_curated" | "available_now">()
+            .notNull(),
+        matchType: text("match_type")
+            .$type<"similarity" | "complementary" | "discovery" | "high_activity" | "admin_curated">(),
+        lastRecommendationEventId: uuid("last_recommendation_event_id").references(() => recommendationEvents.id, { onDelete: "set null" }),
+        matchedCandidatePairId: uuid("matched_candidate_pair_id").references(() => candidatePairs.id, { onDelete: "set null" }),
+        decidedAt: timestamp("decided_at").defaultNow().notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        viewerCandidateUniqueIdx: uniqueIndex("user_match_interests_viewer_candidate_unique_idx").on(table.viewerUserId, table.candidateUserId),
+        viewerIdx: index("user_match_interests_viewer_idx").on(table.viewerUserId),
+        candidateIdx: index("user_match_interests_candidate_idx").on(table.candidateUserId),
+        decisionIdx: index("user_match_interests_decision_idx").on(table.decision),
+        reverseLookupIdx: index("user_match_interests_reverse_lookup_idx").on(table.candidateUserId, table.viewerUserId, table.decision),
+        matchedPairIdx: index("user_match_interests_matched_pair_idx").on(table.matchedCandidatePairId),
+    })
+);
+
 // Date matches — created when a date request is accepted (both sides agreed)
 export const dateLocations = pgTable(
     "date_locations",
@@ -1885,6 +1920,27 @@ export const mutualMatchesRelations = relations(mutualMatches, ({ one }) => ({
     }),
 }));
 
+export const userMatchInterestsRelations = relations(userMatchInterests, ({ one }) => ({
+    viewer: one(user, {
+        fields: [userMatchInterests.viewerUserId],
+        references: [user.id],
+        relationName: "matchInterestViewer",
+    }),
+    candidate: one(user, {
+        fields: [userMatchInterests.candidateUserId],
+        references: [user.id],
+        relationName: "matchInterestCandidate",
+    }),
+    lastRecommendationEvent: one(recommendationEvents, {
+        fields: [userMatchInterests.lastRecommendationEventId],
+        references: [recommendationEvents.id],
+    }),
+    matchedCandidatePair: one(candidatePairs, {
+        fields: [userMatchInterests.matchedCandidatePairId],
+        references: [candidatePairs.id],
+    }),
+}));
+
 export const blindDatesRelations = relations(blindDates, ({ one }) => ({
     user1: one(user, {
         fields: [blindDates.user1Id],
@@ -1923,6 +1979,8 @@ export type UserMatchSignal = typeof userMatchSignals.$inferSelect;
 export type NewUserMatchSignal = typeof userMatchSignals.$inferInsert;
 export type RecommendationEvent = typeof recommendationEvents.$inferSelect;
 export type NewRecommendationEvent = typeof recommendationEvents.$inferInsert;
+export type UserMatchInterest = typeof userMatchInterests.$inferSelect;
+export type NewUserMatchInterest = typeof userMatchInterests.$inferInsert;
 export type MutualMatch = typeof mutualMatches.$inferSelect;
 export type NewMutualMatch = typeof mutualMatches.$inferInsert;
 export type WeeklyDrop = typeof weeklyDrops.$inferSelect;

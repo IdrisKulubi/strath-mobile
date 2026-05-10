@@ -5,9 +5,11 @@ import { db as readDb } from "@/lib/db";
 import {
     blocks,
     candidatePairs,
+    mutualMatches,
     profiles,
     recommendationEvents,
     user,
+    userMatchInterests,
     userMatchPreferences,
     userMatchSignals,
 } from "@/db/schema";
@@ -24,6 +26,8 @@ import { FACE_VERIFICATION_STATUSES } from "@/lib/services/face-verification-pol
 import { getActiveMatchHoldForUser, isUserOnMatchHold } from "@/lib/services/match-hold-service";
 import { isTemporaryAdminMatchPreviewUser, resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
 import { scoreProfilePair } from "@/lib/services/match-ranking";
+import { sendPushNotification } from "@/lib/notifications";
+import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
 export type PreferenceMode =
     | "similar_to_me"
@@ -375,24 +379,33 @@ async function getBlockedUserIds(userId: string) {
 }
 
 async function getUsersIPassedIds(userId: string) {
-    const rows = await readDb
-        .select({
-            userAId: candidatePairs.userAId,
-            userBId: candidatePairs.userBId,
-            aDecision: candidatePairs.aDecision,
-            bDecision: candidatePairs.bDecision,
-        })
-        .from(candidatePairs)
-        .where(
-            and(
-                eq(candidatePairs.status, "closed"),
-                or(
-                    and(eq(candidatePairs.userAId, userId), eq(candidatePairs.aDecision, "passed")),
-                    and(eq(candidatePairs.userBId, userId), eq(candidatePairs.bDecision, "passed")),
+    const [pairRows, interestRows] = await Promise.all([
+        readDb
+            .select({
+                userAId: candidatePairs.userAId,
+                userBId: candidatePairs.userBId,
+                aDecision: candidatePairs.aDecision,
+                bDecision: candidatePairs.bDecision,
+            })
+            .from(candidatePairs)
+            .where(
+                and(
+                    eq(candidatePairs.status, "closed"),
+                    or(
+                        and(eq(candidatePairs.userAId, userId), eq(candidatePairs.aDecision, "passed")),
+                        and(eq(candidatePairs.userBId, userId), eq(candidatePairs.bDecision, "passed")),
+                    ),
                 ),
             ),
-        );
-    return collectUsersIPassedIds(userId, rows);
+        readDb
+            .select({ candidateUserId: userMatchInterests.candidateUserId })
+            .from(userMatchInterests)
+            .where(and(eq(userMatchInterests.viewerUserId, userId), eq(userMatchInterests.decision, "passed"))),
+    ]);
+    return new Set([
+        ...collectUsersIPassedIds(userId, pairRows),
+        ...interestRows.map((row) => row.candidateUserId),
+    ]);
 }
 
 async function getExistingDyadIds(userId: string) {
@@ -405,7 +418,7 @@ async function getExistingDyadIds(userId: string) {
         .from(candidatePairs)
         .where(
             and(
-                inArray(candidatePairs.status, ["active", "queued", "mutual"]),
+                inArray(candidatePairs.status, ["mutual"]),
                 or(eq(candidatePairs.userAId, userId), eq(candidatePairs.userBId, userId)),
             ),
         );
@@ -441,6 +454,25 @@ async function getCandidateSignals(userIds: string[]) {
         .from(userMatchSignals)
         .where(inArray(userMatchSignals.userId, userIds));
     return new Map(rows.map((row) => [row.userId, row]));
+}
+
+async function getIncomingOpenInterestMap(viewerUserId: string, candidateUserIds: string[]) {
+    if (candidateUserIds.length === 0) return new Map<string, Date>();
+    const rows = await readDb
+        .select({
+            viewerUserId: userMatchInterests.viewerUserId,
+            decidedAt: userMatchInterests.decidedAt,
+        })
+        .from(userMatchInterests)
+        .where(
+            and(
+                inArray(userMatchInterests.viewerUserId, candidateUserIds),
+                eq(userMatchInterests.candidateUserId, viewerUserId),
+                eq(userMatchInterests.decision, "open_to_meet"),
+                sql`${userMatchInterests.matchedCandidatePairId} is null`,
+            ),
+        );
+    return new Map(rows.map((row) => [row.viewerUserId, row.decidedAt]));
 }
 
 async function getEligibleCandidateProfiles(viewerUserId: string, filters: BrowseFilters = {}) {
@@ -524,11 +556,6 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
     const preference = await getOrCreateMatchPreferences(viewerUserId);
     await upsertActiveSignal(viewerUserId);
 
-    if (await isUserOnMatchHold(viewerUserId)) {
-        console.log("[match-intelligence] viewer on hold, no recommendations", { viewerUserId });
-        return [] as RankedRecommendation[];
-    }
-
     const { viewerProfile, candidates } = await getEligibleCandidateProfiles(viewerUserId, filters);
     if (!viewerProfile || candidates.length === 0) {
         console.log("[match-intelligence] no candidates to rank", {
@@ -540,11 +567,12 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
     }
 
     const candidateUserIds = candidates.map((candidate) => candidate.userId);
-    const [candidatePreferences, candidateSignals, exposureCounts, holdEntries] = await Promise.all([
+    const [candidatePreferences, candidateSignals, exposureCounts, holdEntries, incomingInterestMap] = await Promise.all([
         getCandidatePreferences(candidateUserIds),
         getCandidateSignals(candidateUserIds),
         getRecentExposureCounts(viewerUserId),
         Promise.all(candidateUserIds.map(async (candidateUserId) => [candidateUserId, await isUserOnMatchHold(candidateUserId)] as const)),
+        getIncomingOpenInterestMap(viewerUserId, candidateUserIds),
     ]);
     const usersOnHold = new Set(holdEntries.filter(([, onHold]) => onHold).map(([candidateUserId]) => candidateUserId));
 
@@ -561,11 +589,12 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
         viewerUserId,
         candidateCount: candidates.length,
         usersOnHoldCount: usersOnHold.size,
+        incomingOpenInterestCount: incomingInterestMap.size,
         preferenceMode: preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE,
         modePreference,
     });
 
-    const ranked = candidates.filter((candidate) => !usersOnHold.has(candidate.userId)).map((candidate) => {
+    const ranked = candidates.map((candidate) => {
         const compatibility = scoreProfilePair(viewerProfile, candidate);
         const candidatePreference = candidatePreferences.get(candidate.userId);
         const candidateSignal = candidateSignals.get(candidate.userId);
@@ -575,7 +604,9 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
         const availabilityScore = scoreAvailability(candidatePreference);
         const diversityScore = scoreDiversity(viewerProfile, candidate);
         const profileQualityScore = scoreProfileQuality(candidate);
-        const mutualProbabilityScore = clampScore((compatibilityScore * 0.45) + (responseScore * 0.3) + (activityScore * 0.15) + (availabilityScore * 0.1));
+        const hasIncomingOpenInterest = incomingInterestMap.has(candidate.userId);
+        const baseMutualProbabilityScore = clampScore((compatibilityScore * 0.45) + (responseScore * 0.3) + (activityScore * 0.15) + (availabilityScore * 0.1));
+        const mutualProbabilityScore = hasIncomingOpenInterest ? 100 : baseMutualProbabilityScore;
         const preferenceFit = preferenceFitScore({
             preferenceMode: modePreference,
             compatibilityScore,
@@ -587,6 +618,7 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
         const exposurePenalty = Math.min(20, (exposureCounts.get(candidate.userId) ?? 0) * 5);
         const passRiskPenalty = candidateSignal?.passRiskPenalty ?? 0;
         const ghostingPenalty = candidateSignal?.ghostingPenalty ?? 0;
+        const activeHoldPenalty = usersOnHold.has(candidate.userId) ? 8 : 0;
         const matchType = classifyMatchType({
             preferenceMode: modePreference,
             compatibilityScore,
@@ -594,7 +626,7 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             responseScore,
             diversityScore,
         });
-        const finalScore = finalRecommendationScore({
+        const baseFinalScore = finalRecommendationScore({
             preferenceMode: modePreference,
             compatibilityScore,
             activityScore,
@@ -606,8 +638,11 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             profileQualityScore,
             ghostingPenalty,
             passRiskPenalty: passRiskPenalty + exposurePenalty,
-            activeHoldPenalty: 0,
+            activeHoldPenalty,
         });
+        const finalScore = hasIncomingOpenInterest
+            ? clampScore(Math.max(96, baseFinalScore + 24))
+            : baseFinalScore;
         const reasons = buildReason(matchType, { activityScore, compatibilityScore, diversityScore, profileQualityScore }, compatibility.reasons);
         console.log("[match-intelligence] scored candidate", {
             viewerUserId,
@@ -623,9 +658,12 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             mutualProbabilityScore,
             preferenceFitScore: preferenceFit,
             profileQualityScore,
+            hasIncomingOpenInterest,
+            incomingInterestAt: incomingInterestMap.get(candidate.userId)?.toISOString() ?? null,
             ghostingPenalty,
             passRiskPenalty,
             exposurePenalty,
+            activeHoldPenalty,
             reasons,
         });
 
@@ -786,16 +824,6 @@ async function getTodaysStableDailyRecommendations(userId: string): Promise<Rank
 export async function getDailyRecommendations(userId: string) {
     const preference = await getOrCreateMatchPreferences(userId);
     const hold = await getActiveMatchHoldForUser(userId);
-    if (hold) {
-        return {
-            userId,
-            generatedAt: new Date().toISOString(),
-            preferenceMode: preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE,
-            mode: "hold" as const,
-            hold,
-            recommendations: [] as RankedRecommendation[],
-        };
-    }
 
     const stableRecommendations = await getTodaysStableDailyRecommendations(userId);
     if (stableRecommendations.length >= DAILY_LIMIT) {
@@ -804,7 +832,7 @@ export async function getDailyRecommendations(userId: string) {
             generatedAt: new Date().toISOString(),
             preferenceMode: preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE,
             mode: "recommendations" as const,
-            hold: null,
+            hold,
             recommendations: stableRecommendations,
         };
     }
@@ -836,7 +864,7 @@ export async function getDailyRecommendations(userId: string) {
         generatedAt: new Date().toISOString(),
         preferenceMode: preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE,
         mode: "recommendations" as const,
-        hold: null,
+        hold,
         recommendations,
     };
 }
@@ -952,38 +980,131 @@ async function updateSignalsAfterDecision(userId: string, decision: Exclude<Reco
         });
 }
 
-export async function handleRecommendationDecision(input: {
+async function upsertDirectedInterest(input: {
+    eventId: string;
     viewerUserId: string;
     candidateUserId: string;
     decision: Exclude<RecommendationDecision, "shown" | "viewed" | "ignored">;
     source: RecommendationSource;
     matchType?: MatchType;
 }) {
-    if (input.viewerUserId === input.candidateUserId) {
-        throw new Error("Cannot decide on your own profile");
-    }
+    const now = new Date();
+    const [interest] = await db
+        .insert(userMatchInterests)
+        .values({
+            viewerUserId: input.viewerUserId,
+            candidateUserId: input.candidateUserId,
+            decision: input.decision,
+            source: input.source,
+            matchType: input.matchType,
+            lastRecommendationEventId: input.eventId,
+            decidedAt: now,
+            updatedAt: now,
+        })
+        .onConflictDoUpdate({
+            target: [userMatchInterests.viewerUserId, userMatchInterests.candidateUserId],
+            set: {
+                decision: input.decision,
+                source: input.source,
+                matchType: input.matchType,
+                lastRecommendationEventId: input.eventId,
+                decidedAt: now,
+                updatedAt: now,
+            },
+        })
+        .returning();
+    return interest;
+}
 
-    const event = await recordRecommendationEvent({
-        viewerUserId: input.viewerUserId,
-        candidateUserId: input.candidateUserId,
-        source: input.source,
-        matchType: input.matchType,
-        event: input.decision,
-    });
+async function notifyReciprocalMatch(input: {
+    pairId: string;
+    userAId: string;
+    userBId: string;
+}) {
+    const [userA, userB, profileA, profileB] = await Promise.all([
+        readDb.query.user.findFirst({ where: eq(user.id, input.userAId) }),
+        readDb.query.user.findFirst({ where: eq(user.id, input.userBId) }),
+        readDb.query.profiles.findFirst({ where: eq(profiles.userId, input.userAId) }),
+        readDb.query.profiles.findFirst({ where: eq(profiles.userId, input.userBId) }),
+    ]);
 
-    await updateSignalsAfterDecision(input.viewerUserId, input.decision);
+    const nameA = profileA?.firstName || userA?.name?.split(" ")[0] || "Someone";
+    const nameB = profileB?.firstName || userB?.name?.split(" ")[0] || "Someone";
 
-    if (input.decision !== "open_to_meet") {
-        return { event, pair: null, mutual: null };
-    }
+    await Promise.all([
+        userA?.pushToken
+            ? sendPushNotification(userA.pushToken, {
+                  title: "It's mutual",
+                  body: `You and ${nameB} are both interested`,
+                  data: {
+                      type: NOTIFICATION_TYPES.MUTUAL_MATCH,
+                      pairId: input.pairId,
+                      userId: input.userBId,
+                  },
+              })
+            : Promise.resolve(),
+        userB?.pushToken
+            ? sendPushNotification(userB.pushToken, {
+                  title: "It's mutual",
+                  body: `You and ${nameA} are both interested`,
+                  data: {
+                      type: NOTIFICATION_TYPES.MUTUAL_MATCH,
+                      pairId: input.pairId,
+                      userId: input.userAId,
+                  },
+              })
+            : Promise.resolve(),
+    ]);
+}
 
+async function linkInterestRowsToPair(input: {
+    pairId: string;
+    eventId: string;
+    viewerUserId: string;
+    candidateUserId: string;
+}) {
+    await Promise.all([
+        db
+            .update(recommendationEvents)
+            .set({ createdCandidatePairId: input.pairId })
+            .where(eq(recommendationEvents.id, input.eventId)),
+        db
+            .update(userMatchInterests)
+            .set({ matchedCandidatePairId: input.pairId, updatedAt: new Date() })
+            .where(
+                or(
+                    and(
+                        eq(userMatchInterests.viewerUserId, input.viewerUserId),
+                        eq(userMatchInterests.candidateUserId, input.candidateUserId),
+                    ),
+                    and(
+                        eq(userMatchInterests.viewerUserId, input.candidateUserId),
+                        eq(userMatchInterests.candidateUserId, input.viewerUserId),
+                    ),
+                ),
+            ),
+    ]);
+}
+
+async function createPairFromReciprocalInterest(input: {
+    viewerUserId: string;
+    candidateUserId: string;
+    eventId: string;
+    source: RecommendationSource;
+    matchType?: MatchType;
+    reverseDecidedAt?: Date | null;
+}) {
     const now = new Date();
     const { userAId, userBId } = canonicalizePairUsers(input.viewerUserId, input.candidateUserId);
     const existing = await readDb.query.candidatePairs.findFirst({
         where: and(
             eq(candidatePairs.userAId, userAId),
             eq(candidatePairs.userBId, userBId),
-            inArray(candidatePairs.status, ["active", "queued", "mutual"]),
+            or(
+                eq(candidatePairs.status, "mutual"),
+                eq(candidatePairs.status, "queued"),
+                and(eq(candidatePairs.status, "active"), gte(candidatePairs.expiresAt, now)),
+            ),
         ),
     });
 
@@ -993,17 +1114,32 @@ export async function handleRecommendationDecision(input: {
             const result = await respondToCandidatePair(existing.id, input.viewerUserId, "open_to_meet", {
                 allowConcurrentInterest: true,
             });
-            await db
-                .update(recommendationEvents)
-                .set({ createdCandidatePairId: result.pair.id })
-                .where(eq(recommendationEvents.id, event.id));
-            return { event, pair: result.pair, mutual: result.mutual };
+            await linkInterestRowsToPair({
+                pairId: result.pair.id,
+                eventId: input.eventId,
+                viewerUserId: input.viewerUserId,
+                candidateUserId: input.candidateUserId,
+            });
+            if (result.mutual) {
+                await notifyReciprocalMatch({
+                    pairId: result.pair.id,
+                    userAId: result.mutual.userAId,
+                    userBId: result.mutual.userBId,
+                });
+            }
+            return result;
         }
-        await db
-            .update(recommendationEvents)
-            .set({ createdCandidatePairId: existing.id })
-            .where(eq(recommendationEvents.id, event.id));
-        return { event, pair: existing, mutual: null };
+
+        await linkInterestRowsToPair({
+            pairId: existing.id,
+            eventId: input.eventId,
+            viewerUserId: input.viewerUserId,
+            candidateUserId: input.candidateUserId,
+        });
+        const mutual = await readDb.query.mutualMatches.findFirst({
+            where: eq(mutualMatches.candidatePairId, existing.id),
+        });
+        return { pair: existing, mutual };
     }
 
     const [viewerProfile, candidateProfile] = await Promise.all([
@@ -1016,8 +1152,11 @@ export async function handleRecommendationDecision(input: {
 
     const compatibility = scoreProfilePair(viewerProfile, candidateProfile);
     const expiresAt = new Date(now.getTime() + CANDIDATE_PAIR_EXPIRY_HOURS * 60 * 60 * 1000);
-    const aDecision = userAId === input.viewerUserId ? "open_to_meet" : "pending";
-    const bDecision = userBId === input.viewerUserId ? "open_to_meet" : "pending";
+    const reverseUserId = input.candidateUserId;
+    const aDecision = userAId === reverseUserId ? "open_to_meet" : "pending";
+    const bDecision = userBId === reverseUserId ? "open_to_meet" : "pending";
+    const shownToAAt = userAId === reverseUserId ? input.reverseDecidedAt ?? now : now;
+    const shownToBAt = userBId === reverseUserId ? input.reverseDecidedAt ?? now : now;
 
     const pair = await db.transaction(async (tx) => {
         const [created] = await tx
@@ -1027,8 +1166,8 @@ export async function handleRecommendationDecision(input: {
                 userBId,
                 compatibilityScore: compatibility.score,
                 matchReasons: compatibility.reasons,
-                shownToAAt: now,
-                shownToBAt: now,
+                shownToAAt,
+                shownToBAt,
                 expiresAt,
                 status: "active",
                 aDecision,
@@ -1043,32 +1182,145 @@ export async function handleRecommendationDecision(input: {
             toStatus: "active",
             metadata: {
                 source: input.source,
-                recommendationEventId: event.id,
-                decision: input.decision,
+                recommendationEventId: input.eventId,
+                reciprocal: true,
                 matchType: input.matchType,
-            },
-        });
-
-        await recordCandidatePairHistory(tx, {
-            pairId: created.id,
-            actorUserId: input.viewerUserId,
-            eventType: "responded",
-            fromStatus: "active",
-            toStatus: "active",
-            metadata: {
-                decision: "open_to_meet",
-                aDecision,
-                bDecision,
             },
         });
 
         return created;
     });
 
-    await db
-        .update(recommendationEvents)
-        .set({ createdCandidatePairId: pair.id })
-        .where(eq(recommendationEvents.id, event.id));
+    const result = await respondToCandidatePair(pair.id, input.viewerUserId, "open_to_meet", {
+        allowConcurrentInterest: true,
+    });
+    await linkInterestRowsToPair({
+        pairId: result.pair.id,
+        eventId: input.eventId,
+        viewerUserId: input.viewerUserId,
+        candidateUserId: input.candidateUserId,
+    });
+    if (result.mutual) {
+        await notifyReciprocalMatch({
+            pairId: result.pair.id,
+            userAId: result.mutual.userAId,
+            userBId: result.mutual.userBId,
+        });
+    }
+    return result;
+}
 
-    return { event, pair, mutual: null };
+export async function handleRecommendationDecision(input: {
+    viewerUserId: string;
+    candidateUserId: string;
+    decision: Exclude<RecommendationDecision, "shown" | "viewed" | "ignored">;
+    source: RecommendationSource;
+    matchType?: MatchType;
+}) {
+    if (input.viewerUserId === input.candidateUserId) {
+        throw new Error("Cannot decide on your own profile");
+    }
+
+    console.log("[match-intelligence] recommendation decision received", {
+        viewerUserId: input.viewerUserId,
+        candidateUserId: input.candidateUserId,
+        decision: input.decision,
+        source: input.source,
+        matchType: input.matchType,
+    });
+
+    const event = await recordRecommendationEvent({
+        viewerUserId: input.viewerUserId,
+        candidateUserId: input.candidateUserId,
+        source: input.source,
+        matchType: input.matchType,
+        event: input.decision,
+    });
+
+    await updateSignalsAfterDecision(input.viewerUserId, input.decision);
+    const interest = await upsertDirectedInterest({
+        eventId: event.id,
+        viewerUserId: input.viewerUserId,
+        candidateUserId: input.candidateUserId,
+        decision: input.decision,
+        source: input.source,
+        matchType: input.matchType,
+    });
+
+    console.log("[match-intelligence] directed interest updated", {
+        eventId: event.id,
+        interestId: interest.id,
+        viewerUserId: interest.viewerUserId,
+        candidateUserId: interest.candidateUserId,
+        decision: interest.decision,
+    });
+
+    if (input.decision !== "open_to_meet") {
+        console.log("[match-intelligence] no pair created for non-interest decision", {
+            eventId: event.id,
+            decision: input.decision,
+        });
+        return { event, interest, pair: null, mutual: null, mutualMatchCreated: false };
+    }
+
+    const reverseInterest = await readDb.query.userMatchInterests.findFirst({
+        where: and(
+            eq(userMatchInterests.viewerUserId, input.candidateUserId),
+            eq(userMatchInterests.candidateUserId, input.viewerUserId),
+            eq(userMatchInterests.decision, "open_to_meet"),
+        ),
+    });
+
+    console.log("[match-intelligence] reverse interest lookup", {
+        eventId: event.id,
+        viewerUserId: input.viewerUserId,
+        candidateUserId: input.candidateUserId,
+        foundReverseInterest: Boolean(reverseInterest),
+        reverseInterestId: reverseInterest?.id ?? null,
+        reverseMatchedCandidatePairId: reverseInterest?.matchedCandidatePairId ?? null,
+    });
+
+    if (reverseInterest?.matchedCandidatePairId) {
+        const pair = await readDb.query.candidatePairs.findFirst({
+            where: eq(candidatePairs.id, reverseInterest.matchedCandidatePairId),
+        });
+        const mutual = await readDb.query.mutualMatches.findFirst({
+            where: eq(mutualMatches.candidatePairId, reverseInterest.matchedCandidatePairId),
+        });
+        await linkInterestRowsToPair({
+            pairId: reverseInterest.matchedCandidatePairId,
+            eventId: event.id,
+            viewerUserId: input.viewerUserId,
+            candidateUserId: input.candidateUserId,
+        });
+        return { event, interest, pair: pair ?? null, mutual: mutual ?? null, mutualMatchCreated: Boolean(mutual) };
+    }
+
+    if (!reverseInterest) {
+        return { event, interest, pair: null, mutual: null, mutualMatchCreated: false };
+    }
+
+    const result = await createPairFromReciprocalInterest({
+        viewerUserId: input.viewerUserId,
+        candidateUserId: input.candidateUserId,
+        eventId: event.id,
+        source: input.source,
+        matchType: input.matchType,
+        reverseDecidedAt: reverseInterest.decidedAt,
+    });
+
+    console.log("[match-intelligence] reciprocal match resolution", {
+        eventId: event.id,
+        pairId: result.pair.id,
+        mutualMatchId: result.mutual?.id ?? null,
+        mutualMatchCreated: Boolean(result.mutual),
+    });
+
+    return {
+        event,
+        interest,
+        pair: result.pair,
+        mutual: result.mutual,
+        mutualMatchCreated: Boolean(result.mutual),
+    };
 }

@@ -50,6 +50,7 @@ export default function HomeScreen() {
         firstName?: string;
     }>({ visible: false, type: 'open_to_meet' });
     const [refreshing, setRefreshing] = useState(false);
+    const [savedDecisions, setSavedDecisions] = useState<Record<string, RecommendationDecision>>({});
 
     const { data: profile } = useProfile();
     const dailyRecommendations = useDailyRecommendations();
@@ -87,17 +88,38 @@ export default function HomeScreen() {
         decision: RecommendationDecision
     ) => {
         try {
-            await recommendationDecision.mutateAsync({
+            const { result } = await recommendationDecision.mutateAsync({
                 candidateUserId: recommendation.candidateUserId,
                 decision,
                 source: 'daily_recommendations',
                 matchType: recommendation.matchType,
             });
 
+            setSavedDecisions((current) => ({
+                ...current,
+                [recommendation.candidateUserId]: decision,
+            }));
+
+            const firstName = recommendation.profilePreview.firstName;
+            const message = result.mutualMatchCreated
+                ? `It's mutual with ${firstName}. Check Dates.`
+                : decision === 'open_to_meet'
+                ? `Interest saved. We'll tell you if it becomes mutual.`
+                : decision === 'maybe'
+                    ? `${firstName} saved for later.`
+                    : `${firstName} passed. Tomorrow's picks will learn from this.`;
+            toast.show({
+                message,
+                variant: decision === 'passed' ? 'default' : 'success',
+                position: 'top',
+                size: 'medium',
+                duration: result.mutualMatchCreated ? 3600 : 2600,
+            });
+
             setInfoSheet({
                 visible: true,
                 type: decision === 'passed' ? 'pass' : decision,
-                firstName: recommendation.profilePreview.firstName,
+                firstName,
             });
         } catch {
             toast.show({
@@ -130,6 +152,7 @@ export default function HomeScreen() {
                         <DailyRecommendationsPreview
                             recommendations={recommendations}
                             isError={dailyRecommendations.isError}
+                            savedDecisions={savedDecisions}
                             onViewProfile={handleViewRecommendationProfile}
                             onDecision={handleRecommendationDecision}
                             actionsDisabled={recommendationDecision.isPending}

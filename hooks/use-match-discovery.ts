@@ -75,6 +75,14 @@ export interface DailyRecommendationsResponse {
   recommendations: RankedRecommendation[];
 }
 
+export interface RecommendationDecisionResponse {
+  event: unknown;
+  interest?: unknown;
+  pair?: unknown | null;
+  mutual?: { id?: string } | null;
+  mutualMatchCreated?: boolean;
+}
+
 function unwrapData<T>(response: { data?: T } | T): T {
   if (response && typeof response === 'object' && 'data' in response) {
     return (response as { data: T }).data;
@@ -188,11 +196,11 @@ export function useRecommendationDecision() {
       source: RecommendationSource;
       matchType?: MatchType;
     }) => {
-      const response = await apiFetch('/api/recommendation-decisions', {
+      const response = await apiFetch<{ data: RecommendationDecisionResponse } | RecommendationDecisionResponse>('/api/recommendation-decisions', {
         method: 'POST',
         body: payload,
       });
-      return { response, payload };
+      return { result: unwrapData(response), payload };
     },
     onSuccess: (_, { candidateUserId }) => {
       queryClient.invalidateQueries({ queryKey: ['recommendations', 'daily'] });

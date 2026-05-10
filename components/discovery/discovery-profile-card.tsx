@@ -16,6 +16,7 @@ interface DiscoveryProfileCardProps {
   recommendation: RankedRecommendation;
   variant?: 'large' | 'compact';
   actionsDisabled?: boolean;
+  savedDecision?: RecommendationDecision;
   onViewProfile: (recommendation: RankedRecommendation) => void;
   onDecision: (recommendation: RankedRecommendation, decision: RecommendationDecision) => void;
 }
@@ -31,6 +32,7 @@ export function DiscoveryProfileCard({
   recommendation,
   variant = 'large',
   actionsDisabled = false,
+  savedDecision,
   onViewProfile,
   onDecision,
 }: DiscoveryProfileCardProps) {
@@ -38,6 +40,15 @@ export function DiscoveryProfileCard({
   const preview = recommendation.profilePreview;
   const photo = preview.profilePhoto || preview.photos?.[0];
   const compact = variant === 'compact';
+  const hasSavedDecision = Boolean(savedDecision);
+  const decisionLabel =
+    savedDecision === 'open_to_meet'
+      ? 'Interest saved'
+      : savedDecision === 'maybe'
+        ? 'Saved for later'
+        : savedDecision === 'passed'
+          ? 'Passed'
+          : 'Interested';
 
   const handleView = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -117,22 +128,46 @@ export function DiscoveryProfileCard({
             <Text style={[styles.secondaryActionText, { color: colors.foreground }]}>View</Text>
           </Pressable>
           <Pressable
-            disabled={actionsDisabled}
+            disabled={actionsDisabled || hasSavedDecision}
             onPress={() => handleDecision('open_to_meet')}
-            style={[styles.primaryAction, actionsDisabled && styles.disabledAction, { backgroundColor: colors.primary }]}
+            style={[
+              styles.primaryAction,
+              (actionsDisabled || hasSavedDecision) && styles.disabledAction,
+              { backgroundColor: hasSavedDecision ? '#10b981' : colors.primary },
+            ]}
           >
-            <Text style={[styles.primaryActionText, { color: colors.primaryForeground }]}>Interested</Text>
+            <Text style={[styles.primaryActionText, { color: colors.primaryForeground }]}>{decisionLabel}</Text>
           </Pressable>
         </View>
 
         <View style={styles.smallActionRow}>
-          <Pressable disabled={actionsDisabled} onPress={() => handleDecision('maybe')} style={styles.smallAction}>
-            <Ionicons name="time-outline" size={15} color={colors.mutedForeground} />
-            <Text style={[styles.smallActionText, { color: colors.mutedForeground }]}>Maybe</Text>
+          <Pressable
+            disabled={actionsDisabled || hasSavedDecision}
+            onPress={() => handleDecision('maybe')}
+            style={styles.smallAction}
+          >
+            <Ionicons
+              name={savedDecision === 'maybe' ? 'checkmark-circle' : 'time-outline'}
+              size={15}
+              color={savedDecision === 'maybe' ? '#10b981' : colors.mutedForeground}
+            />
+            <Text style={[styles.smallActionText, { color: savedDecision === 'maybe' ? '#10b981' : colors.mutedForeground }]}>
+              Maybe
+            </Text>
           </Pressable>
-          <Pressable disabled={actionsDisabled} onPress={() => handleDecision('passed')} style={styles.smallAction}>
-            <Ionicons name="close-outline" size={16} color={colors.mutedForeground} />
-            <Text style={[styles.smallActionText, { color: colors.mutedForeground }]}>Pass</Text>
+          <Pressable
+            disabled={actionsDisabled || hasSavedDecision}
+            onPress={() => handleDecision('passed')}
+            style={styles.smallAction}
+          >
+            <Ionicons
+              name={savedDecision === 'passed' ? 'checkmark-circle' : 'close-outline'}
+              size={16}
+              color={savedDecision === 'passed' ? '#10b981' : colors.mutedForeground}
+            />
+            <Text style={[styles.smallActionText, { color: savedDecision === 'passed' ? '#10b981' : colors.mutedForeground }]}>
+              Pass
+            </Text>
           </Pressable>
         </View>
       </View>

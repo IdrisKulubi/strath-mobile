@@ -18,7 +18,7 @@ interface HomeHeaderProps {
 export function HomeHeader({ firstName, matchCount }: HomeHeaderProps) {
     const { colors, isDark } = useTheme();
     const greeting = getGreeting();
-    const visibleCount = matchCount && matchCount > 0 ? Math.min(matchCount, 4) : 0;
+    const visibleCount = matchCount && matchCount > 0 ? Math.min(matchCount, 5) : 0;
     const subtitle =
         visibleCount > 0
             ? `Your top ${visibleCount} matches today`
@@ -32,7 +32,7 @@ export function HomeHeader({ firstName, matchCount }: HomeHeaderProps) {
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
             {visibleCount > 0 && (
                 <Text style={[styles.refreshLine, { color: colors.mutedForeground }]}>
-                    Only {visibleCount} matches refresh every 24 hours
+                    Only {visibleCount} matches refresh every day.
                 </Text>
             )}
         </View>
