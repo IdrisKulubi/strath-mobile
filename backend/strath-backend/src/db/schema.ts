@@ -401,6 +401,66 @@ export const dailyMatchSkips = pgTable(
     })
 );
 
+export const userMatchPreferences = pgTable(
+    "user_match_preferences",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        preferenceMode: text("preference_mode")
+            .$type<"similar_to_me" | "different_from_me" | "surprise_me" | "active_only" | "serious_matches">()
+            .default("surprise_me")
+            .notNull(),
+        availableNow: boolean("available_now").default(false).notNull(),
+        availableToday: boolean("available_today").default(false).notNull(),
+        openToCalls: boolean("open_to_calls").default(false).notNull(),
+        preferredAgeMin: integer("preferred_age_min"),
+        preferredAgeMax: integer("preferred_age_max"),
+        preferredUniversities: jsonb("preferred_universities").$type<string[]>().default([]).notNull(),
+        preferredContactWindow: text("preferred_contact_window"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userUniqueIdx: uniqueIndex("user_match_preferences_user_unique_idx").on(table.userId),
+        preferenceModeIdx: index("user_match_preferences_mode_idx").on(table.preferenceMode),
+        availabilityIdx: index("user_match_preferences_availability_idx").on(table.availableNow, table.availableToday),
+    })
+);
+
+export const userMatchSignals = pgTable(
+    "user_match_signals",
+    {
+        userId: text("user_id")
+            .primaryKey()
+            .references(() => user.id, { onDelete: "cascade" }),
+        lastActiveAt: timestamp("last_active_at"),
+        activeScore: integer("active_score").default(0).notNull(),
+        profileViewsCount: integer("profile_views_count").default(0).notNull(),
+        likesGivenCount: integer("likes_given_count").default(0).notNull(),
+        passesGivenCount: integer("passes_given_count").default(0).notNull(),
+        matchesReceivedCount: integer("matches_received_count").default(0).notNull(),
+        responseRate: integer("response_rate").default(0).notNull(),
+        averageResponseTimeMinutes: integer("average_response_time_minutes"),
+        mutualMatchRate: integer("mutual_match_rate").default(0).notNull(),
+        noResponseCount: integer("no_response_count").default(0).notNull(),
+        openToMeetCount: integer("open_to_meet_count").default(0).notNull(),
+        passCount: integer("pass_count").default(0).notNull(),
+        maybeCount: integer("maybe_count").default(0).notNull(),
+        callAcceptanceRate: integer("call_acceptance_rate").default(0).notNull(),
+        matchQualityScore: integer("match_quality_score").default(0).notNull(),
+        ghostingPenalty: integer("ghosting_penalty").default(0).notNull(),
+        passRiskPenalty: integer("pass_risk_penalty").default(0).notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        activeScoreIdx: index("user_match_signals_active_score_idx").on(table.activeScore),
+        responseRateIdx: index("user_match_signals_response_rate_idx").on(table.responseRate),
+        updatedAtIdx: index("user_match_signals_updated_at_idx").on(table.updatedAt),
+    })
+);
+
 // Date requests — invite someone on a date (vibe + message)
 export const dateRequests = pgTable(
     "date_requests",
@@ -510,6 +570,43 @@ export const candidatePairHistory = pgTable(
         pairIdx: index("candidate_pair_history_pair_idx").on(table.pairId),
         actorIdx: index("candidate_pair_history_actor_idx").on(table.actorUserId),
         eventIdx: index("candidate_pair_history_event_idx").on(table.eventType),
+    })
+);
+
+export const recommendationEvents = pgTable(
+    "recommendation_events",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        viewerUserId: text("viewer_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        candidateUserId: text("candidate_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        source: text("source")
+            .$type<"daily_recommendations" | "browse" | "admin_curated" | "available_now">()
+            .notNull(),
+        matchType: text("match_type")
+            .$type<"similarity" | "complementary" | "discovery" | "high_activity" | "admin_curated">(),
+        finalScore: integer("final_score"),
+        compatibilityScore: integer("compatibility_score"),
+        activityScore: integer("activity_score"),
+        responseScore: integer("response_score"),
+        diversityScore: integer("diversity_score"),
+        mutualProbabilityScore: integer("mutual_probability_score"),
+        shownAt: timestamp("shown_at").defaultNow().notNull(),
+        viewedAt: timestamp("viewed_at"),
+        decision: text("decision").$type<"shown" | "viewed" | "open_to_meet" | "maybe" | "passed" | "ignored">(),
+        decidedAt: timestamp("decided_at"),
+        createdCandidatePairId: uuid("created_candidate_pair_id").references(() => candidatePairs.id, { onDelete: "set null" }),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    },
+    (table) => ({
+        viewerIdx: index("recommendation_events_viewer_idx").on(table.viewerUserId),
+        candidateIdx: index("recommendation_events_candidate_idx").on(table.candidateUserId),
+        sourceIdx: index("recommendation_events_source_idx").on(table.source),
+        shownAtIdx: index("recommendation_events_shown_at_idx").on(table.shownAt),
+        viewerCandidateIdx: index("recommendation_events_viewer_candidate_idx").on(table.viewerUserId, table.candidateUserId),
     })
 );
 
@@ -839,6 +936,8 @@ export const userRelations = relations(user, ({ one, many }) => ({
     candidatePairsB: many(candidatePairs, { relationName: "candidatePairUserB" }),
     mutualMatchesA: many(mutualMatches, { relationName: "mutualMatchUserA" }),
     mutualMatchesB: many(mutualMatches, { relationName: "mutualMatchUserB" }),
+    matchPreferences: one(userMatchPreferences),
+    matchSignals: one(userMatchSignals),
     faceVerificationSessions: many(faceVerificationSessions),
     faceVerificationJobs: many(faceVerificationJobs),
     profilePhotoAssets: many(profilePhotoAssets),
@@ -949,6 +1048,37 @@ export const profileViewsRelations = relations(profileViews, ({ one }) => ({
         fields: [profileViews.viewedId],
         references: [user.id],
         relationName: "profileViewed",
+    }),
+}));
+
+export const userMatchPreferencesRelations = relations(userMatchPreferences, ({ one }) => ({
+    user: one(user, {
+        fields: [userMatchPreferences.userId],
+        references: [user.id],
+    }),
+}));
+
+export const userMatchSignalsRelations = relations(userMatchSignals, ({ one }) => ({
+    user: one(user, {
+        fields: [userMatchSignals.userId],
+        references: [user.id],
+    }),
+}));
+
+export const recommendationEventsRelations = relations(recommendationEvents, ({ one }) => ({
+    viewer: one(user, {
+        fields: [recommendationEvents.viewerUserId],
+        references: [user.id],
+        relationName: "recommendationEventViewer",
+    }),
+    candidate: one(user, {
+        fields: [recommendationEvents.candidateUserId],
+        references: [user.id],
+        relationName: "recommendationEventCandidate",
+    }),
+    createdCandidatePair: one(candidatePairs, {
+        fields: [recommendationEvents.createdCandidatePairId],
+        references: [candidatePairs.id],
     }),
 }));
 
@@ -1787,6 +1917,12 @@ export type NewAgentContext = typeof agentContext.$inferInsert;
 export type CandidatePair = typeof candidatePairs.$inferSelect;
 export type NewCandidatePair = typeof candidatePairs.$inferInsert;
 export type CandidatePairHistory = typeof candidatePairHistory.$inferSelect;
+export type UserMatchPreference = typeof userMatchPreferences.$inferSelect;
+export type NewUserMatchPreference = typeof userMatchPreferences.$inferInsert;
+export type UserMatchSignal = typeof userMatchSignals.$inferSelect;
+export type NewUserMatchSignal = typeof userMatchSignals.$inferInsert;
+export type RecommendationEvent = typeof recommendationEvents.$inferSelect;
+export type NewRecommendationEvent = typeof recommendationEvents.$inferInsert;
 export type MutualMatch = typeof mutualMatches.$inferSelect;
 export type NewMutualMatch = typeof mutualMatches.$inferInsert;
 export type WeeklyDrop = typeof weeklyDrops.$inferSelect;
