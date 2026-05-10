@@ -880,6 +880,24 @@ export async function generateCandidatePairsForUser(userId: string) {
         limit: 60,
     });
 
+    console.log("[candidate-pairs] viewer profile + exclusions", {
+        userId,
+        allowAdminPreview,
+        viewerGender: currentProfile.gender,
+        interestedIn: currentProfile.interestedIn,
+        targetGenders: targetGenders.length > 0 ? targetGenders : "any",
+        profileCompleted: currentProfile.profileCompleted,
+        isVisible: currentProfile.isVisible,
+        discoveryPaused: currentProfile.discoveryPaused,
+        incognitoMode: currentProfile.incognitoMode,
+        matchExcludedContainsViewer: matchExcludedUserIds.has(userId),
+        matchExcludedCount: matchExcludedUserIds.size,
+        blockedCount: blockedIds.size,
+        matchedCount: matchedIds.size,
+        usersIPassedCount: usersIPassedIds.size,
+        rawCandidateCount: candidateProfiles.length,
+    });
+
     const cooldownCutoff = new Date(Date.now() - EXPIRED_PAIR_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
 
     const reciprocalCandidates = candidateProfiles.filter((candidate) => {
@@ -892,6 +910,7 @@ export async function generateCandidatePairsForUser(userId: string) {
     });
 
     const reciprocalPoolSize = reciprocalCandidates.length;
+    const reciprocalRejected = candidateProfiles.length - reciprocalPoolSize;
 
     const oppositePoolCount = await getOppositeGenderPoolCount(excludedIds, targetGenders);
     const fairnessConfig = getFairnessRelaxConfig();
@@ -928,6 +947,7 @@ export async function generateCandidatePairsForUser(userId: string) {
         waitDays: waitContext.waitDays,
         hasPairHistory: waitContext.hasPairHistory,
         reciprocalPoolSize,
+        reciprocalRejected,
         oppositePoolCount,
         imbalanceExtraRelaxStep,
         maxQueue: MAX_CANDIDATE_QUEUE_SIZE,
@@ -941,24 +961,72 @@ export async function generateCandidatePairsForUser(userId: string) {
         reciprocalCandidates.map(async (candidate) => {
             const exposureCount = await getActiveExposureCount(candidate.userId);
             if (exposureCount >= ACTIVE_EXPOSURE_CAP) {
+                console.log("[candidate-pairs] scoring skip exposure cap", {
+                    viewerUserId: userId,
+                    candidateUserId: candidate.userId,
+                    exposureCount,
+                    exposureCap: ACTIVE_EXPOSURE_CAP,
+                });
                 return null;
             }
 
             const { score, reasons } = await computeCompatibility(userId, candidate.userId);
+            const boostedScore = buildBoostedCompatibilityScore(
+                score,
+                currentProfile,
+                candidate,
+                candidate.user?.lastActive ?? candidate.lastActive ?? null,
+            );
+            const builtReasons = buildReasons(reasons, currentProfile, candidate);
+
+            console.log("[candidate-pairs] scored candidate", {
+                viewerUserId: userId,
+                candidateUserId: candidate.userId,
+                firstName: candidate.firstName,
+                gender: candidate.gender,
+                interestedIn: candidate.interestedIn,
+                course: candidate.course,
+                university: candidate.university,
+                baseScore: score,
+                boostedScore,
+                effectiveMin,
+                passesThreshold: boostedScore >= effectiveMin,
+                exposureCount,
+                reasons: builtReasons,
+            });
 
             return {
                 candidate,
-                score: buildBoostedCompatibilityScore(
-                    score,
-                    currentProfile,
-                    candidate,
-                    candidate.user?.lastActive ?? candidate.lastActive ?? null,
-                ),
-                reasons: buildReasons(reasons, currentProfile, candidate),
+                score: boostedScore,
+                reasons: builtReasons,
                 activeExposureCount: exposureCount,
             };
         }),
     );
+
+    const scored = scoredCandidates.filter(
+        (entry): entry is NonNullable<typeof entry> => Boolean(entry),
+    );
+    const topScoredPreview = [...scored]
+        .sort((left, right) => right.score - left.score)
+        .slice(0, 10)
+        .map((entry) => ({
+            candidateUserId: entry.candidate.userId,
+            firstName: entry.candidate.firstName,
+            score: entry.score,
+            gapToEffectiveMin: effectiveMin - entry.score,
+            activeExposureCount: entry.activeExposureCount,
+            reasons: entry.reasons,
+        }));
+
+    console.log("[candidate-pairs] scoring summary", {
+        viewerUserId: userId,
+        reciprocalPoolSize,
+        scoredCount: scored.length,
+        exposureFilteredCount: scoredCandidates.length - scored.length,
+        effectiveMin,
+        topScoredPreview,
+    });
 
     const aboveThreshold = scoredCandidates
         .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
@@ -985,9 +1053,6 @@ export async function generateCandidatePairsForUser(userId: string) {
     }
 
     if (aboveThreshold.length === 0) {
-        const scored = scoredCandidates.filter(
-            (e): e is NonNullable<typeof e> => Boolean(e),
-        );
         const scores = scored.map((e) => e.score);
         const maxScore = scores.length > 0 ? Math.max(...scores) : null;
         const minScore = scores.length > 0 ? Math.min(...scores) : null;
@@ -1012,7 +1077,17 @@ export async function generateCandidatePairsForUser(userId: string) {
         return [];
     }
 
-    console.log("[candidate-pairs] selected batch:", aboveThreshold.length, "pairs");
+    console.log("[candidate-pairs] selected batch", {
+        viewerUserId: userId,
+        selectedCount: aboveThreshold.length,
+        selected: aboveThreshold.map((entry) => ({
+            candidateUserId: entry.candidate.userId,
+            firstName: entry.candidate.firstName,
+            score: entry.score,
+            reasons: entry.reasons,
+            activeExposureCount: entry.activeExposureCount,
+        })),
+    });
 
     const now = new Date();
     const activeExpiresAt = new Date(now.getTime() + CANDIDATE_PAIR_EXPIRY_HOURS * 60 * 60 * 1000);

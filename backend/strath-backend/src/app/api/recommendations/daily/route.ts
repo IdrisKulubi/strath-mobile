@@ -14,7 +14,14 @@ export async function GET(req: NextRequest) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
 
-        if (!isAdminSession(session)) {
+        const isAdminPreview = isAdminSession(session);
+        console.log("[recommendations/daily] GET", {
+            userId: session.user.id,
+            userRole: (session.user as { role?: string }).role ?? null,
+            isAdminPreview,
+        });
+
+        if (!isAdminPreview) {
             try {
                 await requireMatchmakingAccess(session.user.id);
             } catch (accessError) {
@@ -23,6 +30,19 @@ export async function GET(req: NextRequest) {
         }
 
         const recommendations = await getDailyRecommendations(session.user.id);
+        console.log("[recommendations/daily] result", {
+            userId: session.user.id,
+            mode: recommendations.mode,
+            recommendationCount: recommendations.recommendations.length,
+            preferenceMode: recommendations.preferenceMode,
+            candidates: recommendations.recommendations.map((item) => ({
+                candidateUserId: item.candidateUserId,
+                firstName: item.profilePreview.firstName,
+                finalScore: item.finalScore,
+                matchType: item.matchType,
+                reason: item.reason,
+            })),
+        });
         return successResponse(recommendations);
     } catch (error) {
         console.error("[recommendations/daily] Error:", error);

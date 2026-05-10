@@ -12,6 +12,7 @@ import {
 import { runPairExpiration } from "@/lib/services/pair-expiration-service";
 import { getActiveMatchHoldForUser } from "@/lib/services/match-hold-service";
 import { getManualMatchmakingCopy, isManualMatchmakingModeEnabled } from "@/lib/services/manual-matchmaking-mode";
+import { isTemporaryAdminMatchPreviewUser } from "@/lib/services/match-exclusion-service";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,20 @@ export async function GET(req: NextRequest) {
         }
 
         const userId = session.user.id;
-        console.log("[daily-matches] GET", { userId });
+        const isAdminPreview = await isTemporaryAdminMatchPreviewUser(userId);
+        console.log("[daily-matches] GET", {
+            userId,
+            userRole: (session.user as { role?: string }).role ?? null,
+            manualMode: isManualMatchmakingModeEnabled(),
+            isAdminPreview,
+        });
 
-        if (isManualMatchmakingModeEnabled()) {
+        if (isManualMatchmakingModeEnabled() && !isAdminPreview) {
             const curatedMatches = await getActiveAdminCuratedCandidatePairsForUser(userId);
+            console.log("[daily-matches] manual mode curated lookup", {
+                userId,
+                curatedCount: curatedMatches.length,
+            });
             if (curatedMatches.length > 0) {
                 return successResponse({
                     mode: "matches" as const,
@@ -44,6 +55,8 @@ export async function GET(req: NextRequest) {
                 hold: null,
                 manualCuration: getManualMatchmakingCopy(),
             });
+        } else if (isManualMatchmakingModeEnabled() && isAdminPreview) {
+            console.log("[daily-matches] admin preview bypassing manual matchmaking mode", { userId });
         }
 
         const expiration = await runPairExpiration();

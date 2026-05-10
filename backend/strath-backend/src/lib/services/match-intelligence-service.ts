@@ -22,7 +22,7 @@ import {
 } from "@/lib/services/candidate-pairs-service";
 import { FACE_VERIFICATION_STATUSES } from "@/lib/services/face-verification-policy";
 import { getActiveMatchHoldForUser, isUserOnMatchHold } from "@/lib/services/match-hold-service";
-import { resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
+import { isTemporaryAdminMatchPreviewUser, resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
 import { scoreProfilePair } from "@/lib/services/match-ranking";
 
 export type PreferenceMode =
@@ -451,6 +451,7 @@ async function getEligibleCandidateProfiles(viewerUserId: string, filters: Brows
         getUsersIPassedIds(viewerUserId),
         getExistingDyadIds(viewerUserId),
     ]);
+    const allowAdminPreview = poolExcludedIds.has(viewerUserId) && await isTemporaryAdminMatchPreviewUser(viewerUserId);
 
     const excludedIds = unique([
         viewerUserId,
@@ -487,12 +488,31 @@ async function getEligibleCandidateProfiles(viewerUserId: string, filters: Brows
     });
 
     const now = new Date();
+    const eligibleCandidates = candidates
+        .filter((candidate) => !candidate.user?.deletedAt)
+        .filter((candidate) => isReciprocalGenderMatch(viewerProfile.gender, candidate.gender, candidate.interestedIn as string[] | null))
+        .filter((candidate) => !filters.activeRecently || scoreActivityFromDate(candidate.user?.lastActive ?? candidate.lastActive, now) >= 55);
+
+    console.log("[match-intelligence] eligible pool", {
+        viewerUserId,
+        allowAdminPreview,
+        viewerGender: viewerProfile.gender,
+        interestedIn: viewerProfile.interestedIn,
+        targetGenders: targetGenders.length > 0 ? targetGenders : "any",
+        poolExcludedContainsViewer: poolExcludedIds.has(viewerUserId),
+        poolExcludedCount: poolExcludedIds.size,
+        blockedCount: blockedIds.size,
+        passedCount: passedIds.size,
+        existingDyadsCount: existingDyads.size,
+        excludedIdsCount: excludedIds.length,
+        rawCandidateCount: candidates.length,
+        eligibleCandidateCount: eligibleCandidates.length,
+        filters,
+    });
+
     return {
         viewerProfile,
-        candidates: candidates
-            .filter((candidate) => !candidate.user?.deletedAt)
-            .filter((candidate) => isReciprocalGenderMatch(viewerProfile.gender, candidate.gender, candidate.interestedIn as string[] | null))
-            .filter((candidate) => !filters.activeRecently || scoreActivityFromDate(candidate.user?.lastActive ?? candidate.lastActive, now) >= 55),
+        candidates: eligibleCandidates,
     };
 }
 
@@ -501,11 +521,19 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
     await upsertActiveSignal(viewerUserId);
 
     if (await isUserOnMatchHold(viewerUserId)) {
+        console.log("[match-intelligence] viewer on hold, no recommendations", { viewerUserId });
         return [] as RankedRecommendation[];
     }
 
     const { viewerProfile, candidates } = await getEligibleCandidateProfiles(viewerUserId, filters);
-    if (!viewerProfile || candidates.length === 0) return [];
+    if (!viewerProfile || candidates.length === 0) {
+        console.log("[match-intelligence] no candidates to rank", {
+            viewerUserId,
+            hasViewerProfile: Boolean(viewerProfile),
+            candidateCount: candidates.length,
+        });
+        return [];
+    }
 
     const candidateUserIds = candidates.map((candidate) => candidate.userId);
     const [candidatePreferences, candidateSignals, exposureCounts, holdEntries] = await Promise.all([
@@ -524,6 +552,14 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
                 : filters.mode === "similar"
                     ? "similar_to_me"
                     : preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE;
+
+    console.log("[match-intelligence] ranking start", {
+        viewerUserId,
+        candidateCount: candidates.length,
+        usersOnHoldCount: usersOnHold.size,
+        preferenceMode: preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE,
+        modePreference,
+    });
 
     const ranked = candidates.filter((candidate) => !usersOnHold.has(candidate.userId)).map((candidate) => {
         const compatibility = scoreProfilePair(viewerProfile, candidate);
@@ -569,6 +605,25 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             activeHoldPenalty: 0,
         });
         const reasons = buildReason(matchType, { activityScore, compatibilityScore, diversityScore, profileQualityScore }, compatibility.reasons);
+        console.log("[match-intelligence] scored candidate", {
+            viewerUserId,
+            candidateUserId: candidate.userId,
+            firstName: candidate.firstName,
+            matchType,
+            finalScore,
+            compatibilityScore,
+            activityScore,
+            responseScore,
+            availabilityScore,
+            diversityScore,
+            mutualProbabilityScore,
+            preferenceFitScore: preferenceFit,
+            profileQualityScore,
+            ghostingPenalty,
+            passRiskPenalty,
+            exposurePenalty,
+            reasons,
+        });
 
         return {
             candidateUserId: candidate.userId,
@@ -589,7 +644,19 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
         };
     });
 
-    return ranked.sort((left, right) => right.finalScore - left.finalScore || right.activityScore - left.activityScore);
+    const sorted = ranked.sort((left, right) => right.finalScore - left.finalScore || right.activityScore - left.activityScore);
+    console.log("[match-intelligence] ranking summary", {
+        viewerUserId,
+        rankedCount: sorted.length,
+        top: sorted.slice(0, 10).map((item) => ({
+            candidateUserId: item.candidateUserId,
+            firstName: item.profilePreview.firstName,
+            finalScore: item.finalScore,
+            matchType: item.matchType,
+            reason: item.reason,
+        })),
+    });
+    return sorted;
 }
 
 function targetDailyMix(preferenceMode: PreferenceMode): MatchType[] {
@@ -642,6 +709,19 @@ export async function getDailyRecommendations(userId: string) {
 
     const ranked = await rankCandidates(userId);
     const recommendations = applyDailyMix(ranked, preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE);
+    console.log("[match-intelligence] daily mix", {
+        userId,
+        preferenceMode: preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE,
+        rankedCount: ranked.length,
+        selectedCount: recommendations.length,
+        selected: recommendations.map((item) => ({
+            candidateUserId: item.candidateUserId,
+            firstName: item.profilePreview.firstName,
+            finalScore: item.finalScore,
+            matchType: item.matchType,
+            reason: item.reason,
+        })),
+    });
     await logShownRecommendations(userId, "daily_recommendations", recommendations);
 
     return {
