@@ -106,9 +106,9 @@ export function useDailyMatches() {
                 const ms = new Date(data.hold.autoReleaseAt).getTime() - Date.now();
                 return ms > 0 ? ms : 1000;
             }
-            if (data.mode === 'manual_curation') return false;
+            if (data.mode === 'manual_curation') return 30 * 1000;
             const matches = data.matches ?? [];
-            if (matches.length === 0) return false;
+            if (matches.length === 0) return 60 * 1000;
             const now = Date.now();
             const soonestMs = Math.min(...matches.map((m) => new Date(m.expiresAt).getTime()));
             const msUntilExpiry = soonestMs - now;

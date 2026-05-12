@@ -1,4 +1,4 @@
-import { getAdminFeatureFlags, getAdminMetrics, getAdminOnCallSessions, getAdminPendingDates } from "@/lib/actions/admin";
+import { getAdminDailyDiscoveryHealth, getAdminFeatureFlags, getAdminMetrics, getAdminOnCallSessions, getAdminPendingDates } from "@/lib/actions/admin";
 import { APP_FEATURE_KEYS } from "@/lib/feature-flags";
 
 import { FeatureFlagToggle } from "./feature-flags/_actions";
@@ -24,11 +24,12 @@ function MetricCard({
 }
 
 export default async function AdminOverviewPage() {
-    const [metrics, pending, onCall, flags] = await Promise.all([
+    const [metrics, pending, onCall, flags, discoveryHealth] = await Promise.all([
         getAdminMetrics(),
         getAdminPendingDates(),
         getAdminOnCallSessions(),
         getAdminFeatureFlags(),
+        getAdminDailyDiscoveryHealth(),
     ]);
     const adminMatchPreviewFlag = flags.find((flag) => flag.key === APP_FEATURE_KEYS.adminMatchPreviewEnabled);
 
@@ -98,6 +99,82 @@ export default async function AdminOverviewPage() {
                     accent="text-green-400"
                     sub={`${metrics.attendanceRate}% attendance`}
                 />
+            </div>
+
+            <div className="mb-8 rounded-xl border border-white/10 bg-white/5 p-6">
+                <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                    <div>
+                        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+                            Daily Discovery Health
+                        </h2>
+                        <p className="mt-1 text-sm text-gray-500">
+                            Nairobi day view for shortlist quality, decisions, and manual override pressure.
+                        </p>
+                    </div>
+                    <a href="/admin/matchmaking" className="text-xs font-semibold text-pink-300 transition-colors hover:text-white">
+                        Open manual matchmaking
+                    </a>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+                    <MetricCard
+                        label="Shortlisted"
+                        value={discoveryHealth.viewersWithShortlist}
+                        sub={`${discoveryHealth.eligibleProfiles} eligible`}
+                        accent="text-pink-300"
+                    />
+                    <MetricCard
+                        label="Exactly 5"
+                        value={discoveryHealth.exactlyFive}
+                        sub={`${discoveryHealth.overFive} over cap`}
+                        accent={discoveryHealth.overFive > 0 ? "text-yellow-300" : "text-emerald-300"}
+                    />
+                    <MetricCard
+                        label="Decisions"
+                        value={discoveryHealth.decisions}
+                        sub={`${discoveryHealth.decisionRate}% of shown`}
+                        accent="text-purple-300"
+                    />
+                    <MetricCard
+                        label="Interested"
+                        value={discoveryHealth.interested}
+                        sub={`${discoveryHealth.interestedRate}% of decisions`}
+                        accent="text-emerald-300"
+                    />
+                    <MetricCard
+                        label="Waiting Likes"
+                        value={discoveryHealth.incomingInterestWaiting}
+                        sub={`${discoveryHealth.unmatchedOpenInterests} unmatched opens`}
+                        accent="text-cyan-300"
+                    />
+                    <MetricCard
+                        label="Manual Live"
+                        value={discoveryHealth.activeManualCuratedPairs}
+                        sub={`${discoveryHealth.reciprocalMatchesToday} mutual today`}
+                        accent="text-white"
+                    />
+                </div>
+
+                <div className="mt-5 grid gap-3 md:grid-cols-3">
+                    <div className="rounded-lg bg-white/5 px-4 py-3">
+                        <p className="text-xs uppercase tracking-wide text-gray-500">Shortlist spread</p>
+                        <p className="mt-1 text-sm text-gray-300">
+                            {discoveryHealth.underFive} under five, {discoveryHealth.exactlyFive} exact, {discoveryHealth.overFive} over five.
+                        </p>
+                    </div>
+                    <div className="rounded-lg bg-white/5 px-4 py-3">
+                        <p className="text-xs uppercase tracking-wide text-gray-500">Decision split</p>
+                        <p className="mt-1 text-sm text-gray-300">
+                            {discoveryHealth.interested} interested, {discoveryHealth.maybe} maybe, {discoveryHealth.passed} passed, {discoveryHealth.viewed} viewed.
+                        </p>
+                    </div>
+                    <div className="rounded-lg bg-white/5 px-4 py-3">
+                        <p className="text-xs uppercase tracking-wide text-gray-500">No shortlist yet</p>
+                        <p className="mt-1 text-sm text-gray-300">
+                            {discoveryHealth.usersWithoutShortlist} eligible profiles have not received today&apos;s generated set.
+                        </p>
+                    </div>
+                </div>
             </div>
 
             <div className="mb-8 rounded-xl border border-white/10 bg-white/5 p-6">

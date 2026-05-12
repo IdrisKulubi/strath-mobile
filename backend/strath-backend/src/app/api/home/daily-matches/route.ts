@@ -1,14 +1,8 @@
 import { NextRequest } from "next/server";
+
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
-import {
-    generateCandidatePairsForUser,
-    getActiveAdminCuratedCandidatePairsForUser,
-    getActiveCandidatePairsForUser,
-    getHasUpcomingQueuedForUser,
-    promoteDueQueuedPairsForUser,
-    DAILY_CANDIDATE_PAIR_LIMIT,
-} from "@/lib/services/candidate-pairs-service";
+import { getActiveAdminCuratedCandidatePairsForUser } from "@/lib/services/candidate-pairs-service";
 import { runPairExpiration } from "@/lib/services/pair-expiration-service";
 import { getActiveMatchHoldForUser } from "@/lib/services/match-hold-service";
 import { getManualMatchmakingCopy, isManualMatchmakingModeEnabled } from "@/lib/services/manual-matchmaking-mode";
@@ -24,51 +18,27 @@ export async function GET(req: NextRequest) {
         }
 
         const userId = session.user.id;
+        const manualMode = isManualMatchmakingModeEnabled();
         const isAdminPreview = await isAdminMatchPreviewUser(userId);
         console.log("[daily-matches] GET", {
             userId,
             userRole: (session.user as { role?: string }).role ?? null,
-            manualMode: isManualMatchmakingModeEnabled(),
+            manualMode,
             isAdminPreview,
         });
 
-        if (isManualMatchmakingModeEnabled() && !isAdminPreview) {
-            const curatedMatches = await getActiveAdminCuratedCandidatePairsForUser(userId);
-            console.log("[daily-matches] manual mode curated lookup", {
-                userId,
-                curatedCount: curatedMatches.length,
-            });
-            if (curatedMatches.length > 0) {
-                return successResponse({
-                    mode: "matches" as const,
-                    matches: curatedMatches,
-                    hasUpcomingQueued: false,
-                    hold: null,
-                });
-            }
-
-            console.log("[daily-matches] manual matchmaking mode active", { userId });
-            return successResponse({
-                mode: "manual_curation" as const,
-                matches: [],
-                hasUpcomingQueued: false,
-                hold: null,
-                manualCuration: getManualMatchmakingCopy(),
-            });
-        } else if (isManualMatchmakingModeEnabled() && isAdminPreview) {
+        if (manualMode && isAdminPreview) {
             console.log("[daily-matches] admin match preview bypassing manual matchmaking mode", { userId });
         }
 
         const expiration = await runPairExpiration();
         if (expiration.expiredCount > 0) {
-            console.log("[daily-matches] expired", expiration.expiredCount, "pairs for user", userId);
+            console.log("[daily-matches] expired pairs", { userId, expiredCount: expiration.expiredCount });
         }
 
-        // Match hold short-circuit: if the user already has an active mutual / arranged date,
-        // we pause matching until it resolves (cancelled / completed + feedback / auto-released).
         const hold = await getActiveMatchHoldForUser(userId);
         if (hold) {
-            console.log("[daily-matches] HOLD active — returning hold mode", {
+            console.log("[daily-matches] hold active", {
                 userId,
                 status: hold.status,
                 mutualMatchId: hold.mutualMatchId,
@@ -78,33 +48,33 @@ export async function GET(req: NextRequest) {
                 hold,
                 matches: [],
                 hasUpcomingQueued: false,
+                manualCuration: null,
             });
         }
 
-        await promoteDueQueuedPairsForUser(userId);
+        const curatedMatches = await getActiveAdminCuratedCandidatePairsForUser(userId);
+        console.log("[daily-matches] curated override lookup", {
+            userId,
+            curatedCount: curatedMatches.length,
+            manualMode,
+        });
 
-        let matches = await getActiveCandidatePairsForUser(userId);
-        console.log("[daily-matches] active pairs after promotion:", matches.length);
-
-        if (matches.length < DAILY_CANDIDATE_PAIR_LIMIT) {
-            console.log("[daily-matches] topping up active pairs...", { userId, activeCount: matches.length });
-            matches = await generateCandidatePairsForUser(userId);
-            console.log("[daily-matches] after generate:", matches.length, { userId });
-            if (matches.length === 0) {
-                console.log(
-                    "[daily-matches] zero matches after generate — check [candidate-pairs] SKIP or pool logs for",
-                    { userId },
-                );
-            }
+        if (curatedMatches.length > 0) {
+            return successResponse({
+                mode: "matches" as const,
+                matches: curatedMatches,
+                hasUpcomingQueued: false,
+                hold: null,
+                manualCuration: null,
+            });
         }
 
-        const hasUpcomingQueued = await getHasUpcomingQueuedForUser(userId);
-
         return successResponse({
-            mode: "matches" as const,
-            matches,
-            hasUpcomingQueued,
+            mode: manualMode && !isAdminPreview ? "manual_curation" as const : "matches" as const,
+            matches: [],
+            hasUpcomingQueued: false,
             hold: null,
+            manualCuration: manualMode && !isAdminPreview ? getManualMatchmakingCopy() : null,
         });
     } catch (error) {
         console.error("[home/daily-matches] Error:", error);

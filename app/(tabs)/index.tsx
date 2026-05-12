@@ -18,6 +18,14 @@ import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/dec
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 import { DailyRecommendationsPreview } from '@/components/discovery/daily-recommendations-preview';
 import { MatchPreferencePanel } from '@/components/discovery/match-preference-panel';
+import { DailyMatchesList } from '@/components/home/daily-matches-list';
+import { DateHoldCard } from '@/components/home/date-hold-card';
+import { ManualCurationCard } from '@/components/home/manual-curation-card';
+import {
+    DailyMatch,
+    useDailyMatches,
+    useRespondToDailyPair,
+} from '@/hooks/use-daily-matches';
 import {
     RankedRecommendation,
     RecommendationDecision,
@@ -53,24 +61,71 @@ export default function HomeScreen() {
     const [savedDecisions, setSavedDecisions] = useState<Record<string, RecommendationDecision>>({});
 
     const { data: profile } = useProfile();
+    const dailyMatches = useDailyMatches();
+    const pairDecision = useRespondToDailyPair();
     const dailyRecommendations = useDailyRecommendations();
     const recommendationDecision = useRecommendationDecision();
+    const priorityMatches = dailyMatches.data?.matches ?? [];
+    const activeHold = dailyMatches.data?.hold ?? null;
+    const hasPriorityMatch = priorityMatches.length > 0;
+    const shouldShowRecommendations = !activeHold && !hasPriorityMatch;
     const recommendations = useMemo(
-        () => (dailyRecommendations.data?.recommendations ?? []).slice(0, 5),
-        [dailyRecommendations.data?.recommendations]
+        () => shouldShowRecommendations ? (dailyRecommendations.data?.recommendations ?? []).slice(0, 5) : [],
+        [dailyRecommendations.data?.recommendations, shouldShowRecommendations]
     );
 
     const handleRefresh = useCallback(async () => {
         setRefreshing(true);
         try {
             await Promise.all([
+                dailyMatches.refetch(),
                 dailyRecommendations.refetch(),
                 queryClient.invalidateQueries({ queryKey: ['matchPreferences'] }),
             ]);
         } finally {
             setRefreshing(false);
         }
-    }, [dailyRecommendations, queryClient]);
+    }, [dailyMatches, dailyRecommendations, queryClient]);
+
+    const handleViewDailyMatchProfile = useCallback((match: DailyMatch) => {
+        router.push({
+            pathname: '/profile/[userId]',
+            params: {
+                userId: match.userId,
+                pairId: match.pairId,
+            },
+        });
+    }, [router]);
+
+    const handleDailyMatchDecision = useCallback(async (
+        match: DailyMatch,
+        decision: 'open_to_meet' | 'maybe' | 'passed'
+    ) => {
+        try {
+            await pairDecision.mutateAsync({ pairId: match.pairId, decision });
+            const message = decision === 'open_to_meet'
+                ? `Interest saved for ${match.firstName}.`
+                : decision === 'maybe'
+                    ? `${match.firstName} saved for later.`
+                    : `${match.firstName} passed.`;
+            toast.show({
+                message,
+                variant: decision === 'passed' ? 'default' : 'success',
+                position: 'top',
+                size: 'medium',
+            });
+            setInfoSheet({
+                visible: true,
+                type: decision === 'passed' ? 'pass' : decision,
+                firstName: match.firstName,
+            });
+        } catch {
+            toast.show({
+                message: 'Could not save that decision right now. Please try again.',
+                variant: 'danger',
+            });
+        }
+    }, [pairDecision, toast]);
 
     const handleViewRecommendationProfile = useCallback((recommendation: RankedRecommendation) => {
         router.push({
@@ -141,7 +196,7 @@ export default function HomeScreen() {
                 variant: 'danger',
             });
         }
-    }, [recommendationDecision, toast]);
+    }, [queryClient, recommendationDecision, toast]);
 
     return (
         <TabSwipeView route="/(tabs)">
@@ -155,13 +210,26 @@ export default function HomeScreen() {
                 >
                     <HomeHeader
                         firstName={profile?.firstName}
-                        matchCount={recommendations.length}
+                        matchCount={hasPriorityMatch ? priorityMatches.length : recommendations.length}
                     />
 
-                    <MatchPreferencePanel />
+                    {!hasPriorityMatch && !activeHold && <MatchPreferencePanel />}
 
-                    {dailyRecommendations.isLoading ? (
+                    {dailyMatches.isLoading || (shouldShowRecommendations && dailyRecommendations.isLoading) ? (
                         <HomeSkeleton />
+                    ) : activeHold ? (
+                        <DateHoldCard hold={activeHold} />
+                    ) : hasPriorityMatch ? (
+                        <DailyMatchesList
+                            matches={priorityMatches}
+                            onOpenToMeet={(match) => handleDailyMatchDecision(match, 'open_to_meet')}
+                            onMaybe={(match) => handleDailyMatchDecision(match, 'maybe')}
+                            onPass={(match) => handleDailyMatchDecision(match, 'passed')}
+                            onViewProfile={handleViewDailyMatchProfile}
+                            actionsDisabled={pairDecision.isPending}
+                        />
+                    ) : dailyMatches.data?.mode === 'manual_curation' && recommendations.length === 0 ? (
+                        <ManualCurationCard curation={dailyMatches.data.manualCuration} />
                     ) : (
                         <DailyRecommendationsPreview
                             recommendations={recommendations}

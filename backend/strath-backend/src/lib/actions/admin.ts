@@ -301,6 +301,131 @@ export async function archiveAdminMatchActivity(pairId: string) {
     return { ok: true };
 }
 
+type DailyDiscoveryHealthRow = {
+    eligibleProfiles: number;
+    viewersWithShortlist: number;
+    usersWithoutShortlist: number;
+    shownEvents: number;
+    exactlyFive: number;
+    underFive: number;
+    overFive: number;
+    decisions: number;
+    interested: number;
+    maybe: number;
+    passed: number;
+    viewed: number;
+    unmatchedOpenInterests: number;
+    incomingInterestWaiting: number;
+    reciprocalMatchesToday: number;
+    activeManualCuratedPairs: number;
+};
+
+export async function getAdminDailyDiscoveryHealth() {
+    await requireAdmin();
+
+    const result = await db.execute(sql`
+        with eligible_profiles as (
+            select count(*)::int as eligible_profiles
+            from profiles p
+            join "user" u on u.id = p.user_id
+            where u.deleted_at is null
+              and coalesce(p.profile_completed, false) = true
+              and coalesce(p.is_visible, true) = true
+              and coalesce(p.discovery_paused, false) = false
+              and coalesce(p.incognito_mode, false) = false
+              and coalesce(p.role, 'user') <> 'admin'
+              and coalesce(u.role, 'user') <> 'admin'
+        ),
+        today_shown as (
+            select viewer_user_id, candidate_user_id
+            from recommendation_events
+            where source = 'daily_recommendations'
+              and decision = 'shown'
+              and (shown_at at time zone 'Africa/Nairobi')::date = (now() at time zone 'Africa/Nairobi')::date
+        ),
+        viewer_counts as (
+            select viewer_user_id, count(distinct candidate_user_id)::int as candidate_count
+            from today_shown
+            group by viewer_user_id
+        ),
+        today_events as (
+            select decision
+            from recommendation_events
+            where source = 'daily_recommendations'
+              and (shown_at at time zone 'Africa/Nairobi')::date = (now() at time zone 'Africa/Nairobi')::date
+        ),
+        open_interests as (
+            select viewer_user_id, candidate_user_id, matched_candidate_pair_id
+            from user_match_interests
+            where decision = 'open_to_meet'
+        ),
+        waiting_open_interests as (
+            select a.viewer_user_id, a.candidate_user_id
+            from open_interests a
+            left join user_match_interests b
+              on b.viewer_user_id = a.candidate_user_id
+             and b.candidate_user_id = a.viewer_user_id
+            where a.matched_candidate_pair_id is null
+              and b.id is null
+        ),
+        active_manual_curated as (
+            select count(distinct cp.id)::int as active_manual_curated_pairs
+            from candidate_pairs cp
+            join candidate_pair_history cph on cph.pair_id = cp.id
+            where cp.status = 'active'
+              and cph.event_type = 'generated'
+              and cph.metadata->>'source' = 'admin_curated'
+        )
+        select
+            (select eligible_profiles from eligible_profiles) as "eligibleProfiles",
+            coalesce((select count(*)::int from viewer_counts), 0) as "viewersWithShortlist",
+            greatest((select eligible_profiles from eligible_profiles) - coalesce((select count(*)::int from viewer_counts), 0), 0)::int as "usersWithoutShortlist",
+            coalesce((select count(*)::int from today_shown), 0) as "shownEvents",
+            coalesce((select count(*)::int from viewer_counts where candidate_count = 5), 0) as "exactlyFive",
+            coalesce((select count(*)::int from viewer_counts where candidate_count < 5), 0) as "underFive",
+            coalesce((select count(*)::int from viewer_counts where candidate_count > 5), 0) as "overFive",
+            coalesce((select count(*)::int from today_events where decision in ('open_to_meet', 'maybe', 'passed')), 0) as "decisions",
+            coalesce((select count(*)::int from today_events where decision = 'open_to_meet'), 0) as "interested",
+            coalesce((select count(*)::int from today_events where decision = 'maybe'), 0) as "maybe",
+            coalesce((select count(*)::int from today_events where decision = 'passed'), 0) as "passed",
+            coalesce((select count(*)::int from today_events where decision = 'viewed'), 0) as "viewed",
+            coalesce((select count(*)::int from open_interests where matched_candidate_pair_id is null), 0) as "unmatchedOpenInterests",
+            coalesce((select count(*)::int from waiting_open_interests), 0) as "incomingInterestWaiting",
+            coalesce((
+                select count(*)::int
+                from mutual_matches
+                where (created_at at time zone 'Africa/Nairobi')::date = (now() at time zone 'Africa/Nairobi')::date
+            ), 0) as "reciprocalMatchesToday",
+            coalesce((select active_manual_curated_pairs from active_manual_curated), 0) as "activeManualCuratedPairs"
+    `);
+
+    const row = result.rows?.[0] as Partial<DailyDiscoveryHealthRow> | undefined;
+    const health: DailyDiscoveryHealthRow = {
+        eligibleProfiles: Number(row?.eligibleProfiles ?? 0),
+        viewersWithShortlist: Number(row?.viewersWithShortlist ?? 0),
+        usersWithoutShortlist: Number(row?.usersWithoutShortlist ?? 0),
+        shownEvents: Number(row?.shownEvents ?? 0),
+        exactlyFive: Number(row?.exactlyFive ?? 0),
+        underFive: Number(row?.underFive ?? 0),
+        overFive: Number(row?.overFive ?? 0),
+        decisions: Number(row?.decisions ?? 0),
+        interested: Number(row?.interested ?? 0),
+        maybe: Number(row?.maybe ?? 0),
+        passed: Number(row?.passed ?? 0),
+        viewed: Number(row?.viewed ?? 0),
+        unmatchedOpenInterests: Number(row?.unmatchedOpenInterests ?? 0),
+        incomingInterestWaiting: Number(row?.incomingInterestWaiting ?? 0),
+        reciprocalMatchesToday: Number(row?.reciprocalMatchesToday ?? 0),
+        activeManualCuratedPairs: Number(row?.activeManualCuratedPairs ?? 0),
+    };
+
+    return {
+        ...health,
+        decisionRate: health.shownEvents > 0 ? Math.round((health.decisions / health.shownEvents) * 100) : 0,
+        interestedRate: health.decisions > 0 ? Math.round((health.interested / health.decisions) * 100) : 0,
+    };
+}
+
 export async function moveMutualMatchToArranging(mutualMatchId: string) {
     const session = await requireAdmin();
     if (!mutualMatchId) throw new Error("Missing mutual match id");
