@@ -610,6 +610,40 @@ export const recommendationEvents = pgTable(
     })
 );
 
+// Authoritative per-user daily recommendation shortlist.
+export const dailyShortlists = pgTable(
+    "daily_shortlists",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        viewerUserId: text("viewer_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        candidateUserId: text("candidate_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        shortlistDay: text("shortlist_day").notNull(),
+        position: integer("position").notNull(),
+        matchType: text("match_type")
+            .$type<"similarity" | "complementary" | "discovery" | "high_activity" | "admin_curated">(),
+        finalScore: integer("final_score"),
+        compatibilityScore: integer("compatibility_score"),
+        activityScore: integer("activity_score"),
+        responseScore: integer("response_score"),
+        diversityScore: integer("diversity_score"),
+        mutualProbabilityScore: integer("mutual_probability_score"),
+        recommendationEventId: uuid("recommendation_event_id").references(() => recommendationEvents.id, { onDelete: "set null" }),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        viewerDayPositionUniqueIdx: uniqueIndex("daily_shortlists_viewer_day_position_unique_idx").on(table.viewerUserId, table.shortlistDay, table.position),
+        viewerDayCandidateUniqueIdx: uniqueIndex("daily_shortlists_viewer_day_candidate_unique_idx").on(table.viewerUserId, table.shortlistDay, table.candidateUserId),
+        viewerDayIdx: index("daily_shortlists_viewer_day_idx").on(table.viewerUserId, table.shortlistDay),
+        candidateIdx: index("daily_shortlists_candidate_idx").on(table.candidateUserId),
+    })
+);
+
 // Directed recommendation decisions — one-way until both sides independently show interest.
 export const userMatchInterests = pgTable(
     "user_match_interests",
@@ -1979,6 +2013,8 @@ export type UserMatchSignal = typeof userMatchSignals.$inferSelect;
 export type NewUserMatchSignal = typeof userMatchSignals.$inferInsert;
 export type RecommendationEvent = typeof recommendationEvents.$inferSelect;
 export type NewRecommendationEvent = typeof recommendationEvents.$inferInsert;
+export type DailyShortlist = typeof dailyShortlists.$inferSelect;
+export type NewDailyShortlist = typeof dailyShortlists.$inferInsert;
 export type UserMatchInterest = typeof userMatchInterests.$inferSelect;
 export type NewUserMatchInterest = typeof userMatchInterests.$inferInsert;
 export type MutualMatch = typeof mutualMatches.$inferSelect;

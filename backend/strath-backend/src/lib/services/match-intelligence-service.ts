@@ -5,6 +5,7 @@ import { db as readDb } from "@/lib/db";
 import {
     blocks,
     candidatePairs,
+    dailyShortlists,
     mutualMatches,
     profiles,
     recommendationEvents,
@@ -117,6 +118,10 @@ const MAX_BROWSE_LIMIT = 50;
 
 function startOfUtcDay(date = new Date()) {
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function utcDayKey(date = new Date()) {
+    return startOfUtcDay(date).toISOString().slice(0, 10);
 }
 function clampScore(value: number) {
     return Math.max(0, Math.min(100, Math.round(value)));
@@ -765,23 +770,19 @@ function applyDailyMix(ranked: RankedRecommendation[], preferenceMode: Preferenc
 }
 
 async function getTodaysStableDailyRecommendations(userId: string): Promise<RankedRecommendation[]> {
-    const todayStart = startOfUtcDay();
+    const shortlistDay = utcDayKey();
     const rows = await readDb
         .select()
-        .from(recommendationEvents)
+        .from(dailyShortlists)
         .where(
             and(
-                eq(recommendationEvents.viewerUserId, userId),
-                eq(recommendationEvents.source, "daily_recommendations"),
-                eq(recommendationEvents.decision, "shown"),
-                gte(recommendationEvents.shownAt, todayStart),
+                eq(dailyShortlists.viewerUserId, userId),
+                eq(dailyShortlists.shortlistDay, shortlistDay),
             ),
         )
-        .orderBy(asc(recommendationEvents.shownAt));
+        .orderBy(asc(dailyShortlists.position), asc(dailyShortlists.createdAt));
 
-    const uniqueRows = rows.filter((row, index, all) =>
-        all.findIndex((candidate) => candidate.candidateUserId === row.candidateUserId) === index,
-    ).slice(0, DAILY_LIMIT);
+    const uniqueRows = rows;
 
     if (uniqueRows.length === 0) return [];
 
@@ -834,12 +835,12 @@ async function getTodaysStableDailyRecommendations(userId: string): Promise<Rank
             activityStatus: activityStatusFromScore(activityScore),
             profilePreview: toPreview(candidate),
         }];
-    });
+    }).slice(0, DAILY_LIMIT);
 
     console.log("[match-intelligence] reusing stable daily shortlist", {
         userId,
-        todayStart: todayStart.toISOString(),
-        eventCount: rows.length,
+        shortlistDay,
+        rowCount: rows.length,
         reusedCount: stable.length,
         candidates: stable.map((item) => ({
             candidateUserId: item.candidateUserId,
@@ -850,6 +851,50 @@ async function getTodaysStableDailyRecommendations(userId: string): Promise<Rank
     });
 
     return stable;
+}
+
+async function getDailyShortlistRowCount(viewerUserId: string, shortlistDay: string) {
+    const [row] = await readDb
+        .select({ count: sql<number>`count(*)::int` })
+        .from(dailyShortlists)
+        .where(
+            and(
+                eq(dailyShortlists.viewerUserId, viewerUserId),
+                eq(dailyShortlists.shortlistDay, shortlistDay),
+            ),
+        );
+    return row?.count ?? 0;
+}
+
+async function persistDailyShortlistEntries(input: {
+    viewerUserId: string;
+    shortlistDay: string;
+    startPosition: number;
+    recommendations: RankedRecommendation[];
+    metadata?: Record<string, unknown>;
+}) {
+    if (input.recommendations.length === 0) return [];
+
+    return db
+        .insert(dailyShortlists)
+        .values(
+            input.recommendations.map((item, index) => ({
+                viewerUserId: input.viewerUserId,
+                candidateUserId: item.candidateUserId,
+                shortlistDay: input.shortlistDay,
+                position: input.startPosition + index,
+                matchType: item.matchType,
+                finalScore: item.finalScore,
+                compatibilityScore: item.compatibilityScore,
+                activityScore: item.activityScore,
+                responseScore: item.responseScore,
+                diversityScore: item.diversityScore,
+                mutualProbabilityScore: item.mutualProbabilityScore,
+                metadata: input.metadata ?? {},
+            })),
+        )
+        .onConflictDoNothing()
+        .returning();
 }
 
 export async function getDailyRecommendations(userId: string) {
@@ -870,10 +915,11 @@ export async function getDailyRecommendations(userId: string) {
 
     const ranked = await rankCandidates(userId);
     const stableIds = new Set(stableRecommendations.map((item) => item.candidateUserId));
+    const remainingSlots = Math.max(DAILY_LIMIT - stableRecommendations.length, 0);
     const nextRecommendations = applyDailyMix(
         ranked.filter((item) => !stableIds.has(item.candidateUserId)),
         preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE,
-    );
+    ).slice(0, remainingSlots);
     const recommendations = [...stableRecommendations, ...nextRecommendations].slice(0, DAILY_LIMIT);
     console.log("[match-intelligence] daily mix", {
         userId,
@@ -888,7 +934,16 @@ export async function getDailyRecommendations(userId: string) {
             reason: item.reason,
         })),
     });
+    const shortlistDay = utcDayKey();
+    const nextPosition = await getDailyShortlistRowCount(userId, shortlistDay);
+    await persistDailyShortlistEntries({
+        viewerUserId: userId,
+        shortlistDay,
+        startPosition: nextPosition,
+        recommendations: nextRecommendations,
+    });
     await logShownRecommendations(userId, "daily_recommendations", nextRecommendations);
+    const persistedRecommendations = await getTodaysStableDailyRecommendations(userId);
 
     return {
         userId,
@@ -896,7 +951,7 @@ export async function getDailyRecommendations(userId: string) {
         preferenceMode: preference.preferenceMode ?? DEFAULT_PREFERENCE_MODE,
         mode: "recommendations" as const,
         hold,
-        recommendations,
+        recommendations: persistedRecommendations.length > 0 ? persistedRecommendations : recommendations,
     };
 }
 
