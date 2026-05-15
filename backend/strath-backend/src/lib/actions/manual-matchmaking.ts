@@ -1,25 +1,32 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 
-import { candidatePairHistory, candidatePairs, dateMatches, mutualMatches, profiles, user } from "@/db/schema";
+import { candidatePairHistory, candidatePairs, dailyShortlists, dateMatches, mutualMatches, profiles, user } from "@/db/schema";
 import db from "@/db/drizzle";
 import { db as readDb } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin-auth";
 import {
     MANUAL_CURATED_PAIR_EXPIRES_AT,
     canonicalizePairUsers,
+    generateCandidatePairsForUser,
     recordCandidatePairHistory,
 } from "@/lib/services/candidate-pairs-service";
 import { resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
+import { releaseStalePreDateMatchHolds } from "@/lib/services/match-hold-service";
 import { hasCompletedInitialFaceVerification } from "@/lib/matchmaking-pool-eligibility";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
 const HOLD_STATUSES = ["mutual", "call_pending", "being_arranged", "upcoming"] as const;
+const SHUFFLE_HOLD_STATUSES = ["mutual", "call_pending", "being_arranged", "upcoming", "completed"] as const;
 const BUSY_PAIR_STATUSES = ["active", "queued", "mutual"] as const;
+
+function utcDayKey(date = new Date()) {
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString().slice(0, 10);
+}
 
 type ManualMatchState = "available" | "active_pair" | "mutual_hold" | "unavailable";
 
@@ -581,6 +588,157 @@ export async function markManualMatchCallOutcome(pairId: string, outcome: "accep
 
     revalidatePath("/admin/matchmaking");
     return { ok: true };
+}
+
+export async function reshuffleDailyMatchesForAvailableUsers() {
+    const session = await requireAdmin();
+    const now = new Date();
+    const today = utcDayKey(now);
+    const releasedStaleHolds = await releaseStalePreDateMatchHolds(now);
+
+    const eligibleRows = await readDb
+        .select({
+            userId: profiles.userId,
+            faceVerificationStatus: profiles.faceVerificationStatus,
+            faceVerifiedAt: profiles.faceVerifiedAt,
+            waitlistStatus: profiles.waitlistStatus,
+        })
+        .from(profiles)
+        .innerJoin(user, eq(user.id, profiles.userId))
+        .where(
+            and(
+                eq(profiles.profileCompleted, true),
+                eq(profiles.isVisible, true),
+                eq(profiles.discoveryPaused, false),
+                eq(profiles.incognitoMode, false),
+                isNull(user.deletedAt),
+            ),
+        );
+
+    const eligibleUserIds = eligibleRows
+        .filter((profile) => profile.waitlistStatus !== "waitlisted")
+        .filter(hasCompletedInitialFaceVerification)
+        .map((profile) => profile.userId);
+
+    if (eligibleUserIds.length === 0) {
+        return {
+            ok: true,
+            eligibleUsers: 0,
+            skippedOnHold: 0,
+            expiredPairs: 0,
+            clearedShortlists: 0,
+            regeneratedFor: 0,
+            activeMatchesAfter: 0,
+            releasedStaleHolds,
+        };
+    }
+
+    const holdRows = await readDb
+        .select({
+            userAId: mutualMatches.userAId,
+            userBId: mutualMatches.userBId,
+        })
+        .from(mutualMatches)
+        .where(inArray(mutualMatches.status, [...SHUFFLE_HOLD_STATUSES]));
+    const heldUserIds = new Set(holdRows.flatMap((row) => [row.userAId, row.userBId]));
+    const shuffleUserIds = eligibleUserIds.filter((userId) => !heldUserIds.has(userId));
+
+    if (shuffleUserIds.length === 0) {
+        return {
+            ok: true,
+            eligibleUsers: eligibleUserIds.length,
+            skippedOnHold: eligibleUserIds.length,
+            expiredPairs: 0,
+            clearedShortlists: 0,
+            regeneratedFor: 0,
+            activeMatchesAfter: 0,
+            releasedStaleHolds,
+        };
+    }
+
+    const { expiredPairs, clearedShortlists } = await db.transaction(async (tx) => {
+        const pairFilters = [
+            inArray(candidatePairs.status, ["active", "queued"] as const),
+            or(
+                inArray(candidatePairs.userAId, shuffleUserIds),
+                inArray(candidatePairs.userBId, shuffleUserIds),
+            ),
+        ];
+
+        const heldIds = [...heldUserIds];
+        if (heldIds.length > 0) {
+            pairFilters.push(notInArray(candidatePairs.userAId, heldIds));
+            pairFilters.push(notInArray(candidatePairs.userBId, heldIds));
+        }
+
+        const pairsToExpire = await tx
+            .select({
+                id: candidatePairs.id,
+                fromStatus: candidatePairs.status,
+            })
+            .from(candidatePairs)
+            .where(and(...pairFilters));
+
+        const expired = pairsToExpire.length > 0
+            ? await tx
+            .update(candidatePairs)
+            .set({ status: "expired", updatedAt: now })
+            .where(inArray(candidatePairs.id, pairsToExpire.map((pair) => pair.id)))
+            .returning({ id: candidatePairs.id })
+            : [];
+
+        for (const pair of pairsToExpire) {
+            await recordCandidatePairHistory(tx, {
+                pairId: pair.id,
+                actorUserId: session.user.id,
+                eventType: "expired",
+                fromStatus: pair.fromStatus,
+                toStatus: "expired",
+                metadata: {
+                    source: "admin_daily_shuffle",
+                    adminUserId: session.user.id,
+                    reason: "daily_match_reshuffle",
+                },
+            });
+        }
+
+        const cleared = await tx
+            .delete(dailyShortlists)
+            .where(
+                and(
+                    inArray(dailyShortlists.viewerUserId, shuffleUserIds),
+                    eq(dailyShortlists.shortlistDay, today),
+                ),
+            )
+            .returning({ id: dailyShortlists.id });
+
+        return {
+            expiredPairs: expired.length,
+            clearedShortlists: cleared.length,
+        };
+    });
+
+    let regeneratedFor = 0;
+    let activeMatchesAfter = 0;
+    for (const userId of shuffleUserIds) {
+        const matches = await generateCandidatePairsForUser(userId);
+        if (matches.length > 0) {
+            regeneratedFor++;
+            activeMatchesAfter += matches.length;
+        }
+    }
+
+    revalidatePath("/admin/matchmaking");
+    return {
+        ok: true,
+        eligibleUsers: eligibleUserIds.length,
+        skippedOnHold: eligibleUserIds.length - shuffleUserIds.length,
+        expiredPairs,
+        clearedShortlists,
+        regeneratedFor,
+        activeMatchesAfter,
+        releasedStaleHolds,
+    };
 }
 
 export async function getManualMatchmakingActivity() {

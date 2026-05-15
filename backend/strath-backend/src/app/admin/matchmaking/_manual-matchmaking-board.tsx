@@ -28,6 +28,7 @@ import {
     getManualMatchmakingActivity,
     getManualMatchSuggestions,
     markManualMatchCallOutcome,
+    reshuffleDailyMatchesForAvailableUsers,
     type ManualMatchSuggestion,
     type ManualMatchmakingProfile,
 } from "@/lib/actions/manual-matchmaking";
@@ -1019,6 +1020,26 @@ export function ManualMatchmakingBoard({
         });
     };
 
+    const reshuffleDailyMatches = () => {
+        setError(null);
+        setMessage(null);
+        if (!window.confirm("Replace active daily matches for everyone who is not already in a mutual/date hold?")) return;
+
+        startTransition(async () => {
+            try {
+                const result = await reshuffleDailyMatchesForAvailableUsers();
+                setMessage(
+                    `Daily shuffle complete: ${result.regeneratedFor} users received fresh matches, ${result.skippedOnHold} users with mutual/date holds were skipped, ${result.expiredPairs} old cards were overridden.`
+                );
+                setShowSentMatches(true);
+                await refreshActivity({ preserveVisible: false });
+                router.refresh();
+            } catch (err) {
+                setError(err instanceof Error ? err.message : "Could not reshuffle daily matches");
+            }
+        });
+    };
+
     const sharedInterests = selectedUser && selectedCandidate ? sharedValues(selectedUser.interests, selectedCandidate.interests) : [];
     const sharedQualities = selectedUser && selectedCandidate ? sharedValues(selectedUser.qualities, selectedCandidate.qualities) : [];
     const activeReasons = selectedCandidate?.reasons ?? [];
@@ -1042,6 +1063,24 @@ export function ManualMatchmakingBoard({
                     <p className="text-xs uppercase tracking-wide text-pink-200">Sent</p>
                     <p className="mt-1 text-xl font-bold text-white">{stats.sent}</p>
                 </div>
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p className="text-sm font-bold text-amber-100">Daily match shuffle</p>
+                    <p className="mt-1 max-w-3xl text-xs leading-5 text-amber-100/70">
+                        Overrides active and queued daily cards for users without a mutual/date hold, clears today&apos;s shortlist, then regenerates fresh matches.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={reshuffleDailyMatches}
+                    disabled={isPending}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-300 px-4 py-2 text-sm font-bold text-black transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                    {isPending ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
+                    Shuffle daily matches
+                </button>
             </div>
 
             {(message || error) && (
