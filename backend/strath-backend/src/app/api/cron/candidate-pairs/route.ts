@@ -13,6 +13,7 @@ import {
 } from "@/lib/services/candidate-pairs-service";
 import { runPairExpiration } from "@/lib/services/pair-expiration-service";
 import { isManualMatchmakingModeEnabled } from "@/lib/services/manual-matchmaking-mode";
+import { releaseStalePreDateMatchHolds } from "@/lib/services/match-hold-service";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -24,8 +25,10 @@ export async function GET(req: NextRequest) {
         }
 
         const expiration = await runPairExpiration();
+        const releasedStaleHolds = await releaseStalePreDateMatchHolds();
         const reminders = await sendPendingCandidatePairReminders();
         console.log("[cron/candidate-pairs] expired pairs:", expiration.expiredCount);
+        console.log("[cron/candidate-pairs] released stale pre-date holds:", releasedStaleHolds);
         console.log("[cron/candidate-pairs] reminders:", reminders);
 
         if (isManualMatchmakingModeEnabled()) {
@@ -36,6 +39,7 @@ export async function GET(req: NextRequest) {
                 generatedFor: 0,
                 skippedAutoGeneration: true,
                 expiration,
+                releasedStaleHolds,
                 reminders,
             });
         }
@@ -74,6 +78,7 @@ export async function GET(req: NextRequest) {
             checkedUsers: usersToCheck.length,
             generatedFor,
             expiration,
+            releasedStaleHolds,
             reminders,
         });
     } catch (error) {

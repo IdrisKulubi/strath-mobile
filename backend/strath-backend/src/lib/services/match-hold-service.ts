@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, or } from "drizzle-orm";
+import { and, eq, gt, inArray, lte, ne, or } from "drizzle-orm";
 import db from "@/db/drizzle";
 import { db as readDb } from "@/lib/db";
 import {
@@ -58,6 +58,70 @@ export interface MatchHoldCancelReason {
 }
 
 const HOLD_STATUSES = ["mutual", "call_pending", "being_arranged", "upcoming", "completed"] as const;
+const AUTO_RELEASE_STATUSES = ["mutual", "call_pending"] as const;
+const DURABLE_HOLD_STATUSES = ["being_arranged", "upcoming", "completed"] as const;
+const DEFAULT_PRE_DATE_HOLD_EXPIRY_HOURS = 72;
+
+function getPreDateHoldExpiryHours(): number {
+    const raw = Number(process.env.MATCH_HOLD_PRE_DATE_EXPIRY_HOURS);
+    if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_PRE_DATE_HOLD_EXPIRY_HOURS;
+    return Math.min(Math.floor(raw), 24 * 14);
+}
+
+function getPreDateHoldCutoff(now = new Date()): Date {
+    return new Date(now.getTime() - getPreDateHoldExpiryHours() * 60 * 60 * 1000);
+}
+
+export async function releaseStalePreDateMatchHoldsForUser(userId: string, now = new Date()): Promise<number> {
+    const cutoff = getPreDateHoldCutoff(now);
+    const released = await db
+        .update(mutualMatches)
+        .set({ status: "expired", updatedAt: now })
+        .where(
+            and(
+                inArray(mutualMatches.status, [...AUTO_RELEASE_STATUSES]),
+                lte(mutualMatches.updatedAt, cutoff),
+                or(
+                    eq(mutualMatches.userAId, userId),
+                    eq(mutualMatches.userBId, userId),
+                ),
+            ),
+        )
+        .returning({ id: mutualMatches.id });
+
+    if (released.length > 0) {
+        console.log("[match-hold] auto-released stale pre-date holds", {
+            userId,
+            count: released.length,
+            cutoff: cutoff.toISOString(),
+        });
+    }
+
+    return released.length;
+}
+
+export async function releaseStalePreDateMatchHolds(now = new Date()): Promise<number> {
+    const cutoff = getPreDateHoldCutoff(now);
+    const released = await db
+        .update(mutualMatches)
+        .set({ status: "expired", updatedAt: now })
+        .where(
+            and(
+                inArray(mutualMatches.status, [...AUTO_RELEASE_STATUSES]),
+                lte(mutualMatches.updatedAt, cutoff),
+            ),
+        )
+        .returning({ id: mutualMatches.id });
+
+    if (released.length > 0) {
+        console.log("[match-hold] auto-released stale pre-date holds", {
+            count: released.length,
+            cutoff: cutoff.toISOString(),
+        });
+    }
+
+    return released.length;
+}
 
 /** Days a `completed` mutual stays as a hold while waiting for user feedback. Default 7. */
 export function getMatchHoldFeedbackGraceDays(): number {
@@ -83,6 +147,8 @@ function pickPrimaryPhoto(
  * bridged into `mutualMatches` are intentionally ignored — admins reconcile those.
  */
 export async function getActiveMatchHoldForUser(userId: string): Promise<MatchHold | null> {
+    await releaseStalePreDateMatchHoldsForUser(userId);
+
     const rows = await readDb
         .select()
         .from(mutualMatches)
@@ -183,8 +249,29 @@ export async function getActiveMatchHoldForUser(userId: string): Promise<MatchHo
  * Cheap "is held?" check used by gating code. Skips profile lookups.
  */
 export async function isUserOnMatchHold(userId: string): Promise<boolean> {
-    const hold = await getActiveMatchHoldForUser(userId);
-    return hold !== null;
+    const cutoff = getPreDateHoldCutoff();
+    const row = await readDb
+        .select({ id: mutualMatches.id })
+        .from(mutualMatches)
+        .where(
+            and(
+                inArray(mutualMatches.status, [...HOLD_STATUSES]),
+                or(
+                    inArray(mutualMatches.status, [...DURABLE_HOLD_STATUSES]),
+                    and(
+                        inArray(mutualMatches.status, [...AUTO_RELEASE_STATUSES]),
+                        gt(mutualMatches.updatedAt, cutoff),
+                    ),
+                ),
+                or(
+                    eq(mutualMatches.userAId, userId),
+                    eq(mutualMatches.userBId, userId),
+                ),
+            ),
+        )
+        .limit(1);
+
+    return row.length > 0;
 }
 
 /**
