@@ -936,10 +936,34 @@ export async function updateDateMatchStatus(matchId: string, status: string) {
     type DateMatchStatus = (typeof validStatuses)[number];
     if (!validStatuses.includes(status as DateMatchStatus)) throw new Error("Invalid status");
     const nextStatus = status as DateMatchStatus;
+    const dm = await db.query.dateMatches.findFirst({ where: eq(dateMatches.id, matchId) });
+    if (!dm) throw new Error("Date match not found");
 
-    await db.update(dateMatches)
-        .set({ status: nextStatus })
-        .where(eq(dateMatches.id, matchId));
+    await db.transaction(async (tx) => {
+        await tx.update(dateMatches)
+            .set({ status: nextStatus })
+            .where(eq(dateMatches.id, matchId));
+
+        if ((nextStatus === "cancelled" || nextStatus === "no_show") && dm.candidatePairId) {
+            const [pair] = await tx.update(candidatePairs)
+                .set({ status: "expired", updatedAt: new Date() })
+                .where(eq(candidatePairs.id, dm.candidatePairId))
+                .returning({ id: candidatePairs.id });
+
+            if (pair) {
+                await tx.insert(candidatePairHistory).values({
+                    pairId: pair.id,
+                    eventType: "expired",
+                    toStatus: "expired",
+                    metadata: {
+                        source: "admin_date_status",
+                        dateMatchId: matchId,
+                        status: nextStatus,
+                    },
+                });
+            }
+        }
+    });
 
     // Mirror the new admin status onto the linked mutualMatches row so the mobile Dates
     // tabs (Arranging / Upcoming) and home hold card reflect attendance / cancellations.
@@ -953,7 +977,6 @@ export async function updateDateMatchStatus(matchId: string, status: string) {
 
     if (status === "attended") {
         logEvent(EVENT_TYPES.DATE_ATTENDED, null, { matchId }).catch(() => {});
-        const dm = await db.query.dateMatches.findFirst({ where: eq(dateMatches.id, matchId) });
         if (dm) {
             const [userA, userB] = await Promise.all([
                 db.query.user.findFirst({ where: eq(user.id, dm.userAId) }),

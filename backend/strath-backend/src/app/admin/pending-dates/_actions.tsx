@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CalendarClock, CalendarPlus, Clock3 } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { CalendarClock, CalendarPlus, Clock3, Loader2, XCircle } from "lucide-react";
 
+import { updateDateMatchStatus } from "@/lib/actions/admin";
 import { cn } from "@/lib/utils";
 import { PairCard, PairInfoTile } from "@/components/admin/ops/pair-card";
 import { PairDetailSheet } from "@/components/admin/ops/pair-detail-sheet";
@@ -21,6 +22,9 @@ export function ArrangingView({ rows: initialRows, locations, isDemo }: Arrangin
     const [rows, setRows] = useState(initialRows);
     const [scheduleId, setScheduleId] = useState<string | null>(null);
     const [detailId, setDetailId] = useState<string | null>(null);
+    const [cancellingId, setCancellingId] = useState<string | null>(null);
+    const [cancelError, setCancelError] = useState<string | null>(null);
+    const [isPending, startTransition] = useTransition();
 
     const scheduleTarget = useMemo(
         () => rows.find((r) => r.id === scheduleId) ?? null,
@@ -38,6 +42,27 @@ export function ArrangingView({ rows: initialRows, locations, isDemo }: Arrangin
         setScheduleId(null);
     };
 
+    const handleCancel = (pair: OpsPendingPair) => {
+        if (!window.confirm(`Cancel ${pair.userA.firstName} x ${pair.userB.firstName} and return both people to the pool?`)) return;
+
+        setCancelError(null);
+        setCancellingId(pair.id);
+        startTransition(async () => {
+            try {
+                if (!isDemo) {
+                    await updateDateMatchStatus(pair.id, "cancelled");
+                }
+                setRows((prev) => prev.filter((r) => r.id !== pair.id));
+                setDetailId((current) => current === pair.id ? null : current);
+                setScheduleId((current) => current === pair.id ? null : current);
+            } catch (error) {
+                setCancelError(error instanceof Error ? error.message : "Could not cancel this match");
+            } finally {
+                setCancellingId(null);
+            }
+        });
+    };
+
     return (
         <div className="mx-auto max-w-6xl p-6 md:p-10">
             <OpsHeader
@@ -47,6 +72,12 @@ export function ArrangingView({ rows: initialRows, locations, isDemo }: Arrangin
                 count={rows.length}
                 isDemo={isDemo}
             />
+
+            {cancelError && (
+                <div className="mb-4 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                    {cancelError}
+                </div>
+            )}
 
             {rows.length === 0 ? (
                 <EmptyState
@@ -90,14 +121,25 @@ export function ArrangingView({ rows: initialRows, locations, isDemo }: Arrangin
                                     <p className="text-[11px] text-white/50">
                                         Both confirmed they want to meet
                                     </p>
-                                    <button
-                                        type="button"
-                                        onClick={() => setScheduleId(pair.id)}
-                                        className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-[12px] font-semibold text-black shadow-lg transition-all hover:bg-white/90"
-                                    >
-                                        <CalendarPlus className="size-3.5" />
-                                        Schedule date
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleCancel(pair)}
+                                            disabled={isPending && cancellingId === pair.id}
+                                            className="inline-flex items-center gap-1.5 rounded-full border border-red-400/30 bg-red-500/10 px-3.5 py-1.5 text-[12px] font-semibold text-red-100 transition-all hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                            {isPending && cancellingId === pair.id ? <Loader2 className="size-3.5 animate-spin" /> : <XCircle className="size-3.5" />}
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setScheduleId(pair.id)}
+                                            className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-[12px] font-semibold text-black shadow-lg transition-all hover:bg-white/90"
+                                        >
+                                            <CalendarPlus className="size-3.5" />
+                                            Schedule date
+                                        </button>
+                                    </div>
                                 </div>
                             }
                         />
@@ -130,17 +172,28 @@ export function ArrangingView({ rows: initialRows, locations, isDemo }: Arrangin
                     createdAt={detailTarget.createdAt}
                     callCompleted
                     actions={
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setDetailId(null);
-                                setScheduleId(detailTarget.id);
-                            }}
-                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-[13px] font-semibold text-black shadow-lg transition-all hover:bg-white/90"
-                        >
-                            <CalendarPlus className="size-4" />
-                            Schedule this date
-                        </button>
+                        <div className="grid gap-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setDetailId(null);
+                                    setScheduleId(detailTarget.id);
+                                }}
+                                className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-[13px] font-semibold text-black shadow-lg transition-all hover:bg-white/90"
+                            >
+                                <CalendarPlus className="size-4" />
+                                Schedule this date
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleCancel(detailTarget)}
+                                disabled={isPending && cancellingId === detailTarget.id}
+                                className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-red-400/30 bg-red-500/10 px-4 py-2.5 text-[13px] font-semibold text-red-100 transition-all hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {isPending && cancellingId === detailTarget.id ? <Loader2 className="size-4 animate-spin" /> : <XCircle className="size-4" />}
+                                Cancel and return to pool
+                            </button>
+                        </div>
                     }
                 />
             )}
