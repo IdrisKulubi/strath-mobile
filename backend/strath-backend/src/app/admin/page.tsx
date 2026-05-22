@@ -1,7 +1,9 @@
 import { getAdminDailyDiscoveryHealth, getAdminFeatureFlags, getAdminMetrics, getAdminOnCallSessions, getAdminPendingDates } from "@/lib/actions/admin";
+import { getZeroMatchUsers } from "@/lib/actions/manual-matchmaking";
 import { APP_FEATURE_KEYS } from "@/lib/feature-flags";
 
 import { FeatureFlagToggle } from "./feature-flags/_actions";
+import { ZeroMatchRecoveryCard } from "./_zero-match-recovery-card";
 
 function MetricCard({
     label,
@@ -24,12 +26,13 @@ function MetricCard({
 }
 
 export default async function AdminOverviewPage() {
-    const [metrics, pending, onCall, flags, discoveryHealth] = await Promise.all([
+    const [metrics, pending, onCall, flags, discoveryHealth, zeroMatchUsers] = await Promise.all([
         getAdminMetrics(),
         getAdminPendingDates(),
         getAdminOnCallSessions(),
         getAdminFeatureFlags(),
         getAdminDailyDiscoveryHealth(),
+        getZeroMatchUsers(),
     ]);
     const adminMatchPreviewFlag = flags.find((flag) => flag.key === APP_FEATURE_KEYS.adminMatchPreviewEnabled);
 
@@ -176,6 +179,8 @@ export default async function AdminOverviewPage() {
                     </div>
                 </div>
             </div>
+
+            <ZeroMatchRecoveryCard users={zeroMatchUsers} />
 
             <div className="mb-8 rounded-xl border border-white/10 bg-white/5 p-6">
                 <h2 className="mb-5 text-sm font-semibold uppercase tracking-wide text-gray-300">Conversion Funnel</h2>

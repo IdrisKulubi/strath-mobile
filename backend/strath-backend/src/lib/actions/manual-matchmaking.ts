@@ -11,6 +11,7 @@ import {
     MANUAL_CURATED_PAIR_EXPIRES_AT,
     canonicalizePairUsers,
     generateCandidatePairsForUser,
+    getActiveCandidatePairsForUser,
     recordCandidatePairHistory,
 } from "@/lib/services/candidate-pairs-service";
 import { resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
@@ -333,6 +334,225 @@ async function getPoolData() {
 export async function getManualMatchmakingPool() {
     await requireAdmin();
     return getPoolData();
+}
+
+export type ZeroMatchRecoveryUser = {
+    userId: string;
+    name: string;
+    email: string;
+    gender: string | null;
+    interestedIn: string[];
+    createdAt: string;
+    lastActive: string;
+    pushEnabled: boolean;
+    profileStatus: string;
+    verificationStatus: string;
+    candidatePoolSize: number;
+    reason: "no_active_pairs" | "no_push_token" | "candidate_pool_empty";
+};
+
+export type ZeroMatchGenerationResult = {
+    userId: string;
+    activeMatches: number;
+    notificationSent: boolean;
+    notificationFailed: boolean;
+};
+
+async function collectZeroMatchUsers(): Promise<ZeroMatchRecoveryUser[]> {
+    const matchExcludedUserIds = await resolveMatchExcludedUserIds();
+    const rows = await readDb
+        .select({
+            userId: user.id,
+            name: user.name,
+            email: user.email,
+            pushToken: user.pushToken,
+            lastActive: user.lastActive,
+            createdAt: user.createdAt,
+            firstName: profiles.firstName,
+            lastName: profiles.lastName,
+            gender: profiles.gender,
+            interestedIn: profiles.interestedIn,
+            profileCompleted: profiles.profileCompleted,
+            isComplete: profiles.isComplete,
+            isVisible: profiles.isVisible,
+            discoveryPaused: profiles.discoveryPaused,
+            incognitoMode: profiles.incognitoMode,
+            waitlistStatus: profiles.waitlistStatus,
+            faceVerificationStatus: profiles.faceVerificationStatus,
+            faceVerifiedAt: profiles.faceVerifiedAt,
+        })
+        .from(user)
+        .innerJoin(profiles, eq(profiles.userId, user.id))
+        .where(isNull(user.deletedAt))
+        .orderBy(desc(user.createdAt));
+
+    const eligibleRows = rows.filter((row) => {
+        const profileComplete = Boolean(row.profileCompleted || row.isComplete);
+        return profileComplete
+            && row.isVisible !== false
+            && row.discoveryPaused !== true
+            && row.incognitoMode !== true
+            && row.waitlistStatus !== "waitlisted"
+            && !matchExcludedUserIds.has(row.userId)
+            && hasCompletedInitialFaceVerification(row);
+    });
+
+    const userIds = eligibleRows.map((row) => row.userId);
+    if (userIds.length === 0) return [];
+
+    const now = new Date();
+    const [activePairs, heldMatches] = await Promise.all([
+        readDb
+            .select({
+                userAId: candidatePairs.userAId,
+                userBId: candidatePairs.userBId,
+            })
+            .from(candidatePairs)
+            .where(
+                and(
+                    eq(candidatePairs.status, "active"),
+                    gte(candidatePairs.expiresAt, now),
+                    or(
+                        inArray(candidatePairs.userAId, userIds),
+                        inArray(candidatePairs.userBId, userIds),
+                    ),
+                ),
+            ),
+        readDb
+            .select({
+                userAId: mutualMatches.userAId,
+                userBId: mutualMatches.userBId,
+            })
+            .from(mutualMatches)
+            .where(
+                and(
+                    inArray(mutualMatches.status, [...SHUFFLE_HOLD_STATUSES]),
+                    or(
+                        inArray(mutualMatches.userAId, userIds),
+                        inArray(mutualMatches.userBId, userIds),
+                    ),
+                ),
+            ),
+    ]);
+
+    const activeCountByUserId = new Map<string, number>();
+    const addActive = (userId: string) => activeCountByUserId.set(userId, (activeCountByUserId.get(userId) ?? 0) + 1);
+    for (const pair of activePairs) {
+        addActive(pair.userAId);
+        addActive(pair.userBId);
+    }
+
+    const heldUserIds = new Set(heldMatches.flatMap((match) => [match.userAId, match.userBId]));
+
+    return eligibleRows
+        .filter((row) => !heldUserIds.has(row.userId))
+        .filter((row) => (activeCountByUserId.get(row.userId) ?? 0) === 0)
+        .map((row) => {
+            const interestedIn = arrayValue(row.interestedIn as string[] | null);
+            const candidatePoolSize = eligibleRows.filter((candidate) => (
+                candidate.userId !== row.userId
+                && !heldUserIds.has(candidate.userId)
+                && isOppositeGenderMatch(row.gender, candidate.gender)
+                && isOppositeGenderMatch(candidate.gender, row.gender)
+            )).length;
+            const reason = candidatePoolSize === 0
+                ? "candidate_pool_empty"
+                : row.pushToken
+                    ? "no_active_pairs"
+                    : "no_push_token";
+
+            return {
+                userId: row.userId,
+                name: displayName(row, row.name),
+                email: row.email,
+                gender: row.gender,
+                interestedIn,
+                createdAt: row.createdAt.toISOString(),
+                lastActive: row.lastActive.toISOString(),
+                pushEnabled: Boolean(row.pushToken),
+                profileStatus: "eligible",
+                verificationStatus: row.faceVerificationStatus ?? (row.faceVerifiedAt ? "verified" : "unknown"),
+                candidatePoolSize,
+                reason,
+            };
+        });
+}
+
+async function sendZeroMatchRecoveryPush(userId: string) {
+    const row = await readDb.query.user.findFirst({
+        where: eq(user.id, userId),
+        columns: { pushToken: true },
+    });
+
+    if (!row?.pushToken) return { sent: false, failed: false };
+
+    const result = await sendPushNotification(row.pushToken, {
+        title: "New matches are ready",
+        body: "Open StrathSpace to see who we found for you.",
+        data: {
+            type: NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH,
+            route: "/(tabs)",
+        },
+    });
+
+    return { sent: Boolean(result), failed: !result };
+}
+
+async function generateForZeroMatchUser(userId: string): Promise<ZeroMatchGenerationResult> {
+    const matches = await generateCandidatePairsForUser(userId, { notify: false });
+    const activeMatches = matches.length > 0
+        ? matches.length
+        : (await getActiveCandidatePairsForUser(userId)).length;
+    const notification = activeMatches > 0
+        ? await sendZeroMatchRecoveryPush(userId)
+        : { sent: false, failed: false };
+
+    return {
+        userId,
+        activeMatches,
+        notificationSent: notification.sent,
+        notificationFailed: notification.failed,
+    };
+}
+
+export async function getZeroMatchUsers() {
+    await requireAdmin();
+    return collectZeroMatchUsers();
+}
+
+export async function generateMatchesForZeroMatchUser(userId: string) {
+    await requireAdmin();
+    const result = await generateForZeroMatchUser(userId);
+    revalidatePath("/admin");
+    revalidatePath("/admin/matchmaking");
+    return result;
+}
+
+export async function generateMatchesForAllZeroMatchUsers() {
+    await requireAdmin();
+    const zeroMatchUsers = await collectZeroMatchUsers();
+    const results: ZeroMatchGenerationResult[] = [];
+
+    for (const zeroMatchUser of zeroMatchUsers) {
+        results.push(await generateForZeroMatchUser(zeroMatchUser.userId));
+    }
+
+    const generatedFor = results.filter((result) => result.activeMatches > 0).length;
+    const notificationsSent = results.filter((result) => result.notificationSent).length;
+    const notificationFailures = results.filter((result) => result.notificationFailed).length;
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/matchmaking");
+
+    return {
+        checked: zeroMatchUsers.length,
+        generatedFor,
+        stillZero: zeroMatchUsers.length - generatedFor,
+        skipped: 0,
+        notificationsSent,
+        notificationFailures,
+        results,
+    };
 }
 
 export async function getManualMatchSuggestions(userId: string) {

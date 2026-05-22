@@ -439,8 +439,8 @@ async function sendNewCandidateMatchPushes(pairId: string, userAId: string, user
         .where(inArray(user.id, [userAId, userBId]));
 
     const payload = {
-        title: "New match for you ✨",
-        body: "Open Home to see who we picked for you.",
+        title: "New matches are ready",
+        body: "Open StrathSpace to see who we found for you.",
         data: {
             type: NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH,
             pairId,
@@ -777,7 +777,7 @@ export async function promoteDueQueuedPairsForUser(userId: string): Promise<bool
     return false;
 }
 
-export async function generateCandidatePairsForUser(userId: string) {
+export async function generateCandidatePairsForUser(userId: string, options: { notify?: boolean } = {}) {
     console.log("[candidate-pairs] generateCandidatePairsForUser", { userId });
 
     await expireCandidatePairs();
@@ -1147,12 +1147,14 @@ export async function generateCandidatePairsForUser(userId: string) {
         }
     });
 
-    for (const pairId of newActivePairIds) {
-        const row = await readDb.query.candidatePairs.findFirst({
-            where: eq(candidatePairs.id, pairId),
-        });
-        if (row) {
-            void sendNewCandidateMatchPushes(row.id, row.userAId, row.userBId);
+    if (options.notify !== false) {
+        for (const pairId of newActivePairIds) {
+            const row = await readDb.query.candidatePairs.findFirst({
+                where: eq(candidatePairs.id, pairId),
+            });
+            if (row) {
+                void sendNewCandidateMatchPushes(row.id, row.userAId, row.userBId);
+            }
         }
     }
 
