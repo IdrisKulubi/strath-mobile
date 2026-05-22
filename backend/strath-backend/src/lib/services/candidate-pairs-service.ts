@@ -24,9 +24,8 @@ import { isAdminMatchPreviewUser, resolveMatchExcludedUserIds } from "@/lib/serv
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
-export const DAILY_CANDIDATE_PAIR_LIMIT = 2;
+export const DAILY_CANDIDATE_PAIR_LIMIT = Number(process.env.DAILY_CANDIDATE_PAIR_LIMIT) || 5;
 export const DAILY_CANDIDATE_DECISION_LIMIT = Number(process.env.DAILY_CANDIDATE_DECISION_LIMIT) || 32;
-export const ACTIVE_EXPOSURE_CAP = 2;
 export const MANUAL_CURATED_PAIR_EXPIRES_AT = new Date("2099-12-31T23:59:59.000Z");
 
 // Expiry: env CANDIDATE_PAIR_EXPIRY_MINUTES (default 2880 = 48h). Use 5 for testing.
@@ -355,6 +354,18 @@ async function getMatchedUserIds(userId: string) {
         ...legacyMatches.map((row) => (row.user1Id === userId ? row.user2Id : row.user1Id)),
         ...mutualRows.map((row) => (row.userAId === userId ? row.userBId : row.userAId)),
     ]);
+}
+
+async function getUsersOnActiveMatchHolds() {
+    const rows = await readDb
+        .select({
+            userAId: mutualMatches.userAId,
+            userBId: mutualMatches.userBId,
+        })
+        .from(mutualMatches)
+        .where(inArray(mutualMatches.status, ["mutual", "call_pending", "being_arranged", "upcoming"]));
+
+    return new Set(rows.flatMap((row) => [row.userAId, row.userBId]));
 }
 
 /** Days since any candidate_pair involving this user was created; no history => waitDays 0 and no relax-by-wait. */
@@ -846,12 +857,13 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
         return [];
     }
 
-    const [blockedIds, matchedIds, usersIPassedIds, existingPairMap, waitContext] = await Promise.all([
+    const [blockedIds, matchedIds, usersIPassedIds, existingPairMap, waitContext, usersOnMatchHolds] = await Promise.all([
         getBlockedUserIds(userId),
         getMatchedUserIds(userId),
         getUsersIPassedIds(userId),
         getExistingPairMap(userId),
         getWaitContextForUser(userId),
+        getUsersOnActiveMatchHolds(),
     ]);
 
     const targetGenders = getTargetGenders(
@@ -865,6 +877,7 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
         ...matchedIds,
         ...usersIPassedIds,
         ...matchExcludedUserIds,
+        ...usersOnMatchHolds,
     ];
 
     const candidateProfiles = await readDb.query.profiles.findMany({
@@ -894,6 +907,7 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
         matchExcludedCount: matchExcludedUserIds.size,
         blockedCount: blockedIds.size,
         matchedCount: matchedIds.size,
+        usersOnMatchHoldsCount: usersOnMatchHolds.size,
         usersIPassedCount: usersIPassedIds.size,
         rawCandidateCount: candidateProfiles.length,
     });
@@ -960,16 +974,6 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
     const scoredCandidates = await Promise.all(
         reciprocalCandidates.map(async (candidate) => {
             const exposureCount = await getActiveExposureCount(candidate.userId);
-            if (exposureCount >= ACTIVE_EXPOSURE_CAP) {
-                console.log("[candidate-pairs] scoring skip exposure cap", {
-                    viewerUserId: userId,
-                    candidateUserId: candidate.userId,
-                    exposureCount,
-                    exposureCap: ACTIVE_EXPOSURE_CAP,
-                });
-                return null;
-            }
-
             const { score, reasons } = await computeCompatibility(userId, candidate.userId);
             const boostedScore = buildBoostedCompatibilityScore(
                 score,
@@ -1004,9 +1008,7 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
         }),
     );
 
-    const scored = scoredCandidates.filter(
-        (entry): entry is NonNullable<typeof entry> => Boolean(entry),
-    );
+    const scored = scoredCandidates;
     const topScoredPreview = [...scored]
         .sort((left, right) => right.score - left.score)
         .slice(0, 10)
@@ -1023,13 +1025,11 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
         viewerUserId: userId,
         reciprocalPoolSize,
         scoredCount: scored.length,
-        exposureFilteredCount: scoredCandidates.length - scored.length,
         effectiveMin,
         topScoredPreview,
     });
 
     const aboveThreshold = scoredCandidates
-        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
         .filter((entry) => entry.score >= effectiveMin)
         .sort((left, right) =>
             compareScoredCandidatesForFairness(
@@ -1047,11 +1047,6 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
         )
         .slice(0, hasQueuedPairs ? activeSlotsAvailable : MAX_CANDIDATE_QUEUE_SIZE);
 
-    const filteredByExposure = scoredCandidates.filter((e) => e === null).length;
-    if (filteredByExposure > 0) {
-        console.log("[candidate-pairs] filtered by exposure cap:", filteredByExposure);
-    }
-
     if (aboveThreshold.length === 0) {
         const scores = scored.map((e) => e.score);
         const maxScore = scores.length > 0 ? Math.max(...scores) : null;
@@ -1064,7 +1059,6 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
             scoreFloor: MIN_CANDIDATE_MATCH_SCORE_FLOOR,
             reciprocalPoolSize,
             scoredCount: scored.length,
-            exposureFilteredCount: filteredByExposure,
             maxScore,
             minScore,
             scored: scored.map((e) => ({
