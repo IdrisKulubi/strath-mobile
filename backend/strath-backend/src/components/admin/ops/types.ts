@@ -25,6 +25,7 @@ export interface OpsScheduledPair {
     userB: OpsPairUser;
     vibe: OpsVibe;
     createdAt: string;
+    locationId?: string | null;
     scheduledAt: string | null;
     venueName: string | null;
     venueAddress: string | null;

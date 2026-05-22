@@ -1,5 +1,5 @@
-import { getAdminScheduledDates } from "@/lib/actions/admin";
-import { DEMO_SCHEDULED_DATES } from "@/lib/admin/demo-data";
+import { getAdminDateLocations, getAdminScheduledDates } from "@/lib/actions/admin";
+import { DEMO_LOCATIONS, DEMO_SCHEDULED_DATES } from "@/lib/admin/demo-data";
 import { UpcomingView } from "./_actions";
 
 export default async function ScheduledDatesPage({
@@ -11,9 +11,12 @@ export default async function ScheduledDatesPage({
     const isDemo = demo === "1";
 
     if (isDemo) {
-        return <UpcomingView rows={DEMO_SCHEDULED_DATES} isDemo />;
+        return <UpcomingView rows={DEMO_SCHEDULED_DATES} locations={DEMO_LOCATIONS} isDemo />;
     }
 
-    const rows = await getAdminScheduledDates();
-    return <UpcomingView rows={rows} isDemo={false} />;
+    const [rows, locations] = await Promise.all([
+        getAdminScheduledDates(),
+        getAdminDateLocations(),
+    ]);
+    return <UpcomingView rows={rows} locations={locations} isDemo={false} />;
 }

@@ -38,6 +38,7 @@ interface StatusActionButtonsProps {
     variant?: "upcoming" | "history";
     isDemo?: boolean;
     onDemoUpdate?: (nextStatus: string) => void;
+    onUpdated?: (nextStatus: string) => void;
     pairLabel?: string;
 }
 
@@ -47,6 +48,7 @@ export function StatusActionButtons({
     variant = "upcoming",
     isDemo,
     onDemoUpdate,
+    onUpdated,
     pairLabel,
 }: StatusActionButtonsProps) {
     const [isPending, startTransition] = useTransition();
@@ -54,12 +56,14 @@ export function StatusActionButtons({
     const runUpdate = (status: string, confirmLabel: string) => {
         if (isDemo) {
             onDemoUpdate?.(status);
+            onUpdated?.(status);
             toast.success(`Demo · Marked ${confirmLabel}`, pairLabel);
             return;
         }
         startTransition(async () => {
             try {
                 await updateDateMatchStatus(matchId, status);
+                onUpdated?.(status);
                 toast.success(`Marked as ${confirmLabel}`, pairLabel);
             } catch (err) {
                 toast.error("Failed to update", (err as Error)?.message);
@@ -128,6 +132,17 @@ export function StatusActionButtons({
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[180px]">
+                    <ConfirmDropdownItem
+                        title="Move back to Arranging?"
+                        description={pairLabel ? `This will clear the scheduled date for ${pairLabel} and return them to Arranging.` : "This will clear the scheduled date and return this pair to Arranging."}
+                        onConfirm={() => runUpdate("pending_setup", "Arranging")}
+                        trigger={
+                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                <Undo2 className="size-3.5 text-sky-300" />
+                                <span>Move to Arranging</span>
+                            </DropdownMenuItem>
+                        }
+                    />
                     <ConfirmDropdownItem
                         title="Mark date as cancelled?"
                         description={pairLabel ? `This will move ${pairLabel} to History with a cancelled outcome.` : "This will move this date to History."}

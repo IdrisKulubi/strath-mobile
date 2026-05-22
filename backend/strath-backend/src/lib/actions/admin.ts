@@ -939,8 +939,16 @@ export async function updateDateMatchStatus(matchId: string, status: string) {
     const dm = await db.query.dateMatches.findFirst({ where: eq(dateMatches.id, matchId) });
     if (!dm) throw new Error("Date match not found");
 
+    const update: Partial<typeof dateMatches.$inferInsert> = { status: nextStatus };
+    if (nextStatus === "pending_setup") {
+        update.locationId = null;
+        update.venueName = null;
+        update.venueAddress = null;
+        update.scheduledAt = null;
+    }
+
     await db.update(dateMatches)
-        .set({ status: nextStatus })
+        .set(update)
         .where(eq(dateMatches.id, matchId));
 
     if ((nextStatus === "cancelled" || nextStatus === "no_show") && dm.candidatePairId) {

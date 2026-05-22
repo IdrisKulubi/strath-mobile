@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { ArrowLeft, ArrowRight, CalendarCheck2, MapPin, Send } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -29,6 +29,9 @@ interface ScheduleDateSheetProps {
     vibe?: string | null;
     locations: OpsLocation[];
     isDemo?: boolean;
+    mode?: "schedule" | "reschedule";
+    initialLocationId?: string | null;
+    initialScheduledAt?: string | null;
     onScheduled?: (payload: { locationId: string; scheduledAt: string; venueName: string; venueAddress: string }) => void;
 }
 
@@ -43,21 +46,17 @@ export function ScheduleDateSheet({
     vibe,
     locations,
     isDemo,
+    mode = "schedule",
+    initialLocationId,
+    initialScheduledAt,
     onScheduled,
 }: ScheduleDateSheetProps) {
     const [step, setStep] = useState<Step>(1);
-    const [locationId, setLocationId] = useState<string | null>(null);
-    const [scheduledAt, setScheduledAt] = useState<string | null>(null);
+    const [locationId, setLocationId] = useState<string | null>(() => initialLocationId ?? null);
+    const [scheduledAt, setScheduledAt] = useState<string | null>(() => initialScheduledAt ?? null);
     const [isPending, startTransition] = useTransition();
     const vibeMeta = getVibeMeta(vibe);
-
-    useEffect(() => {
-        if (!open) {
-            setStep(1);
-            setLocationId(null);
-            setScheduledAt(null);
-        }
-    }, [open]);
+    const isReschedule = mode === "reschedule";
 
     const selectedLocation = useMemo(
         () => locations.find((l) => l.id === locationId) ?? null,
@@ -77,17 +76,17 @@ export function ScheduleDateSheet({
     const handleSubmit = () => {
         if (!locationId || !scheduledAt || !selectedLocation) return;
 
+        const payload = {
+            locationId,
+            scheduledAt,
+            venueName: selectedLocation.name,
+            venueAddress: selectedLocation.address,
+        };
+        const pairLabel = `${userA.firstName} x ${userB.firstName} · ${whenLabel}`;
+
         if (isDemo) {
-            onScheduled?.({
-                locationId,
-                scheduledAt,
-                venueName: selectedLocation.name,
-                venueAddress: selectedLocation.address,
-            });
-            toast.success(
-                `Demo · Date scheduled`,
-                `${userA.firstName} × ${userB.firstName} · ${whenLabel}`
-            );
+            onScheduled?.(payload);
+            toast.success(isReschedule ? "Demo: date rescheduled" : "Demo: date scheduled", pairLabel);
             onOpenChange(false);
             return;
         }
@@ -100,23 +99,14 @@ export function ScheduleDateSheet({
         startTransition(async () => {
             try {
                 await scheduleDate(formData);
-                toast.success(
-                    `Date scheduled`,
-                    `${userA.firstName} × ${userB.firstName} · ${whenLabel}`
-                );
-                onScheduled?.({
-                    locationId,
-                    scheduledAt,
-                    venueName: selectedLocation.name,
-                    venueAddress: selectedLocation.address,
-                });
+                toast.success(isReschedule ? "Date rescheduled" : "Date scheduled", pairLabel);
+                onScheduled?.(payload);
                 onOpenChange(false);
             } catch (err) {
-                toast.error("Couldn't schedule date", (err as Error)?.message);
+                toast.error("Could not schedule date", (err as Error)?.message);
             }
         });
     };
-
     const canNextFrom1 = !!locationId;
     const canNextFrom2 = !!scheduledAt;
 
@@ -138,7 +128,7 @@ export function ScheduleDateSheet({
                         <PairAvatars userA={userA} userB={userB} vibe={vibe} size="md" />
                         <div className="min-w-0">
                             <SheetTitle className="text-lg font-semibold tracking-tight text-white">
-                                Schedule date
+                                {isReschedule ? "Reschedule date" : "Schedule date"}
                             </SheetTitle>
                             <SheetDescription className="text-[12px] text-white/50">
                                 {userA.firstName} × {userB.firstName} · {vibeMeta.label}
@@ -155,7 +145,7 @@ export function ScheduleDateSheet({
                             <SectionHeading
                                 eyebrow="Step 1 of 3"
                                 title="Pick a venue"
-                                description={vibe ? `Matches for ${vibeMeta.label} dates are suggested first.` : "Choose a saved location."}
+                                description={isReschedule ? "Keep the current venue or choose a new one." : vibe ? `Matches for ${vibeMeta.label} dates are suggested first.` : "Choose a saved location."}
                             />
                             <LocationPickerGrid
                                 locations={locations}
@@ -171,7 +161,7 @@ export function ScheduleDateSheet({
                             <SectionHeading
                                 eyebrow="Step 2 of 3"
                                 title="Pick a time"
-                                description="Tap a suggestion or set a custom slot."
+                                description={isReschedule ? "Keep the current time or set a new slot." : "Tap a suggestion or set a custom slot."}
                             />
                             <QuickTimePicker value={scheduledAt} onChange={setScheduledAt} />
                         </section>
@@ -182,7 +172,7 @@ export function ScheduleDateSheet({
                             <SectionHeading
                                 eyebrow="Step 3 of 3"
                                 title="Review & send"
-                                description="Both people will receive this push notification."
+                                description={isReschedule ? "Both people will receive the updated details." : "Both people will receive this push notification."}
                             />
 
                             <div className="rounded-2xl bg-white/[0.03] p-4 ring-1 ring-inset ring-white/[0.04]">
@@ -250,7 +240,7 @@ export function ScheduleDateSheet({
                             className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-emerald-500 to-green-600 px-4 py-2 text-[13px] font-semibold text-white shadow-[0_4px_16px_-4px_rgba(16,185,129,0.6)] transition-all hover:from-emerald-400 hover:to-green-500 disabled:opacity-60"
                         >
                             <Send className="size-3.5" />
-                            {isPending ? "Sending…" : isDemo ? "Simulate send" : "Send & schedule"}
+                            {isPending ? "Sending..." : isDemo ? "Simulate send" : isReschedule ? "Send update" : "Send & schedule"}
                         </button>
                     )}
                 </div>

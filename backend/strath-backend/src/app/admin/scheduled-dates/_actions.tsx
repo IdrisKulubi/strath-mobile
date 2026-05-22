@@ -1,34 +1,58 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarCheck2, MapPin, Star } from "lucide-react";
+import { CalendarCheck2, CalendarPlus, MapPin, Star } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { PairCard, PairInfoTile } from "@/components/admin/ops/pair-card";
 import { PairDetailSheet } from "@/components/admin/ops/pair-detail-sheet";
+import { ScheduleDateSheet } from "@/components/admin/ops/schedule-date-sheet";
 import { EmptyState } from "@/components/admin/ops/empty-state";
 import { OpsHeader } from "@/components/admin/ops/ops-header";
 import { CountdownChip } from "@/components/admin/ops/countdown-chip";
 import { StatusActionButtons } from "@/components/admin/ops/status-action-buttons";
-import type { OpsScheduledPair } from "@/components/admin/ops/types";
+import type { OpsLocation, OpsScheduledPair } from "@/components/admin/ops/types";
 
 interface UpcomingViewProps {
     rows: OpsScheduledPair[];
+    locations: OpsLocation[];
     isDemo: boolean;
 }
 
-export function UpcomingView({ rows: initialRows, isDemo }: UpcomingViewProps) {
+export function UpcomingView({ rows: initialRows, locations, isDemo }: UpcomingViewProps) {
     const [rows, setRows] = useState(initialRows);
     const [detailId, setDetailId] = useState<string | null>(null);
+    const [rescheduleId, setRescheduleId] = useState<string | null>(null);
+    const [viewedAt] = useState(() => Date.now());
 
     const detail = useMemo(() => rows.find((r) => r.id === detailId) ?? null, [rows, detailId]);
+    const rescheduleTarget = useMemo(() => rows.find((r) => r.id === rescheduleId) ?? null, [rescheduleId, rows]);
 
-    const handleDemoStatus = (matchId: string, nextStatus: string) => {
+    const handleStatusUpdate = (matchId: string, nextStatus: string) => {
         setRows((prev) =>
             nextStatus === "scheduled"
                 ? prev.map((r) => (r.id === matchId ? { ...r, status: nextStatus } : r))
                 : prev.filter((r) => r.id !== matchId)
         );
+    };
+
+    const handleRescheduled = (
+        matchId: string,
+        payload: { locationId: string; scheduledAt: string; venueName: string; venueAddress: string },
+    ) => {
+        setRows((prev) => prev.map((row) => (
+            row.id === matchId
+                ? {
+                    ...row,
+                    locationId: payload.locationId,
+                    scheduledAt: payload.scheduledAt,
+                    venueName: payload.venueName,
+                    venueAddress: payload.venueAddress,
+                    status: "scheduled",
+                }
+                : row
+        )));
+        setRescheduleId(null);
     };
 
     return (
@@ -102,18 +126,28 @@ export function UpcomingView({ rows: initialRows, isDemo }: UpcomingViewProps) {
                                 footer={
                                     <div className="flex items-center justify-between">
                                         <p className="text-[11px] text-white/50">
-                                            {pair.scheduledAt && Date.now() > new Date(pair.scheduledAt).getTime()
+                                            {pair.scheduledAt && viewedAt > new Date(pair.scheduledAt).getTime()
                                                 ? "Date should have happened — confirm outcome"
                                                 : "After the date, mark the outcome"}
                                         </p>
-                                        <StatusActionButtons
-                                            matchId={pair.id}
-                                            current={pair.status}
-                                            variant="upcoming"
-                                            pairLabel={pairLabel}
-                                            isDemo={isDemo}
-                                            onDemoUpdate={(s) => handleDemoStatus(pair.id, s)}
-                                        />
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setRescheduleId(pair.id)}
+                                                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] font-semibold text-white transition hover:border-white/20 hover:bg-white/[0.07]"
+                                            >
+                                                <CalendarPlus className="size-3.5" />
+                                                Reschedule
+                                            </button>
+                                            <StatusActionButtons
+                                                matchId={pair.id}
+                                                current={pair.status}
+                                                variant="upcoming"
+                                                pairLabel={pairLabel}
+                                                isDemo={isDemo}
+                                                onUpdated={(s) => handleStatusUpdate(pair.id, s)}
+                                            />
+                                        </div>
                                     </div>
                                 }
                             />
@@ -137,18 +171,48 @@ export function UpcomingView({ rows: initialRows, isDemo }: UpcomingViewProps) {
                     venueAddress={detail.venueAddress}
                     status={detail.status}
                     actions={
-                        <StatusActionButtons
+                        <div className="grid gap-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setDetailId(null);
+                                    setRescheduleId(detail.id);
+                                }}
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-white/90"
+                            >
+                                <CalendarPlus className="size-4" />
+                                Reschedule date
+                            </button>
+                            <StatusActionButtons
                             matchId={detail.id}
                             current={detail.status}
                             variant="upcoming"
                             pairLabel={`${detail.userA.firstName} × ${detail.userB.firstName}`}
                             isDemo={isDemo}
-                            onDemoUpdate={(s) => {
-                                handleDemoStatus(detail.id, s);
+                            onUpdated={(s) => {
+                                handleStatusUpdate(detail.id, s);
                                 setDetailId(null);
                             }}
-                        />
+                            />
+                        </div>
                     }
+                />
+            )}
+
+            {rescheduleTarget && (
+                <ScheduleDateSheet
+                    open={!!rescheduleId}
+                    onOpenChange={(open) => !open && setRescheduleId(null)}
+                    matchId={rescheduleTarget.id}
+                    userA={rescheduleTarget.userA}
+                    userB={rescheduleTarget.userB}
+                    vibe={rescheduleTarget.vibe}
+                    locations={locations}
+                    isDemo={isDemo}
+                    mode="reschedule"
+                    initialLocationId={rescheduleTarget.locationId ?? null}
+                    initialScheduledAt={rescheduleTarget.scheduledAt}
+                    onScheduled={(payload) => handleRescheduled(rescheduleTarget.id, payload)}
                 />
             )}
         </div>
