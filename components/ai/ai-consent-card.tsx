@@ -39,14 +39,14 @@ export function AiConsentCard({
             </View>
 
             <Pressable
-                style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+                style={[styles.allowButton, { borderColor: colors.primary }]}
                 onPress={onAllow}
                 disabled={isLoading}
             >
                 {isLoading ? (
-                    <ActivityIndicator size="small" color={colors.primaryForeground} />
+                    <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
-                    <Text style={[styles.primaryButtonText, { color: colors.primaryForeground }]}>{allowLabel}</Text>
+                    <Text style={[styles.allowButtonText, { color: colors.primary }]}>{allowLabel}</Text>
                 )}
             </Pressable>
 
@@ -93,14 +93,16 @@ const styles = StyleSheet.create({
         fontSize: 14,
         lineHeight: 20,
     },
-    primaryButton: {
+    allowButton: {
         minHeight: 48,
+        borderWidth: 1,
         borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 16,
+        backgroundColor: 'transparent',
     },
-    primaryButtonText: {
+    allowButtonText: {
         fontSize: 15,
         fontWeight: '700',
     },
@@ -111,6 +113,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 16,
+        backgroundColor: 'transparent',
     },
     secondaryButtonText: {
         fontSize: 14,

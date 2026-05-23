@@ -2,7 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, StyleSheet, ScrollView, RefreshControl, StatusBar, Pressable } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { ScreenGradient } from '@/components/ui/screen-gradient';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Animated, {
+    FadeIn,
+    Easing,
+    useSharedValue,
+    useAnimatedStyle,
+    withTiming,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
@@ -93,7 +99,10 @@ export default function DatesScreen() {
     const handleSectionChange = useCallback((section: Section, idx: number) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setActiveSection(section);
-        indicatorX.value = withSpring(idx * segmentWidth.current, { damping: 18, stiffness: 220 });
+        indicatorX.value = withTiming(idx * segmentWidth.current, {
+            duration: 220,
+            easing: Easing.out(Easing.cubic),
+        });
     }, [indicatorX]);
 
     const handleRefresh = useCallback(async () => {
@@ -227,7 +236,12 @@ export default function DatesScreen() {
                     />
                 }
             >
-                {renderContent()}
+                <Animated.View
+                    key={activeSection}
+                    entering={FadeIn.duration(160).easing(Easing.out(Easing.quad))}
+                >
+                    {renderContent()}
+                </Animated.View>
             </ScrollView>
 
             <DateMatchModal

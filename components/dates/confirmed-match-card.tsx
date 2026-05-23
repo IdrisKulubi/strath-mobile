@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import Animated, {
-    FadeInDown,
     useSharedValue,
     useAnimatedStyle,
     withRepeat,
@@ -74,7 +73,6 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
 
     return (
         <Animated.View
-            entering={FadeInDown.delay(index * 80).duration(400)}
             style={[styles.card, {
                 backgroundColor: isDark ? colors.card : '#fff',
                 borderColor: colors.border,
