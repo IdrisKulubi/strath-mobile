@@ -5,17 +5,12 @@ import {
     messages,
     mutualMatches,
     profiles,
-    vibeChecks,
 } from "@/db/schema";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 
 /**
- * After a vibe call both parties say "meet", flip the `mutualMatches` row to `being_arranged` and
+ * Admin moves a mutual match to arranging: flip `mutualMatches` to `being_arranged` and
  * find-or-create the `dateMatches` row admins use on the Arranging queue.
- *
- * Bridge step is needed because `dateMatches` historically only got created by the legacy
- * `dateRequests` accept flow. The new candidate-pair → mutual → call flow never created one,
- * leaving the admin "Arranging" page empty.
  *
  * Idempotent: safe to call multiple times.
  */
@@ -142,27 +137,13 @@ export type MutualDatesItem = {
         compatibilityScore?: number;
         compatibilityReasons?: string[];
     };
-    arrangementStatus: "mutual" | "call_pending" | "being_arranged" | "upcoming" | "completed" | "cancelled" | "expired";
+    arrangementStatus: "mutual" | "being_arranged" | "upcoming" | "completed" | "cancelled" | "expired";
     legacyMatchId?: string;
     legacyDateMatchId?: string;
     venueName?: string;
     venueAddress?: string;
     scheduledAt?: string;
     createdAt: string;
-    /**
-     * Sub-state of the post-call decision flow. Drives the Dates tab UI for `call_pending`
-     * mutuals so users can resume an undecided meet/pass even after the original call screen closed.
-     */
-    callStage?:
-        | "call_ready"
-        | "decision_pending_me"
-        | "decision_pending_partner"
-        | "decision_pending_both"
-        | "completed";
-    vibeCheckId?: string;
-    myDecision?: "meet" | "pass" | null;
-    partnerDecision?: "meet" | "pass" | null;
-    callEndedAt?: string;
     /**
      * Unread messages the viewer has not read yet in the linked chat thread. Populated
      * only for items where chat is listed (status in `CHAT_UNLOCKED_STATUSES`
@@ -173,48 +154,10 @@ export type MutualDatesItem = {
 
 const CHAT_UNLOCKED_STATUSES: ReadonlyArray<MutualDatesItem["arrangementStatus"]> = [
     "mutual",
-    "call_pending",
     "being_arranged",
     "upcoming",
     "completed",
 ];
-
-function deriveCallStage(input: {
-    viewerIsUser1: boolean;
-    user1Decision: "meet" | "pass" | null;
-    user2Decision: "meet" | "pass" | null;
-    bothAgreedToMeet: boolean;
-    status: "pending" | "scheduled" | "active" | "completed" | "expired" | "cancelled";
-    endedAt: Date | null;
-}): {
-    stage: NonNullable<MutualDatesItem["callStage"]>;
-    myDecision: MutualDatesItem["myDecision"];
-    partnerDecision: MutualDatesItem["partnerDecision"];
-} {
-    const myDecision = input.viewerIsUser1 ? input.user1Decision : input.user2Decision;
-    const partnerDecision = input.viewerIsUser1 ? input.user2Decision : input.user1Decision;
-    const bothDecided = !!(input.user1Decision && input.user2Decision);
-
-    if (input.bothAgreedToMeet || (bothDecided && input.status === "completed")) {
-        return { stage: "completed", myDecision, partnerDecision };
-    }
-
-    const callOver = input.status === "completed" || input.status === "expired" || input.endedAt !== null;
-    if (!callOver) {
-        return { stage: "call_ready", myDecision, partnerDecision };
-    }
-
-    if (!myDecision && !partnerDecision) {
-        return { stage: "decision_pending_both", myDecision, partnerDecision };
-    }
-    if (!myDecision) {
-        return { stage: "decision_pending_me", myDecision, partnerDecision };
-    }
-    if (!partnerDecision) {
-        return { stage: "decision_pending_partner", myDecision, partnerDecision };
-    }
-    return { stage: "completed", myDecision, partnerDecision };
-}
 
 export function mapLegacyDateStatus(
     dm: typeof dateMatches.$inferSelect,
@@ -222,18 +165,13 @@ export function mapLegacyDateStatus(
     if (dm.status === "attended") return "completed";
     if (dm.status === "cancelled" || dm.status === "no_show") return "cancelled";
     if (dm.status === "scheduled") return "upcoming";
-    // Match admin "Arranging" queue: only after vibe call and both users confirmed meet intent
-    if (dm.callCompleted && dm.userAConfirmed && dm.userBConfirmed) return "being_arranged";
-    return "call_pending";
+    if (dm.status === "pending_setup") return "being_arranged";
+    return "mutual";
 }
 
 /**
  * Pure mapping from admin-facing `dateMatches.status` (+ call/confirmation flags) to the
  * corresponding `mutualMatches.status` value used by the mobile app.
- *
- * Returns `null` when no deterministic transition should be applied (e.g. a `pending_setup`
- * date without confirmations — in that case we preserve whatever the mutual row currently has
- * so we don't accidentally regress `call_pending` back to an earlier state).
  */
 export function mapDateMatchStatusToMutualStatus(dm: {
     status: typeof dateMatches.$inferSelect["status"];
@@ -244,12 +182,7 @@ export function mapDateMatchStatusToMutualStatus(dm: {
     if (dm.status === "scheduled") return "upcoming";
     if (dm.status === "attended") return "completed";
     if (dm.status === "cancelled" || dm.status === "no_show") return "cancelled";
-    if (
-        dm.status === "pending_setup"
-        && dm.callCompleted
-        && dm.userAConfirmed
-        && dm.userBConfirmed
-    ) {
+    if (dm.status === "pending_setup") {
         return "being_arranged";
     }
     return null;
@@ -268,8 +201,6 @@ export interface SyncMutualFromDateMatchResult {
  * (schedule date, mark attended / cancelled / no_show) only touch `dateMatches`, so the mobile
  * app — which reads `mutualMatches.status`, `venueName`, `venueAddress`, and `scheduledAt` for
  * the Arranging / Upcoming tabs and the home hold card — would otherwise stay behind.
- *
- * Idempotent. Safe to call from any admin mutation or reconciliation job.
  */
 export async function syncMutualMatchFromDateMatch(
     dateMatchId: string,
@@ -363,18 +294,12 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
     const hydratedMutuals = await Promise.all(
         mutualRows.map(async (row) => {
             const otherUserId = row.userAId === userId ? row.userBId : row.userAId;
-            const [profile, compatibility, latestVibeCheck] = await Promise.all([
+            const [profile, compatibility] = await Promise.all([
                 db.query.profiles.findFirst({
                     where: eq(profiles.userId, otherUserId),
                     with: { user: true },
                 }),
                 computeCompatibility(userId, otherUserId),
-                row.legacyMatchId
-                    ? db.query.vibeChecks.findFirst({
-                          where: eq(vibeChecks.matchId, row.legacyMatchId),
-                          orderBy: (v, { desc }) => [desc(v.createdAt)],
-                      })
-                    : Promise.resolve(undefined),
             ]);
             const primaryPhoto =
                 (Array.isArray(profile?.photos) ? profile.photos[0] : null)
@@ -382,35 +307,6 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                 ?? profile?.user?.profilePhoto
                 ?? profile?.user?.image
                 ?? undefined;
-
-            let callStage: MutualDatesItem["callStage"];
-            let myDecision: MutualDatesItem["myDecision"];
-            let partnerDecision: MutualDatesItem["partnerDecision"];
-            let vibeCheckId: string | undefined;
-            let callEndedAt: string | undefined;
-
-            if (latestVibeCheck && row.status === "call_pending") {
-                const viewerIsUser1 = latestVibeCheck.user1Id === userId;
-                const derived = deriveCallStage({
-                    viewerIsUser1,
-                    user1Decision: latestVibeCheck.user1Decision ?? null,
-                    user2Decision: latestVibeCheck.user2Decision ?? null,
-                    bothAgreedToMeet: !!latestVibeCheck.bothAgreedToMeet,
-                    status: (latestVibeCheck.status ?? "pending") as
-                        | "pending"
-                        | "scheduled"
-                        | "active"
-                        | "completed"
-                        | "expired"
-                        | "cancelled",
-                    endedAt: latestVibeCheck.endedAt ?? null,
-                });
-                callStage = derived.stage;
-                myDecision = derived.myDecision;
-                partnerDecision = derived.partnerDecision;
-                vibeCheckId = latestVibeCheck.id;
-                callEndedAt = latestVibeCheck.endedAt?.toISOString();
-            }
 
             return {
                 id: row.id,
@@ -431,11 +327,6 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                 venueAddress: row.venueAddress ?? undefined,
                 scheduledAt: row.scheduledAt?.toISOString() ?? undefined,
                 createdAt: row.createdAt.toISOString(),
-                callStage,
-                vibeCheckId,
-                myDecision,
-                partnerDecision,
-                callEndedAt,
             };
         }),
     );
@@ -490,8 +381,6 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
         (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
     );
 
-    // Populate unread message counts for every item with chat unlocked. One grouped
-    // query covers all matches in the list. Pattern mirrors /api/matches/route.ts.
     const chatUnlockedLegacyIds = combined
         .filter((item) =>
             CHAT_UNLOCKED_STATUSES.includes(item.arrangementStatus)

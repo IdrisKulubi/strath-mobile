@@ -1,4 +1,4 @@
-import { getAdminDailyDiscoveryHealth, getAdminFeatureFlags, getAdminMetrics, getAdminOnCallSessions, getAdminPendingDates } from "@/lib/actions/admin";
+import { getAdminDailyDiscoveryHealth, getAdminFeatureFlags, getAdminMetrics, getAdminPendingDates } from "@/lib/actions/admin";
 import { getZeroMatchUsers } from "@/lib/actions/manual-matchmaking";
 import { APP_FEATURE_KEYS } from "@/lib/feature-flags";
 
@@ -26,10 +26,9 @@ function MetricCard({
 }
 
 export default async function AdminOverviewPage() {
-    const [metrics, pending, onCall, flags, discoveryHealth, zeroMatchUsers] = await Promise.all([
+    const [metrics, pending, flags, discoveryHealth, zeroMatchUsers] = await Promise.all([
         getAdminMetrics(),
         getAdminPendingDates(),
-        getAdminOnCallSessions(),
         getAdminFeatureFlags(),
         getAdminDailyDiscoveryHealth(),
         getZeroMatchUsers(),
@@ -84,16 +83,10 @@ export default async function AdminOverviewPage() {
                     sub={`${metrics.totalAccepted} accepted`}
                 />
                 <MetricCard
-                    label="On Call"
-                    value={metrics.onCall}
-                    accent={metrics.onCall > 0 ? "text-cyan-300" : "text-white"}
-                    sub="pending, joining, or active vibe checks"
-                />
-                <MetricCard
                     label="Arranging"
                     value={metrics.pendingSetup}
                     accent={metrics.pendingSetup > 0 ? "text-yellow-400" : "text-white"}
-                    sub="agreed pairs awaiting setup"
+                    sub="pairs awaiting setup"
                 />
                 <MetricCard label="Scheduled" value={metrics.scheduled} accent="text-blue-400" />
                 <MetricCard
@@ -208,62 +201,15 @@ export default async function AdminOverviewPage() {
                 })}
             </div>
 
-            {onCall.length > 0 && (
-                <div className="mb-8 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-6">
-                    <div className="mb-4 flex items-center justify-between gap-4">
-                        <h2 className="text-sm font-semibold uppercase tracking-wide text-cyan-300">
-                            {onCall.length} vibe check{onCall.length > 1 ? "s" : ""} in call flow
-                        </h2>
-                        <a href="/admin/on-call" className="text-xs text-cyan-200 transition-colors hover:text-white">
-                            Open on-call queue →
-                        </a>
-                    </div>
-                    <div className="space-y-3">
-                        {onCall.slice(0, 5).map((session) => (
-                            <div key={session.id} className="flex items-center justify-between rounded-lg bg-white/5 px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                    <span className="text-sm font-medium text-white">
-                                        {session.userA.firstName} × {session.userB.firstName}
-                                    </span>
-                                    <span className="rounded-md bg-white/10 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-300">
-                                        {session.status}
-                                    </span>
-                                </div>
-                                <span className="text-xs text-gray-400">
-                                    {session.startedAt
-                                        ? `Started ${new Date(session.startedAt).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}`
-                                        : session.scheduledAt
-                                        ? `Invited ${new Date(session.scheduledAt).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}`
-                                        : "Waiting"}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
             {pending.length > 0 && (
                 <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-6">
-                    <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-yellow-400">
-                        {pending.length} agreed pair{pending.length > 1 ? "s" : ""} need scheduling
-                    </h2>
-                    <div className="space-y-3">
-                        {pending.slice(0, 5).map((dm) => (
-                            <div key={dm.id} className="flex items-center justify-between rounded-lg bg-white/5 px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                    <span className="text-sm font-medium text-white">
-                                        {dm.userA.firstName} × {dm.userB.firstName}
-                                    </span>
-                                    <span className="text-xs capitalize text-gray-500">{dm.vibe}</span>
-                                </div>
-                                <a
-                                    href="/admin/pending-dates"
-                                    className="text-xs text-purple-400 transition-colors hover:text-purple-300"
-                                >
-                                    Arrange →
-                                </a>
-                            </div>
-                        ))}
+                    <div className="mb-4 flex items-center justify-between gap-4">
+                        <h2 className="text-sm font-semibold uppercase tracking-wide text-yellow-300">
+                            {pending.length} pair{pending.length > 1 ? "s" : ""} awaiting arrangement
+                        </h2>
+                        <a href="/admin/pending-dates" className="text-xs text-yellow-200 transition-colors hover:text-white">
+                            Open arranging queue →
+                        </a>
                     </div>
                 </div>
             )}

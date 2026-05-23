@@ -58,7 +58,6 @@ export type CandidateDecision = "pending" | "open_to_meet" | "maybe" | "passed";
 export type CandidatePairStatus = "active" | "queued" | "mutual" | "closed" | "expired";
 export type MutualMatchStatus =
     | "mutual"
-    | "call_pending"
     | "being_arranged"
     | "upcoming"
     | "completed"
@@ -363,7 +362,7 @@ async function getUsersOnActiveMatchHolds() {
             userBId: mutualMatches.userBId,
         })
         .from(mutualMatches)
-        .where(inArray(mutualMatches.status, ["mutual", "call_pending", "being_arranged", "upcoming"]));
+        .where(inArray(mutualMatches.status, ["mutual", "being_arranged", "upcoming"]));
 
     return new Set(rows.flatMap((row) => [row.userAId, row.userBId]));
 }
@@ -1472,7 +1471,7 @@ export async function respondToCandidatePair(
             });
 
             if (!mutual && !existingSameStatus) {
-                const { ensureLegacyMatch } = await import("@/lib/services/mutual-match-call-service");
+                const { ensureLegacyMatch } = await import("@/lib/services/legacy-match-service");
                 const legacyMatch = await ensureLegacyMatch(
                     tx,
                     updatedPair.userAId,

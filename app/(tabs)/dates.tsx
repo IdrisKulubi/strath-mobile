@@ -8,8 +8,6 @@ import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useMutualMatches, useDateHistory } from '@/hooks/use-date-requests';
 import { ConfirmedMatchCard } from '@/components/dates/confirmed-match-card';
-import { DecisionPendingCard } from '@/components/dates/decision-pending-card';
-import { FinishDecisionModal } from '@/components/dates/finish-decision-modal';
 import { HistoryCard } from '@/components/dates/history-card';
 import { EmptyDates } from '@/components/dates/empty-dates';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,11 +16,10 @@ import { useProfile } from '@/hooks/use-profile';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 import type { MutualDate } from '@/hooks/use-date-requests';
 
-type Section = 'mutual' | 'call_pending' | 'being_arranged' | 'upcoming' | 'history';
+type Section = 'mutual' | 'being_arranged' | 'upcoming' | 'history';
 
 const SECTIONS: { key: Section; label: string }[] = [
     { key: 'mutual', label: 'Mutual' },
-    { key: 'call_pending', label: 'Call' },
     { key: 'being_arranged', label: 'Arranging' },
     { key: 'upcoming', label: 'Upcoming' },
     { key: 'history', label: 'History' },
@@ -54,12 +51,10 @@ export default function DatesScreen() {
 
     const [matchModalVisible, setMatchModalVisible] = useState(false);
     const [celebrationMatch, setCelebrationMatch] = useState<MutualDate | null>(null);
-    const [decisionMatch, setDecisionMatch] = useState<MutualDate | null>(null);
     const seenMatchIds = useRef<Set<string>>(new Set());
 
     const sections = useMemo(() => ({
         mutual: mutualDates.filter((item) => item.arrangementStatus === 'mutual'),
-        call_pending: mutualDates.filter((item) => item.arrangementStatus === 'call_pending'),
         being_arranged: mutualDates.filter((item) => item.arrangementStatus === 'being_arranged'),
         upcoming: mutualDates.filter((item) => item.arrangementStatus === 'upcoming'),
     }), [mutualDates]);
@@ -112,13 +107,13 @@ export default function DatesScreen() {
     }));
 
     const mutualBadge = sections.mutual.length > 0 ? sections.mutual.length : null;
-    const callBadge = sections.call_pending.length > 0 ? sections.call_pending.length : null;
     const arrangingBadge = sections.being_arranged.length > 0 ? sections.being_arranged.length : null;
     const upcomingBadge = sections.upcoming.length > 0 ? sections.upcoming.length : null;
     const historyBadge = history.length > 0 ? history.length : null;
+
     const renderContent = () => {
         if (activeSection === 'history') {
-        if (loadingHistory || isHydratingSections) return <SectionSkeleton />;
+            if (loadingHistory || isHydratingSections) return <SectionSkeleton />;
             if (history.length === 0) return <EmptyDates section="history" />;
             return (
                 <View style={styles.list}>
@@ -136,32 +131,6 @@ export default function DatesScreen() {
             return <EmptyDates section={activeSection} />;
         }
 
-        if (activeSection === 'call_pending') {
-            return (
-                <View style={styles.list}>
-                    {items.map((match, index) => {
-                        const stage = match.callStage;
-                        const isDecisionPending =
-                            stage === 'decision_pending_me'
-                            || stage === 'decision_pending_partner'
-                            || stage === 'decision_pending_both';
-
-                        if (isDecisionPending) {
-                            return (
-                                <DecisionPendingCard
-                                    key={match.id}
-                                    match={match}
-                                    index={index}
-                                    onPress={(m) => setDecisionMatch(m)}
-                                />
-                            );
-                        }
-                        return <ConfirmedMatchCard key={match.id} match={match} index={index} />;
-                    })}
-                </View>
-            );
-        }
-
         return (
             <View style={styles.list}>
                 {items.map((match, index) => (
@@ -169,6 +138,13 @@ export default function DatesScreen() {
                 ))}
             </View>
         );
+    };
+
+    const badgeForSection = (key: Section) => {
+        if (key === 'mutual') return mutualBadge;
+        if (key === 'being_arranged') return arrangingBadge;
+        if (key === 'upcoming') return upcomingBadge;
+        return historyBadge;
     };
 
     return (
@@ -215,13 +191,7 @@ export default function DatesScreen() {
                                 >
                                     {section.label}
                                 </Text>
-                                {(
-                                    (section.key === 'mutual' && mutualBadge)
-                                    || (section.key === 'call_pending' && callBadge)
-                                    || (section.key === 'being_arranged' && arrangingBadge)
-                                    || (section.key === 'upcoming' && upcomingBadge)
-                                    || (section.key === 'history' && historyBadge)
-                                ) ? (
+                                {badgeForSection(section.key) ? (
                                     <View
                                         style={[
                                             styles.badge,
@@ -234,15 +204,7 @@ export default function DatesScreen() {
                                                 { color: activeSection === section.key ? colors.primary : '#fff' },
                                             ]}
                                         >
-                                            {section.key === 'mutual'
-                                                ? mutualBadge
-                                                : section.key === 'call_pending'
-                                                    ? callBadge
-                                                    : section.key === 'being_arranged'
-                                                        ? arrangingBadge
-                                                        : section.key === 'upcoming'
-                                                            ? upcomingBadge
-                                                            : historyBadge}
+                                            {badgeForSection(section.key)}
                                         </Text>
                                     </View>
                                 ) : null}
@@ -270,8 +232,7 @@ export default function DatesScreen() {
 
             <DateMatchModal
                 visible={matchModalVisible}
-                matchId={celebrationMatch?.id}
-                callMatchId={celebrationMatch?.legacyMatchId}
+                legacyMatchId={celebrationMatch?.legacyMatchId}
                 theirFirstName={celebrationMatch?.withUser.firstName ?? ''}
                 theirPhoto={celebrationMatch?.withUser.profilePhoto}
                 myPhoto={myProfile?.profilePhoto ?? myProfile?.photos?.[0]}
@@ -279,12 +240,6 @@ export default function DatesScreen() {
                     setMatchModalVisible(false);
                     setCelebrationMatch(null);
                 }}
-            />
-
-            <FinishDecisionModal
-                visible={!!decisionMatch}
-                mutualDate={decisionMatch}
-                onClose={() => setDecisionMatch(null)}
             />
         </ScreenGradient>
         </TabSwipeView>

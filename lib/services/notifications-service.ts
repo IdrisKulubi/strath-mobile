@@ -11,7 +11,6 @@ export const NOTIFICATION_TYPES = {
     MATCH: 'match',
     NEW_CANDIDATE_MATCH: 'new_candidate_match',
     MESSAGE: 'message',
-    CALL: 'call',
     GENERIC: 'generic',
 
     // Date-flow types (new)
@@ -19,7 +18,6 @@ export const NOTIFICATION_TYPES = {
     DATE_REQUEST_ACCEPTED: 'date_request_accepted',   // "Sarah accepted your date invite! 🎉"
     DATE_REQUEST_DECLINED: 'date_request_declined',   // "Sarah passed on your request."
     MUTUAL_MATCH: 'mutual_match',                     // "It's a Date Match with Sarah! 💜"
-    CALL_REMINDER: 'call_reminder',                   // "Your 3-min call with Sarah starts soon"
     DATE_ARRANGING: 'date_arranging',                 // "We're arranging your date with Sarah"
     DATE_SCHEDULED: 'date_scheduled',                 // "Your date is set! Saturday 6PM 📍"
     FEEDBACK_PROMPT: 'feedback_prompt',               // "How was your date with Sarah? 💬"

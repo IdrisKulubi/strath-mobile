@@ -212,18 +212,6 @@ function buildTimelineSteps({
     });
 
     steps.push({
-        label: "Vibe call",
-        detail: startedAt
-            ? `Started ${formatShort(startedAt)}`
-            : stage === "on-call"
-            ? "In progress"
-            : callCompleted
-            ? "Completed"
-            : "Scheduled",
-        status: stage === "on-call" ? "current" : callCompleted ? "done" : "pending",
-    });
-
-    steps.push({
         label: "Arranging",
         detail: stage === "arranging" ? "Pick venue & time" : undefined,
         status:

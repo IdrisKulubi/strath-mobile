@@ -7,7 +7,6 @@ import { errorResponse } from "@/lib/api-response";
 /** Statuses where the mobile Messages tab lists the thread and chat APIs allow access. */
 export const CHAT_UNLOCKED_STATUSES = [
     "mutual",
-    "call_pending",
     "being_arranged",
     "upcoming",
     "completed",

@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import db from "@/db/drizzle";
 import { matches, messages, mutualMatches, profiles, user } from "@/db/schema";
 import { CHAT_UNLOCKED_STATUSES, isChatUnlockedStatus } from "@/lib/chat-access";
-import { ensureLegacyMatch } from "@/lib/services/mutual-match-call-service";
+import { ensureLegacyMatch } from "@/lib/services/legacy-match-service";
 
 export interface ConversationItem {
     id: string;

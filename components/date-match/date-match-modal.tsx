@@ -17,17 +17,14 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
-import { useToast } from '@/components/ui/toast';
 import { useTheme } from '@/hooks/use-theme';
-import { useStartMutualMatchCall } from '@/hooks/use-date-requests';
 import { MatchPhotosAnimation } from './match-photos-animation';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export interface DateMatchModalProps {
     visible: boolean;
-    matchId?: string;
-    callMatchId?: string;
+    legacyMatchId?: string;
     theirFirstName: string;
     theirPhoto?: string | null;
     myPhoto?: string | null;
@@ -36,8 +33,7 @@ export interface DateMatchModalProps {
 
 export function DateMatchModal({
     visible,
-    matchId,
-    callMatchId,
+    legacyMatchId,
     theirFirstName,
     theirPhoto,
     myPhoto,
@@ -45,8 +41,6 @@ export function DateMatchModal({
 }: DateMatchModalProps) {
     const { colors, isDark } = useTheme();
     const router = useRouter();
-    const toast = useToast();
-    const { mutateAsync: startMutualMatchCall, isPending: isStartingCall } = useStartMutualMatchCall();
 
     const opacity = useSharedValue(0);
     const contentY = useSharedValue(40);
@@ -62,7 +56,6 @@ export function DateMatchModal({
             contentY.value = withDelay(180, withSpring(0, { damping: 18, stiffness: 200 }));
             contentOpacity.value = withDelay(180, withTiming(1, { duration: 280 }));
 
-            // Success haptic burst when modal appears
             setTimeout(() => {
                 if (!firedHaptic.current) {
                     firedHaptic.current = true;
@@ -84,47 +77,21 @@ export function DateMatchModal({
     }));
     const btnAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: btnScale.value }] }));
 
-    const handleStartCall = useCallback(() => {
+    const handleMessage = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         btnScale.value = withSpring(0.94, { damping: 10, stiffness: 300 }, () => {
             btnScale.value = withSpring(1);
         });
 
-        const start = async () => {
-            try {
-                if (matchId && !callMatchId) {
-                    const result = await startMutualMatchCall(matchId);
-                    if (result.reusedExistingCall) {
-                        toast.show({ message: 'This call is already ready. Joining now.', variant: 'default' });
-                    } else if (result.partnerAvailability === 'online') {
-                        toast.show({ message: 'They look online. Starting your vibe check now.', variant: 'success' });
-                    } else if (result.notificationSent) {
-                        toast.show({ message: 'They are not online right now. We sent them a call notification.', variant: 'default' });
-                    } else {
-                        toast.show({ message: 'They are offline right now. You can still start and try again later.', variant: 'warning' });
-                    }
+        onClose();
+        if (legacyMatchId) {
+            router.push({ pathname: '/chat/[matchId]', params: { matchId: legacyMatchId } } as any);
+            return;
+        }
+        router.push('/(tabs)/dates');
+    }, [btnScale, legacyMatchId, onClose, router]);
 
-                    onClose();
-                    router.push(`/vibe-check/${result.matchId}?mode=caller`);
-                    return;
-                }
-
-                if (!callMatchId) {
-                    throw new Error('Call is not ready yet');
-                }
-
-                onClose();
-                router.push(`/vibe-check/${callMatchId}?mode=caller`);
-            } catch (error) {
-                const message = error instanceof Error ? error.message : 'Unable to start the call right now';
-                toast.show({ message, variant: 'danger' });
-            }
-        };
-
-        start();
-    }, [btnScale, callMatchId, matchId, onClose, router, startMutualMatchCall, toast]);
-
-    const handleSkip = useCallback(() => {
+    const handleViewDates = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onClose();
         router.push('/(tabs)/dates');
@@ -134,10 +101,8 @@ export function DateMatchModal({
 
     return (
         <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-            {/* Dark backdrop */}
             <Animated.View style={[styles.backdrop, backdropStyle]} />
 
-            {/* Content */}
             <View style={styles.root}>
                 <Animated.View
                     style={[
@@ -149,7 +114,6 @@ export function DateMatchModal({
                         contentStyle,
                     ]}
                 >
-                    {/* Confetti dots (pure CSS/RN decorative circles) */}
                     <View style={styles.confettiWrap} pointerEvents="none">
                         {CONFETTI_DOTS.map((dot, i) => (
                             <Animated.View
@@ -168,52 +132,45 @@ export function DateMatchModal({
                         ))}
                     </View>
 
-                    {/* Photos animation */}
                     <MatchPhotosAnimation
                         myPhoto={myPhoto}
                         theirPhoto={theirPhoto}
                         theirName={theirFirstName}
                     />
 
-                    {/* Headline */}
                     <View style={styles.textBlock}>
                         <Text style={[styles.headline, { color: colors.foreground }]}>
                             It's a match
                         </Text>
                         <Text style={[styles.subline, { color: colors.mutedForeground }]}>
-                            Looks like you're both open to meeting
+                            Say hi in chat while we arrange your date
                         </Text>
                     </View>
 
-                    {/* Call nudge */}
-                    <View style={[styles.callHintBox, {
+                    <View style={[styles.hintBox, {
                         backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
                         borderColor: colors.border,
                     }]}>
-                        <Text style={[styles.callHintText, { color: colors.mutedForeground }]}>
-                            Before you meet, we recommend a quick{' '}
-                            <Text style={[styles.callHintBold, { color: colors.foreground }]}>
-                                3-minute call
-                            </Text>
-                            {' '}to confirm the vibe.
+                        <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                            Message {theirFirstName} to break the ice. Our team will reach out when your date is ready.
                         </Text>
                     </View>
 
-                    {/* CTAs */}
                     <View style={styles.ctaBlock}>
                         <Animated.View style={btnAnimStyle}>
                             <Pressable
-                                onPress={handleStartCall}
-                                disabled={isStartingCall}
+                                onPress={handleMessage}
                                 style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
                             >
-                                <Text style={styles.primaryBtnText}>Start 3-Minute Call</Text>
+                                <Text style={styles.primaryBtnText}>
+                                    {legacyMatchId ? `Message ${theirFirstName}` : 'View in Dates'}
+                                </Text>
                             </Pressable>
                         </Animated.View>
 
-                        <Pressable onPress={handleSkip} style={styles.skipBtn}>
+                        <Pressable onPress={handleViewDates} style={styles.skipBtn}>
                             <Text style={[styles.skipText, { color: colors.mutedForeground }]}>
-                                Do it later
+                                View in Dates
                             </Text>
                         </Pressable>
                     </View>
@@ -223,7 +180,6 @@ export function DateMatchModal({
     );
 }
 
-// Decorative confetti dots — positions relative to the card
 const CONFETTI_DOTS = [
     { top: 12, left: 18, size: 8, color: '#e91e8c' },
     { top: 20, left: '75%' as any, size: 6, color: '#f59e0b' },
@@ -278,20 +234,17 @@ const styles = StyleSheet.create({
         fontSize: 16,
         textAlign: 'center',
     },
-    callHintBox: {
+    hintBox: {
         borderRadius: 14,
         borderWidth: 1,
         paddingHorizontal: 16,
         paddingVertical: 12,
         width: '100%',
     },
-    callHintText: {
+    hintText: {
         fontSize: 14,
         lineHeight: 20,
         textAlign: 'center',
-    },
-    callHintBold: {
-        fontWeight: '700',
     },
     ctaBlock: {
         width: '100%',

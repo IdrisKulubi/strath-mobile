@@ -10,12 +10,10 @@ export const dynamic = "force-dynamic";
 
 function toArrangementStatus(
     dm: { callCompleted: boolean | null; userAConfirmed: boolean | null; userBConfirmed: boolean | null; status: string }
-): "call_pending" | "call_done" | "being_arranged" | "date_confirmed" {
-    if (!dm.callCompleted) return "call_pending";
-    const bothConfirmed = dm.userAConfirmed && dm.userBConfirmed;
-    if (bothConfirmed && dm.status === "scheduled") return "date_confirmed";
-    if (bothConfirmed) return "being_arranged";
-    return "call_done";
+): "mutual" | "being_arranged" | "date_confirmed" {
+    if (dm.status === "scheduled") return "date_confirmed";
+    if (dm.status === "pending_setup") return "being_arranged";
+    return "mutual";
 }
 
 /**
@@ -56,7 +54,7 @@ export async function GET(req: NextRequest) {
 
                 const { score, reasons } = await computeCompatibility(session.user.id, otherUserId);
 
-                // Look up the chat match (created when date request was accepted) for vibe-check
+                // Look up the chat match (created when date request was accepted)
                 const chatMatch = await db.query.matches.findFirst({
                     where: or(
                         and(eq(matches.user1Id, dm.userAId), eq(matches.user2Id, dm.userBId)),

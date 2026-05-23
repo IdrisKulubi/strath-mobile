@@ -10,7 +10,6 @@ import {
     Eye,
     ImageIcon,
     Loader2,
-    PhoneCall,
     RotateCcw,
     Search,
     Send,
@@ -27,7 +26,6 @@ import {
     createManualCandidatePair,
     getManualMatchmakingActivity,
     getManualMatchSuggestions,
-    markManualMatchCallOutcome,
     reshuffleDailyMatchesForAvailableUsers,
     type ManualMatchSuggestion,
     type ManualMatchmakingProfile,
@@ -43,8 +41,7 @@ type CandidateSort = "compatibility" | "newest" | "age_asc" | "age_desc" | "year
 type CompareMode = "photos" | "bio" | "interests" | "answers" | "history";
 type AdminAction =
     | { type: "create" }
-    | { type: "cancel"; pairId: string; title: string }
-    | { type: "call"; pairId: string; outcome: "accepted" | "rejected"; title: string };
+    | { type: "cancel"; pairId: string; title: string };
 
 type CandidateDeckItem = ManualMatchmakingProfile & {
     compatibilityScore?: number;
@@ -636,12 +633,6 @@ function ActionModal({
         description = `Send ${fullName(selectedCandidate)} to ${fullName(selectedUser)} and ${fullName(selectedUser)} to ${fullName(selectedCandidate)}.`;
     } else if (action.type === "cancel") {
         description = "Cancel this sent match, remove it from Sent, and return both people to the matching pool.";
-    } else if (action.type === "call") {
-        description = action.outcome === "accepted"
-            ? "Mark the call as accepted and keep these people out of the matching pool."
-            : "Mark this as rejected, cancel the match, and return both people to the pool.";
-    }
-
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" onClick={onClose}>
             <section className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#10101c] p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
@@ -981,11 +972,6 @@ export function ManualMatchmakingBoard({
         setAdminAction({ type: "cancel", pairId, title });
     };
 
-    const openMarkCall = (pairId: string, outcome: "accepted" | "rejected", title: string) => {
-        setActionNote(outcome === "rejected" ? "Rejected after admin call" : "");
-        setAdminAction({ type: "call", pairId, outcome, title });
-    };
-
     const runAdminAction = () => {
         if (!adminAction) return;
         setError(null);
@@ -1007,9 +993,6 @@ export function ManualMatchmakingBoard({
                 } else if (adminAction.type === "cancel") {
                     await cancelManualCandidatePair(adminAction.pairId, actionNote.trim() || "Cancelled after admin review");
                     setMessage("Match cancelled. Both people are back in the pool.");
-                } else {
-                    await markManualMatchCallOutcome(adminAction.pairId, adminAction.outcome, actionNote.trim());
-                    setMessage(adminAction.outcome === "accepted" ? "Call accepted and match kept on hold." : "Match rejected and both people are back in the pool.");
                 }
                 setAdminAction(null);
                 setActionNote("");
@@ -1396,14 +1379,6 @@ export function ManualMatchmakingBoard({
                                     </div>
                                     <p className="mt-3 line-clamp-2 text-xs text-gray-400">{item.reasons.join(" - ")}</p>
                                     <div className="mt-3 flex flex-wrap gap-2">
-                                        <button type="button" onClick={() => openMarkCall(item.pairId, "accepted", `${item.userAName} + ${item.userBName}`)} className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 px-2 py-1 text-xs font-semibold text-emerald-200">
-                                            <Check className="size-3" />
-                                            Call accepted
-                                        </button>
-                                        <button type="button" onClick={() => openMarkCall(item.pairId, "rejected", `${item.userAName} + ${item.userBName}`)} className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 px-2 py-1 text-xs font-semibold text-amber-200">
-                                            <PhoneCall className="size-3" />
-                                            Call rejected
-                                        </button>
                                         <button type="button" onClick={() => openCancelPair(item.pairId, `${item.userAName} + ${item.userBName}`)} className="inline-flex items-center gap-1 rounded-md border border-red-500/30 px-2 py-1 text-xs font-semibold text-red-200">
                                             <X className="size-3" />
                                             Cancel

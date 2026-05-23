@@ -15,7 +15,7 @@ import { logEvent, EVENT_TYPES } from "@/lib/analytics";
  * until that arrangement is concluded (or auto-released).
  *
  * Statuses that gate matching:
- *  - mutual, call_pending, being_arranged, upcoming  -> always hold
+ *  - mutual, being_arranged, upcoming  -> always hold
  *  - completed -> hold UNTIL feedback submitted by this user OR auto-release grace expires
  *
  * Released:
@@ -25,7 +25,6 @@ import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 
 export type MatchHoldStatus =
     | "mutual"
-    | "call_pending"
     | "being_arranged"
     | "upcoming"
     | "completed_pending_feedback";
@@ -57,8 +56,8 @@ export interface MatchHoldCancelReason {
     notes?: string | null;
 }
 
-const HOLD_STATUSES = ["mutual", "call_pending", "being_arranged", "upcoming", "completed"] as const;
-const AUTO_RELEASE_STATUSES = ["mutual", "call_pending"] as const;
+const HOLD_STATUSES = ["mutual", "being_arranged", "upcoming", "completed"] as const;
+const AUTO_RELEASE_STATUSES = ["mutual"] as const;
 const DURABLE_HOLD_STATUSES = ["being_arranged", "upcoming", "completed"] as const;
 const DEFAULT_PRE_DATE_HOLD_EXPIRY_HOURS = 72;
 
@@ -215,7 +214,7 @@ export async function getActiveMatchHoldForUser(userId: string): Promise<MatchHo
             };
         }
 
-        // Statuses: mutual, call_pending, being_arranged, upcoming -> always hold.
+        // Statuses: mutual, being_arranged, upcoming -> always hold.
         const partnerProfile = await readDb.query.profiles.findFirst({
             where: eq(profiles.userId, partnerUserId),
         });

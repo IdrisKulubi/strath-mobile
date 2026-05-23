@@ -1,6 +1,6 @@
 export type OpsVibe = "coffee" | "walk" | "dinner" | "hangout" | string;
 
-export type OpsStage = "on-call" | "arranging" | "upcoming" | "history";
+export type OpsStage = "arranging" | "upcoming" | "history";
 
 export interface OpsPairUser {
     id?: string;
@@ -35,22 +35,6 @@ export interface OpsScheduledPair {
 }
 
 export type OpsHistoryPair = OpsScheduledPair;
-
-export interface OpsOnCallSession {
-    id: string;
-    userA: OpsPairUser;
-    userB: OpsPairUser;
-    roomName: string;
-    status: string | null;
-    scheduledAt: string | null;
-    startedAt: string | null;
-    endedAt: string | null;
-    createdAt: string;
-    dateMatchStatus: string | null;
-    callCompleted: boolean;
-    user1Decision: string | null;
-    user2Decision: string | null;
-}
 
 export interface OpsLocation {
     id: string;
@@ -116,7 +100,6 @@ export function getVibeMeta(vibe: string | null | undefined) {
 }
 
 export const STAGE_META: Record<OpsStage, { label: string; accent: string; dot: string }> = {
-    "on-call": { label: "On Call", accent: "text-cyan-300", dot: "bg-cyan-400" },
     arranging: { label: "Arranging", accent: "text-amber-300", dot: "bg-amber-400" },
     upcoming: { label: "Upcoming", accent: "text-blue-300", dot: "bg-blue-400" },
     history: { label: "History", accent: "text-gray-300", dot: "bg-gray-400" },

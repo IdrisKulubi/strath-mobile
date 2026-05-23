@@ -1,21 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-helpers';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export type DateVibe = 'coffee' | 'walk' | 'dinner' | 'hangout';
-
-/**
- * Sub-state of the post-call decision flow. Surfaced for `call_pending` mutuals so the
- * Dates tab can render a "Finish your decision" affordance after the deciding user gets
- * routed back without finalizing.
- */
-export type CallStage =
-    | 'call_ready'
-    | 'decision_pending_me'
-    | 'decision_pending_partner'
-    | 'decision_pending_both'
-    | 'completed';
 
 export interface MutualDate {
     id: string;
@@ -30,18 +18,12 @@ export interface MutualDate {
         compatibilityScore?: number;
         compatibilityReasons?: string[];
     };
-    arrangementStatus: 'mutual' | 'call_pending' | 'being_arranged' | 'upcoming' | 'completed' | 'cancelled' | 'expired';
+    arrangementStatus: 'mutual' | 'being_arranged' | 'upcoming' | 'completed' | 'cancelled' | 'expired';
     legacyMatchId?: string;
     legacyDateMatchId?: string;
     venueName?: string;
     venueAddress?: string;
     scheduledAt?: string;
-    /** Only present for `call_pending` mutuals backed by a vibe check. */
-    callStage?: CallStage;
-    vibeCheckId?: string;
-    myDecision?: 'meet' | 'pass' | null;
-    partnerDecision?: 'meet' | 'pass' | null;
-    callEndedAt?: string;
     /** Unread messages the viewer has not yet read in the linked chat thread. */
     unreadMessageCount?: number;
 }
@@ -59,15 +41,6 @@ export interface ScheduledDate {
         firstName: string;
         profilePhoto?: string;
     };
-}
-
-export interface StartCallResult {
-    mutualMatchId: string;
-    matchId: string;
-    vibeCheckId: string;
-    partnerAvailability: 'online' | 'recently_active' | 'offline';
-    notificationSent: boolean;
-    reusedExistingCall: boolean;
 }
 
 export function useMutualMatches() {
@@ -108,40 +81,6 @@ export function useDateHistory() {
     });
 }
 
-export function useStartMutualMatchCall() {
-    const queryClient = useQueryClient();
-
-    return useMutation({
-        mutationFn: async (mutualMatchId: string): Promise<StartCallResult> => {
-            const token = await getAuthToken();
-            if (!token) {
-                throw new Error('Not authenticated');
-            }
-
-            const res = await fetch(`${API_URL}/api/mutual-matches/${mutualMatchId}/start-call`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                throw new Error(json?.error ?? `Failed to start call (${res.status})`);
-            }
-
-            return json?.data as StartCallResult;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
-            queryClient.invalidateQueries({ queryKey: ['matches'] });
-            queryClient.invalidateQueries({ queryKey: ['candidatePairs', 'daily'] });
-            queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
-        },
-    });
-}
-
 export const VIBE_LABELS: Record<DateVibe, string> = {
     coffee: 'Coffee',
     walk: 'Walk',
@@ -158,7 +97,6 @@ export const VIBE_EMOJIS: Record<DateVibe, string> = {
 
 const CHAT_UNLOCKED_STATUSES: MutualDate['arrangementStatus'][] = [
     'mutual',
-    'call_pending',
     'being_arranged',
     'upcoming',
     'completed',
@@ -172,7 +110,6 @@ export function isChatUnlocked(match: MutualDate): boolean {
 
 export const ARRANGEMENT_STATUS_LABELS: Record<MutualDate['arrangementStatus'], string> = {
     mutual: 'You both said yes',
-    call_pending: 'Waiting for your call',
     being_arranged: "We're arranging this one for you",
     upcoming: 'Date confirmed',
     completed: 'Completed',

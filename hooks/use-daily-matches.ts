@@ -25,7 +25,6 @@ export interface DailyMatch {
 
 export type MatchHoldStatus =
     | 'mutual'
-    | 'call_pending'
     | 'being_arranged'
     | 'upcoming'
     | 'completed_pending_feedback';

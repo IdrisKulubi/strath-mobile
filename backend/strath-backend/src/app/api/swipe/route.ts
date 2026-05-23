@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
                         if (user2?.pushToken) {
                             await sendPushNotification(user2.pushToken, {
                                 title: "It's a Date Match! 💜",
-                                body: `You and ${user1FirstName} both accepted! Time for a 3-min call.`,
+                                body: `You and ${user1FirstName} both accepted! Say hi in chat while we arrange your date.`,
                                 data: {
                                     type: NOTIFICATION_TYPES.MUTUAL_MATCH,
                                     matchId: newMatch.id,
@@ -189,7 +189,7 @@ export async function POST(req: NextRequest) {
                         if (user1?.pushToken) {
                             await sendPushNotification(user1.pushToken, {
                                 title: "It's a Date Match! 💜",
-                                body: `You and ${user2FirstName} both accepted! Time for a 3-min call.`,
+                                body: `You and ${user2FirstName} both accepted! Say hi in chat while we arrange your date.`,
                                 data: {
                                     type: NOTIFICATION_TYPES.MUTUAL_MATCH,
                                     matchId: newMatch.id,

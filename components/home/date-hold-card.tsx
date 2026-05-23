@@ -321,19 +321,9 @@ function buildCopy(hold: MatchHold): HoldCopy {
                 statusIcon: 'sparkles',
                 title: `You and ${name} both said yes`,
                 subtitle:
-                    'We’re lining up your date. New intros are paused so you can focus on this — we’ll notify you the moment your date is set.',
+                    'Say hi in chat while we line up your date. New intros are paused so you can focus on this match.',
                 footnote: 'You can cancel any time and we’ll keep matching you.',
-                primaryCta: { label: 'View in Dates', kind: 'view' },
-            };
-        case 'call_pending':
-            return {
-                statusLabel: 'Vibe call pending',
-                statusIcon: 'call-outline',
-                title: `Vibe call with ${name}`,
-                subtitle:
-                    'You’ve got a quick vibe call coming up. New intros are paused so you can give this match your full attention.',
-                footnote: 'Open Dates to see call details.',
-                primaryCta: { label: 'Open Dates', kind: 'view' },
+                primaryCta: { label: 'Message in Dates', kind: 'view' },
             };
         case 'being_arranged':
             return {

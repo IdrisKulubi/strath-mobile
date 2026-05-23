@@ -173,7 +173,7 @@ export default async function DateRequestsPage({
                                     <td className="px-4 py-3 text-right">
                                         {row.pairId || row.mutualMatchId ? (
                                             <div className="flex flex-col items-end gap-2">
-                                                {row.mutualMatchId && (row.status === "mutual" || row.status === "call_pending") && (
+                                                {row.mutualMatchId && row.status === "mutual" && (
                                                     <form
                                                         action={async () => {
                                                             "use server";
