@@ -77,7 +77,6 @@ export async function GET(req: NextRequest) {
             manualCuration: manualMode && !isAdminPreview ? getManualMatchmakingCopy() : null,
         });
     } catch (error) {
-        console.error("[home/daily-matches] Error:", error);
         return errorResponse(error);
     }
 }

@@ -1,39 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { matches, messages, mutualMatches, session as sessionTable } from "@/db/schema";
+import { matches, messages, mutualMatches } from "@/db/schema";
 import { eq, and, or, ne, sql, inArray } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { successResponse, errorResponse } from "@/lib/api-response";
+import { getSessionWithFallback } from "@/lib/auth-helpers";
 
-// Helper to get session with Bearer token fallback
-async function getSessionWithFallback(req: NextRequest) {
-    let session = await auth.api.getSession({ headers: req.headers });
-
-    // Fallback: Manual token check if getSession fails (for Bearer token auth from mobile)
-    if (!session) {
-        const authHeader = req.headers.get('authorization');
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            const token = authHeader.split(' ')[1];
-            const dbSession = await db.query.session.findFirst({
-                where: eq(sessionTable.token, token),
-                with: { user: true }
-            });
-
-            if (dbSession && dbSession.expiresAt > new Date()) {
-                session = { session: dbSession, user: dbSession.user } as any;
-            }
-        }
-    }
-    return session;
-}
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
     try {
         const session = await getSessionWithFallback(request);
         if (!session?.user?.id) {
-            return NextResponse.json(
-                { success: false, error: "Unauthorized" },
-                { status: 401 }
-            );
+            return errorResponse(new Error("Unauthorized"), 401);
         }
 
         const userId = session.user.id;
@@ -94,22 +72,15 @@ export async function GET(request: NextRequest) {
             unreadMessages = unreadResult[0]?.count || 0;
         }
 
-        return NextResponse.json({
-            success: true,
-            data: {
-                unopenedMatches,
-                unreadMessages,
-                datesAttention,
-                incomingRequests: 0,
-                total: unopenedMatches + unreadMessages + datesAttention,
-            }
+        return successResponse({
+            unopenedMatches,
+            unreadMessages,
+            datesAttention,
+            incomingRequests: 0,
+            total: unopenedMatches + unreadMessages + datesAttention,
         });
 
-    } catch (error) {
-        console.error("Error fetching notification counts:", error);
-        return NextResponse.json(
-            { success: false, error: "Failed to fetch notification counts" },
-            { status: 500 }
-        );
+    } catch {
+        return errorResponse(new Error("Failed to fetch notification counts"));
     }
 }
