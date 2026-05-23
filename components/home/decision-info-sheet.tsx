@@ -23,7 +23,7 @@ interface DecisionInfoSheetProps {
 
 const CONTENT: Record<
     DecisionSheetType,
-    { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; steps: string[]; primaryColor: string; ctaLabel: string }
+    { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; steps: string[]; ctaLabel: string }
 > = {
     open_to_meet: {
         icon: 'heart',
@@ -33,7 +33,6 @@ const CONTENT: Record<
             "You'll see each other in Dates when you both say yes.",
             "From there — vibe check, chat, or plan to link.",
         ],
-        primaryColor: '#e91e8c',
         ctaLabel: 'Got it',
     },
     maybe: {
@@ -44,7 +43,6 @@ const CONTENT: Record<
             "They won't see this as a pass.",
             "If the pool is tight, we can recycle this later.",
         ],
-        primaryColor: '#f59e0b',
         ctaLabel: 'Got it',
     },
     pass: {
@@ -55,7 +53,6 @@ const CONTENT: Record<
             "New matches tomorrow — same energy.",
             "Explore tab's always there if you want more.",
         ],
-        primaryColor: '#64748b',
         ctaLabel: 'Got it',
     },
     view_profile: {
@@ -66,7 +63,6 @@ const CONTENT: Record<
             'Check compatibility and why you matched.',
             "Tap Interested when you're ready.",
         ],
-        primaryColor: '#e91e8c',
         ctaLabel: 'View Profile',
     },
     already_responded: {
@@ -77,7 +73,6 @@ const CONTENT: Record<
             "Dates tab when you're both a match.",
             "Ball's in their court — you're good.",
         ],
-        primaryColor: '#10b981',
         ctaLabel: 'Got it',
     },
 };
@@ -89,6 +84,14 @@ export function DecisionInfoSheet({ visible, type, firstName, onClose }: Decisio
     const dragStartY = useSharedValue(0);
 
     const content = CONTENT[type];
+    const accentColor =
+        type === 'maybe'
+            ? colors.warning
+            : type === 'pass'
+              ? colors.mutedForeground
+              : type === 'already_responded'
+                ? colors.success
+                : colors.primary;
     const displayTitle = firstName
         ? content.title.replace('their', `${firstName}'s`).replace('your', 'your')
         : content.title;
@@ -147,7 +150,7 @@ export function DecisionInfoSheet({ visible, type, firstName, onClose }: Decisio
                             styles.sheet,
                             sheetStyle,
                             {
-                                backgroundColor: isDark ? '#1a1425' : '#ffffff',
+                                backgroundColor: colors.card,
                                 borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
                             },
                         ]}
@@ -155,8 +158,8 @@ export function DecisionInfoSheet({ visible, type, firstName, onClose }: Decisio
                         <View style={[styles.handle, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.12)' }]} />
 
                         <View style={styles.content}>
-                            <View style={[styles.iconWrap, { backgroundColor: content.primaryColor + '20' }]}>
-                                <Ionicons name={content.icon} size={36} color={content.primaryColor} />
+                            <View style={[styles.iconWrap, { backgroundColor: accentColor + '20' }]}>
+                                <Ionicons name={content.icon} size={36} color={accentColor} />
                             </View>
 
                             <Text style={[styles.title, { color: colors.foreground }]}>
@@ -172,7 +175,7 @@ export function DecisionInfoSheet({ visible, type, firstName, onClose }: Decisio
                             <View style={[styles.stepsWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }]}>
                                 {content.steps.map((step, i) => (
                                     <View key={i} style={styles.stepRow}>
-                                        <View style={[styles.stepDot, { backgroundColor: content.primaryColor }]} />
+                                        <View style={[styles.stepDot, { backgroundColor: accentColor }]} />
                                         <Text style={[styles.stepText, { color: colors.mutedForeground }]}>
                                             {step}
                                         </Text>
@@ -182,9 +185,9 @@ export function DecisionInfoSheet({ visible, type, firstName, onClose }: Decisio
 
                             <Pressable
                                 onPress={closeSheet}
-                                style={[styles.gotItBtn, { backgroundColor: content.primaryColor }]}
+                                style={[styles.gotItBtn, { backgroundColor: accentColor }]}
                             >
-                                <Text style={styles.gotItText}>{content.ctaLabel}</Text>
+                                <Text style={[styles.gotItText, { color: colors.primaryForeground }]}>{content.ctaLabel}</Text>
                             </Pressable>
                         </View>
                     </Animated.View>

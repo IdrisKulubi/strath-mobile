@@ -1472,6 +1472,12 @@ export async function respondToCandidatePair(
             });
 
             if (!mutual && !existingSameStatus) {
+                const { ensureLegacyMatch } = await import("@/lib/services/mutual-match-call-service");
+                const legacyMatch = await ensureLegacyMatch(
+                    tx,
+                    updatedPair.userAId,
+                    updatedPair.userBId,
+                );
                 const [createdMutual] = await tx
                     .insert(mutualMatches)
                     .values({
@@ -1479,6 +1485,7 @@ export async function respondToCandidatePair(
                         userAId: updatedPair.userAId,
                         userBId: updatedPair.userBId,
                         status: "mutual",
+                        legacyMatchId: legacyMatch.id,
                     })
                     .returning();
                 mutual = createdMutual;

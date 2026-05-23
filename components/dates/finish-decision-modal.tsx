@@ -123,8 +123,8 @@ export function FinishDecisionModal({
 
     if (!mutualDate) return null;
 
-    const sheetBg = isDark ? '#1a0d2e' : '#ffffff';
-    const handleColor = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.15)';
+    const sheetBg = colors.card;
+    const handleColor = colors.border;
     const partnerStatus = partnerStatusLabel(mutualDate);
     const partnerIcon = partnerStatusIcon(mutualDate);
 

@@ -19,6 +19,7 @@ import Animated, {
     SlideInRight,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
 import * as Haptics from 'expo-haptics';
 import { Calendar, User, MagnifyingGlass, CheckCircle, MapPin } from 'phosphor-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -384,11 +385,7 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            <LinearGradient
-                colors={['#0f0d23', '#1a0d2e', '#0f0d23']}
-                pointerEvents="none"
-                style={StyleSheet.absoluteFill}
-            />
+            <OnboardingScreenBackdrop />
 
             {/* Progress bar */}
             <View style={styles.progressBarContainer}>

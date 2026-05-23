@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { View, FlatList, StyleSheet, RefreshControl } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
-import { Match } from '@/hooks/use-matches';
+import type { Conversation } from '@/hooks/use-conversations';
 import { ConversationCard } from './conversation-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatCircleDots } from 'phosphor-react-native';
@@ -10,14 +10,14 @@ import { ChatCircleDots } from 'phosphor-react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 interface ConversationsListProps {
-    conversations: Match[];
+    conversations: Conversation[];
     isLoading: boolean;
     isRefreshing: boolean;
     onRefresh: () => void;
-    onConversationPress: (match: Match) => void;
-    onArchive?: (match: Match) => void;
-    onDelete?: (match: Match) => void;
-    onMute?: (match: Match) => void;
+    onConversationPress: (conversation: Conversation) => void;
+    onArchive?: (conversation: Conversation) => void;
+    onDelete?: (conversation: Conversation) => void;
+    onMute?: (conversation: Conversation) => void;
     onExplore?: () => void;
     mutedIds?: Set<string>;
 }
@@ -61,10 +61,10 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
                 <ChatCircleDots size={48} color="#ec4899" weight="duotone" />
             </View>
             <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                No conversations yet 💬
+                No messages yet
             </Text>
             <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
-                When you match, your chats will show up here.{'\n'}Keep exploring — you&apos;ve got this ✨
+                When you and someone are a mutual match, they&apos;ll appear here so you can chat.
             </Text>
         </Animated.View>
     );
@@ -84,10 +84,10 @@ export function ConversationsList({
 }: ConversationsListProps) {
     const { colors, isDark } = useTheme();
 
-    const renderItem = useCallback(({ item, index }: { item: Match; index: number }) => (
+    const renderItem = useCallback(({ item, index }: { item: Conversation; index: number }) => (
         <Animated.View entering={FadeInDown.delay(index * 30).duration(300)}>
             <ConversationCard
-                match={item}
+                conversation={item}
                 onPress={onConversationPress}
                 onArchive={onArchive}
                 onDelete={onDelete}
@@ -97,7 +97,7 @@ export function ConversationsList({
         </Animated.View>
     ), [onConversationPress, onArchive, onDelete, onMute, mutedIds]);
 
-    const keyExtractor = useCallback((item: Match) => item.id, []);
+    const keyExtractor = useCallback((item: Conversation) => item.id, []);
 
     const renderHeader = useCallback(() => {
         if (conversations.length === 0) return null;

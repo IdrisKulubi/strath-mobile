@@ -35,6 +35,9 @@ yarn-error.*
 .env
 
 
+.agents/
+agents/
+
 # typescript
 *.tsbuildinfo
 

@@ -15,13 +15,15 @@ type Props = {
 
 export function LoginBenefitsCard({ isDark }: Props) {
   const c = isDark ? Colors.dark : Colors.light;
+  const shadowColor = c.background;
   return (
     <View
       style={[
         styles.card,
         {
-          backgroundColor: isDark ? 'rgba(34, 18, 51, 0.76)' : 'rgba(255, 255, 255, 0.88)',
-          borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(233, 30, 140, 0.14)',
+          backgroundColor: isDark ? c.card : c.card,
+          borderColor: c.border,
+          shadowColor,
         },
       ]}
     >
@@ -66,7 +68,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 15,
     gap: 10,
-    shadowColor: '#1a0d2e',
+    shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.1,
     shadowRadius: 18,

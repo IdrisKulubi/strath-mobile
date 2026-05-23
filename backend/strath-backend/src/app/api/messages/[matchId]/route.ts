@@ -6,26 +6,7 @@ import { messageSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { eq, and, or, asc } from "drizzle-orm";
 import { sendPushNotification } from "@/lib/notifications";
-
-/**
- * Chat unlocks only after the 3-minute vibe call and both users agreed to meet.
- * That maps to the linked `mutualMatches.status` being `being_arranged`, `upcoming`,
- * or `completed`. Enforced server-side so deep-links or tampered clients can't bypass.
- *
- * Returns `null` when access is allowed, or an error Response when blocked.
- */
-async function assertChatUnlocked(matchId: string) {
-    const mm = await db.query.mutualMatches.findFirst({
-        where: eq(mutualMatches.legacyMatchId, matchId),
-    });
-    if (!mm || !(["being_arranged", "upcoming", "completed"] as const).includes(mm.status as any)) {
-        return errorResponse(
-            new Error("Chat unlocks after the 3-minute call when you both agree to meet."),
-            403,
-        );
-    }
-    return null;
-}
+import { assertChatUnlocked } from "@/lib/chat-access";
 
 export async function GET(
     req: NextRequest,

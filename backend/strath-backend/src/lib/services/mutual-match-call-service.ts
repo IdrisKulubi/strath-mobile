@@ -54,7 +54,7 @@ async function findExistingLegacyMatch(tx: TransactionClient, userAId: string, u
     });
 }
 
-async function ensureLegacyMatch(tx: TransactionClient, userAId: string, userBId: string) {
+export async function ensureLegacyMatch(tx: TransactionClient, userAId: string, userBId: string) {
     const existing = await findExistingLegacyMatch(tx, userAId, userBId);
 
     if (existing) {

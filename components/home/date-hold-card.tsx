@@ -51,21 +51,9 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
     };
 
     const cardBorder = isDark ? 'rgba(233,30,140,0.3)' : 'rgba(233,30,140,0.22)';
-    const cardBg = isDark ? 'rgba(45,27,71,0.55)' : '#ffffff';
-    const glow = isDark
-        ? (['rgba(233,30,140,0.4)', 'rgba(147,51,234,0.18)'] as const)
-        : (['rgba(233,30,140,0.18)', 'rgba(233,30,140,0.04)'] as const);
-
     return (
         <Animated.View entering={FadeInDown.duration(400)} style={styles.outer}>
-            <View style={[styles.card, { borderColor: cardBorder, backgroundColor: cardBg }]}>
-                <LinearGradient
-                    colors={glow}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                />
-
+            <View style={[styles.card, { borderColor: cardBorder, backgroundColor: colors.card }]}>
                 <View style={styles.content}>
                     <View style={styles.statusPillRow}>
                         <View style={[styles.statusPill, { backgroundColor: colors.primary }]}>
@@ -81,14 +69,11 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                             {hold.partner.profilePhoto ? (
                                 <CachedImage uri={hold.partner.profilePhoto} style={styles.avatar} />
                             ) : (
-                                <LinearGradient
-                                    colors={['#ec4899', '#f43f5e']}
-                                    style={styles.avatarFallback}
-                                >
-                                    <Text style={styles.avatarFallbackText}>
+                                <View style={[styles.avatarFallback, { backgroundColor: colors.primary }]}>
+                                    <Text style={[styles.avatarFallbackText, { color: colors.primaryForeground }]}>
                                         {partnerName.charAt(0).toUpperCase()}
                                     </Text>
-                                </LinearGradient>
+                                </View>
                             )}
                         </View>
                         <View style={styles.partnerText}>
@@ -221,7 +206,7 @@ function CancelHoldSheet({
     const { colors, isDark } = useTheme();
     const [selected, setSelected] = useState<MatchHoldCancelReason | null>(null);
 
-    const sheetBg = isDark ? '#1a0d2e' : '#ffffff';
+    const sheetBg = colors.card;
     const handleColor = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.15)';
 
     return (
@@ -470,7 +455,7 @@ const styles = StyleSheet.create({
     avatarFallbackText: {
         fontSize: 26,
         fontWeight: '800',
-        color: '#fff',
+        color: 'transparent',
     },
     partnerText: {
         flex: 1,

@@ -18,14 +18,14 @@ export function MessageBubble({ message, isOwn, showTimestamp = true }: MessageB
         ? [styles.bubble, styles.ownBubble, { backgroundColor: colors.primary }]
         : [styles.bubble, styles.otherBubble, { backgroundColor: colors.card }];
 
-    const textColor = isOwn ? '#FFFFFF' : colors.foreground;
-    const timeColor = isOwn ? 'rgba(255,255,255,0.7)' : colors.mutedForeground;
+    const textColor = isOwn ? colors.primaryForeground : colors.foreground;
+    const timeColor = isOwn ? colors.primaryForeground : colors.mutedForeground;
 
     // Status icon for own messages
     const renderStatus = () => {
         if (!isOwn) return null;
 
-        const iconColor = 'rgba(255,255,255,0.7)';
+        const iconColor = colors.primaryForeground;
         const iconSize = 14;
 
         switch (message.status) {

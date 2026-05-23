@@ -39,22 +39,21 @@ function PulseDot({ color }: { color: string }) {
     return <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }, style]} />;
 }
 
-const ARRANGEMENT_COLORS: Record<MutualDate['arrangementStatus'], string> = {
-    mutual: '#e91e8c',
-    call_pending: '#f59e0b',
-    being_arranged: '#e91e8c',
-    upcoming: '#10b981',
-    completed: '#10b981',
-    cancelled: '#6b7280',
-    expired: '#6b7280',
-};
-
 export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
     const { colors, isDark } = useTheme();
+    const arrangementColors: Record<MutualDate['arrangementStatus'], string> = {
+        mutual: colors.primary,
+        call_pending: colors.warning ?? '#E0A040',
+        being_arranged: colors.primary,
+        upcoming: colors.success ?? '#3DB87A',
+        completed: colors.success ?? '#3DB87A',
+        cancelled: colors.mutedForeground,
+        expired: colors.mutedForeground,
+    };
     const router = useRouter();
     const toast = useToast();
     const { mutateAsync: startMutualMatchCall, isPending: isStartingCall } = useStartMutualMatchCall();
-    const statusColor = ARRANGEMENT_COLORS[match.arrangementStatus];
+    const statusColor = arrangementColors[match.arrangementStatus];
     const formattedScheduledAt = match.scheduledAt
         ? new Intl.DateTimeFormat(undefined, {
             dateStyle: 'full',
@@ -229,7 +228,7 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                 </View>
             )}
 
-            {/* Post-call chat chip — unlocks only after both agreed to meet */}
+            {/* Message chip — available for mutual matches */}
             {chatUnlocked && (
                 <Pressable
                     onPress={handleOpenChat}

@@ -21,6 +21,7 @@ import Animated, {
     withTiming,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
 import * as Haptics from 'expo-haptics';
 import { ArrowClockwise, CheckCircle, Heart, Rocket, Sparkle, Star } from 'phosphor-react-native';
 
@@ -312,7 +313,7 @@ export function LaunchCelebration({
 
     return (
         <View style={styles.container}>
-            <LinearGradient colors={['#0f0d23', '#1a0d2e', '#2d1347']} style={StyleSheet.absoluteFill} />
+            <OnboardingScreenBackdrop />
 
             <CustomConfetti />
 

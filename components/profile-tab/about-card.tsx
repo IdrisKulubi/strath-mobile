@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import { Text } from '@/components/ui/text';
-import { Ionicons } from '@expo/vector-icons';
+import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { useTheme } from '@/hooks/use-theme';
 
 interface AboutCardProps {
@@ -13,121 +14,71 @@ interface AboutCardProps {
     perfectDateIdea?: string;
 }
 
-export function AboutCard({ bio, aboutMe, lookingFor, favoriteVibe, perfectDateIdea }: AboutCardProps) {
-    const { colors, isDark } = useTheme();
+export function AboutCard({
+    bio,
+    aboutMe,
+    lookingFor,
+    favoriteVibe,
+    perfectDateIdea,
+}: AboutCardProps) {
+    const { colors } = useTheme();
 
     return (
-        <Animated.View
-            entering={FadeInDown.delay(280).springify().damping(14)}
-            style={[
-                styles.card,
-                {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
-                    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                },
-                !isDark && styles.cardShadow,
-            ]}
-        >
-            <View style={styles.header}>
-                <View style={[styles.iconWrap, { backgroundColor: isDark ? 'rgba(233,30,140,0.2)' : 'rgba(233,30,140,0.1)' }]}>
-                    <Ionicons name="person" size={18} color={colors.primary} />
-                </View>
-                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>About</Text>
-            </View>
+        <Animated.View entering={FadeInDown.duration(280)} style={styles.section}>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>About</Text>
             <Text style={[styles.bio, { color: colors.foreground }]}>
-                {bio || 'No bio yet. Tap Edit Profile to add one.'}
+                {bio || 'Add a short bio so matches know what you are about.'}
             </Text>
             {aboutMe && aboutMe !== bio && (
-                <Text style={[styles.aboutMe, { color: colors.mutedForeground }]}>
+                <Text variant="muted" style={{ color: colors.mutedForeground, marginTop: SPACING.compact }}>
                     {aboutMe}
                 </Text>
             )}
             {(lookingFor || favoriteVibe || perfectDateIdea) && (
-                <View style={styles.subBlocks}>
-                    {lookingFor && (
-                        <View style={[styles.subBlock, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}>
-                            <Text style={[styles.subLabel, { color: colors.mutedForeground }]}>Looking for</Text>
-                            <Text style={[styles.subValue, { color: colors.foreground }]}>{lookingFor}</Text>
-                        </View>
-                    )}
-                    {favoriteVibe && (
-                        <View style={[styles.subBlock, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}>
-                            <Text style={[styles.subLabel, { color: colors.mutedForeground }]}>Favorite vibe</Text>
-                            <Text style={[styles.subValue, { color: colors.foreground }]}>{favoriteVibe}</Text>
-                        </View>
-                    )}
-                    {perfectDateIdea && (
-                        <View style={[styles.subBlock, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}>
-                            <Text style={[styles.subLabel, { color: colors.mutedForeground }]}>Perfect date idea</Text>
-                            <Text style={[styles.subValue, { color: colors.foreground }]}>{perfectDateIdea}</Text>
-                        </View>
-                    )}
+                <View style={styles.details}>
+                    {lookingFor && <DetailRow label="Looking for" value={lookingFor} />}
+                    {favoriteVibe && <DetailRow label="Favorite vibe" value={favoriteVibe} />}
+                    {perfectDateIdea && <DetailRow label="Perfect date" value={perfectDateIdea} />}
                 </View>
             )}
         </Animated.View>
     );
 }
 
+function DetailRow({ label, value }: { label: string; value: string }) {
+    const { colors } = useTheme();
+    return (
+        <View style={styles.detailRow}>
+            <Text variant="caption" style={{ color: colors.mutedForeground }}>
+                {label}
+            </Text>
+            <Text style={[styles.detailValue, { color: colors.foreground }]}>{value}</Text>
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
-    card: {
-        marginHorizontal: 20,
-        marginBottom: 16,
-        borderRadius: 20,
-        borderWidth: 1,
-        padding: 20,
+    section: {
+        paddingHorizontal: SPACING.screenX,
+        paddingBottom: SPACING.section,
     },
-    cardShadow: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 12,
-        elevation: 3,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        marginBottom: 14,
-    },
-    iconWrap: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    sectionLabel: {
-        fontSize: 12,
-        fontWeight: '700',
-        letterSpacing: 0.8,
+    label: {
+        ...TYPOGRAPHY.label,
+        fontWeight: '600',
+        marginBottom: SPACING.tight,
     },
     bio: {
-        fontSize: 16,
-        lineHeight: 24,
-        fontWeight: '400',
+        ...TYPOGRAPHY.body,
     },
-    aboutMe: {
-        fontSize: 14,
-        lineHeight: 21,
-        marginTop: 12,
+    details: {
+        marginTop: SPACING.compact,
+        gap: SPACING.compact,
     },
-    subBlocks: {
-        marginTop: 16,
-        gap: 10,
+    detailRow: {
+        gap: SPACING.micro,
     },
-    subBlock: {
-        padding: 10,
-        borderRadius: 12,
-        gap: 4,
-    },
-    subLabel: {
-        fontSize: 11,
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    subValue: {
-        fontSize: 14,
+    detailValue: {
+        ...TYPOGRAPHY.callout,
         fontWeight: '500',
     },
 });

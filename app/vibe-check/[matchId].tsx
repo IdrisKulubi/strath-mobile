@@ -190,7 +190,6 @@ export default function VibeCheckCallScreen() {
             if (sessionId) {
                 endCall({ vibeCheckId: sessionId, durationSeconds: elapsed });
             }
-            console.log("[vibe-check] finishCall", { reason, sessionId, elapsed });
             setShowDecision(true);
         },
         [endCall, stopTimer],
@@ -278,7 +277,6 @@ export default function VibeCheckCallScreen() {
                 enableBarCollapsing: true,
             });
         } catch (err) {
-            console.warn("[vibe-check] openBrowserAsync threw:", err);
         }
 
         // Resolves when the user closes the browser (manual or programmatic dismiss).

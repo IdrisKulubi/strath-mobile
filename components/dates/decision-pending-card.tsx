@@ -68,7 +68,7 @@ export function DecisionPendingCard({ match, index, onPress }: DecisionPendingCa
                 ]}
             >
                 <View style={styles.row}>
-                    <View style={[styles.avatarRing, { borderColor: '#f59e0b' }]}>
+                    <View style={[styles.avatarRing, { borderColor: colors.warning }]}>
                         {match.withUser.profilePhoto ? (
                             <CachedImage
                                 uri={match.withUser.profilePhoto}
@@ -90,8 +90,8 @@ export function DecisionPendingCard({ match, index, onPress }: DecisionPendingCa
 
                     <View style={styles.body}>
                         <View style={styles.statusRow}>
-                            <Ionicons name="alert-circle" size={14} color="#f59e0b" />
-                            <Text style={[styles.statusLabel, { color: '#f59e0b' }]}>
+                            <Ionicons name="alert-circle" size={14} color={colors.warning} />
+                            <Text style={[styles.statusLabel, { color: colors.warning }]}>
                                 Decision pending
                             </Text>
                         </View>

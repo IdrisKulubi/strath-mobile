@@ -165,13 +165,15 @@ export type MutualDatesItem = {
     callEndedAt?: string;
     /**
      * Unread messages the viewer has not read yet in the linked chat thread. Populated
-     * only for items where chat is unlocked (status in `being_arranged | upcoming | completed`
+     * only for items where chat is listed (status in `CHAT_UNLOCKED_STATUSES`
      * and a `legacyMatchId` exists). Omitted otherwise.
      */
     unreadMessageCount?: number;
 };
 
 const CHAT_UNLOCKED_STATUSES: ReadonlyArray<MutualDatesItem["arrangementStatus"]> = [
+    "mutual",
+    "call_pending",
     "being_arranged",
     "upcoming",
     "completed",

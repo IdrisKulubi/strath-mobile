@@ -104,8 +104,7 @@ export default function RootLayout() {
         if (!cancelled) {
           setBootstrap({ isNewUserIntro: !slidesDone, hasAuthToken: authed });
         }
-      } catch (e) {
-        console.warn(e);
+      } catch {
         if (!cancelled) {
           setBootstrap({ isNewUserIntro: true, hasAuthToken: false });
         }

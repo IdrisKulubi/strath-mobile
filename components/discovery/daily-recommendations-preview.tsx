@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/text';
+import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { useTheme } from '@/hooks/use-theme';
 import {
   RankedRecommendation,
@@ -36,9 +37,9 @@ export function DailyRecommendationsPreview({
   return (
     <View style={styles.section}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.foreground }]}>Your 5 Best Matches Today</Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-          That&apos;s today&apos;s shortlist. Your choices sharpen tomorrow&apos;s five.
+        <Text style={[styles.title, { color: colors.foreground }]}>Today&apos;s five</Text>
+        <Text variant="muted" style={{ color: colors.mutedForeground }}>
+          Review each profile — your choices improve tomorrow&apos;s set.
         </Text>
       </View>
 
@@ -64,25 +65,18 @@ export function DailyRecommendationsPreview({
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: 4,
+    marginBottom: SPACING.tight,
   },
   header: {
-    paddingHorizontal: 20,
-    marginBottom: 12,
-    gap: 4,
+    paddingHorizontal: SPACING.screenX,
+    marginBottom: SPACING.compact,
+    gap: SPACING.micro,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '800',
-    lineHeight: 25,
-  },
-  subtitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '500',
+    ...TYPOGRAPHY.title,
   },
   row: {
-    paddingHorizontal: 16,
-    paddingBottom: 4,
+    paddingHorizontal: SPACING.base,
+    paddingBottom: SPACING.tight,
   },
 });

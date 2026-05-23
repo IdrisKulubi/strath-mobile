@@ -39,7 +39,7 @@ const PLAYBOOK_SECTIONS: DateKitSection[] = [
         title: 'How Strathspace works',
         subtitle: 'From a strong match to a real-world plan.',
         icon: 'git-network-outline',
-        accent: '#e91e8c',
+        accent: 'primary',
         steps: [
             'Home shows your best daily matches instead of endless swiping.',
             'When someone feels right, send a date invite with a vibe that fits the energy.',
@@ -149,7 +149,7 @@ export default function DateKitScreen() {
     };
 
     return (
-        <TabSwipeView route="/(tabs)/date-kit">
+        <TabSwipeView route="/(tabs)/chats">
         <ScreenGradient edges={['top']} style={styles.container}>
             <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
@@ -173,7 +173,7 @@ export default function DateKitScreen() {
                 />
 
                 <Animated.View
-                    entering={FadeInDown.delay(60).springify().damping(14)}
+                    entering={FadeInDown.delay(60).duration(280)}
                     style={[
                         styles.filterWrap,
                         {
@@ -205,7 +205,7 @@ export default function DateKitScreen() {
                             title={section.title}
                             subtitle={section.subtitle}
                             icon={section.icon}
-                            accent={section.accent}
+                            accent={section.accent === 'primary' ? colors.primary : section.accent}
                             steps={section.steps}
                             tips={section.tips}
                             expanded={expandedSectionId === section.id}
@@ -217,11 +217,11 @@ export default function DateKitScreen() {
 
                 {(activeFilter === 'all' || activeFilter === 'starters') ? (
                     <Animated.View
-                        entering={FadeInDown.delay(180).springify().damping(14)}
+                        entering={FadeInDown.delay(180).duration(280)}
                         style={[
                             styles.startersPanel,
                             {
-                                backgroundColor: isDark ? colors.card : '#fff',
+                                backgroundColor: colors.card,
                                 borderColor: colors.border,
                             },
                         ]}

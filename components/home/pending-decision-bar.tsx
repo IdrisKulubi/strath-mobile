@@ -54,7 +54,7 @@ export function PendingDecisionBar({
         ? `Undo before this sends in ${remainingSeconds}s`
         : `Undo in ${remainingSeconds}s`;
     const iconName = decision === 'passed' ? 'play-back' : decision === 'maybe' ? 'time-outline' : 'heart';
-    const accentColor = decision === 'passed' ? '#64748b' : decision === 'maybe' ? '#f59e0b' : colors.primary;
+    const accentColor = decision === 'passed' ? colors.mutedForeground : decision === 'maybe' ? colors.warning : colors.primary;
 
     return (
         <Animated.View
@@ -72,9 +72,9 @@ export function PendingDecisionBar({
                 style={[
                     styles.card,
                     {
-                        backgroundColor: isDark ? '#1b1527' : '#ffffff',
+                        backgroundColor: colors.card,
                         borderColor: colors.border,
-                        shadowColor: '#000',
+                        shadowColor: colors.background,
                     },
                 ]}
             >

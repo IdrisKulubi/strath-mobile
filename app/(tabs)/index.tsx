@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     content: {
-        paddingBottom: 28,
+        paddingBottom: 32,
     },
     skeletonWrap: {
         paddingHorizontal: 16,

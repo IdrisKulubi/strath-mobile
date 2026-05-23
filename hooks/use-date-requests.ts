@@ -156,18 +156,18 @@ export const VIBE_EMOJIS: Record<DateVibe, string> = {
     hangout: '🎮',
 };
 
-/**
- * Chat is only available after the 3-minute call has happened and both users agreed
- * to meet. That maps to `mutualMatches.status` being `being_arranged`, `upcoming`, or
- * `completed`, plus a non-null `legacyMatchId` (the `matches.id` the chat screen uses).
- */
+const CHAT_UNLOCKED_STATUSES: MutualDate['arrangementStatus'][] = [
+    'mutual',
+    'call_pending',
+    'being_arranged',
+    'upcoming',
+    'completed',
+];
+
+/** Messaging is available for mutual matches once a chat thread exists. */
 export function isChatUnlocked(match: MutualDate): boolean {
     if (!match.legacyMatchId) return false;
-    return (
-        match.arrangementStatus === 'being_arranged'
-        || match.arrangementStatus === 'upcoming'
-        || match.arrangementStatus === 'completed'
-    );
+    return CHAT_UNLOCKED_STATUSES.includes(match.arrangementStatus);
 }
 
 export const ARRANGEMENT_STATUS_LABELS: Record<MutualDate['arrangementStatus'], string> = {

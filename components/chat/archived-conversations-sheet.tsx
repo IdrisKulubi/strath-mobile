@@ -10,7 +10,8 @@ import {
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
-import { Match, getRelativeTime } from '@/hooks/use-matches';
+import type { Conversation } from '@/hooks/use-conversations';
+import { getRelativeTime } from '@/lib/messaging/format-time';
 import { Ionicons } from '@expo/vector-icons';
 import { Archive, Trash, ArrowCounterClockwise } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -31,10 +32,10 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 interface ArchivedConversationsSheetProps {
     visible: boolean;
     onClose: () => void;
-    archivedConversations: Match[];
-    onConversationPress: (match: Match) => void;
-    onUnarchive: (match: Match) => void;
-    onDelete: (match: Match) => void;
+    archivedConversations: Conversation[];
+    onConversationPress: (conversation: Conversation) => void;
+    onUnarchive: (conversation: Conversation) => void;
+    onDelete: (conversation: Conversation) => void;
 }
 
 export function ArchivedConversationsSheet({
@@ -86,15 +87,9 @@ export function ArchivedConversationsSheet({
         opacity: withTiming(visible ? 1 : 0, { duration: 200 }),
     }));
 
-    const renderItem = ({ item, index }: { item: Match; index: number }) => {
-        const partnerName = item.partner.name ||
-            (item.partner.profile?.firstName
-                ? `${item.partner.profile.firstName} ${item.partner.profile.lastName || ''}`.trim()
-                : 'Unknown');
-
-        const avatarUri = item.partner.image ||
-            item.partner.profile?.profilePhoto ||
-            (item.partner.profile?.photos?.[0]);
+    const renderItem = ({ item, index }: { item: Conversation; index: number }) => {
+        const partnerName = item.partner.name || 'Unknown';
+        const avatarUri = item.partner.image;
 
         const initial = partnerName.charAt(0).toUpperCase();
         const lastMessageText = item.lastMessage?.content || 'No messages';

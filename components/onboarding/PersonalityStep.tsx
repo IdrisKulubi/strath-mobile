@@ -9,6 +9,7 @@ import Animated, {
     withSpring,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -231,7 +232,7 @@ export function PersonalityStep({ data, onComplete, onBack }: PersonalityStepPro
 
     return (
         <View style={styles.container}>
-            <LinearGradient colors={['#0f0d23', '#1a0d2e', '#0f0d23']} style={StyleSheet.absoluteFill} />
+            <OnboardingScreenBackdrop />
 
             <View style={[styles.progressContainer, { paddingTop: Math.max(insets.top + 12, 60) }]}>
                 <TouchableOpacity onPress={handleBack} activeOpacity={0.7} style={styles.backButton}>
