@@ -4,7 +4,6 @@ import { Text } from '@/components/ui/text';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import Animated, {
     FadeIn,
@@ -79,23 +78,22 @@ export function NoInternetScreen({ onRetry }: NoInternetScreenProps) {
                 <View style={[styles.centerColumn, { minHeight: scrollMinHeight }]}>
                 <View style={styles.content}>
                     <Animated.View entering={FadeIn.duration(500)} style={[styles.iconContainer, pulseStyle]}>
-                        <LinearGradient
-                            colors={isDark ? ['#3d2459', '#2d1b47'] : ['#F3F4F6', '#E5E7EB']}
-                            style={styles.iconBackground}
+                        <View
+                            style={[styles.iconBackground, { backgroundColor: colors.muted }]}
                         >
                             <Ionicons
                                 name="wifi-outline"
                                 size={80}
-                                color={isDark ? '#6B7280' : '#9CA3AF'}
+                                color={colors.mutedForeground}
                             />
                             <View style={styles.slashOverlay}>
                                 <View style={[styles.slash, { backgroundColor: colors.destructive }]} />
                             </View>
-                        </LinearGradient>
+                        </View>
                     </Animated.View>
 
                     <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.titleBlock}>
-                        <Text style={[styles.title, { color: colors.foreground }]}>No Internet Connection</Text>
+                        <Text style={[styles.title, { color: colors.foreground }]}>No internet connection</Text>
                     </Animated.View>
 
                     <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.descBlock}>
@@ -110,7 +108,7 @@ export function NoInternetScreen({ onRetry }: NoInternetScreenProps) {
                             onPress={openSettings}
                             style={({ pressed }) => [
                                 styles.settingsButton,
-                                { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F3F4F6' },
+                                { backgroundColor: colors.secondary },
                                 pressed && styles.buttonPressed,
                             ]}
                         >
@@ -123,8 +121,8 @@ export function NoInternetScreen({ onRetry }: NoInternetScreenProps) {
                                 style={({ pressed }) => [
                                     styles.retryButton,
                                     {
-                                        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
-                                        backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FAFAFA',
+                                        borderColor: colors.border,
+                                        backgroundColor: colors.card,
                                     },
                                     pressed && styles.buttonPressed,
                                 ]}

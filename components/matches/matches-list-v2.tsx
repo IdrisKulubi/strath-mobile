@@ -14,7 +14,6 @@ import { useTheme } from '@/hooks/use-theme';
 import { Match } from '@/hooks/use-matches';
 import { MatchCard } from './match-card';
 import { Heart } from 'phosphor-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Swipeable } from 'react-native-gesture-handler';
 import Animated, { FadeIn, Layout } from 'react-native-reanimated';
 
@@ -32,7 +31,7 @@ interface MatchesListV2Props {
 
 // Enhanced loading skeleton
 function MatchSkeleton({ index }: { index: number }) {
-    const { isDark } = useTheme();
+    const { colors, isDark } = useTheme();
     
     return (
         <Animated.View 
@@ -40,7 +39,7 @@ function MatchSkeleton({ index }: { index: number }) {
             style={[
                 styles.skeletonCard,
                 { 
-                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#ffffff',
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : colors.card,
                     borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
                 }
             ]}
@@ -60,7 +59,7 @@ function MatchSkeleton({ index }: { index: number }) {
 }
 
 function EmptyState() {
-    const { isDark } = useTheme();
+    const { colors, isDark } = useTheme();
 
     return (
         <ScrollView
@@ -72,20 +71,15 @@ function EmptyState() {
                 <View style={[styles.emptyRing3, { borderColor: isDark ? 'rgba(236,72,153,0.07)' : 'rgba(236,72,153,0.06)' }]} />
                 <View style={[styles.emptyRing2, { borderColor: isDark ? 'rgba(236,72,153,0.13)' : 'rgba(236,72,153,0.10)' }]} />
                 <View style={[styles.emptyRing1, { borderColor: isDark ? 'rgba(236,72,153,0.20)' : 'rgba(236,72,153,0.16)' }]} />
-                <LinearGradient
-                    colors={['#f472b6', '#f43f5e']}
-                    start={{ x: 0.2, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.emptyHeartGradient}
-                >
-                    <Heart size={44} color="#fff" weight="fill" />
-                </LinearGradient>
+                <View style={[styles.emptyHeartGradient, { backgroundColor: colors.primary }]}>
+                    <Heart size={44} color={colors.primaryForeground} weight="fill" />
+                </View>
             </View>
 
-            <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
                 Your connections are simmering 🔥
             </Text>
-            <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
+            <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
                 Someone could be a like away. Need a boost? Ask your Wingman for a profile glow-up ✨
             </Text>
         </ScrollView>
@@ -109,9 +103,9 @@ export function MatchesListV2({
         <View style={styles.swipeActionWrap}>
             <Pressable
                 onPress={() => onArchive?.(item)}
-                style={({ pressed }) => [styles.archiveSwipeBtn, { opacity: pressed ? 0.88 : 1 }]}
+                style={({ pressed }) => [styles.archiveSwipeBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
             >
-                <Text style={styles.archiveSwipeText}>Archive</Text>
+                <Text style={[styles.archiveSwipeText, { color: colors.primaryForeground }]}>Archive</Text>
             </Pressable>
         </View>
     ), [onArchive]);
@@ -143,12 +137,12 @@ export function MatchesListV2({
         return (
             <View style={styles.footer}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={[styles.footerText, { color: isDark ? '#64748b' : '#9ca3af' }]}>
+                <Text style={[styles.footerText, { color: colors.mutedForeground }]}>
                     Loading more...
                 </Text>
             </View>
         );
-    }, [isFetchingNextPage, colors.primary, isDark]);
+    }, [isFetchingNextPage, colors.primary, colors.mutedForeground]);
 
     // Loading state
     if (isLoading && !isRefreshing) {

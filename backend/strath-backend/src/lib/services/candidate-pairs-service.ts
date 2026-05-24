@@ -5,6 +5,7 @@ import {
     blocks,
     candidatePairHistory,
     candidatePairs,
+    dateMatches,
     matches,
     mutualMatches,
     profiles,
@@ -20,6 +21,7 @@ import {
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
 import { expireQueuedPairsForUser, isUserOnMatchHold } from "@/lib/services/match-hold-service";
+import { assignMeetupSlot } from "@/lib/services/meetup-slot-service";
 import { isAdminMatchPreviewUser, resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
@@ -54,11 +56,10 @@ function getFairnessRelaxConfig(): FairnessRelaxConfig {
     };
 }
 
-export type CandidateDecision = "pending" | "open_to_meet" | "maybe" | "passed";
+export type CandidateDecision = "pending" | "open_to_meet" | "passed";
 export type CandidatePairStatus = "active" | "queued" | "mutual" | "closed" | "expired";
 export type MutualMatchStatus =
     | "mutual"
-    | "call_pending"
     | "being_arranged"
     | "upcoming"
     | "completed"
@@ -94,10 +95,6 @@ export function resolveCandidatePairStatus(
 ): CandidatePairStatus {
     if (aDecision === "passed" || bDecision === "passed") {
         return "closed";
-    }
-
-    if (aDecision === "maybe" || bDecision === "maybe") {
-        return "expired";
     }
 
     if (aDecision === "open_to_meet" && bDecision === "open_to_meet") {
@@ -363,7 +360,7 @@ async function getUsersOnActiveMatchHolds() {
             userBId: mutualMatches.userBId,
         })
         .from(mutualMatches)
-        .where(inArray(mutualMatches.status, ["mutual", "call_pending", "being_arranged", "upcoming"]));
+        .where(inArray(mutualMatches.status, ["mutual", "being_arranged", "upcoming"]));
 
     return new Set(rows.flatMap((row) => [row.userAId, row.userBId]));
 }
@@ -528,12 +525,12 @@ async function getOpenSlotClearingWindowForUser(userId: string, now = new Date()
                 or(
                     and(
                         eq(candidatePairs.userAId, userId),
-                        inArray(candidatePairs.aDecision, ["passed", "maybe"]),
+                        eq(candidatePairs.aDecision, "passed"),
                         inArray(candidatePairs.status, ["closed", "expired"]),
                     ),
                     and(
                         eq(candidatePairs.userBId, userId),
-                        inArray(candidatePairs.bDecision, ["passed", "maybe"]),
+                        eq(candidatePairs.bDecision, "passed"),
                         inArray(candidatePairs.status, ["closed", "expired"]),
                     ),
                 ),
@@ -805,7 +802,7 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
 
     const openSlotClearingWindow = await getOpenSlotClearingWindowForUser(userId);
     if (openSlotClearingWindow) {
-        console.log("[candidate-pairs] WINDOW: pass/maybe already used a slot - skip refill", {
+        console.log("[candidate-pairs] WINDOW: pass already used a slot - skip refill", {
             userId,
             pairId: openSlotClearingWindow.id,
             windowExpiresAt: openSlotClearingWindow.expiresAt,
@@ -1472,6 +1469,14 @@ export async function respondToCandidatePair(
             });
 
             if (!mutual && !existingSameStatus) {
+                const { ensureLegacyMatch } = await import("@/lib/services/legacy-match-service");
+                const legacyMatch = await ensureLegacyMatch(
+                    tx,
+                    updatedPair.userAId,
+                    updatedPair.userBId,
+                );
+                const mutualAt = new Date();
+                const assignment = assignMeetupSlot(mutualAt);
                 const [createdMutual] = await tx
                     .insert(mutualMatches)
                     .values({
@@ -1479,9 +1484,35 @@ export async function respondToCandidatePair(
                         userAId: updatedPair.userAId,
                         userBId: updatedPair.userBId,
                         status: "mutual",
+                        legacyMatchId: legacyMatch.id,
+                        scheduledAt: assignment.scheduledAt,
+                        slotConfirmBy: assignment.confirmBy,
+                        assignedSlot: assignment.slot,
                     })
                     .returning();
-                mutual = createdMutual;
+                const [createdDateMatch] = await tx
+                    .insert(dateMatches)
+                    .values({
+                        candidatePairId: updatedPair.id,
+                        userAId: updatedPair.userAId,
+                        userBId: updatedPair.userBId,
+                        vibe: "coffee",
+                        status: "pending_setup",
+                        scheduledAt: assignment.scheduledAt,
+                        callCompleted: false,
+                        userAConfirmed: false,
+                        userBConfirmed: false,
+                        createdAt: mutualAt,
+                    })
+                    .returning({ id: dateMatches.id });
+                await tx
+                    .update(mutualMatches)
+                    .set({ legacyDateMatchId: createdDateMatch.id, updatedAt: mutualAt })
+                    .where(eq(mutualMatches.id, createdMutual.id));
+                mutual = {
+                    ...createdMutual,
+                    legacyDateMatchId: createdDateMatch.id,
+                };
                 mutualWasJustCreated = true;
             }
         }

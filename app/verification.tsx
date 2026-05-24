@@ -28,6 +28,7 @@ import { useProfile } from '@/hooks/use-profile';
 import { hasVerifiedFace } from '@/lib/profile-access';
 import { setCachedProfile } from '@/lib/session-cache';
 import { useToast } from '@/components/ui/toast';
+import { useTheme } from '@/hooks/use-theme';
 
 const UPLOAD_STAGES = [
     {
@@ -74,6 +75,7 @@ export default function VerificationScreen() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const { show } = useToast();
+    const { colors } = useTheme();
     const { data: profile, isLoading: isProfileLoading, refetch: refetchProfile } = useProfile();
     const {
         latestSession,
@@ -283,7 +285,6 @@ export default function VerificationScreen() {
                 setSelfieUri(result.assets[0].uri);
             }
         } catch (error) {
-            console.error('[Verification] Failed to capture selfie', error);
             show({
                 message: 'Could not open the camera. Please try again.',
                 variant: 'danger',
@@ -351,7 +352,6 @@ export default function VerificationScreen() {
                 variant: 'success',
             });
         } catch (error) {
-            console.error('[Verification] Failed to submit verification', error);
             show({
                 message: getVerificationUserMessage(error),
                 variant: 'danger',
@@ -408,18 +408,16 @@ export default function VerificationScreen() {
 
     if (shouldExitToTabs) {
         return (
-            <SafeAreaView style={styles.container}>
-                <LinearGradient colors={['#0f0d23', '#1a0d2e', '#0f0d23']} style={StyleSheet.absoluteFill} />
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                    <ActivityIndicator size="large" color="#f472b6" />
+                    <ActivityIndicator size="large" color={colors.primary} />
                 </View>
             </SafeAreaView>
         );
     }
 
     return (
-        <SafeAreaView style={styles.container}>
-            <LinearGradient colors={['#0f0d23', '#1a0d2e', '#0f0d23']} style={StyleSheet.absoluteFill} />
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
                 {showSuccessState ? (
                     <Animated.View

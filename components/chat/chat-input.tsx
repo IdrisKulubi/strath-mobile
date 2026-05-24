@@ -76,10 +76,10 @@ export function ChatInput({
                         disabled={!canSend}
                     >
                         {isSending ? (
-                            <ActivityIndicator size="small" color={canSend ? "#FFFFFF" : colors.mutedForeground} />
+                            <ActivityIndicator size="small" color={canSend ? colors.primaryForeground : colors.mutedForeground} />
                         ) : (
                             <Text style={{
-                                color: canSend ? '#FFFFFF' : colors.mutedForeground,
+                                color: canSend ? colors.primaryForeground : colors.mutedForeground,
                                 fontWeight: '600',
                                 fontSize: 16
                             }}>

@@ -17,7 +17,7 @@ export interface DailyMatch {
     personalityTags?: string[];
     course?: string;
     university?: string;
-    currentUserDecision: 'pending' | 'open_to_meet' | 'maybe' | 'passed';
+    currentUserDecision: 'pending' | 'open_to_meet' | 'passed';
     status: 'active' | 'mutual' | 'closed' | 'expired';
     expiresAt: string;
     expiresInMs: number;
@@ -25,10 +25,19 @@ export interface DailyMatch {
 
 export type MatchHoldStatus =
     | 'mutual'
-    | 'call_pending'
     | 'being_arranged'
     | 'upcoming'
     | 'completed_pending_feedback';
+
+export interface SlotConfirmationState {
+    assignedSlot: 'wednesday' | 'saturday' | null;
+    scheduledAt: string | null;
+    confirmBy: string | null;
+    confirmWindowOpen: boolean;
+    viewerSlotConfirmed: boolean;
+    partnerSlotConfirmed: boolean;
+    needsSlotConfirmation: boolean;
+}
 
 export interface MatchHold {
     mutualMatchId: string;
@@ -49,6 +58,7 @@ export interface MatchHold {
     needsFeedback: boolean;
     autoReleaseAt: string | null;
     createdAt: string;
+    slotConfirmation: SlotConfirmationState;
 }
 
 export type MatchHoldCancelReason =
@@ -69,6 +79,22 @@ export interface DailyMatchesResponse {
     hasUpcomingQueued?: boolean;
     hold?: MatchHold | null;
     manualCuration?: ManualCuration | null;
+}
+
+function normalizeMatchHold(hold: MatchHold & { slotConfirmation?: SlotConfirmationState }): MatchHold {
+    const slot = hold.slotConfirmation;
+    return {
+        ...hold,
+        slotConfirmation: {
+            assignedSlot: slot?.assignedSlot ?? null,
+            scheduledAt: slot?.scheduledAt ?? hold.scheduledAt ?? null,
+            confirmBy: slot?.confirmBy ?? null,
+            confirmWindowOpen: slot?.confirmWindowOpen ?? false,
+            viewerSlotConfirmed: slot?.viewerSlotConfirmed ?? false,
+            partnerSlotConfirmed: slot?.partnerSlotConfirmed ?? false,
+            needsSlotConfirmation: slot?.needsSlotConfirmation ?? false,
+        },
+    };
 }
 
 export function useDailyMatches() {
@@ -94,7 +120,7 @@ export function useDailyMatches() {
                 mode,
                 matches: Array.isArray(data.matches) ? data.matches : [],
                 hasUpcomingQueued: Boolean(data.hasUpcomingQueued),
-                hold: data.hold ?? null,
+                hold: data.hold ? normalizeMatchHold(data.hold) : null,
                 manualCuration: data.manualCuration ?? null,
             };
         },
@@ -159,7 +185,7 @@ const ALREADY_RESPONDED_MSG = 'You have already responded to this pair';
 export function useRespondToDailyPair() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async (payload: { pairId: string; decision: 'open_to_meet' | 'maybe' | 'passed' }) => {
+        mutationFn: async (payload: { pairId: string; decision: 'open_to_meet' | 'passed' }) => {
             const token = await getAuthToken();
             if (!token) throw new Error('Not authenticated');
             const res = await fetch(`${API_URL}/api/pairs/${payload.pairId}/respond`, {
@@ -176,7 +202,7 @@ export function useRespondToDailyPair() {
             return payload;
         },
         onSuccess: ({ pairId, decision }) => {
-            if (decision === 'passed' || decision === 'maybe') {
+            if (decision === 'passed') {
                 queryClient.setQueryData<DailyMatchesResponse>(['candidatePairs', 'daily'], (prev) =>
                     prev ? { ...prev, matches: prev.matches.filter((m) => m.pairId !== pairId) } : prev
                 );

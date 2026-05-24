@@ -21,8 +21,8 @@ import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
-const HOLD_STATUSES = ["mutual", "call_pending", "being_arranged", "upcoming"] as const;
-const SHUFFLE_HOLD_STATUSES = ["mutual", "call_pending", "being_arranged", "upcoming", "completed"] as const;
+const HOLD_STATUSES = ["mutual", "being_arranged", "upcoming"] as const;
+const SHUFFLE_HOLD_STATUSES = ["mutual", "being_arranged", "upcoming", "completed"] as const;
 const BUSY_PAIR_STATUSES = ["active", "queued", "mutual"] as const;
 
 function utcDayKey(date = new Date()) {
@@ -72,7 +72,6 @@ export type ManualMatchmakingProfile = {
         totalPairs: number;
         interested: number;
         passed: number;
-        maybe: number;
         mutual: number;
     };
 };
@@ -250,7 +249,7 @@ async function getPoolData() {
     const ensureStats = (userId: string) => {
         const existing = statsByUserId.get(userId);
         if (existing) return existing;
-        const fresh = { totalPairs: 0, interested: 0, passed: 0, maybe: 0, mutual: 0 };
+        const fresh = { totalPairs: 0, interested: 0, passed: 0, mutual: 0 };
         statsByUserId.set(userId, fresh);
         return fresh;
     };
@@ -264,7 +263,6 @@ async function getPoolData() {
             stats.totalPairs += 1;
             if (side.decision === "open_to_meet") stats.interested += 1;
             if (side.decision === "passed") stats.passed += 1;
-            if (side.decision === "maybe") stats.maybe += 1;
             if (pair.status === "mutual") stats.mutual += 1;
         }
     }
@@ -324,7 +322,7 @@ async function getPoolData() {
             activePairId: activePair?.id ?? null,
             activeMutualMatchId: activeMutual?.id ?? null,
             activePartnerName: partnerId ? profileNameByUserId.get(partnerId) ?? partnerId : null,
-            stats: statsByUserId.get(row.userId) ?? { totalPairs: 0, interested: 0, passed: 0, maybe: 0, mutual: 0 },
+            stats: statsByUserId.get(row.userId) ?? { totalPairs: 0, interested: 0, passed: 0, mutual: 0 },
         };
     });
 
@@ -762,48 +760,6 @@ export async function cancelManualCandidatePair(pairId: string, reason = "Admin 
                     .where(eq(dateMatches.id, mutual.legacyDateMatchId));
             }
         }
-    });
-
-    revalidatePath("/admin/matchmaking");
-    return { ok: true };
-}
-
-export async function markManualMatchCallOutcome(pairId: string, outcome: "accepted" | "rejected", notes = "") {
-    const session = await requireAdmin();
-    if (!pairId) throw new Error("Missing pair id");
-    if (outcome === "rejected") {
-        return cancelManualCandidatePair(pairId, notes || "Rejected after admin call");
-    }
-
-    const now = new Date();
-    await db.transaction(async (tx) => {
-        const pair = await tx.query.candidatePairs.findFirst({ where: eq(candidatePairs.id, pairId) });
-        if (!pair) throw new Error("Candidate pair not found");
-
-        const mutual = await tx.query.mutualMatches.findFirst({
-            where: eq(mutualMatches.candidatePairId, pairId),
-        });
-
-        if (mutual && mutual.status === "mutual") {
-            await tx
-                .update(mutualMatches)
-                .set({ status: "call_pending", updatedAt: now })
-                .where(eq(mutualMatches.id, mutual.id));
-        }
-
-        await recordCandidatePairHistory(tx, {
-            pairId,
-            actorUserId: session.user.id,
-            eventType: "responded",
-            fromStatus: pair.status,
-            toStatus: pair.status,
-            metadata: {
-                source: "admin_curated",
-                adminUserId: session.user.id,
-                callOutcome: "accepted",
-                notes,
-            },
-        });
     });
 
     revalidatePath("/admin/matchmaking");

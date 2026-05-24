@@ -55,11 +55,6 @@ test("resolveCandidatePairStatus closes on any pass", () => {
     assert.equal(resolveCandidatePairStatus("open_to_meet", "passed"), "closed");
 });
 
-test("resolveCandidatePairStatus recycles maybe without closing the dyad", () => {
-    assert.equal(resolveCandidatePairStatus("maybe", "pending"), "expired");
-    assert.equal(resolveCandidatePairStatus("open_to_meet", "maybe"), "expired");
-});
-
 test("resolveCandidatePairStatus becomes mutual only on double yes", () => {
     assert.equal(resolveCandidatePairStatus("open_to_meet", "open_to_meet"), "mutual");
     assert.equal(resolveCandidatePairStatus("open_to_meet", "pending"), "active");
@@ -84,14 +79,14 @@ test("mapLegacyDateStatus keeps legacy date matches compatible with new sections
         createdAt: new Date(),
     };
 
-    assert.equal(mapLegacyDateStatus(baseDateMatch), "call_pending");
+    assert.equal(mapLegacyDateStatus(baseDateMatch), "being_arranged");
     assert.equal(
         mapLegacyDateStatus({ ...baseDateMatch, callCompleted: true, userAConfirmed: true, userBConfirmed: true }),
         "being_arranged",
     );
     assert.equal(
         mapLegacyDateStatus({ ...baseDateMatch, callCompleted: true, userAConfirmed: true, userBConfirmed: false }),
-        "call_pending",
+        "being_arranged",
     );
     assert.equal(mapLegacyDateStatus({ ...baseDateMatch, status: "scheduled", callCompleted: true }), "upcoming");
     assert.equal(mapLegacyDateStatus({ ...baseDateMatch, status: "attended" }), "completed");

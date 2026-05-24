@@ -28,6 +28,7 @@ import { apiFetch, isApiError, isAuthExpiredError, isNetworkError } from '@/lib/
 import { getProfileRoute } from '@/lib/profile-access';
 import { setCachedProfile } from '@/lib/session-cache';
 import { useTheme } from '@/hooks/use-theme';
+import { devError, devLog } from '@/lib/dev-log';
 
 const CTA_H = 50;
 
@@ -122,7 +123,7 @@ export default function LoginScreen() {
         const payload = await response.json();
         setDemoLoginEnabled(Boolean(payload?.data?.demoLoginEnabled));
       } catch (error) {
-        console.log('Could not load public feature flags:', error);
+        devLog('Could not load public feature flags:', error);
       }
     };
 
@@ -159,7 +160,7 @@ export default function LoginScreen() {
         });
       }
     } catch (error) {
-      console.error('Auth error:', error);
+      devError('Auth error:', error);
       toast.show({ message: 'Authentication failed. Please try again.', variant: 'danger' });
     } finally {
       setLoading(false);
@@ -218,7 +219,7 @@ export default function LoginScreen() {
         toast.show({ message: 'Sign in canceled. You can try Google above.' });
         return;
       }
-      console.error('Apple auth error:', error);
+      devError('Apple auth error:', error);
       toast.show({
         message: err.message || 'Apple sign in failed. Please try again.',
         variant: 'danger',
@@ -271,7 +272,7 @@ export default function LoginScreen() {
       toast.show({ message: 'Signed in as demo', variant: 'success' });
       router.replace(nextRoute as any);
     } catch (error) {
-      console.error('Demo auth error:', error);
+      devError('Demo auth error:', error);
       toast.show({
         message: 'Demo sign in failed. The demo session may need to be reseeded.',
         variant: 'danger',
@@ -364,24 +365,19 @@ export default function LoginScreen() {
                 disabled={loading || appleLoading || demoLoading}
                 style={({ pressed }) => [styles.googleBtn, pressed && !loading && !appleLoading && !demoLoading && styles.pressedBtn]}
               >
-                <LinearGradient
-                  colors={['#ff4fa8', '#e91e8c', '#c61c77']}
-                  start={{ x: 0, y: 0.2 }}
-                  end={{ x: 1, y: 0.9 }}
-                  style={styles.googleGradient}
-                >
+                <View style={[styles.googleGradient, { backgroundColor: colors.primary }]}>
                   {loading ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <ActivityIndicator color={colors.primaryForeground} size="small" />
                   ) : (
                     <View style={styles.googleBtnInner}>
                       <View style={styles.googleIconBadge}>
                         <GoogleLogo size={20} />
                       </View>
-                      <Text style={styles.googleLabelPrimary}>Continue with Google</Text>
-                      <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                      <Text style={[styles.googleLabelPrimary, { color: colors.primaryForeground }]}>Continue with Google</Text>
+                      <Ionicons name="arrow-forward" size={18} color={colors.primaryForeground} />
                     </View>
                   )}
-                </LinearGradient>
+                </View>
               </Pressable>
 
               {demoLoginEnabled && (
@@ -431,7 +427,7 @@ export default function LoginScreen() {
                   />
                   {appleLoading && (
                     <View style={styles.appleOverlay}>
-                      <ActivityIndicator color={isDark ? '#111111' : '#FFFFFF'} size="small" />
+                      <ActivityIndicator color={colors.primaryForeground} size="small" />
                     </View>
                   )}
                 </View>
@@ -523,7 +519,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    shadowColor: '#e91e8c',
+    shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.1,
     shadowRadius: 22,
@@ -573,7 +569,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 11,
     gap: 9,
-    shadowColor: '#1a0d2e',
+    shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.08,
     shadowRadius: 22,
@@ -608,7 +604,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: 'transparent',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.16,
         shadowRadius: 16,
@@ -634,7 +630,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     ...Platform.select({
       ios: {
-        shadowColor: '#1a0d2e',
+        shadowColor: 'transparent',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.14,
         shadowRadius: 16,
@@ -668,7 +664,7 @@ const styles = StyleSheet.create({
   },
   googleLabelPrimary: {
     flex: 1,
-    color: '#FFFFFF',
+    color: 'transparent',
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: -0.25,

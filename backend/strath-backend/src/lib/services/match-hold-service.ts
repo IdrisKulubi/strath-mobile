@@ -9,13 +9,18 @@ import {
     profiles,
 } from "@/db/schema";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
+import {
+    buildSlotConfirmationView,
+    expireUnconfirmedMeetups,
+    type SlotConfirmationView,
+} from "@/lib/services/meetup-confirmation-service";
 
 /**
  * "Match hold" = a user is in an active mutual / arranged date and should not see new daily intros
  * until that arrangement is concluded (or auto-released).
  *
  * Statuses that gate matching:
- *  - mutual, call_pending, being_arranged, upcoming  -> always hold
+ *  - mutual, being_arranged, upcoming  -> always hold
  *  - completed -> hold UNTIL feedback submitted by this user OR auto-release grace expires
  *
  * Released:
@@ -25,7 +30,6 @@ import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 
 export type MatchHoldStatus =
     | "mutual"
-    | "call_pending"
     | "being_arranged"
     | "upcoming"
     | "completed_pending_feedback";
@@ -50,6 +54,7 @@ export interface MatchHold {
     /** ISO timestamp at which the hold auto-releases if user has not submitted feedback. */
     autoReleaseAt: string | null;
     createdAt: string;
+    slotConfirmation: SlotConfirmationView;
 }
 
 export interface MatchHoldCancelReason {
@@ -57,8 +62,8 @@ export interface MatchHoldCancelReason {
     notes?: string | null;
 }
 
-const HOLD_STATUSES = ["mutual", "call_pending", "being_arranged", "upcoming", "completed"] as const;
-const AUTO_RELEASE_STATUSES = ["mutual", "call_pending"] as const;
+const HOLD_STATUSES = ["mutual", "being_arranged", "upcoming", "completed"] as const;
+const AUTO_RELEASE_STATUSES = ["mutual"] as const;
 const DURABLE_HOLD_STATUSES = ["being_arranged", "upcoming", "completed"] as const;
 const DEFAULT_PRE_DATE_HOLD_EXPIRY_HOURS = 72;
 
@@ -146,8 +151,20 @@ function pickPrimaryPhoto(
  * Note: the primary source of truth is `mutualMatches`. Legacy `dateMatches` rows that were never
  * bridged into `mutualMatches` are intentionally ignored — admins reconcile those.
  */
+function holdWithSlotConfirmation(
+    base: Omit<MatchHold, "slotConfirmation">,
+    row: typeof mutualMatches.$inferSelect,
+    viewerUserId: string,
+): MatchHold {
+    return {
+        ...base,
+        slotConfirmation: buildSlotConfirmationView(row, viewerUserId),
+    };
+}
+
 export async function getActiveMatchHoldForUser(userId: string): Promise<MatchHold | null> {
     await releaseStalePreDateMatchHoldsForUser(userId);
+    await expireUnconfirmedMeetups();
 
     const rows = await readDb
         .select()
@@ -193,7 +210,39 @@ export async function getActiveMatchHoldForUser(userId: string): Promise<MatchHo
                 where: eq(profiles.userId, partnerUserId),
             });
 
-            return {
+            return holdWithSlotConfirmation(
+                {
+                    mutualMatchId: row.id,
+                    candidatePairId: row.candidatePairId,
+                    partnerUserId,
+                    partner: {
+                        firstName: partnerProfile?.firstName ?? null,
+                        age: partnerProfile?.age ?? null,
+                        profilePhoto: pickPrimaryPhoto(partnerProfile),
+                        course: partnerProfile?.course ?? null,
+                        university: partnerProfile?.university ?? null,
+                    },
+                    status: "completed_pending_feedback",
+                    venueName: row.venueName,
+                    venueAddress: row.venueAddress,
+                    scheduledAt: row.scheduledAt?.toISOString() ?? null,
+                    dateMatchId,
+                    needsFeedback: true,
+                    autoReleaseAt: new Date(autoReleaseMs).toISOString(),
+                    createdAt: row.createdAt.toISOString(),
+                },
+                row,
+                userId,
+            );
+        }
+
+        // Statuses: mutual, being_arranged, upcoming -> always hold.
+        const partnerProfile = await readDb.query.profiles.findFirst({
+            where: eq(profiles.userId, partnerUserId),
+        });
+
+        return holdWithSlotConfirmation(
+            {
                 mutualMatchId: row.id,
                 candidatePairId: row.candidatePairId,
                 partnerUserId,
@@ -204,42 +253,18 @@ export async function getActiveMatchHoldForUser(userId: string): Promise<MatchHo
                     course: partnerProfile?.course ?? null,
                     university: partnerProfile?.university ?? null,
                 },
-                status: "completed_pending_feedback",
+                status: row.status as MatchHoldStatus,
                 venueName: row.venueName,
                 venueAddress: row.venueAddress,
                 scheduledAt: row.scheduledAt?.toISOString() ?? null,
-                dateMatchId,
-                needsFeedback: true,
-                autoReleaseAt: new Date(autoReleaseMs).toISOString(),
+                dateMatchId: row.legacyDateMatchId ?? null,
+                needsFeedback: false,
+                autoReleaseAt: null,
                 createdAt: row.createdAt.toISOString(),
-            };
-        }
-
-        // Statuses: mutual, call_pending, being_arranged, upcoming -> always hold.
-        const partnerProfile = await readDb.query.profiles.findFirst({
-            where: eq(profiles.userId, partnerUserId),
-        });
-
-        return {
-            mutualMatchId: row.id,
-            candidatePairId: row.candidatePairId,
-            partnerUserId,
-            partner: {
-                firstName: partnerProfile?.firstName ?? null,
-                age: partnerProfile?.age ?? null,
-                profilePhoto: pickPrimaryPhoto(partnerProfile),
-                course: partnerProfile?.course ?? null,
-                university: partnerProfile?.university ?? null,
             },
-            status: row.status as MatchHoldStatus,
-            venueName: row.venueName,
-            venueAddress: row.venueAddress,
-            scheduledAt: row.scheduledAt?.toISOString() ?? null,
-            dateMatchId: row.legacyDateMatchId ?? null,
-            needsFeedback: false,
-            autoReleaseAt: null,
-            createdAt: row.createdAt.toISOString(),
-        };
+            row,
+            userId,
+        );
     }
 
     return null;

@@ -12,7 +12,6 @@ import { BlockReportModal } from '@/components/discover/block-report-modal';
 
 interface ProfileViewCtaProps {
     onOpenToMeet: () => void;
-    onMaybe?: () => void;
     onPass?: () => void;
     disabled?: boolean;
     completed?: boolean;
@@ -25,7 +24,6 @@ interface ProfileViewCtaProps {
 
 export function ProfileViewCta({
     onOpenToMeet,
-    onMaybe,
     onPass,
     disabled = false,
     completed = false,
@@ -116,20 +114,11 @@ export function ProfileViewCta({
             ) : null}
 
             {onPass && !completed && !disabled && (
-                <View style={styles.secondaryRow}>
-                    {onMaybe ? (
-                        <Pressable onPress={onMaybe} style={styles.secondaryBtn}>
-                            <Text style={[styles.passText, { color: colors.mutedForeground }]}>
-                                Maybe
-                            </Text>
-                        </Pressable>
-                    ) : null}
-                    <Pressable onPress={onPass} style={styles.secondaryBtn}>
-                        <Text style={[styles.passText, { color: colors.mutedForeground }]}>
-                            Pass
-                        </Text>
-                    </Pressable>
-                </View>
+                <Pressable onPress={onPass} style={styles.secondaryBtn}>
+                    <Text style={[styles.passText, { color: colors.mutedForeground }]}>
+                        Pass
+                    </Text>
+                </Pressable>
             )}
 
             {safetyTarget && blockReportMode ? (

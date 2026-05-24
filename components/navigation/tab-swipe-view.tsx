@@ -9,7 +9,7 @@ const SWIPE_ROUTES = [
     '/(tabs)/dates',
     '/(tabs)',
     '/(tabs)/pulse',
-    '/(tabs)/date-kit',
+    '/(tabs)/chats',
 ] as const;
 
 const MIN_SWIPE_DISTANCE = 36;

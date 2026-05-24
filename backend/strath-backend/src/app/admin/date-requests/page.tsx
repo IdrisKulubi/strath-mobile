@@ -2,7 +2,6 @@ import { archiveAdminMatchActivity, getAdminDateRequests, moveMutualMatchToArran
 
 const STATUS_COLORS: Record<string, string> = {
     open_to_meet: "bg-emerald-500/20 text-emerald-300",
-    maybe: "bg-amber-500/20 text-amber-300",
     passed: "bg-red-500/20 text-red-300",
     mutual: "bg-pink-500/20 text-pink-200",
     mutual_match: "bg-pink-500/20 text-pink-200",
@@ -17,7 +16,6 @@ const STATUS_COLORS: Record<string, string> = {
 const FILTERS = [
     { value: "all", label: "All" },
     { value: "open_to_meet", label: "Interested" },
-    { value: "maybe", label: "Maybe later" },
     { value: "passed", label: "Passed" },
     { value: "mutual_match", label: "Mutual matches" },
     { value: "legacy_request", label: "Legacy invites" },
@@ -88,10 +86,9 @@ export default async function DateRequestsPage({
                 </p>
             </div>
 
-            <div className="mb-6 grid gap-3 md:grid-cols-3 xl:grid-cols-7">
+            <div className="mb-6 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
                 <Stat label="All activity" value={stats.all} />
                 <Stat label="Interested" value={stats.openToMeet} />
-                <Stat label="Maybe" value={stats.maybe} />
                 <Stat label="Passed" value={stats.passed} />
                 <Stat label="Mutual matches" value={stats.mutual} />
                 <Stat label="Legacy invites" value={stats.legacy} />
@@ -173,7 +170,7 @@ export default async function DateRequestsPage({
                                     <td className="px-4 py-3 text-right">
                                         {row.pairId || row.mutualMatchId ? (
                                             <div className="flex flex-col items-end gap-2">
-                                                {row.mutualMatchId && (row.status === "mutual" || row.status === "call_pending") && (
+                                                {row.mutualMatchId && row.status === "mutual" && (
                                                     <form
                                                         action={async () => {
                                                             "use server";

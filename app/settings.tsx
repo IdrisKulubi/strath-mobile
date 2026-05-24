@@ -70,7 +70,6 @@ export default function SettingsScreen() {
         try {
             await Linking.openSettings();
         } catch (error) {
-            console.error('Failed to open settings:', error);
             Alert.alert('Notifications', 'Unable to open system settings. Please open your phone settings and manage notifications for Strathspace.');
         }
     };
@@ -92,7 +91,6 @@ export default function SettingsScreen() {
                             // cookies, Apple fallback, profile cache).
                             await clearSession();
                         } catch (error) {
-                            console.error('Logout error:', error);
                         } finally {
                             router.replace('/(auth)/login');
                             setIsLoggingOut(false);
@@ -159,7 +157,6 @@ export default function SettingsScreen() {
                                                 ]
                                             );
                                         } catch (error) {
-                                            console.error('Delete account error:', error);
                                             Alert.alert(
                                                 "Error",
                                                 error instanceof Error ? error.message : "Failed to delete account. Please try again."
@@ -221,8 +218,8 @@ export default function SettingsScreen() {
                     <Switch
                         value={value as boolean}
                         onValueChange={onValueChange}
-                        trackColor={{ false: '#767577', true: colors.primary }}
-                        thumbColor={Platform.OS === 'ios' ? '#fff' : (value ? '#fff' : '#f4f3f4')}
+                        trackColor={{ false: colors.muted, true: colors.primary }}
+                        thumbColor={Platform.OS === 'ios' ? colors.primaryForeground : (value ? colors.primaryForeground : colors.muted)}
                     />
                 )}
 

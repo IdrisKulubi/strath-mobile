@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+
 import { Text } from '@/components/ui/text';
+import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { useTheme } from '@/hooks/use-theme';
 
 function getGreeting(): string {
@@ -13,55 +15,62 @@ function getGreeting(): string {
 interface HomeHeaderProps {
     firstName?: string;
     matchCount?: number;
+    focusedIndex?: number;
+    compact?: boolean;
 }
 
-export function HomeHeader({ firstName, matchCount }: HomeHeaderProps) {
-    const { colors, isDark } = useTheme();
+export function HomeHeader({ firstName, matchCount, focusedIndex, compact = false }: HomeHeaderProps) {
+    const { colors } = useTheme();
     const greeting = getGreeting();
     const visibleCount = matchCount && matchCount > 0 ? Math.min(matchCount, 5) : 0;
+
     const subtitle =
-        visibleCount > 0
-            ? `Your top ${visibleCount} matches today`
-            : 'We’re curating your introduction';
+        visibleCount > 0 && focusedIndex !== undefined
+            ? `Profile ${focusedIndex + 1} of ${visibleCount}`
+            : visibleCount > 0
+              ? `${visibleCount} ${visibleCount === 1 ? 'profile' : 'profiles'} in today's shortlist`
+              : 'Your introduction is being prepared';
 
     return (
-        <View style={styles.container}>
-            <Text style={[styles.greeting, { color: colors.foreground }]}>
-                {greeting}{firstName ? `, ${firstName}` : ''} ☀️
+        <View style={[styles.container, compact && styles.containerCompact]}>
+            <Text
+                style={[
+                    compact ? styles.greetingCompact : styles.greeting,
+                    { color: colors.foreground },
+                ]}
+            >
+                {greeting}
+                {firstName ? `, ${firstName}` : ''}
             </Text>
-            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
-            {visibleCount > 0 && (
-                <Text style={[styles.refreshLine, { color: colors.mutedForeground }]}>
-                    Only {visibleCount} matches refresh every day.
-                </Text>
-            )}
+            <Text variant="muted" style={[styles.subtitle, { color: colors.mutedForeground }]}>
+                {subtitle}
+            </Text>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        paddingHorizontal: 20,
-        paddingTop: 18,
-        paddingBottom: 22,
-        gap: 8,
+        paddingHorizontal: SPACING.screenX,
+        paddingTop: SPACING.comfortable,
+        paddingBottom: SPACING.base,
+        gap: SPACING.tight,
+    },
+    containerCompact: {
+        paddingTop: SPACING.compact,
+        paddingBottom: SPACING.tight,
+        gap: SPACING.micro,
     },
     greeting: {
-        fontSize: 34,
-        fontWeight: '800',
-        letterSpacing: -1,
-        lineHeight: 40,
+        ...TYPOGRAPHY.display,
+    },
+    greetingCompact: {
+        ...TYPOGRAPHY.title,
+        fontSize: 22,
+        lineHeight: 28,
     },
     subtitle: {
-        fontSize: 16,
-        lineHeight: 22,
-        fontWeight: '500',
-    },
-    refreshLine: {
-        fontSize: 12,
-        fontWeight: '500',
-        letterSpacing: 0.2,
-        marginTop: 2,
-        opacity: 0.85,
+        fontSize: 14,
+        lineHeight: 18,
     },
 });

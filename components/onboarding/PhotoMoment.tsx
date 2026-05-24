@@ -21,6 +21,7 @@ import Animated, {
     ZoomIn,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -305,10 +306,7 @@ export function PhotoMoment({ photos, onUpdate, onNext }: PhotoMomentProps) {
 
     return (
         <View style={styles.container}>
-            <LinearGradient
-                colors={['#0f0d23', '#1a0d2e', '#0f0d23']}
-                style={StyleSheet.absoluteFill}
-            />
+            <OnboardingScreenBackdrop />
 
             {/* Progress indicator */}
             <View style={styles.progressContainer}>

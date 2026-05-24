@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, StyleSheet, Pressable, Text as RNText } from 'react-native';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -8,8 +7,9 @@ import Animated, {
     Easing,
     FadeInDown,
 } from 'react-native-reanimated';
-import { Text } from '@/components/ui/text';
-import { Ionicons } from '@expo/vector-icons';
+
+import { SPACING, TYPOGRAPHY, RADIUS } from '@/lib/design-tokens';
+import { getProfileStrengthHint, getProfileStrengthLabel } from '@/lib/profile-strength';
 import { useTheme } from '@/hooks/use-theme';
 
 interface CompletionProgressCardProps {
@@ -26,138 +26,147 @@ export function CompletionProgressCard({
     onPress,
 }: CompletionProgressCardProps) {
     const { colors, isDark } = useTheme();
-    const fillWidth = useSharedValue(0);
+    const progress = useSharedValue(0);
+    const clamped = Math.min(100, Math.max(0, percentage));
+    const strengthLabel = getProfileStrengthLabel(clamped);
+    const hint = ctaText ?? getProfileStrengthHint(clamped);
 
     useEffect(() => {
-        fillWidth.value = withTiming(percentage / 100, {
-            duration: 1200,
+        progress.value = withTiming(clamped / 100, {
+            duration: 700,
             easing: Easing.out(Easing.cubic),
         });
-    }, [percentage, fillWidth]);
+    }, [clamped, progress]);
 
     const fillStyle = useAnimatedStyle(() => ({
-        width: `${fillWidth.value * 100}%`,
+        flex: Math.max(progress.value, 0.001),
     }));
 
-    const remaining = Math.max(0, 100 - percentage);
-    const thingsLeft = remaining > 0 ? Math.ceil(remaining / 20) : 0;
-    const displayCta = ctaText ?? (thingsLeft > 0 ? `${thingsLeft} things left to unlock better matches` : 'Almost there!');
+    const spacerStyle = useAnimatedStyle(() => ({
+        flex: Math.max(1 - progress.value, 0.001),
+    }));
 
     return (
-        <Animated.View entering={FadeInDown.delay(180).springify().damping(14)}>
+        <Animated.View entering={FadeInDown.duration(280)}>
             <Pressable
                 onPress={onPress}
                 disabled={!onPress}
                 style={({ pressed }) => [
-                    styles.card,
-                    {
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
-                        borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(233,30,140,0.12)',
-                        opacity: pressed && onPress ? 0.9 : 1,
-                    },
-                    !isDark && styles.cardShadow,
+                    styles.section,
+                    { opacity: pressed && onPress ? 0.88 : 1 },
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Profile strength ${clamped} percent. ${hint}`}
             >
-                <LinearGradient
-                    colors={isDark ? ['rgba(233,30,140,0.25)', 'rgba(192,38,211,0.2)'] : ['rgba(233,30,140,0.08)', 'rgba(192,38,211,0.06)']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.gradientBg}
+                <View
+                    style={[
+                        styles.card,
+                        {
+                            backgroundColor: colors.card,
+                            borderColor: colors.border,
+                        },
+                        !isDark && styles.cardShadowLight,
+                    ]}
                 >
-                    <View style={styles.header}>
-                        <View style={[styles.iconWrap, { backgroundColor: isDark ? 'rgba(233,30,140,0.3)' : 'rgba(233,30,140,0.15)' }]}>
-                            <Ionicons name="sparkles" size={18} color={colors.primary} />
-                        </View>
-                        <View style={styles.textBlock}>
-                            <Text style={[styles.prompt, { color: colors.foreground }]}>
-                                {promptText}
-                            </Text>
-                            <Text style={[styles.cta, { color: colors.mutedForeground }]}>
-                                {displayCta}
-                            </Text>
-                        </View>
-                        <View style={[styles.badge, { backgroundColor: isDark ? 'rgba(233,30,140,0.4)' : 'rgba(233,30,140,0.2)' }]}>
-                            <Text style={[styles.badgeText, { color: colors.primary }]}>
-                                {percentage}%
-                            </Text>
+                    <View style={styles.topRow}>
+                        <RNText style={[styles.eyebrow, { color: colors.mutedForeground }]}>
+                            Profile strength
+                        </RNText>
+                        <View
+                            style={[
+                                styles.badge,
+                                {
+                                    backgroundColor: isDark
+                                        ? 'rgba(217, 74, 143, 0.15)'
+                                        : 'rgba(184, 50, 122, 0.1)',
+                                },
+                            ]}
+                        >
+                            <RNText style={[styles.badgeText, { color: colors.primary }]}>
+                                {strengthLabel} · {clamped}%
+                            </RNText>
                         </View>
                     </View>
-                    <View style={[styles.track, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(233,30,140,0.12)' }]}>
-                        <Animated.View style={[styles.fill, fillStyle]}>
-                            <LinearGradient
-                                colors={['#ec4899', '#e91e8c']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                                style={StyleSheet.absoluteFill}
-                            />
-                        </Animated.View>
+
+                    <RNText style={[styles.title, { color: colors.foreground }]}>{promptText}</RNText>
+                    <RNText style={[styles.hint, { color: colors.mutedForeground }]}>{hint}</RNText>
+
+                    <View style={[styles.track, { backgroundColor: colors.muted }]}>
+                        <Animated.View
+                            style={[
+                                styles.fill,
+                                fillStyle,
+                                {
+                                    backgroundColor: colors.primary,
+                                    borderTopLeftRadius: RADIUS.full,
+                                    borderBottomLeftRadius: RADIUS.full,
+                                    borderTopRightRadius: clamped >= 100 ? RADIUS.full : 0,
+                                    borderBottomRightRadius: clamped >= 100 ? RADIUS.full : 0,
+                                },
+                            ]}
+                        />
+                        <Animated.View style={spacerStyle} />
                     </View>
-                </LinearGradient>
+                </View>
             </Pressable>
         </Animated.View>
     );
 }
 
 const styles = StyleSheet.create({
+    section: {
+        paddingHorizontal: SPACING.screenX,
+        paddingBottom: SPACING.section,
+    },
     card: {
-        marginHorizontal: 20,
-        marginBottom: 20,
-        borderRadius: 20,
+        borderRadius: RADIUS.lg,
         borderWidth: 1,
-        overflow: 'hidden',
+        padding: SPACING.base,
+        gap: SPACING.tight,
     },
-    cardShadow: {
-        shadowColor: '#e91e8c',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 4,
+    cardShadowLight: {
+        shadowColor: '#1C1524',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 2,
     },
-    gradientBg: {
-        padding: 18,
-        gap: 14,
-    },
-    header: {
+    topRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        justifyContent: 'space-between',
+        gap: SPACING.compact,
     },
-    iconWrap: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    textBlock: {
-        flex: 1,
-        gap: 2,
-    },
-    prompt: {
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    cta: {
-        fontSize: 13,
-        fontWeight: '500',
+    eyebrow: {
+        ...TYPOGRAPHY.label,
+        fontWeight: '600',
     },
     badge: {
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 12,
+        paddingHorizontal: SPACING.compact,
+        paddingVertical: SPACING.micro + 2,
+        borderRadius: RADIUS.full,
     },
     badgeText: {
-        fontSize: 14,
-        fontWeight: '800',
+        ...TYPOGRAPHY.label,
+        fontWeight: '600',
+    },
+    title: {
+        ...TYPOGRAPHY.headline,
+        fontWeight: '600',
+    },
+    hint: {
+        ...TYPOGRAPHY.caption,
+        marginBottom: SPACING.micro,
     },
     track: {
+        flexDirection: 'row',
         height: 8,
-        borderRadius: 999,
+        borderRadius: RADIUS.full,
         overflow: 'hidden',
+        marginTop: SPACING.micro,
     },
     fill: {
         height: '100%',
-        borderRadius: 999,
-        overflow: 'hidden',
+        minWidth: 8,
     },
 });

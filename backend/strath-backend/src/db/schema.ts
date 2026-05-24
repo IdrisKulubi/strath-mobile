@@ -505,11 +505,11 @@ export const candidatePairs = pgTable(
         shownToAAt: timestamp("shown_to_a_at").defaultNow().notNull(),
         shownToBAt: timestamp("shown_to_b_at").defaultNow().notNull(),
         aDecision: text("a_decision")
-            .$type<"pending" | "open_to_meet" | "maybe" | "passed">()
+            .$type<"pending" | "open_to_meet" | "passed">()
             .default("pending")
             .notNull(),
         bDecision: text("b_decision")
-            .$type<"pending" | "open_to_meet" | "maybe" | "passed">()
+            .$type<"pending" | "open_to_meet" | "passed">()
             .default("pending")
             .notNull(),
         status: text("status")
@@ -596,7 +596,7 @@ export const recommendationEvents = pgTable(
         mutualProbabilityScore: integer("mutual_probability_score"),
         shownAt: timestamp("shown_at").defaultNow().notNull(),
         viewedAt: timestamp("viewed_at"),
-        decision: text("decision").$type<"shown" | "viewed" | "open_to_meet" | "maybe" | "passed" | "ignored">(),
+        decision: text("decision").$type<"shown" | "viewed" | "open_to_meet" | "passed" | "ignored">(),
         decidedAt: timestamp("decided_at"),
         createdCandidatePairId: uuid("created_candidate_pair_id").references(() => candidatePairs.id, { onDelete: "set null" }),
         metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
@@ -656,7 +656,7 @@ export const userMatchInterests = pgTable(
             .notNull()
             .references(() => user.id, { onDelete: "cascade" }),
         decision: text("decision")
-            .$type<"open_to_meet" | "maybe" | "passed">()
+            .$type<"open_to_meet" | "passed">()
             .notNull(),
         source: text("source")
             .$type<"daily_recommendations" | "browse" | "admin_curated" | "available_now">()
@@ -689,6 +689,7 @@ export const dateLocations = pgTable(
         vibe: text("vibe").$type<"coffee" | "walk" | "dinner" | "hangout">(),
         notes: text("notes"),
         isActive: boolean("is_active").default(true).notNull(),
+        isDefault: boolean("is_default").default(false).notNull(),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
     },
@@ -804,7 +805,7 @@ export const mutualMatches = pgTable(
             .notNull()
             .references(() => user.id, { onDelete: "cascade" }),
         status: text("status")
-            .$type<"mutual" | "call_pending" | "being_arranged" | "upcoming" | "completed" | "cancelled" | "expired">()
+            .$type<"mutual" | "being_arranged" | "upcoming" | "completed" | "cancelled" | "expired">()
             .default("mutual")
             .notNull(),
         legacyMatchId: text("legacy_match_id").references(() => matches.id, { onDelete: "set null" }),
@@ -812,6 +813,10 @@ export const mutualMatches = pgTable(
         venueName: text("venue_name"),
         venueAddress: text("venue_address"),
         scheduledAt: timestamp("scheduled_at"),
+        userASlotConfirmedAt: timestamp("user_a_slot_confirmed_at"),
+        userBSlotConfirmedAt: timestamp("user_b_slot_confirmed_at"),
+        slotConfirmBy: timestamp("slot_confirm_by"),
+        assignedSlot: text("assigned_slot").$type<"wednesday" | "saturday">(),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
     },
@@ -1519,49 +1524,6 @@ export const matchMissions = pgTable("match_missions", {
     deadlineIdx: index("missions_deadline_idx").on(table.deadline),
 }));
 
-// Vibe Checks — 3-minute anonymous voice calls
-export const vibeChecks = pgTable("vibe_checks", {
-    id: uuid("id").defaultRandom().primaryKey(),
-    matchId: text("match_id")
-        .notNull()
-        .references(() => matches.id, { onDelete: "cascade" }),
-
-    // Call details
-    roomName: text("room_name").notNull().unique(),
-    roomUrl: text("room_url"),
-
-    // Participants
-    user1Id: text("user1_id").notNull().references(() => user.id),
-    user2Id: text("user2_id").notNull().references(() => user.id),
-
-    // Scheduling
-    scheduledAt: timestamp("scheduled_at"),
-    startedAt: timestamp("started_at"),
-    endedAt: timestamp("ended_at"),
-    durationSeconds: integer("duration_seconds"),
-
-    // Post-call decisions
-    user1Decision: text("user1_decision").$type<"meet" | "pass">(),
-    user2Decision: text("user2_decision").$type<"meet" | "pass">(),
-    bothAgreedToMeet: boolean("both_agreed_to_meet").default(false),
-
-    // Conversation starter provided
-    suggestedTopic: text("suggested_topic"),
-
-    status: text("status").$type<"pending" | "scheduled" | "active" | "completed" | "expired" | "cancelled">().default("pending"),
-
-    /** Idempotency flag: ensures we only push the partner once when their decision window expires. */
-    partnerNudgeSent: boolean("partner_nudge_sent").default(false),
-
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (table) => ({
-    matchIdx: index("vibe_checks_match_idx").on(table.matchId),
-    statusIdx: index("vibe_checks_status_idx").on(table.status),
-    openMatchUniqueIdx: uniqueIndex("vibe_checks_open_match_unique_idx")
-        .on(table.matchId)
-        .where(sql`${table.status} in ('pending', 'scheduled', 'active')`),
-}));
-
 // Campus Pulse — anonymous social feed
 export const pulsePosts = pgTable("pulse_posts", {
     id: uuid("id").defaultRandom().primaryKey(),
@@ -1819,23 +1781,6 @@ export const matchMissionsRelations = relations(matchMissions, ({ one }) => ({
     }),
 }));
 
-export const vibeChecksRelations = relations(vibeChecks, ({ one }) => ({
-    match: one(matches, {
-        fields: [vibeChecks.matchId],
-        references: [matches.id],
-    }),
-    user1: one(user, {
-        fields: [vibeChecks.user1Id],
-        references: [user.id],
-        relationName: "vibeCheckUser1",
-    }),
-    user2: one(user, {
-        fields: [vibeChecks.user2Id],
-        references: [user.id],
-        relationName: "vibeCheckUser2",
-    }),
-}));
-
 export const pulsePostsRelations = relations(pulsePosts, ({ one, many }) => ({
     author: one(user, {
         fields: [pulsePosts.authorId],
@@ -2023,8 +1968,6 @@ export type WeeklyDrop = typeof weeklyDrops.$inferSelect;
 export type NewWeeklyDrop = typeof weeklyDrops.$inferInsert;
 export type MatchMission = typeof matchMissions.$inferSelect;
 export type NewMatchMission = typeof matchMissions.$inferInsert;
-export type VibeCheck = typeof vibeChecks.$inferSelect;
-export type NewVibeCheck = typeof vibeChecks.$inferInsert;
 export type PulsePost = typeof pulsePosts.$inferSelect;
 export type NewPulsePost = typeof pulsePosts.$inferInsert;
 export type PulseReaction = typeof pulseReactions.$inferSelect;

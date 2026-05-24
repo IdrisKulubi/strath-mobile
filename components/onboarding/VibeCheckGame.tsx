@@ -20,6 +20,7 @@ import Animated, {
     ZoomIn,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
 import * as Haptics from 'expo-haptics';
 import {
     SunHorizon,
@@ -267,15 +268,12 @@ export function VibeCheckGame({ onComplete }: VibeCheckGameProps) {
 
     return (
         <View style={styles.container}>
-            <LinearGradient
-                colors={['#0f0d23', '#1a0d2e', '#0f0d23']}
-                style={StyleSheet.absoluteFill}
-            />
+            <OnboardingScreenBackdrop />
 
             {/* Header */}
             <View style={styles.header}>
                 <ProgressBar current={currentIndex + 1} total={QUESTIONS.length} />
-                <Text style={styles.headerTitle}>Vibe Check ⚡</Text>
+                <Text style={styles.headerTitle}>Vibe check</Text>
                 <Text style={styles.headerSubtitle}>
                     {currentIndex + 1} of {QUESTIONS.length}
                 </Text>

@@ -20,7 +20,7 @@ import { useNetwork } from '@/hooks/use-network';
  * whatever cached content they had.
  */
 export function OfflineBanner() {
-    const { colors, isDark } = useTheme();
+    const { colors } = useTheme();
     const { isOffline } = useNetwork();
     const insets = useSafeAreaInsets();
 
@@ -60,9 +60,7 @@ export function OfflineBanner() {
                 styles.container,
                 {
                     paddingTop: topInset + 6,
-                    backgroundColor: isDark
-                        ? 'rgba(31, 17, 45, 0.96)'
-                        : 'rgba(255, 250, 235, 0.96)',
+                    backgroundColor: colors.card,
                     borderBottomColor: colors.border,
                 },
                 animatedStyle,
@@ -74,17 +72,14 @@ export function OfflineBanner() {
                 <Ionicons
                     name="cloud-offline-outline"
                     size={16}
-                    color={isDark ? '#F5D3A7' : '#8A4B08'}
+                    color={colors.mutedForeground}
                     style={styles.icon}
                 />
                 <Text
-                    style={[
-                        styles.text,
-                        { color: isDark ? '#F5D3A7' : '#8A4B08' },
-                    ]}
+                    style={[styles.text, { color: colors.mutedForeground }]}
                     numberOfLines={1}
                 >
-                    You&apos;re offline — some features may be unavailable.
+                    You&apos;re offline. Some features may be unavailable.
                 </Text>
             </View>
         </Animated.View>

@@ -9,7 +9,7 @@ export default async function AdminLocationsPage() {
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-white">Locations</h1>
                 <p className="text-sm text-gray-400 mt-1">
-                    Manage reusable venues for manual date scheduling.
+                    Manage venues for manual scheduling and auto-confirmed campus dates. Mark one as the default venue.
                 </p>
             </div>
 
@@ -45,15 +45,22 @@ export default async function AdminLocationsPage() {
                                             <div className="max-w-[240px] truncate">{location.notes || "—"}</div>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span
-                                                className={`rounded-md px-2 py-1 text-xs font-medium ${
-                                                    location.isActive
-                                                        ? "bg-emerald-500/20 text-emerald-300"
-                                                        : "bg-gray-500/20 text-gray-300"
-                                                }`}
-                                            >
-                                                {location.isActive ? "Active" : "Archived"}
-                                            </span>
+                                            <div className="flex flex-col gap-1">
+                                                <span
+                                                    className={`w-fit rounded-md px-2 py-1 text-xs font-medium ${
+                                                        location.isActive
+                                                            ? "bg-emerald-500/20 text-emerald-300"
+                                                            : "bg-gray-500/20 text-gray-300"
+                                                    }`}
+                                                >
+                                                    {location.isActive ? "Active" : "Archived"}
+                                                </span>
+                                                {location.isDefault && location.isActive ? (
+                                                    <span className="w-fit rounded-md bg-amber-500/20 px-2 py-1 text-xs font-medium text-amber-200">
+                                                        Default venue
+                                                    </span>
+                                                ) : null}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3">
                                             <LocationRowActions location={location} />

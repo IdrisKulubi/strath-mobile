@@ -1,14 +1,15 @@
 import React from 'react';
 import { View, StyleSheet, Dimensions, Pressable } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { CachedImage } from '@/components/ui/cached-image';
 import { Ionicons } from '@expo/vector-icons';
+
+import { CachedImage } from '@/components/ui/cached-image';
+import { RADIUS, SPACING } from '@/lib/design-tokens';
 import { useTheme } from '@/hooks/use-theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const PADDING = 20;
-const GAP = 10;
+const PADDING = SPACING.screenX;
+const GAP = SPACING.tight;
 const CONTENT_WIDTH = SCREEN_WIDTH - PADDING * 2;
 const HERO_WIDTH = (CONTENT_WIDTH - GAP) * 0.58;
 const HERO_HEIGHT = 220;
@@ -23,51 +24,35 @@ interface ProfilePhotoGridProps {
 }
 
 export function ProfilePhotoGrid({ photos, onPhotoPress, onEditPress }: ProfilePhotoGridProps) {
-    const { colors, isDark } = useTheme();
+    const { colors } = useTheme();
     const validPhotos = photos.filter(Boolean) as string[];
     const heroPhoto = validPhotos[0];
     const gridPhotos = validPhotos.slice(1, 5);
 
     return (
-        <Animated.View entering={FadeInDown.delay(220).springify().damping(14)} style={styles.container}>
+        <Animated.View entering={FadeInDown.duration(280)} style={styles.container}>
             <View style={styles.grid}>
-                {/* Hero image - dominant */}
                 <Pressable
-                    onPress={() => heroPhoto ? onPhotoPress?.(heroPhoto, 0) : onEditPress?.()}
+                    onPress={() => (heroPhoto ? onPhotoPress?.(heroPhoto, 0) : onEditPress?.())}
                     style={styles.heroWrap}
                 >
-                    <View style={[styles.heroCard, { backgroundColor: isDark ? colors.muted : '#f3f4f6' }]}>
+                    <View style={[styles.heroCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
                         {heroPhoto ? (
                             <CachedImage uri={heroPhoto} style={styles.heroImage} contentFit="cover" />
                         ) : (
-                            <View style={[styles.heroPlaceholder, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}>
-                                <Ionicons name="camera" size={40} color={colors.mutedForeground} />
+                            <View style={styles.heroPlaceholder}>
+                                <Ionicons name="camera-outline" size={36} color={colors.mutedForeground} />
                             </View>
-                        )}
-                        {heroPhoto && (
-                            <LinearGradient
-                                colors={['transparent', 'rgba(0,0,0,0.4)']}
-                                style={styles.heroGradient}
-                            />
-                        )}
-                        {onEditPress && heroPhoto && (
-                            <Pressable
-                                onPress={onEditPress}
-                                style={[styles.editBadge, { backgroundColor: 'rgba(0,0,0,0.4)' }]}
-                            >
-                                <Ionicons name="pencil" size={14} color="#fff" />
-                            </Pressable>
                         )}
                     </View>
                 </Pressable>
 
-                {/* Small grid */}
                 <View style={styles.smallGrid}>
                     {gridPhotos.slice(0, 4).map((uri, i) => (
                         <Pressable
-                            key={i}
+                            key={`grid-photo-${i}`}
                             onPress={() => onPhotoPress?.(uri, i + 1)}
-                            style={[styles.smallWrap, { backgroundColor: isDark ? colors.muted : '#f3f4f6' }]}
+                            style={[styles.smallWrap, { backgroundColor: colors.muted, borderColor: colors.border }]}
                         >
                             <CachedImage uri={uri} style={styles.smallImage} contentFit="cover" />
                         </Pressable>
@@ -75,9 +60,10 @@ export function ProfilePhotoGrid({ photos, onPhotoPress, onEditPress }: ProfileP
                     {gridPhotos.length < 4 && onEditPress && (
                         <Pressable
                             onPress={onEditPress}
-                            style={[styles.addSlot, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderColor: colors.border }]}
+                            style={[styles.addSlot, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                            accessibilityLabel="Add photo"
                         >
-                            <Ionicons name="add" size={28} color={colors.mutedForeground} />
+                            <Ionicons name="add" size={24} color={colors.mutedForeground} />
                         </Pressable>
                     )}
                 </View>
@@ -89,7 +75,7 @@ export function ProfilePhotoGrid({ photos, onPhotoPress, onEditPress }: ProfileP
 const styles = StyleSheet.create({
     container: {
         marginHorizontal: PADDING,
-        marginBottom: 24,
+        marginBottom: SPACING.section,
     },
     grid: {
         flexDirection: 'row',
@@ -101,34 +87,16 @@ const styles = StyleSheet.create({
     heroCard: {
         width: '100%',
         height: HERO_HEIGHT,
-        borderRadius: 20,
+        borderRadius: RADIUS.lg,
+        borderWidth: 1,
         overflow: 'hidden',
-        position: 'relative',
     },
     heroImage: {
         width: '100%',
         height: '100%',
     },
     heroPlaceholder: {
-        width: '100%',
-        height: '100%',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    heroGradient: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 60,
-    },
-    editBadge: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -141,7 +109,8 @@ const styles = StyleSheet.create({
     smallWrap: {
         width: SMALL_SIZE,
         height: SMALL_HEIGHT,
-        borderRadius: 14,
+        borderRadius: RADIUS.md,
+        borderWidth: 1,
         overflow: 'hidden',
     },
     smallImage: {
@@ -151,8 +120,8 @@ const styles = StyleSheet.create({
     addSlot: {
         width: SMALL_SIZE,
         height: SMALL_HEIGHT,
-        borderRadius: 14,
-        borderWidth: 2,
+        borderRadius: RADIUS.md,
+        borderWidth: 1,
         borderStyle: 'dashed',
         alignItems: 'center',
         justifyContent: 'center',

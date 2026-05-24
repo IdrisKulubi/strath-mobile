@@ -19,6 +19,7 @@ import {
 import { useImageUpload } from '@/hooks/use-image-upload';
 import { getAuthToken, clearSession, getCurrentUser } from '@/lib/auth-helpers';
 import { setCachedProfile } from '@/lib/session-cache';
+import { devError, devLog } from '@/lib/dev-log';
 
 // Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=Personality, 8=Lifestyle, 9=OpeningLine, 10=ProfileDetails, 11=Celebration
 type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
@@ -208,7 +209,7 @@ export default function OnboardingScreen() {
                 const lastName = normalized.lastName;
 
                 if (firstName) {
-                    console.log('[Onboarding] Pre-populating name from auth user data');
+                    devLog('[Onboarding] Pre-populating name from auth user data');
                     setFormData((prev) => ({
                         ...prev,
                         firstName: prev.firstName || firstName,
@@ -216,7 +217,7 @@ export default function OnboardingScreen() {
                     }));
                 }
             } catch (error) {
-                console.log('[Onboarding] Could not load user data:', error);
+                devLog('[Onboarding] Could not load user data:', error);
             }
         };
         
@@ -230,32 +231,32 @@ export default function OnboardingScreen() {
     const submitData = async () => {
         setIsSubmitting(true);
         setSubmitError(null);
-        console.log('[Onboarding] Starting profile submission...');
+        devLog('[Onboarding] Starting profile submission...');
         
         try {
             // Get auth token (works with both Better Auth and Apple Sign In)
             const token = await getAuthToken();
-            console.log('[Onboarding] Token retrieved:', token ? `${token.substring(0, 20)}...` : 'null');
+            devLog('[Onboarding] Token retrieved:', token ? `${token.substring(0, 20)}...` : 'null');
 
             if (!token) {
                 throw new Error('Not authenticated. Please log in again.');
             }
 
             // Upload photos first
-            console.log('[Onboarding] Photos to upload:', formData.photos.length);
+            devLog('[Onboarding] Photos to upload:', formData.photos.length);
             let uploadedPhotos = [...formData.photos];
             if (uploadedPhotos.length > 0) {
                 uploadedPhotos = await Promise.all(uploadedPhotos.map(async (photo, index) => {
                     if (photo && !photo.startsWith('http')) {
-                        console.log(`[Onboarding] Uploading photo ${index + 1}...`);
+                        devLog(`[Onboarding] Uploading photo ${index + 1}...`);
                         const uploaded = await uploadImage(photo);
-                        console.log(`[Onboarding] Photo ${index + 1} uploaded:`, uploaded ? 'success' : 'failed');
+                        devLog(`[Onboarding] Photo ${index + 1} uploaded:`, uploaded ? 'success' : 'failed');
                         return uploaded;
                     }
                     return photo;
                 }));
             }
-            console.log('[Onboarding] Photos after upload:', uploadedPhotos);
+            devLog('[Onboarding] Photos after upload:', uploadedPhotos);
 
             // Convert lookingFor to interestedIn array for matching algorithm
             const getInterestedIn = (lookingFor: string): string[] => {
@@ -272,7 +273,7 @@ export default function OnboardingScreen() {
             };
 
             // Prepare data for API - convert string fields to proper types
-            console.log('[Onboarding] formData BEFORE creating payload:', {
+            devLog('[Onboarding] formData BEFORE creating payload:', {
                 loveLanguage: formData.loveLanguage,
                 communicationStyle: formData.communicationStyle,
                 sleepingHabits: formData.sleepingHabits,
@@ -301,8 +302,8 @@ export default function OnboardingScreen() {
                 profileCompleted: true,
             };
 
-            console.log('[Onboarding] Payload keys:', Object.keys(payload));
-            console.log('[Onboarding] Vibe check fields in payload:', {
+            devLog('[Onboarding] Payload keys:', Object.keys(payload));
+            devLog('[Onboarding] Vibe check fields in payload:', {
                 loveLanguage: payload.loveLanguage,
                 communicationStyle: payload.communicationStyle,
                 sleepingHabits: payload.sleepingHabits,
@@ -316,7 +317,7 @@ export default function OnboardingScreen() {
                 smoking: payload.smoking,
                 religion: payload.religion,
             });
-            console.log('[Onboarding] API URL:', `${process.env.EXPO_PUBLIC_API_URL}/api/user/me`);
+            devLog('[Onboarding] API URL:', `${process.env.EXPO_PUBLIC_API_URL}/api/user/me`);
 
             const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/user/me`, {
                 method: 'PATCH',
@@ -327,24 +328,24 @@ export default function OnboardingScreen() {
                 body: JSON.stringify(payload),
             });
 
-            console.log('[Onboarding] Response status:', response.status);
+            devLog('[Onboarding] Response status:', response.status);
             
             const responseText = await response.text();
-            console.log('[Onboarding] Response text:', responseText.substring(0, 500));
+            devLog('[Onboarding] Response text:', responseText.substring(0, 500));
             
             let responseData: any = {};
             try {
                 responseData = JSON.parse(responseText);
             } catch {
-                console.error('[Onboarding] Failed to parse response as JSON');
+                devError('[Onboarding] Failed to parse response as JSON');
             }
             
             if (!response.ok) {
-                console.error('[Onboarding] Profile update failed:', response.status, responseData);
+                devError('[Onboarding] Profile update failed:', response.status, responseData);
                 
                 // Handle 401 Unauthorized - session expired or invalid
                 if (response.status === 401) {
-                    console.log('[Onboarding] Session expired - redirecting to login');
+                    devLog('[Onboarding] Session expired - redirecting to login');
                     await clearSession();
                     Alert.alert(
                         'Session Expired',
@@ -357,7 +358,7 @@ export default function OnboardingScreen() {
                 throw new Error(getProfileSetupErrorMessage(responseData, response.status));
             }
 
-            console.log('[Onboarding] Profile saved successfully!');
+            devLog('[Onboarding] Profile saved successfully!');
             if (responseData?.data?.userId) {
                 await setCachedProfile(responseData.data.userId, responseData.data);
             }
@@ -374,7 +375,7 @@ export default function OnboardingScreen() {
             // Continue into the face verification checkpoint before matchmaking access.
             router.replace('/verification' as any);
         } catch (error: any) {
-            console.error('[Onboarding] Error:', error.message || error);
+            devError('[Onboarding] Error:', error.message || error);
             setSubmitError(error.message || 'Failed to save your profile. Please try again.');
         } finally {
             setIsSubmitting(false);

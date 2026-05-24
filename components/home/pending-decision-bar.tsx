@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 
-type PendingDecisionType = 'open_to_meet' | 'maybe' | 'passed';
+type PendingDecisionType = 'open_to_meet' | 'passed';
 
 interface PendingDecisionBarProps {
     decision: PendingDecisionType;
@@ -47,14 +47,12 @@ export function PendingDecisionBar({
 
     const title = decision === 'passed'
         ? `Skipped ${firstName}`
-        : decision === 'maybe'
-            ? `Maybe later for ${firstName}`
-            : `Interest sent to ${firstName}`;
+        : `Interest sent to ${firstName}`;
     const subtitle = decision === 'open_to_meet'
         ? `Undo before this sends in ${remainingSeconds}s`
         : `Undo in ${remainingSeconds}s`;
-    const iconName = decision === 'passed' ? 'play-back' : decision === 'maybe' ? 'time-outline' : 'heart';
-    const accentColor = decision === 'passed' ? '#64748b' : decision === 'maybe' ? '#f59e0b' : colors.primary;
+    const iconName = decision === 'passed' ? 'play-back' : 'heart';
+    const accentColor = decision === 'passed' ? colors.mutedForeground : colors.primary;
 
     return (
         <Animated.View
@@ -72,14 +70,14 @@ export function PendingDecisionBar({
                 style={[
                     styles.card,
                     {
-                        backgroundColor: isDark ? '#1b1527' : '#ffffff',
+                        backgroundColor: colors.card,
                         borderColor: colors.border,
-                        shadowColor: '#000',
+                        shadowColor: colors.background,
                     },
                 ]}
             >
                 <View style={styles.row}>
-                    <View style={[styles.iconWrap, { backgroundColor: decision === 'passed' ? 'rgba(100,116,139,0.14)' : decision === 'maybe' ? 'rgba(245,158,11,0.14)' : 'rgba(233,30,140,0.14)' }]}>
+                    <View style={[styles.iconWrap, { backgroundColor: decision === 'passed' ? 'rgba(100,116,139,0.14)' : 'rgba(233,30,140,0.14)' }]}>
                         <Ionicons
                             name={iconName}
                             size={16}

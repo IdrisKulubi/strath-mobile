@@ -265,7 +265,6 @@ export default function EditProfileScreen() {
                 },
             });
         } catch (error) {
-            console.error('Error saving profile:', error);
             Alert.alert('Error', 'Failed to save changes');
         }
     };

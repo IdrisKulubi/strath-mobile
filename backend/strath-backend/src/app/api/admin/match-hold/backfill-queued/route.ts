@@ -10,7 +10,6 @@ export const dynamic = "force-dynamic";
 
 const ACTIVE_HOLD_STATUSES = [
     "mutual",
-    "call_pending",
     "being_arranged",
     "upcoming",
     "completed",

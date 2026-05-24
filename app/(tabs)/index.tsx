@@ -1,12 +1,14 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     RefreshControl,
     ScrollView,
     StatusBar,
     StyleSheet,
+    useWindowDimensions,
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,6 +22,7 @@ import { DailyRecommendationsPreview } from '@/components/discovery/daily-recomm
 import { MatchPreferencePanel } from '@/components/discovery/match-preference-panel';
 import { DailyMatchesList } from '@/components/home/daily-matches-list';
 import { DateHoldCard } from '@/components/home/date-hold-card';
+import { MeetupSlotConfirmModal } from '@/components/dates/meetup-slot-confirm-modal';
 import { ManualCurationCard } from '@/components/home/manual-curation-card';
 import {
     DailyMatch,
@@ -32,6 +35,7 @@ import {
     useDailyRecommendations,
     useRecommendationDecision,
 } from '@/hooks/use-match-discovery';
+import { useHomeIntroLayout } from '@/hooks/use-home-intro-layout';
 
 function HomeSkeleton() {
     return (
@@ -59,6 +63,10 @@ export default function HomeScreen() {
     }>({ visible: false, type: 'open_to_meet' });
     const [refreshing, setRefreshing] = useState(false);
     const [savedDecisions, setSavedDecisions] = useState<Record<string, RecommendationDecision>>({});
+    const [carouselIndex, setCarouselIndex] = useState(0);
+    const [prefsExpanded, setPrefsExpanded] = useState(false);
+    const { height: windowHeight } = useWindowDimensions();
+    const tabBarHeight = useBottomTabBarHeight();
 
     const { data: profile } = useProfile();
     const dailyMatches = useDailyMatches();
@@ -67,12 +75,28 @@ export default function HomeScreen() {
     const recommendationDecision = useRecommendationDecision();
     const priorityMatches = dailyMatches.data?.matches ?? [];
     const activeHold = dailyMatches.data?.hold ?? null;
+    const needsConfirmGate = Boolean(
+        activeHold?.slotConfirmation?.needsSlotConfirmation
+        && !activeHold?.slotConfirmation?.viewerSlotConfirmed,
+    );
     const hasPriorityMatch = priorityMatches.length > 0;
-    const shouldShowRecommendations = !activeHold && !hasPriorityMatch;
+    const shouldShowRecommendations = !needsConfirmGate && !activeHold && !hasPriorityMatch;
     const recommendations = useMemo(
         () => shouldShowRecommendations ? (dailyRecommendations.data?.recommendations ?? []).slice(0, 5) : [],
         [dailyRecommendations.data?.recommendations, shouldShowRecommendations]
     );
+    const showCarousel =
+        !needsConfirmGate
+        && !activeHold
+        && (hasPriorityMatch || (shouldShowRecommendations && recommendations.length > 0));
+    const showPrefsPanel = !needsConfirmGate && !hasPriorityMatch && !activeHold;
+    const { cardHeight, headerCompact, itemWidthRatio } = useHomeIntroLayout(prefsExpanded, showPrefsPanel);
+
+    const scrollMinHeight = windowHeight - tabBarHeight;
+
+    useEffect(() => {
+        setCarouselIndex(0);
+    }, [hasPriorityMatch, recommendations.length, priorityMatches.length]);
 
     const handleRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -99,15 +123,13 @@ export default function HomeScreen() {
 
     const handleDailyMatchDecision = useCallback(async (
         match: DailyMatch,
-        decision: 'open_to_meet' | 'maybe' | 'passed'
+        decision: 'open_to_meet' | 'passed'
     ) => {
         try {
             await pairDecision.mutateAsync({ pairId: match.pairId, decision });
             const message = decision === 'open_to_meet'
                 ? `Interest saved for ${match.firstName}.`
-                : decision === 'maybe'
-                    ? `${match.firstName} saved for later.`
-                    : `${match.firstName} passed.`;
+                : `${match.firstName} passed.`;
             toast.show({
                 message,
                 variant: decision === 'passed' ? 'default' : 'success',
@@ -174,9 +196,7 @@ export default function HomeScreen() {
                 ? `It's mutual with ${firstName}. Check Dates.`
                 : decision === 'open_to_meet'
                 ? `Interest saved. We'll tell you if it becomes mutual.`
-                : decision === 'maybe'
-                    ? `${firstName} saved for later.`
-                    : `${firstName} passed. Tomorrow's picks will learn from this.`;
+                : `${firstName} passed. Tomorrow's picks will learn from this.`;
             toast.show({
                 message,
                 variant: decision === 'passed' ? 'default' : 'success',
@@ -198,48 +218,73 @@ export default function HomeScreen() {
         }
     }, [queryClient, recommendationDecision, toast]);
 
+    const mainContent = dailyMatches.isLoading || (shouldShowRecommendations && dailyRecommendations.isLoading) ? (
+        <HomeSkeleton />
+    ) : needsConfirmGate ? (
+        <View style={styles.confirmGatePlaceholder} />
+    ) : activeHold ? (
+        <DateHoldCard hold={activeHold} />
+    ) : hasPriorityMatch ? (
+        <DailyMatchesList
+            matches={priorityMatches}
+            onOpenToMeet={(match) => handleDailyMatchDecision(match, 'open_to_meet')}
+            onPass={(match) => handleDailyMatchDecision(match, 'passed')}
+            onViewProfile={handleViewDailyMatchProfile}
+            actionsDisabled={pairDecision.isPending}
+            onFocusedIndexChange={setCarouselIndex}
+            cardHeight={cardHeight}
+            itemWidthRatio={itemWidthRatio}
+            sectionCompact={!prefsExpanded}
+        />
+    ) : dailyMatches.data?.mode === 'manual_curation' && recommendations.length === 0 ? (
+        <ManualCurationCard curation={dailyMatches.data.manualCuration} />
+    ) : (
+        <DailyRecommendationsPreview
+            recommendations={recommendations}
+            isError={dailyRecommendations.isError}
+            savedDecisions={savedDecisions}
+            onViewProfile={handleViewRecommendationProfile}
+            onDecision={handleRecommendationDecision}
+            actionsDisabled={recommendationDecision.isPending}
+            onFocusedIndexChange={setCarouselIndex}
+            cardHeight={cardHeight}
+            itemWidthRatio={itemWidthRatio}
+            sectionCompact={!prefsExpanded}
+        />
+    );
+
     return (
         <TabSwipeView route="/(tabs)">
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
                 <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
                 <ScrollView
                     style={styles.scroll}
-                    contentContainerStyle={styles.content}
+                    contentContainerStyle={[
+                        styles.content,
+                        showCarousel && styles.contentCarousel,
+                        { minHeight: scrollMinHeight },
+                    ]}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
                     showsVerticalScrollIndicator={false}
+                    scrollEnabled={!showCarousel || prefsExpanded}
                 >
                     <HomeHeader
                         firstName={profile?.firstName}
                         matchCount={hasPriorityMatch ? priorityMatches.length : recommendations.length}
+                        focusedIndex={carouselIndex}
+                        compact={showCarousel && headerCompact}
                     />
 
-                    {!hasPriorityMatch && !activeHold && <MatchPreferencePanel />}
+                    {showPrefsPanel ? (
+                        <MatchPreferencePanel
+                            expanded={prefsExpanded}
+                            onExpandedChange={setPrefsExpanded}
+                        />
+                    ) : null}
 
-                    {dailyMatches.isLoading || (shouldShowRecommendations && dailyRecommendations.isLoading) ? (
-                        <HomeSkeleton />
-                    ) : activeHold ? (
-                        <DateHoldCard hold={activeHold} />
-                    ) : hasPriorityMatch ? (
-                        <DailyMatchesList
-                            matches={priorityMatches}
-                            onOpenToMeet={(match) => handleDailyMatchDecision(match, 'open_to_meet')}
-                            onMaybe={(match) => handleDailyMatchDecision(match, 'maybe')}
-                            onPass={(match) => handleDailyMatchDecision(match, 'passed')}
-                            onViewProfile={handleViewDailyMatchProfile}
-                            actionsDisabled={pairDecision.isPending}
-                        />
-                    ) : dailyMatches.data?.mode === 'manual_curation' && recommendations.length === 0 ? (
-                        <ManualCurationCard curation={dailyMatches.data.manualCuration} />
-                    ) : (
-                        <DailyRecommendationsPreview
-                            recommendations={recommendations}
-                            isError={dailyRecommendations.isError}
-                            savedDecisions={savedDecisions}
-                            onViewProfile={handleViewRecommendationProfile}
-                            onDecision={handleRecommendationDecision}
-                            actionsDisabled={recommendationDecision.isPending}
-                        />
-                    )}
+                    <View style={showCarousel ? styles.carouselHost : undefined}>
+                        {mainContent}
+                    </View>
                 </ScrollView>
 
                 <DecisionInfoSheet
@@ -248,6 +293,14 @@ export default function HomeScreen() {
                     firstName={infoSheet.firstName}
                     onClose={() => setInfoSheet((state) => ({ ...state, visible: false }))}
                 />
+
+                {needsConfirmGate && activeHold ? (
+                    <MeetupSlotConfirmModal
+                        visible
+                        hold={activeHold}
+                        onCancelHold={() => router.push('/(tabs)/dates')}
+                    />
+                ) : null}
             </SafeAreaView>
         </TabSwipeView>
     );
@@ -261,7 +314,14 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     content: {
-        paddingBottom: 28,
+        paddingBottom: 32,
+    },
+    contentCarousel: {
+        flexGrow: 1,
+        paddingBottom: 8,
+    },
+    carouselHost: {
+        flex: 1,
     },
     skeletonWrap: {
         paddingHorizontal: 16,
@@ -281,5 +341,8 @@ const styles = StyleSheet.create({
     cardSkeleton: {
         height: 430,
         borderRadius: 24,
+    },
+    confirmGatePlaceholder: {
+        minHeight: 120,
     },
 });

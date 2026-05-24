@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
                     eq(mutualMatches.userAId, userId),
                     eq(mutualMatches.userBId, userId),
                 ),
-                inArray(mutualMatches.status, ["mutual", "call_pending", "being_arranged", "upcoming"]),
+                inArray(mutualMatches.status, ["mutual", "being_arranged", "upcoming"]),
             ));
         const datesAttention = datesAttentionResult[0]?.count || 0;
 

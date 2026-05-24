@@ -36,7 +36,7 @@ export async function canViewUserProfile(input: {
                     and(eq(mutualMatches.userAId, viewerUserId), eq(mutualMatches.userBId, targetUserId)),
                     and(eq(mutualMatches.userAId, targetUserId), eq(mutualMatches.userBId, viewerUserId)),
                 ),
-                inArray(mutualMatches.status, ["mutual", "call_pending", "being_arranged", "upcoming", "completed"]),
+                inArray(mutualMatches.status, ["mutual", "being_arranged", "upcoming", "completed"]),
             ),
             columns: { id: true },
         }),

@@ -90,7 +90,6 @@ export default function Index() {
                         // Offline or server unreachable. Trust the token and
                         // default into the tabs shell. Individual screens will
                         // show their own "try again" states.
-                        console.log('[Index] Network error during profile check; entering app optimistically');
                         route('/(tabs)');
                         return;
                     }
@@ -105,11 +104,9 @@ export default function Index() {
                     }
                     // Unknown non-auth server error (5xx, 404, etc). Same as
                     // above — keep the user signed in and let the tabs render.
-                    console.warn('[Index] Profile check failed:', error);
                     route('/(tabs)');
                 }
-            } catch (error) {
-                console.error('[Index] Bootstrap failed:', error);
+            } catch {
                 // Defensive: never leave the user on a blank Index screen.
                 route('/(auth)/login');
             } finally {

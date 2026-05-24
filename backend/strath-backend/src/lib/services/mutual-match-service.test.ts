@@ -9,32 +9,8 @@ const base = {
     userBConfirmed: false,
 };
 
-test("mapDateMatchStatusToMutualStatus returns null when setup is still pending", () => {
-    assert.equal(mapDateMatchStatusToMutualStatus(base), null);
-    assert.equal(
-        mapDateMatchStatusToMutualStatus({ ...base, callCompleted: true }),
-        null,
-    );
-    assert.equal(
-        mapDateMatchStatusToMutualStatus({
-            ...base,
-            callCompleted: true,
-            userAConfirmed: true,
-        }),
-        null,
-    );
-});
-
-test("mapDateMatchStatusToMutualStatus resolves being_arranged after call + both confirmations", () => {
-    assert.equal(
-        mapDateMatchStatusToMutualStatus({
-            ...base,
-            callCompleted: true,
-            userAConfirmed: true,
-            userBConfirmed: true,
-        }),
-        "being_arranged",
-    );
+test("mapDateMatchStatusToMutualStatus resolves pending_setup to being_arranged", () => {
+    assert.equal(mapDateMatchStatusToMutualStatus(base), "being_arranged");
 });
 
 test("mapDateMatchStatusToMutualStatus promotes scheduled dates to upcoming", () => {

@@ -64,7 +64,7 @@ export default function TabLayout() {
       initialRouteName="index"
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: '#8E8E93',
+        tabBarInactiveTintColor: colors.tabIconDefault,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: {
@@ -83,7 +83,7 @@ export default function TabLayout() {
         },
         tabBarBadgeStyle: {
           backgroundColor: colors.primary,
-          color: '#fff',
+          color: colors.primaryForeground,
           fontSize: 10,
           fontWeight: '600',
           minWidth: 18,
@@ -121,10 +121,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="date-kit"
+        name="chats"
         options={{
-          title: 'Date Kit',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "reader" : "reader-outline"} color={color} />,
+          title: 'Messages',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons size={26} name={focused ? 'chatbubbles' : 'chatbubbles-outline'} color={color} />
+          ),
+          tabBarBadge: formatBadgeCount(unreadMessages),
         }}
       />
       {/* Hidden routes — accessible but not shown in tab bar */}
@@ -132,13 +135,7 @@ export default function TabLayout() {
       <Tabs.Screen name="drops" options={{ href: null }} />
       <Tabs.Screen name="matches" options={{ href: null }} />
       <Tabs.Screen name="study-date" options={{ href: null }} />
-      <Tabs.Screen
-        name="chats"
-        options={{
-          href: null,
-          tabBarBadge: formatBadgeCount(unreadMessages),
-        }}
-      />
+      <Tabs.Screen name="date-kit" options={{ href: null }} />
     </Tabs>
   );
 }

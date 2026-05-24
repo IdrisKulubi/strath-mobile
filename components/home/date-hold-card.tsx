@@ -13,6 +13,7 @@ import {
     MatchHoldCancelReason,
     useCancelMatchHold,
 } from '@/hooks/use-daily-matches';
+import { formatMeetupSlot } from '@/lib/meetup-slot';
 
 interface DateHoldCardProps {
     hold: MatchHold;
@@ -51,21 +52,9 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
     };
 
     const cardBorder = isDark ? 'rgba(233,30,140,0.3)' : 'rgba(233,30,140,0.22)';
-    const cardBg = isDark ? 'rgba(45,27,71,0.55)' : '#ffffff';
-    const glow = isDark
-        ? (['rgba(233,30,140,0.4)', 'rgba(147,51,234,0.18)'] as const)
-        : (['rgba(233,30,140,0.18)', 'rgba(233,30,140,0.04)'] as const);
-
     return (
         <Animated.View entering={FadeInDown.duration(400)} style={styles.outer}>
-            <View style={[styles.card, { borderColor: cardBorder, backgroundColor: cardBg }]}>
-                <LinearGradient
-                    colors={glow}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                />
-
+            <View style={[styles.card, { borderColor: cardBorder, backgroundColor: colors.card }]}>
                 <View style={styles.content}>
                     <View style={styles.statusPillRow}>
                         <View style={[styles.statusPill, { backgroundColor: colors.primary }]}>
@@ -81,14 +70,11 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                             {hold.partner.profilePhoto ? (
                                 <CachedImage uri={hold.partner.profilePhoto} style={styles.avatar} />
                             ) : (
-                                <LinearGradient
-                                    colors={['#ec4899', '#f43f5e']}
-                                    style={styles.avatarFallback}
-                                >
-                                    <Text style={styles.avatarFallbackText}>
+                                <View style={[styles.avatarFallback, { backgroundColor: colors.primary }]}>
+                                    <Text style={[styles.avatarFallbackText, { color: colors.primaryForeground }]}>
                                         {partnerName.charAt(0).toUpperCase()}
                                     </Text>
-                                </LinearGradient>
+                                </View>
                             )}
                         </View>
                         <View style={styles.partnerText}>
@@ -112,7 +98,23 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                     <Text style={[styles.title, { color: colors.foreground }]}>{copy.title}</Text>
                     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{copy.subtitle}</Text>
 
-                    {(hold.scheduledAt || hold.venueName) && (
+                    {hold.slotConfirmation?.needsSlotConfirmation && hold.slotConfirmation.viewerSlotConfirmed ? (
+                        <View style={[styles.detailsBlock, { borderColor: cardBorder }]}>
+                            {hold.slotConfirmation.scheduledAt ? (
+                                <View style={styles.detailRow}>
+                                    <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+                                    <Text style={[styles.detailText, { color: colors.foreground }]}>
+                                        {formatMeetupSlot(hold.slotConfirmation.scheduledAt)}
+                                    </Text>
+                                </View>
+                            ) : null}
+                            <Text style={[styles.waitingPartner, { color: colors.mutedForeground }]}>
+                                {hold.slotConfirmation.partnerSlotConfirmed
+                                    ? 'Finalizing your date.'
+                                    : `Waiting for ${partnerName} to confirm.`}
+                            </Text>
+                        </View>
+                    ) : !hold.slotConfirmation?.needsSlotConfirmation && (hold.scheduledAt || hold.venueName) ? (
                         <View style={[styles.detailsBlock, { borderColor: cardBorder }]}>
                             {hold.scheduledAt ? (
                                 <View style={styles.detailRow}>
@@ -132,7 +134,7 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                                 </View>
                             ) : null}
                         </View>
-                    )}
+                    ) : null}
 
                     <View style={styles.ctaStack}>
                         {copy.primaryCta ? (
@@ -221,7 +223,7 @@ function CancelHoldSheet({
     const { colors, isDark } = useTheme();
     const [selected, setSelected] = useState<MatchHoldCancelReason | null>(null);
 
-    const sheetBg = isDark ? '#1a0d2e' : '#ffffff';
+    const sheetBg = colors.card;
     const handleColor = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.15)';
 
     return (
@@ -333,32 +335,32 @@ function buildCopy(hold: MatchHold): HoldCopy {
         case 'mutual':
             return {
                 statusLabel: 'Mutual match',
-                statusIcon: 'sparkles',
+                statusIcon: 'heart',
                 title: `You and ${name} both said yes`,
-                subtitle:
-                    'We’re lining up your date. New intros are paused so you can focus on this — we’ll notify you the moment your date is set.',
-                footnote: 'You can cancel any time and we’ll keep matching you.',
-                primaryCta: { label: 'View in Dates', kind: 'view' },
-            };
-        case 'call_pending':
-            return {
-                statusLabel: 'Vibe call pending',
-                statusIcon: 'call-outline',
-                title: `Vibe call with ${name}`,
-                subtitle:
-                    'You’ve got a quick vibe call coming up. New intros are paused so you can give this match your full attention.',
-                footnote: 'Open Dates to see call details.',
-                primaryCta: { label: 'Open Dates', kind: 'view' },
+                subtitle: hold.slotConfirmation?.needsSlotConfirmation
+                    ? 'Confirm your assigned campus date below. New intros stay paused until this is settled.'
+                    : 'Say hi in chat while your date is lined up. New intros are paused for this match.',
+                footnote: 'You can cancel any time and we will keep matching you.',
+                primaryCta: { label: 'Message in Dates', kind: 'view' },
             };
         case 'being_arranged':
             return {
-                statusLabel: 'Arranging your date',
-                statusIcon: 'sparkles',
-                title: `Setting up your date with ${name}`,
-                subtitle:
-                    'We’re working with you both to pick a time and venue. Hang tight — new intros are on pause.',
-                footnote: 'You’ll get a push notification once it’s confirmed.',
-                primaryCta: { label: 'See arrangement', kind: 'view' },
+                statusLabel: hold.slotConfirmation?.needsSlotConfirmation
+                    ? 'Confirm your date'
+                    : 'Arranging your date',
+                statusIcon: hold.slotConfirmation?.needsSlotConfirmation ? 'calendar' : 'calendar-outline',
+                title: hold.slotConfirmation?.needsSlotConfirmation
+                    ? `Confirm your date with ${name}`
+                    : `Setting up your date with ${name}`,
+                subtitle: hold.slotConfirmation?.needsSlotConfirmation
+                    ? 'Your campus time is assigned. Confirm below to continue.'
+                    : 'Your date is being finalized. New intros stay paused.',
+                footnote: hold.slotConfirmation?.needsSlotConfirmation
+                    ? 'Messaging unlocks after you confirm.'
+                    : 'You will get a push notification once it is confirmed.',
+                primaryCta: hold.slotConfirmation?.needsSlotConfirmation
+                    ? null
+                    : { label: 'See arrangement', kind: 'view' },
             };
         case 'upcoming':
             return {
@@ -470,7 +472,7 @@ const styles = StyleSheet.create({
     avatarFallbackText: {
         fontSize: 26,
         fontWeight: '800',
-        color: '#fff',
+        color: 'transparent',
     },
     partnerText: {
         flex: 1,
@@ -513,6 +515,11 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 14,
         fontWeight: '500',
+    },
+    waitingPartner: {
+        fontSize: 13,
+        lineHeight: 18,
+        marginTop: 4,
     },
     ctaStack: {
         marginTop: 4,

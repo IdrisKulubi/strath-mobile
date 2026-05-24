@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import {
     createDateLocation,
     deleteDateLocation,
+    setDefaultDateLocation,
     toggleDateLocation,
     updateDateLocation,
 } from "@/lib/actions/admin";
@@ -106,7 +107,36 @@ type EditableLocation = {
     vibe: string | null;
     notes: string | null;
     isActive: boolean;
+    isDefault: boolean;
 };
+
+export function SetDefaultLocationButton({
+    locationId,
+    isDefault,
+    isActive,
+}: {
+    locationId: string;
+    isDefault: boolean;
+    isActive: boolean;
+}) {
+    const [isPending, startTransition] = useTransition();
+
+    if (!isActive) return null;
+
+    return (
+        <button
+            onClick={() => startTransition(() => setDefaultDateLocation(locationId))}
+            disabled={isPending || isDefault}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium text-white transition-colors disabled:opacity-50 ${
+                isDefault
+                    ? "bg-amber-600/80 cursor-default"
+                    : "bg-amber-700 hover:bg-amber-600"
+            }`}
+        >
+            {isPending ? "Saving…" : isDefault ? "Default venue" : "Set as default"}
+        </button>
+    );
+}
 
 export function LocationRowActions({ location }: { location: EditableLocation }) {
     const [editing, setEditing] = useState(false);
@@ -187,6 +217,11 @@ export function LocationRowActions({ location }: { location: EditableLocation })
 
     return (
         <div className="flex flex-wrap gap-2">
+            <SetDefaultLocationButton
+                locationId={location.id}
+                isDefault={location.isDefault}
+                isActive={location.isActive}
+            />
             <button
                 onClick={() => setEditing(true)}
                 className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"

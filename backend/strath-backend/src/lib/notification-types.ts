@@ -9,7 +9,6 @@ export const NOTIFICATION_TYPES = {
     /** New curated home introduction (candidate pair went live). */
     NEW_CANDIDATE_MATCH: 'new_candidate_match',
     MESSAGE: 'message',
-    CALL: 'call',
     GENERIC: 'generic',
 
     // Date-flow
@@ -17,7 +16,6 @@ export const NOTIFICATION_TYPES = {
     DATE_REQUEST_ACCEPTED: 'date_request_accepted',
     DATE_REQUEST_DECLINED: 'date_request_declined',
     MUTUAL_MATCH: 'mutual_match',
-    CALL_REMINDER: 'call_reminder',
     DATE_ARRANGING: 'date_arranging',
     DATE_SCHEDULED: 'date_scheduled',
     FEEDBACK_PROMPT: 'feedback_prompt',

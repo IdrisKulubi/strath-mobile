@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import { useRouter } from 'expo-router';
@@ -58,8 +57,7 @@ export function HistoryCard({ date, index }: HistoryCardProps) {
     const showFeedback = date.status === 'attended' && !date.hasFeedback;
 
     return (
-        <Animated.View
-            entering={FadeInDown.delay(index * 60).springify().damping(14)}
+        <View
             style={[
                 styles.card,
                 {
@@ -120,7 +118,7 @@ export function HistoryCard({ date, index }: HistoryCardProps) {
                     </Text>
                 </View>
             )}
-        </Animated.View>
+        </View>
     );
 }
 

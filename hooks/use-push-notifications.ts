@@ -39,10 +39,6 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
         case NOTIFICATION_TYPES.MATCH:
             return 'accent';
 
-        case NOTIFICATION_TYPES.CALL_REMINDER:
-        case NOTIFICATION_TYPES.CALL:
-            return 'warning';
-
         case NOTIFICATION_TYPES.DATE_REQUEST_DECLINED:
         case NOTIFICATION_TYPES.DATE_CANCELLED:
             return 'danger';
@@ -68,12 +64,6 @@ function resolveRoute(data: NotificationPayload): string | null {
         case NOTIFICATION_TYPES.DATE_ARRANGING:
         case NOTIFICATION_TYPES.DATE_SCHEDULED:
         case NOTIFICATION_TYPES.DATE_CANCELLED:
-            return '/(tabs)/dates';
-
-        // 3-min call reminder → vibe-check screen
-        case NOTIFICATION_TYPES.CALL_REMINDER:
-        case NOTIFICATION_TYPES.CALL:
-            if (data.matchId) return `/vibe-check/${data.matchId}`;
             return '/(tabs)/dates';
 
         // Post-date feedback prompt → feedback screen with dateId + name

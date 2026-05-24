@@ -5,7 +5,7 @@ import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 
 interface EmptyDatesProps {
-    section: 'mutual' | 'call_pending' | 'being_arranged' | 'upcoming' | 'history';
+    section: 'mutual' | 'being_arranged' | 'upcoming' | 'history';
 }
 
 const CONFIG: Record<EmptyDatesProps['section'], { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; subtitle: string }> = {
@@ -13,11 +13,6 @@ const CONFIG: Record<EmptyDatesProps['section'], { icon: React.ComponentProps<ty
         icon: 'heart-outline',
         title: 'No mutuals yet 💕',
         subtitle: "When you both say yes, they'll show up here.",
-    },
-    call_pending: {
-        icon: 'call-outline',
-        title: 'No vibe checks waiting 📞',
-        subtitle: "Quick 3-min calls will show up here when you're both a match.",
     },
     being_arranged: {
         icon: 'sparkles-outline',

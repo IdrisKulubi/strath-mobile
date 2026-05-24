@@ -39,7 +39,7 @@ const PLAYBOOK_SECTIONS: DateKitSection[] = [
         title: 'How Strathspace works',
         subtitle: 'From a strong match to a real-world plan.',
         icon: 'git-network-outline',
-        accent: '#e91e8c',
+        accent: 'primary',
         steps: [
             'Home shows your best daily matches instead of endless swiping.',
             'When someone feels right, send a date invite with a vibe that fits the energy.',
@@ -64,19 +64,19 @@ const PLAYBOOK_SECTIONS: DateKitSection[] = [
         tips: ['Short message wins', 'Match the vibe', 'No over-explaining'],
     },
     {
-        id: 'vibe-check',
+        id: 'chat-first',
         category: 'flow',
-        title: 'What happens in vibe check',
-        subtitle: 'A quick reality check before the real date energy kicks in.',
-        icon: 'videocam-outline',
+        title: 'Chat before the date',
+        subtitle: 'A low-pressure way to feel each other out before you meet.',
+        icon: 'chatbubble-ellipses-outline',
         accent: '#06b6d4',
         steps: [
-            'Vibe check lets you both feel the chemistry before locking in the date.',
-            'Come in relaxed, curious, and present instead of trying to perform.',
-            'The goal is not to be perfect. The goal is to see if the energy feels easy.',
-            'If it clicks, the date setup feels much smoother and more natural.',
+            'When you both say yes, messaging opens so you can say hi without pressure.',
+            'Keep it short and curious instead of trying to plan the whole date in chat.',
+            'Our team arranges the in-person plan once you are both ready.',
+            'If the chat feels easy, the real date usually feels easier too.',
         ],
-        tips: ['Keep it light', 'Be present', 'Look for ease'],
+        tips: ['Keep it light', 'Be curious', 'Let the team arrange'],
     },
     {
         id: 'first-date-tips',
@@ -149,7 +149,7 @@ export default function DateKitScreen() {
     };
 
     return (
-        <TabSwipeView route="/(tabs)/date-kit">
+        <TabSwipeView route="/(tabs)/chats">
         <ScreenGradient edges={['top']} style={styles.container}>
             <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
@@ -173,7 +173,7 @@ export default function DateKitScreen() {
                 />
 
                 <Animated.View
-                    entering={FadeInDown.delay(60).springify().damping(14)}
+                    entering={FadeInDown.delay(60).duration(280)}
                     style={[
                         styles.filterWrap,
                         {
@@ -205,7 +205,7 @@ export default function DateKitScreen() {
                             title={section.title}
                             subtitle={section.subtitle}
                             icon={section.icon}
-                            accent={section.accent}
+                            accent={section.accent === 'primary' ? colors.primary : section.accent}
                             steps={section.steps}
                             tips={section.tips}
                             expanded={expandedSectionId === section.id}
@@ -217,11 +217,11 @@ export default function DateKitScreen() {
 
                 {(activeFilter === 'all' || activeFilter === 'starters') ? (
                     <Animated.View
-                        entering={FadeInDown.delay(180).springify().damping(14)}
+                        entering={FadeInDown.delay(180).duration(280)}
                         style={[
                             styles.startersPanel,
                             {
-                                backgroundColor: isDark ? colors.card : '#fff',
+                                backgroundColor: colors.card,
                                 borderColor: colors.border,
                             },
                         ]}

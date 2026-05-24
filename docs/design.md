@@ -1,4 +1,7 @@
-# StrathSpace Design System
+# StrathSpace Design System (legacy)
+
+> **Deprecated:** Use root [`DESIGN.md`](../DESIGN.md) and [`PRODUCT.md`](../PRODUCT.md) for Impeccable and new UI work. This file is kept for historical reference only.
+
 *Inspired by Apple's Human Interface Guidelines*
 
 ---

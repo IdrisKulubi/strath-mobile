@@ -15,7 +15,7 @@ import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 import { useChat, Message } from '@/hooks/use-chat';
-import { useMatches } from '@/hooks/use-matches';
+import { useConversations, findConversation } from '@/hooks/use-conversations';
 import { useUnmatch } from '@/hooks/use-unmatch';
 import { MessageBubble, ChatInput, ChatHeader } from '@/components/chat';
 import { SafetyToolkitModal } from '@/components/chat/safety-toolkit-modal';
@@ -59,10 +59,15 @@ export default function ChatScreen() {
         currentUserId,
     } = useChat(matchId || '');
 
-    // Get partner info from matches
-    const { data: matchesData } = useMatches();
-    const currentMatch = matchesData?.matches?.find(m => m.id === matchId);
-    const partner = currentMatch?.partner;
+    const { data: conversations } = useConversations();
+    const thread = findConversation(conversations, matchId || '');
+    const partner = thread
+        ? {
+              id: thread.partner.id,
+              name: thread.partner.name,
+              image: thread.partner.image ?? undefined,
+          }
+        : undefined;
 
     // Track previous message count to know when new messages arrive
     const prevMessageCountRef = useRef(messages.length);
@@ -206,20 +211,24 @@ export default function ChatScreen() {
 
     // Header component for the list (Matched date)
     const renderListHeader = useCallback(() => {
-        if (!currentMatch) return null;
-        const date = new Date(currentMatch.createdAt || Date.now());
-        const dateString = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' });
+        if (!thread) return null;
+        const date = new Date(thread.createdAt);
+        const dateString = date.toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'numeric',
+            year: 'numeric',
+        });
 
         return (
             <View style={styles.listHeader}>
                 <View style={styles.matchedTextContainer}>
                     <Text style={styles.matchedText}>
-                        YOU CONNECTED WITH {partner?.profile?.firstName?.toUpperCase() || 'THEM'} ON {dateString}
+                        YOU CONNECTED WITH {(partner?.name ?? 'them').toUpperCase()} ON {dateString}
                     </Text>
                 </View>
             </View>
         );
-    }, [currentMatch, partner]);
+    }, [thread, partner?.name]);
 
     // Loading state - only show skeletons on the VERY FIRST load when no messages exist
     if (isInitialLoading && messages.length === 0) {
@@ -306,9 +315,9 @@ export default function ChatScreen() {
                             <ChatInput
                                 onSend={handleSend}
                                 isSending={isSending}
-                                onMediaPress={() => console.log('Media')}
-                                onGifPress={() => console.log('GIF')}
-                                onMusicPress={() => console.log('Music')}
+                                onMediaPress={() => undefined}
+                                onGifPress={() => undefined}
+                                onMusicPress={() => undefined}
                             />
                         </KeyboardAvoidingView>
 
