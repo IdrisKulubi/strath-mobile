@@ -1,37 +1,39 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 
 interface EmptyDatesProps {
     section: 'mutual' | 'being_arranged' | 'upcoming' | 'history';
+    showHomeCta?: boolean;
+    onGoHome?: () => void;
 }
 
 const CONFIG: Record<EmptyDatesProps['section'], { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; subtitle: string }> = {
     mutual: {
         icon: 'heart-outline',
-        title: 'No mutuals yet 💕',
+        title: 'No mutuals yet',
         subtitle: "When you both say yes, they'll show up here.",
     },
     being_arranged: {
         icon: 'sparkles-outline',
-        title: 'Nothing in the works yet ✨',
+        title: 'Nothing in the works yet',
         subtitle: "When plans start getting made, you'll see them here.",
     },
     upcoming: {
         icon: 'calendar-outline',
-        title: 'No dates planned yet 📅',
+        title: 'No dates planned yet',
         subtitle: 'Scheduled plans will appear here.',
     },
     history: {
         icon: 'time-outline',
-        title: 'No date history yet 📖',
+        title: 'No date history yet',
         subtitle: 'Your future stories start here.',
     },
 };
 
-export function EmptyDates({ section }: EmptyDatesProps) {
+export function EmptyDates({ section, showHomeCta, onGoHome }: EmptyDatesProps) {
     const { colors } = useTheme();
     const { icon, title, subtitle } = CONFIG[section];
 
@@ -41,7 +43,24 @@ export function EmptyDates({ section }: EmptyDatesProps) {
                 <Ionicons name={icon} size={36} color={colors.primary} />
             </View>
             <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
-            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+                {showHomeCta
+                    ? 'Your assigned date is on Home — confirm your campus time there.'
+                    : subtitle}
+            </Text>
+            {showHomeCta && onGoHome ? (
+                <Pressable
+                    onPress={onGoHome}
+                    style={({ pressed }) => [
+                        styles.cta,
+                        { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 },
+                    ]}
+                >
+                    <Text style={[styles.ctaLabel, { color: colors.primaryForeground }]}>
+                        Go to Home
+                    </Text>
+                </Pressable>
+            ) : null}
         </View>
     );
 }
@@ -72,5 +91,15 @@ const styles = StyleSheet.create({
         fontSize: 14,
         lineHeight: 20,
         textAlign: 'center',
+    },
+    cta: {
+        marginTop: 8,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 12,
+    },
+    ctaLabel: {
+        fontSize: 15,
+        fontWeight: '600',
     },
 });

@@ -1,31 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Device from 'expo-device';
-import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 
 import {
-    NotificationsService,
     NOTIFICATION_TYPES,
     type NotificationPayload,
     type AppNotificationType,
 } from '@/lib/services/notifications-service';
 import { useToast } from '@/components/ui/toast';
+import {
+    configureAndroidNotificationChannel,
+    registerPushTokenIfGranted,
+} from '@/lib/push-registration';
 
-// Re-export for consumers that only need the type
 export type { AppNotificationType };
-
-const ANDROID_CHANNEL_ID = 'default';
-
-function getProjectId(): string | undefined {
-    return (
-        (Constants.expoConfig as any)?.extra?.eas?.projectId ||
-        (Constants as any)?.easConfig?.projectId
-    );
-}
-
-// ─── Toast variant per notification type ─────────────────────────────────────
 
 type ToastVariant = 'default' | 'accent' | 'warning' | 'danger';
 
@@ -35,6 +23,9 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
         case NOTIFICATION_TYPES.DATE_REQUEST_ACCEPTED:
         case NOTIFICATION_TYPES.DATE_ARRANGING:
         case NOTIFICATION_TYPES.DATE_SCHEDULED:
+        case NOTIFICATION_TYPES.MEETUP_SLOT_ASSIGNED:
+        case NOTIFICATION_TYPES.MEETUP_PARTNER_CONFIRMED:
+        case NOTIFICATION_TYPES.MEETUP_CONFIRM_REMINDER:
         case NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH:
         case NOTIFICATION_TYPES.MATCH:
             return 'accent';
@@ -48,15 +39,10 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
     }
 }
 
-// ─── Deep-link resolver ───────────────────────────────────────────────────────
-// Returns a router-compatible path string or null if no navigation needed.
-
 function resolveRoute(data: NotificationPayload): string | null {
-    // Explicit override always wins
     if (data.route) return data.route;
 
     switch (data.type) {
-        // Both incoming invite and sent invite accepted → Dates tab (Incoming section)
         case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
         case NOTIFICATION_TYPES.DATE_REQUEST_ACCEPTED:
         case NOTIFICATION_TYPES.DATE_REQUEST_DECLINED:
@@ -64,9 +50,9 @@ function resolveRoute(data: NotificationPayload): string | null {
         case NOTIFICATION_TYPES.DATE_ARRANGING:
         case NOTIFICATION_TYPES.DATE_SCHEDULED:
         case NOTIFICATION_TYPES.DATE_CANCELLED:
+        case NOTIFICATION_TYPES.MEETUP_PARTNER_CONFIRMED:
             return '/(tabs)/dates';
 
-        // Post-date feedback prompt → feedback screen with dateId + name
         case NOTIFICATION_TYPES.FEEDBACK_PROMPT:
             if (data.dateId) {
                 const name = data.name ? `?name=${encodeURIComponent(data.name)}` : '';
@@ -74,7 +60,6 @@ function resolveRoute(data: NotificationPayload): string | null {
             }
             return '/(tabs)/dates';
 
-        // Legacy message / match
         case NOTIFICATION_TYPES.MESSAGE:
             if (data.matchId) return `/chat/${data.matchId}`;
             return null;
@@ -83,14 +68,13 @@ function resolveRoute(data: NotificationPayload): string | null {
             return '/(tabs)/dates';
 
         case NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH:
+        case NOTIFICATION_TYPES.MEETUP_SLOT_ASSIGNED:
+        case NOTIFICATION_TYPES.MEETUP_CONFIRM_REMINDER:
             return '/(tabs)';
 
-        // Soft-launch: "You're in" push — land them at the root so the route
-        // guard picks the right screen once the profile refetches.
         case NOTIFICATION_TYPES.ADMITTED_FROM_WAITLIST:
             return '/';
 
-        // Generic admin announcements don't deep-link anywhere specific.
         case NOTIFICATION_TYPES.ADMIN_ANNOUNCEMENT:
             return null;
 
@@ -99,55 +83,9 @@ function resolveRoute(data: NotificationPayload): string | null {
     }
 }
 
-// ─── Android channel ──────────────────────────────────────────────────────────
-
-async function configureAndroidChannel() {
-    if (Platform.OS !== 'android') return;
-
-    await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
-        name: 'Default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        sound: 'default',
-        enableVibrate: true,
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-    });
-}
-
-// ─── Token registration ───────────────────────────────────────────────────────
-
-async function registerForPushNotificationsAsync(): Promise<string | null> {
-    if (!Device.isDevice) {
-        console.log('[Notifications] Must use physical device for push notifications');
-        return null;
-    }
-
-    const existingStatus = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus.status;
-
-    if (finalStatus !== 'granted') {
-        const requestStatus = await Notifications.requestPermissionsAsync();
-        finalStatus = requestStatus.status;
-    }
-
-    if (finalStatus !== 'granted') {
-        console.log('[Notifications] Permission not granted');
-        return null;
-    }
-
-    const projectId = getProjectId();
-    if (!projectId) {
-        console.warn('[Notifications] Missing EAS projectId; cannot fetch Expo push token');
-        return null;
-    }
-
-    const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
-    return tokenResponse.data;
-}
-
-// ─── Hook ─────────────────────────────────────────────────────────────────────
-
-export function usePushNotifications() {
+export function usePushNotifications(options?: {
+    onTokenRegistered?: (token: string | null) => void;
+}) {
     const toast = useToast();
     const router = useRouter();
     const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
@@ -156,7 +94,6 @@ export function usePushNotifications() {
     const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null);
 
     useEffect(() => {
-        // Foreground: show alert + sound + badge
         Notifications.setNotificationHandler({
             handleNotification: async () => ({
                 shouldShowAlert: true,
@@ -167,24 +104,18 @@ export function usePushNotifications() {
             }),
         });
 
-        configureAndroidChannel().catch((e) =>
-            console.warn('[Notifications] Failed configuring Android channel', e)
+        configureAndroidNotificationChannel().catch((e) =>
+            console.warn('[Notifications] Failed configuring Android channel', e),
         );
 
-        registerForPushNotificationsAsync()
-            .then(async (token) => {
+        registerPushTokenIfGranted()
+            .then((token) => {
                 if (!token) return;
                 setExpoPushToken(token);
-                try {
-                    await NotificationsService.registerPushToken(token);
-                    console.log('[Notifications] Push token registered');
-                } catch (e) {
-                    console.warn('[Notifications] Failed to register token with backend', e);
-                }
+                options?.onTokenRegistered?.(token);
             })
             .catch((e) => console.warn('[Notifications] Token registration error', e));
 
-        // ── Foreground: show in-app toast ────────────────────────────────────
         notificationReceivedListener.current =
             Notifications.addNotificationReceivedListener((notification) => {
                 const content = notification.request.content;
@@ -200,17 +131,13 @@ export function usePushNotifications() {
                 });
             });
 
-        // ── Background/killed: handle tap → navigate ─────────────────────────
         notificationResponseListener.current =
             Notifications.addNotificationResponseReceivedListener((response) => {
                 const content = response.notification.request.content;
                 const data = (content.data || {}) as NotificationPayload;
 
-                console.log('[Notifications] Tapped notification type:', data.type);
-
                 const route = resolveRoute(data);
                 if (route) {
-                    console.log('[Notifications] Navigating to:', route);
                     router.push(route as any);
                 }
             });
@@ -219,9 +146,8 @@ export function usePushNotifications() {
             notificationReceivedListener.current?.remove();
             notificationResponseListener.current?.remove();
         };
-        // Stable refs — intentionally omit toast/router to avoid re-registering listeners
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    return { expoPushToken };
+    return { expoPushToken, setExpoPushToken };
 }

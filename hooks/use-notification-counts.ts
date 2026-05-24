@@ -8,6 +8,10 @@ interface NotificationCounts {
     unopenedMatches: number;
     unreadMessages: number;
     datesAttention?: number;
+    slotConfirmPending?: number;
+    partnerWaitingOnYou?: number;
+    homeAttention?: number;
+    datesActionable?: number;
     total: number;
 }
 
@@ -19,11 +23,29 @@ async function fetchNotificationCounts(): Promise<NotificationCounts> {
 
     if (!token) {
         console.log('[NotificationCounts] No token, returning zeros');
-        return { unopenedMatches: 0, unreadMessages: 0, datesAttention: 0, total: 0 };
+        return {
+            unopenedMatches: 0,
+            unreadMessages: 0,
+            datesAttention: 0,
+            slotConfirmPending: 0,
+            partnerWaitingOnYou: 0,
+            homeAttention: 0,
+            datesActionable: 0,
+            total: 0,
+        };
     }
 
     const result = await apiFetch<{ data?: NotificationCounts }>('/api/notifications/counts');
-    const data = result.data || { unopenedMatches: 0, unreadMessages: 0, datesAttention: 0, total: 0 };
+    const data = result.data || {
+        unopenedMatches: 0,
+        unreadMessages: 0,
+        datesAttention: 0,
+        slotConfirmPending: 0,
+        partnerWaitingOnYou: 0,
+        homeAttention: 0,
+        datesActionable: 0,
+        total: 0,
+    };
     console.log('[NotificationCounts] Fetched:', data);
     return data;
 }
@@ -91,6 +113,10 @@ export function useNotificationCounts() {
         unopenedMatches: data?.unopenedMatches ?? 0,
         unreadMessages: data?.unreadMessages ?? 0,
         datesAttention: data?.datesAttention ?? 0,
+        slotConfirmPending: data?.slotConfirmPending ?? 0,
+        partnerWaitingOnYou: data?.partnerWaitingOnYou ?? 0,
+        homeAttention: data?.homeAttention ?? 0,
+        datesActionable: data?.datesActionable ?? 0,
         totalNotifications: data?.total ?? 0,
         isLoading,
         refetch,

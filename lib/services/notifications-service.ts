@@ -23,6 +23,10 @@ export const NOTIFICATION_TYPES = {
     FEEDBACK_PROMPT: 'feedback_prompt',               // "How was your date with Sarah? 💬"
     DATE_CANCELLED: 'date_cancelled',                 // "Your date with Sarah was cancelled."
 
+    MEETUP_SLOT_ASSIGNED: 'meetup_slot_assigned',
+    MEETUP_PARTNER_CONFIRMED: 'meetup_partner_confirmed',
+    MEETUP_CONFIRM_REMINDER: 'meetup_confirm_reminder',
+
     // Soft-launch gating
     ADMITTED_FROM_WAITLIST: 'admitted_from_waitlist', // "You're in 💛" — user promoted from waitlist to admitted
     ADMIN_ANNOUNCEMENT: 'admin_announcement',         // Arbitrary broadcast from the admin console

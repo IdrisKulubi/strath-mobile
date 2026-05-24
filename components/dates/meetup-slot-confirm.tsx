@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '@/hooks/use-theme';
 import { useConfirmMeetupSlot } from '@/hooks/use-confirm-meetup-slot';
+import { useNotificationPermissionPrompt } from '@/context/notification-permission-context';
 import { useToast } from '@/components/ui/toast';
 import { RADIUS, SPACING } from '@/lib/design-tokens';
 import { formatConfirmBy, formatMeetupSlot, MEETUP_WINDOWS_COPY } from '@/lib/meetup-slot';
@@ -31,6 +32,7 @@ export function MeetupSlotConfirm({
     const { colors } = useTheme();
     const toast = useToast();
     const confirm = useConfirmMeetupSlot();
+    const { promptIfAppropriate } = useNotificationPermissionPrompt();
     const primaryFill = colors.primary;
 
     const canConfirm =
@@ -40,7 +42,7 @@ export function MeetupSlotConfirm({
         if (!canConfirm) return;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         confirm.mutate(mutualMatchId, {
-            onSuccess: (data) => {
+            onSuccess: async (data) => {
                 if (data?.status === 'finalized') {
                     toast.show({
                         message: 'Date confirmed. See you on campus.',
@@ -52,6 +54,10 @@ export function MeetupSlotConfirm({
                         variant: 'default',
                     });
                 }
+                await promptIfAppropriate({
+                    context: 'after_confirm',
+                    partnerName: partnerFirstName,
+                });
             },
             onError: () => {
                 toast.show({

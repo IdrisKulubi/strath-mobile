@@ -7,6 +7,8 @@ import { useProfile } from '@/hooks/use-profile';
 import { useAiConsent } from '@/hooks/use-ai-consent';
 import { clearSession, getAuthToken } from '@/lib/auth-helpers';
 import { AI_CONSENT_DISCLOSURE, AI_PROVIDER_NAME } from '@/lib/ai-consent';
+import { useNotificationPermissionPrompt } from '@/context/notification-permission-context';
+import { getPushPermissionStatus } from '@/lib/notification-permission-prompt';
 
 export default function SettingsScreen() {
     const router = useRouter();
@@ -15,6 +17,7 @@ export default function SettingsScreen() {
     const { hasAiConsent, grantAiConsent, revokeAiConsent, isAiConsentUpdating } = useAiConsent();
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const { promptIfAppropriate } = useNotificationPermissionPrompt();
 
     const handleAiConsentToggle = (nextValue: boolean) => {
         if (isAiConsentUpdating) return;
@@ -69,9 +72,18 @@ export default function SettingsScreen() {
     const handleOpenNotificationSettings = async () => {
         try {
             await Linking.openSettings();
-        } catch (error) {
+        } catch {
             Alert.alert('Notifications', 'Unable to open system settings. Please open your phone settings and manage notifications for Strathspace.');
         }
+    };
+
+    const handleNotificationsPress = async () => {
+        const status = await getPushPermissionStatus();
+        if (status === 'granted') {
+            await handleOpenNotificationSettings();
+            return;
+        }
+        await promptIfAppropriate({ context: 'settings' });
     };
 
     const handleLogout = () => {
@@ -294,9 +306,9 @@ export default function SettingsScreen() {
                     <SettingItem
                         label="Notifications"
                         type="link"
-                        description="Manage notification preferences in your system settings"
+                        description="Enable alerts for matches, date confirmations, and messages"
                         icon="notifications-outline"
-                        onPress={handleOpenNotificationSettings}
+                        onPress={handleNotificationsPress}
                     />
                 </SettingCard>
 

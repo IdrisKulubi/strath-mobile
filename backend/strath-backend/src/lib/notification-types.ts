@@ -21,6 +21,11 @@ export const NOTIFICATION_TYPES = {
     FEEDBACK_PROMPT: 'feedback_prompt',
     DATE_CANCELLED: 'date_cancelled',
 
+    // Meetup slot confirmation
+    MEETUP_SLOT_ASSIGNED: 'meetup_slot_assigned',
+    MEETUP_PARTNER_CONFIRMED: 'meetup_partner_confirmed',
+    MEETUP_CONFIRM_REMINDER: 'meetup_confirm_reminder',
+
     // Soft-launch gating
     ADMITTED_FROM_WAITLIST: 'admitted_from_waitlist',
     ADMIN_ANNOUNCEMENT: 'admin_announcement',

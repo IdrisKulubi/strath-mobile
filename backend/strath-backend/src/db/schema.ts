@@ -816,6 +816,7 @@ export const mutualMatches = pgTable(
         userASlotConfirmedAt: timestamp("user_a_slot_confirmed_at"),
         userBSlotConfirmedAt: timestamp("user_b_slot_confirmed_at"),
         slotConfirmBy: timestamp("slot_confirm_by"),
+        slotConfirmReminderSentAt: timestamp("slot_confirm_reminder_sent_at"),
         assignedSlot: text("assigned_slot").$type<"wednesday" | "saturday">(),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),

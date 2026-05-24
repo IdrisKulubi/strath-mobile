@@ -20,6 +20,10 @@ import { SessionBootstrap } from '@/components/session-bootstrap';
 import { AppFeedbackNudge } from '@/components/feedback/app-feedback-nudge';
 import { useNetwork } from '@/hooks/use-network';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
+import {
+  NotificationPermissionProvider,
+  useNotificationPermissionPrompt,
+} from '@/context/notification-permission-context';
 import { usePresenceHeartbeat } from '@/hooks/use-presence-heartbeat';
 import { hasCompletedIntroSlides } from '@/lib/intro-storage';
 import { isAuthenticated } from '@/lib/auth-helpers';
@@ -76,10 +80,20 @@ function RootLayoutNav({ hasAuthToken }: { hasAuthToken: boolean }) {
   );
 }
 
-function NotificationsBootstrap() {
-  usePushNotifications();
+function PushNotificationListeners() {
+  const { setExpoPushToken } = useNotificationPermissionPrompt();
+  usePushNotifications({ onTokenRegistered: setExpoPushToken });
   usePresenceHeartbeat();
   return null;
+}
+
+function NotificationsBootstrap({ children }: { children: React.ReactNode }) {
+  return (
+    <NotificationPermissionProvider>
+      <PushNotificationListeners />
+      {children}
+    </NotificationPermissionProvider>
+  );
 }
 
 interface BootstrapState {
@@ -143,8 +157,9 @@ export default function RootLayout() {
               ) : (
                 <>
                   <SessionBootstrap />
-                  <NotificationsBootstrap />
-                  <RootLayoutNav hasAuthToken={bootstrap.hasAuthToken} />
+                  <NotificationsBootstrap>
+                    <RootLayoutNav hasAuthToken={bootstrap.hasAuthToken} />
+                  </NotificationsBootstrap>
                 </>
               )}
             </ToastProvider>

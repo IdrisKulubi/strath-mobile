@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, StatusBar, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { ScreenGradient } from '@/components/ui/screen-gradient';
 import Animated, {
@@ -13,7 +14,10 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useMutualMatches, useDateHistory } from '@/hooks/use-date-requests';
+import { useDailyMatches } from '@/hooks/use-daily-matches';
 import { ConfirmedMatchCard } from '@/components/dates/confirmed-match-card';
+import { ActionRequiredBanner } from '@/components/attention/action-required-banner';
+import { MeetupSlotConfirmModal } from '@/components/dates/meetup-slot-confirm-modal';
 import { HistoryCard } from '@/components/dates/history-card';
 import { EmptyDates } from '@/components/dates/empty-dates';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,6 +25,7 @@ import { DateMatchModal } from '@/components/date-match/date-match-modal';
 import { useProfile } from '@/hooks/use-profile';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 import type { MutualDate } from '@/hooks/use-date-requests';
+import { useNotificationPermissionPrompt } from '@/context/notification-permission-context';
 
 type Section = 'mutual' | 'being_arranged' | 'upcoming' | 'history';
 
@@ -42,6 +47,7 @@ function SectionSkeleton() {
 }
 
 export default function DatesScreen() {
+    const router = useRouter();
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const [activeSection, setActiveSection] = useState<Section>('mutual');
@@ -57,7 +63,17 @@ export default function DatesScreen() {
 
     const [matchModalVisible, setMatchModalVisible] = useState(false);
     const [celebrationMatch, setCelebrationMatch] = useState<MutualDate | null>(null);
+    const [confirmModalVisible, setConfirmModalVisible] = useState(false);
     const seenMatchIds = useRef<Set<string>>(new Set());
+
+    const { promptIfAppropriate } = useNotificationPermissionPrompt();
+    const dailyMatches = useDailyMatches();
+    const activeHold = dailyMatches.data?.hold ?? null;
+    const showActionBanner = Boolean(
+        activeHold?.slotConfirmation?.needsSlotConfirmation
+        && !activeHold?.slotConfirmation?.viewerSlotConfirmed
+        && activeHold?.slotConfirmation?.confirmWindowOpen,
+    );
 
     const sections = useMemo(() => ({
         mutual: mutualDates.filter((item) => item.arrangementStatus === 'mutual'),
@@ -94,7 +110,11 @@ export default function DatesScreen() {
         seenMatchIds.current.add(newMutual.id);
         setCelebrationMatch(newMutual);
         setTimeout(() => setMatchModalVisible(true), 400);
-    }, [fetchingMutuals, isHydratingSections, sections.mutual]);
+        void promptIfAppropriate({
+            context: 'mutual_match',
+            partnerName: newMutual.withUser.firstName,
+        });
+    }, [fetchingMutuals, isHydratingSections, promptIfAppropriate, sections.mutual]);
 
     const handleSectionChange = useCallback((section: Section, idx: number) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -137,7 +157,19 @@ export default function DatesScreen() {
 
         const items = sections[activeSection];
         if (items.length === 0) {
-            return <EmptyDates section={activeSection} />;
+            const needsHoldCta =
+                (activeSection === 'mutual' || activeSection === 'being_arranged')
+                && Boolean(
+                    activeHold?.slotConfirmation?.needsSlotConfirmation
+                    && !activeHold?.slotConfirmation?.viewerSlotConfirmed,
+                );
+            return (
+                <EmptyDates
+                    section={activeSection}
+                    showHomeCta={needsHoldCta}
+                    onGoHome={() => router.push('/(tabs)')}
+                />
+            );
         }
 
         return (
@@ -167,6 +199,14 @@ export default function DatesScreen() {
                     Mutual matches and curated plans
                 </Text>
             </View>
+
+            {showActionBanner && activeHold ? (
+                <ActionRequiredBanner
+                    partnerFirstName={activeHold.partner.firstName ?? 'your match'}
+                    slot={activeHold.slotConfirmation}
+                    onPress={() => setConfirmModalVisible(true)}
+                />
+            ) : null}
 
             <View style={[styles.segmentWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}>
                 <View
@@ -255,6 +295,14 @@ export default function DatesScreen() {
                     setCelebrationMatch(null);
                 }}
             />
+
+            {activeHold && confirmModalVisible ? (
+                <MeetupSlotConfirmModal
+                    visible={confirmModalVisible}
+                    hold={activeHold}
+                    onCancelHold={() => setConfirmModalVisible(false)}
+                />
+            ) : null}
         </ScreenGradient>
         </TabSwipeView>
     );

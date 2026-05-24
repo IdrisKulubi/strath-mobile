@@ -1534,6 +1534,23 @@ export async function respondToCandidatePair(
                     reason: "mutual_created",
                 }),
             ]);
+
+            if (
+                result.mutual.scheduledAt
+                && result.mutual.slotConfirmBy
+            ) {
+                const { sendMeetupSlotAssignedPushes } = await import(
+                    "@/lib/services/meetup-push-notifications-service"
+                );
+                await sendMeetupSlotAssignedPushes({
+                    userAId: result.mutual.userAId,
+                    userBId: result.mutual.userBId,
+                    scheduledAt: result.mutual.scheduledAt,
+                    confirmBy: result.mutual.slotConfirmBy,
+                }).catch((err) => {
+                    console.warn("[candidate-pairs] meetup slot push failed", err);
+                });
+            }
         }
         return { pair: result.pair, mutual: result.mutual };
     });

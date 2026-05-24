@@ -67,9 +67,22 @@ export async function backfillArrangingMeetupSlots(
                 legacyDateMatchId: dateMatchId,
                 userASlotConfirmedAt: null,
                 userBSlotConfirmedAt: null,
+                slotConfirmReminderSentAt: null,
                 updatedAt: backfillAt,
             })
             .where(eq(mutualMatches.id, row.id));
+
+        const { sendMeetupSlotAssignedPushes } = await import(
+            "@/lib/services/meetup-push-notifications-service"
+        );
+        await sendMeetupSlotAssignedPushes({
+            userAId: row.userAId,
+            userBId: row.userBId,
+            scheduledAt: assignment.scheduledAt,
+            confirmBy: assignment.confirmBy,
+        }).catch((err) => {
+            console.warn("[meetup-backfill] slot push failed", row.id, err);
+        });
 
         updated += 1;
         details.push({

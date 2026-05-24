@@ -140,6 +140,18 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                 </View>
             )}
 
+            {match.needsSlotConfirmation && !match.viewerSlotConfirmed && match.partnerSlotConfirmed ? (
+                <Text style={[styles.partnerTurnHint, { color: colors.primary }]}>
+                    {match.withUser.firstName} confirmed — your turn to lock in the date.
+                </Text>
+            ) : null}
+
+            {match.needsSlotConfirmation && match.viewerSlotConfirmed && !match.partnerSlotConfirmed ? (
+                <Text style={[styles.partnerTurnHint, { color: colors.mutedForeground }]}>
+                    You confirmed · Waiting for {match.withUser.firstName} to confirm.
+                </Text>
+            ) : null}
+
             {match.needsSlotConfirmation && match.confirmBy ? (
                 <MeetupSlotConfirm
                     mutualMatchId={match.id}
@@ -328,6 +340,11 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 14,
         fontWeight: '600',
+    },
+    partnerTurnHint: {
+        fontSize: 13,
+        lineHeight: 18,
+        fontWeight: '500',
     },
     chatBlockedHint: {
         fontSize: 13,

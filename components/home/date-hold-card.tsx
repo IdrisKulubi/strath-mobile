@@ -110,8 +110,8 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                             ) : null}
                             <Text style={[styles.waitingPartner, { color: colors.mutedForeground }]}>
                                 {hold.slotConfirmation.partnerSlotConfirmed
-                                    ? 'Finalizing your date.'
-                                    : `Waiting for ${partnerName} to confirm.`}
+                                    ? `${partnerName} confirmed — finalizing your date.`
+                                    : `You confirmed · Waiting for ${partnerName} to confirm.`}
                             </Text>
                         </View>
                     ) : !hold.slotConfirmation?.needsSlotConfirmation && (hold.scheduledAt || hold.venueName) ? (
@@ -357,7 +357,7 @@ function buildCopy(hold: MatchHold): HoldCopy {
                     : 'Your date is being finalized. New intros stay paused.',
                 footnote: hold.slotConfirmation?.needsSlotConfirmation
                     ? 'Messaging unlocks after you confirm.'
-                    : 'You will get a push notification once it is confirmed.',
+                    : 'Open Dates for details while your plan is finalized.',
                 primaryCta: hold.slotConfirmation?.needsSlotConfirmation
                     ? null
                     : { label: 'See arrangement', kind: 'view' },

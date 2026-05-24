@@ -9,12 +9,21 @@ import { MessagesHeader } from '@/components/messages';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 import { useTheme } from '@/hooks/use-theme';
 import { useConversations, type Conversation } from '@/hooks/use-conversations';
+import { useDailyMatches } from '@/hooks/use-daily-matches';
+import { ActionRequiredBanner } from '@/components/attention/action-required-banner';
 
 export default function ChatsScreen() {
     const { colors, colorScheme } = useTheme();
     const router = useRouter();
 
     const { data: conversations = [], isLoading, refetch } = useConversations();
+    const dailyMatches = useDailyMatches();
+    const activeHold = dailyMatches.data?.hold ?? null;
+    const showConfirmBanner = Boolean(
+        activeHold?.slotConfirmation?.needsSlotConfirmation
+        && !activeHold?.slotConfirmation?.viewerSlotConfirmed
+        && activeHold?.slotConfirmation?.confirmWindowOpen,
+    );
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showSearch, setShowSearch] = useState(false);
@@ -137,6 +146,14 @@ export default function ChatsScreen() {
                     onSearchChange={setSearchQuery}
                     onOpenArchived={() => setShowArchivedSheet(true)}
                 />
+
+                {showConfirmBanner && activeHold ? (
+                    <ActionRequiredBanner
+                        partnerFirstName={activeHold.partner.firstName ?? 'your match'}
+                        slot={activeHold.slotConfirmation}
+                        onPress={() => router.push('/(tabs)')}
+                    />
+                ) : null}
 
                 <View style={styles.listContainer}>
                     <ConversationsList

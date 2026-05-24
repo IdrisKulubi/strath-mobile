@@ -13,9 +13,10 @@ import { getProfileRoute } from '@/lib/profile-access';
 export default function TabLayout() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { unreadMessages, datesAttention } = useNotificationCounts();
+  const { unreadMessages, homeAttention, datesActionable } = useNotificationCounts();
   const { data: profile, error: profileError, isError: isProfileError, isLoading, isSuccess } = useProfile();
-  const datesBadge = datesAttention ?? 0;
+  const homeBadge = homeAttention ?? 0;
+  const datesBadge = datesActionable ?? 0;
   const nextRoute = isSuccess ? getProfileRoute(profile) : null;
 
   useEffect(() => {
@@ -111,6 +112,7 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, focused }) => <Ionicons size={26} name={focused ? "home" : "home-outline"} color={color} />,
+          tabBarBadge: formatBadgeCount(homeBadge),
         }}
       />
       <Tabs.Screen

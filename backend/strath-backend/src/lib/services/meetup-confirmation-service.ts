@@ -20,6 +20,7 @@ import { syncMutualMatchFromDateMatch } from "@/lib/services/mutual-match-servic
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
+import { notifyPartnerAfterSlotConfirm } from "@/lib/services/meetup-push-notifications-service";
 
 export interface SlotConfirmationView {
     assignedSlot: MeetupSlotKind | null;
@@ -238,6 +239,10 @@ export async function confirmMeetupSlot(
                 updatedAt: now,
             })
             .where(eq(mutualMatches.id, mutualMatchId));
+    }
+
+    if (!alreadyConfirmed) {
+        await notifyPartnerAfterSlotConfirm(mutualMatchId, userId);
     }
 
     const finalize = await tryFinalizeConfirmedMeetup(mutualMatchId);
