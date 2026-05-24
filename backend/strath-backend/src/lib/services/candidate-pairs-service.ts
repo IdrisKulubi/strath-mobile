@@ -5,6 +5,7 @@ import {
     blocks,
     candidatePairHistory,
     candidatePairs,
+    dateMatches,
     matches,
     mutualMatches,
     profiles,
@@ -20,6 +21,7 @@ import {
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
 import { expireQueuedPairsForUser, isUserOnMatchHold } from "@/lib/services/match-hold-service";
+import { assignMeetupSlot } from "@/lib/services/meetup-slot-service";
 import { isAdminMatchPreviewUser, resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
@@ -1473,6 +1475,8 @@ export async function respondToCandidatePair(
                     updatedPair.userAId,
                     updatedPair.userBId,
                 );
+                const mutualAt = new Date();
+                const assignment = assignMeetupSlot(mutualAt);
                 const [createdMutual] = await tx
                     .insert(mutualMatches)
                     .values({
@@ -1481,9 +1485,34 @@ export async function respondToCandidatePair(
                         userBId: updatedPair.userBId,
                         status: "mutual",
                         legacyMatchId: legacyMatch.id,
+                        scheduledAt: assignment.scheduledAt,
+                        slotConfirmBy: assignment.confirmBy,
+                        assignedSlot: assignment.slot,
                     })
                     .returning();
-                mutual = createdMutual;
+                const [createdDateMatch] = await tx
+                    .insert(dateMatches)
+                    .values({
+                        candidatePairId: updatedPair.id,
+                        userAId: updatedPair.userAId,
+                        userBId: updatedPair.userBId,
+                        vibe: "coffee",
+                        status: "pending_setup",
+                        scheduledAt: assignment.scheduledAt,
+                        callCompleted: false,
+                        userAConfirmed: false,
+                        userBConfirmed: false,
+                        createdAt: mutualAt,
+                    })
+                    .returning({ id: dateMatches.id });
+                await tx
+                    .update(mutualMatches)
+                    .set({ legacyDateMatchId: createdDateMatch.id, updatedAt: mutualAt })
+                    .where(eq(mutualMatches.id, createdMutual.id));
+                mutual = {
+                    ...createdMutual,
+                    legacyDateMatchId: createdDateMatch.id,
+                };
                 mutualWasJustCreated = true;
             }
         }

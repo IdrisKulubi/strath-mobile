@@ -15,6 +15,7 @@ import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { MutualDate, ARRANGEMENT_STATUS_LABELS, isChatUnlocked } from '@/hooks/use-date-requests';
+import { MeetupSlotConfirm } from '@/components/dates/meetup-slot-confirm';
 
 interface ConfirmedMatchCardProps {
     match: MutualDate;
@@ -148,16 +149,26 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                 </View>
             )}
 
-            {match.arrangementStatus === 'mutual' && (
-                <View style={[styles.mutualHintBlock, { backgroundColor: isDark ? 'rgba(233,30,140,0.08)' : 'rgba(233,30,140,0.06)', borderColor: 'rgba(233,30,140,0.25)' }]}>
+            {match.needsSlotConfirmation && match.confirmBy ? (
+                <MeetupSlotConfirm
+                    mutualMatchId={match.id}
+                    partnerFirstName={match.withUser.firstName}
+                    scheduledAt={match.scheduledAt ?? null}
+                    confirmBy={match.confirmBy}
+                    viewerSlotConfirmed={Boolean(match.viewerSlotConfirmed)}
+                    partnerSlotConfirmed={Boolean(match.partnerSlotConfirmed)}
+                    confirmWindowOpen={Boolean(match.confirmWindowOpen)}
+                />
+            ) : match.arrangementStatus === 'mutual' ? (
+                <View style={[styles.mutualHintBlock, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', borderColor: colors.border }]}>
                     <View style={styles.mutualHintRow}>
-                        <Ionicons name="chatbubble-ellipses" size={16} color={colors.primary} />
+                        <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.primary} />
                         <Text style={[styles.scheduledText, { color: colors.foreground, flex: 1 }]}>
-                            You matched. Say hi in chat while we arrange your date.
+                            You matched. Say hi in chat while your date is confirmed.
                         </Text>
                     </View>
                 </View>
-            )}
+            ) : null}
 
             {chatUnlocked && (
                 <Pressable

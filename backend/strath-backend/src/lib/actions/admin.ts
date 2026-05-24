@@ -948,12 +948,45 @@ export async function createDateLocation(formData: FormData) {
             ? vibeValue
             : null;
 
+    const existingDefault = await db.query.dateLocations.findFirst({
+        where: and(eq(dateLocations.isActive, true), eq(dateLocations.isDefault, true)),
+    });
+
     await db.insert(dateLocations).values({
         name,
         address,
         vibe,
         notes: notes || null,
         isActive: true,
+        isDefault: !existingDefault,
+    });
+
+    revalidatePath("/admin/locations");
+    revalidatePath("/admin/pending-dates");
+}
+
+export async function setDefaultDateLocation(locationId: string) {
+    await requireAdmin();
+
+    const location = await db.query.dateLocations.findFirst({
+        where: eq(dateLocations.id, locationId),
+    });
+    if (!location) {
+        throw new Error("Location not found");
+    }
+    if (!location.isActive) {
+        throw new Error("Only active locations can be the default venue");
+    }
+
+    await db.transaction(async (tx) => {
+        await tx
+            .update(dateLocations)
+            .set({ isDefault: false })
+            .where(eq(dateLocations.isDefault, true));
+        await tx
+            .update(dateLocations)
+            .set({ isDefault: true })
+            .where(eq(dateLocations.id, locationId));
     });
 
     revalidatePath("/admin/locations");
@@ -965,7 +998,10 @@ export async function toggleDateLocation(locationId: string, nextActive: boolean
 
     await db
         .update(dateLocations)
-        .set({ isActive: nextActive })
+        .set({
+            isActive: nextActive,
+            ...(nextActive ? {} : { isDefault: false }),
+        })
         .where(eq(dateLocations.id, locationId));
 
     revalidatePath("/admin/locations");

@@ -29,6 +29,16 @@ export type MatchHoldStatus =
     | 'upcoming'
     | 'completed_pending_feedback';
 
+export interface SlotConfirmationState {
+    assignedSlot: 'wednesday' | 'saturday' | null;
+    scheduledAt: string | null;
+    confirmBy: string | null;
+    confirmWindowOpen: boolean;
+    viewerSlotConfirmed: boolean;
+    partnerSlotConfirmed: boolean;
+    needsSlotConfirmation: boolean;
+}
+
 export interface MatchHold {
     mutualMatchId: string;
     candidatePairId: string;
@@ -48,6 +58,7 @@ export interface MatchHold {
     needsFeedback: boolean;
     autoReleaseAt: string | null;
     createdAt: string;
+    slotConfirmation: SlotConfirmationState;
 }
 
 export type MatchHoldCancelReason =
@@ -68,6 +79,22 @@ export interface DailyMatchesResponse {
     hasUpcomingQueued?: boolean;
     hold?: MatchHold | null;
     manualCuration?: ManualCuration | null;
+}
+
+function normalizeMatchHold(hold: MatchHold & { slotConfirmation?: SlotConfirmationState }): MatchHold {
+    const slot = hold.slotConfirmation;
+    return {
+        ...hold,
+        slotConfirmation: {
+            assignedSlot: slot?.assignedSlot ?? null,
+            scheduledAt: slot?.scheduledAt ?? hold.scheduledAt ?? null,
+            confirmBy: slot?.confirmBy ?? null,
+            confirmWindowOpen: slot?.confirmWindowOpen ?? false,
+            viewerSlotConfirmed: slot?.viewerSlotConfirmed ?? false,
+            partnerSlotConfirmed: slot?.partnerSlotConfirmed ?? false,
+            needsSlotConfirmation: slot?.needsSlotConfirmation ?? false,
+        },
+    };
 }
 
 export function useDailyMatches() {
@@ -93,7 +120,7 @@ export function useDailyMatches() {
                 mode,
                 matches: Array.isArray(data.matches) ? data.matches : [],
                 hasUpcomingQueued: Boolean(data.hasUpcomingQueued),
-                hold: data.hold ?? null,
+                hold: data.hold ? normalizeMatchHold(data.hold) : null,
                 manualCuration: data.manualCuration ?? null,
             };
         },

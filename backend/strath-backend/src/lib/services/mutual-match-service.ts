@@ -7,6 +7,7 @@ import {
     profiles,
 } from "@/db/schema";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
+import { buildSlotConfirmationView } from "@/lib/services/meetup-confirmation-service";
 
 /**
  * Admin moves a mutual match to arranging: flip `mutualMatches` to `being_arranged` and
@@ -67,16 +68,12 @@ export async function bridgeMutualToBeingArranged(input: {
         const stillNeedsSetup =
             existingDateMatch.status === "pending_setup" || existingDateMatch.status === "cancelled";
 
-        const update: Partial<typeof dateMatches.$inferInsert> = {
-            callCompleted: true,
-            userAConfirmed: true,
-            userBConfirmed: true,
-        };
         if (stillNeedsSetup && existingDateMatch.status !== "pending_setup") {
-            update.status = "pending_setup";
+            await db
+                .update(dateMatches)
+                .set({ status: "pending_setup" })
+                .where(eq(dateMatches.id, existingDateMatch.id));
         }
-
-        await db.update(dateMatches).set(update).where(eq(dateMatches.id, existingDateMatch.id));
     } else {
         const [inserted] = await db
             .insert(dateMatches)
@@ -84,10 +81,11 @@ export async function bridgeMutualToBeingArranged(input: {
                 userAId,
                 userBId,
                 vibe: "coffee",
-                callCompleted: true,
-                userAConfirmed: true,
-                userBConfirmed: true,
+                callCompleted: false,
+                userAConfirmed: false,
+                userBConfirmed: false,
                 status: "pending_setup",
+                scheduledAt: mutualRow.scheduledAt ?? null,
                 candidatePairId: mutualRow.candidatePairId ?? input.candidatePairId ?? null,
                 createdAt: now,
             })
@@ -143,6 +141,12 @@ export type MutualDatesItem = {
     venueName?: string;
     venueAddress?: string;
     scheduledAt?: string;
+    confirmBy?: string;
+    assignedSlot?: "wednesday" | "saturday";
+    viewerSlotConfirmed?: boolean;
+    partnerSlotConfirmed?: boolean;
+    needsSlotConfirmation?: boolean;
+    confirmWindowOpen?: boolean;
     createdAt: string;
     /**
      * Unread messages the viewer has not read yet in the linked chat thread. Populated
@@ -326,6 +330,17 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                 venueName: row.venueName ?? undefined,
                 venueAddress: row.venueAddress ?? undefined,
                 scheduledAt: row.scheduledAt?.toISOString() ?? undefined,
+                ...(() => {
+                    const slot = buildSlotConfirmationView(row, userId);
+                    return {
+                        confirmBy: slot.confirmBy ?? undefined,
+                        assignedSlot: slot.assignedSlot ?? undefined,
+                        viewerSlotConfirmed: slot.viewerSlotConfirmed,
+                        partnerSlotConfirmed: slot.partnerSlotConfirmed,
+                        needsSlotConfirmation: slot.needsSlotConfirmation,
+                        confirmWindowOpen: slot.confirmWindowOpen,
+                    };
+                })(),
                 createdAt: row.createdAt.toISOString(),
             };
         }),

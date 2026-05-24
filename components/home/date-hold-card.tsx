@@ -13,6 +13,7 @@ import {
     MatchHoldCancelReason,
     useCancelMatchHold,
 } from '@/hooks/use-daily-matches';
+import { MeetupSlotConfirm } from '@/components/dates/meetup-slot-confirm';
 
 interface DateHoldCardProps {
     hold: MatchHold;
@@ -97,7 +98,17 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                     <Text style={[styles.title, { color: colors.foreground }]}>{copy.title}</Text>
                     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{copy.subtitle}</Text>
 
-                    {(hold.scheduledAt || hold.venueName) && (
+                    {hold.slotConfirmation?.needsSlotConfirmation ? (
+                        <MeetupSlotConfirm
+                            mutualMatchId={hold.mutualMatchId}
+                            partnerFirstName={partnerName}
+                            scheduledAt={hold.slotConfirmation.scheduledAt}
+                            confirmBy={hold.slotConfirmation.confirmBy}
+                            viewerSlotConfirmed={hold.slotConfirmation.viewerSlotConfirmed}
+                            partnerSlotConfirmed={hold.slotConfirmation.partnerSlotConfirmed}
+                            confirmWindowOpen={hold.slotConfirmation.confirmWindowOpen}
+                        />
+                    ) : (hold.scheduledAt || hold.venueName) ? (
                         <View style={[styles.detailsBlock, { borderColor: cardBorder }]}>
                             {hold.scheduledAt ? (
                                 <View style={styles.detailRow}>
@@ -117,7 +128,7 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                                 </View>
                             ) : null}
                         </View>
-                    )}
+                    ) : null}
 
                     <View style={styles.ctaStack}>
                         {copy.primaryCta ? (
@@ -318,11 +329,12 @@ function buildCopy(hold: MatchHold): HoldCopy {
         case 'mutual':
             return {
                 statusLabel: 'Mutual match',
-                statusIcon: 'sparkles',
+                statusIcon: 'heart',
                 title: `You and ${name} both said yes`,
-                subtitle:
-                    'Say hi in chat while we line up your date. New intros are paused so you can focus on this match.',
-                footnote: 'You can cancel any time and we’ll keep matching you.',
+                subtitle: hold.slotConfirmation?.needsSlotConfirmation
+                    ? 'Confirm your assigned campus date below. New intros stay paused until this is settled.'
+                    : 'Say hi in chat while your date is lined up. New intros are paused for this match.',
+                footnote: 'You can cancel any time and we will keep matching you.',
                 primaryCta: { label: 'Message in Dates', kind: 'view' },
             };
         case 'being_arranged':

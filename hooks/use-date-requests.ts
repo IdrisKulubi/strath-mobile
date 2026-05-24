@@ -24,6 +24,12 @@ export interface MutualDate {
     venueName?: string;
     venueAddress?: string;
     scheduledAt?: string;
+    confirmBy?: string;
+    assignedSlot?: 'wednesday' | 'saturday';
+    viewerSlotConfirmed?: boolean;
+    partnerSlotConfirmed?: boolean;
+    needsSlotConfirmation?: boolean;
+    confirmWindowOpen?: boolean;
     /** Unread messages the viewer has not yet read in the linked chat thread. */
     unreadMessageCount?: number;
 }
