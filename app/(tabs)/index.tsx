@@ -22,6 +22,7 @@ import { DailyRecommendationsPreview } from '@/components/discovery/daily-recomm
 import { MatchPreferencePanel } from '@/components/discovery/match-preference-panel';
 import { DailyMatchesList } from '@/components/home/daily-matches-list';
 import { DateHoldCard } from '@/components/home/date-hold-card';
+import { MeetupSlotConfirmModal } from '@/components/dates/meetup-slot-confirm-modal';
 import { ManualCurationCard } from '@/components/home/manual-curation-card';
 import {
     DailyMatch,
@@ -74,14 +75,21 @@ export default function HomeScreen() {
     const recommendationDecision = useRecommendationDecision();
     const priorityMatches = dailyMatches.data?.matches ?? [];
     const activeHold = dailyMatches.data?.hold ?? null;
+    const needsConfirmGate = Boolean(
+        activeHold?.slotConfirmation?.needsSlotConfirmation
+        && !activeHold?.slotConfirmation?.viewerSlotConfirmed,
+    );
     const hasPriorityMatch = priorityMatches.length > 0;
-    const shouldShowRecommendations = !activeHold && !hasPriorityMatch;
+    const shouldShowRecommendations = !needsConfirmGate && !activeHold && !hasPriorityMatch;
     const recommendations = useMemo(
         () => shouldShowRecommendations ? (dailyRecommendations.data?.recommendations ?? []).slice(0, 5) : [],
         [dailyRecommendations.data?.recommendations, shouldShowRecommendations]
     );
-    const showCarousel = !activeHold && (hasPriorityMatch || (shouldShowRecommendations && recommendations.length > 0));
-    const showPrefsPanel = !hasPriorityMatch && !activeHold;
+    const showCarousel =
+        !needsConfirmGate
+        && !activeHold
+        && (hasPriorityMatch || (shouldShowRecommendations && recommendations.length > 0));
+    const showPrefsPanel = !needsConfirmGate && !hasPriorityMatch && !activeHold;
     const { cardHeight, headerCompact, itemWidthRatio } = useHomeIntroLayout(prefsExpanded, showPrefsPanel);
 
     const scrollMinHeight = windowHeight - tabBarHeight;
@@ -212,6 +220,8 @@ export default function HomeScreen() {
 
     const mainContent = dailyMatches.isLoading || (shouldShowRecommendations && dailyRecommendations.isLoading) ? (
         <HomeSkeleton />
+    ) : needsConfirmGate ? (
+        <View style={styles.confirmGatePlaceholder} />
     ) : activeHold ? (
         <DateHoldCard hold={activeHold} />
     ) : hasPriorityMatch ? (
@@ -283,6 +293,14 @@ export default function HomeScreen() {
                     firstName={infoSheet.firstName}
                     onClose={() => setInfoSheet((state) => ({ ...state, visible: false }))}
                 />
+
+                {needsConfirmGate && activeHold ? (
+                    <MeetupSlotConfirmModal
+                        visible
+                        hold={activeHold}
+                        onCancelHold={() => router.push('/(tabs)/dates')}
+                    />
+                ) : null}
             </SafeAreaView>
         </TabSwipeView>
     );
@@ -323,5 +341,8 @@ const styles = StyleSheet.create({
     cardSkeleton: {
         height: 430,
         borderRadius: 24,
+    },
+    confirmGatePlaceholder: {
+        minHeight: 120,
     },
 });

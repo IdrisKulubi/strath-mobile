@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+    assignLegacyArrangingSlot,
     assignMeetupSlot,
     getMeetupSlotConfig,
     getNairobiParts,
+    getThisWeekWednesdayOccurrence,
     isConfirmWindowOpen,
     pickSlotKindForMatchDay,
     nairobiLocalToUtc,
@@ -84,6 +86,22 @@ test("isConfirmWindowOpen respects confirmBy", () => {
     const confirmBy = new Date("2026-05-20T11:30:00.000Z");
     assert.equal(isConfirmWindowOpen(confirmBy, new Date("2026-05-20T11:00:00.000Z")), true);
     assert.equal(isConfirmWindowOpen(confirmBy, new Date("2026-05-20T12:00:00.000Z")), false);
+});
+
+test("getThisWeekWednesdayOccurrence uses current week Wednesday in Nairobi", () => {
+    const thu = mutualAtNairobi(2026, 5, 21, 10, 0);
+    const scheduled = getThisWeekWednesdayOccurrence(thu, CONFIG);
+    const parts = getNairobiParts(scheduled);
+    assert.equal(parts.dayOfWeek, 3);
+    assert.equal(parts.day, 20);
+});
+
+test("assignLegacyArrangingSlot uses grace confirmBy when Wednesday already passed", () => {
+    const sat = mutualAtNairobi(2026, 5, 23, 12, 0);
+    const { slot, scheduledAt, confirmBy } = assignLegacyArrangingSlot(sat, CONFIG);
+    assert.equal(slot, "wednesday");
+    assert.equal(getNairobiParts(scheduledAt).day, 20);
+    assert.ok(confirmBy.getTime() > sat.getTime());
 });
 
 test("getMeetupSlotConfig returns defaults when env unset", () => {

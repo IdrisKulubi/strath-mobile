@@ -151,6 +151,45 @@ export function getNextMeetupOccurrence(
     return nairobiLocalToUtc(targetDate.year, targetDate.month, targetDate.day, hour, minute);
 }
 
+/** Wednesday 17:30 EAT for the current Sun–Sat week in Nairobi (may be in the past). */
+export function getThisWeekWednesdayOccurrence(
+    reference: Date = new Date(),
+    config: MeetupSlotConfig = getMeetupSlotConfig(),
+): Date {
+    const parts = getNairobiParts(reference);
+    const daysBackToWednesday = (parts.dayOfWeek - TARGET_DOW.wednesday + 7) % 7;
+    const wedDate = addDaysToNairobiDate(parts, -daysBackToWednesday);
+    return nairobiLocalToUtc(
+        wedDate.year,
+        wedDate.month,
+        wedDate.day,
+        config.wednesdayHour,
+        config.wednesdayMinute,
+    );
+}
+
+export const LEGACY_ARRANGING_CONFIRM_GRACE_HOURS = 48;
+
+/** One-time backfill slot for existing Arranging matches (this week's Wednesday). */
+export function assignLegacyArrangingSlot(
+    backfillAt: Date = new Date(),
+    config: MeetupSlotConfig = getMeetupSlotConfig(),
+): AssignedMeetupSlot {
+    const scheduledAt = getThisWeekWednesdayOccurrence(backfillAt, config);
+    const standardConfirmBy = new Date(
+        scheduledAt.getTime() - config.confirmLeadHours * 60 * 60 * 1000,
+    );
+    const graceConfirmBy = new Date(
+        backfillAt.getTime() + LEGACY_ARRANGING_CONFIRM_GRACE_HOURS * 60 * 60 * 1000,
+    );
+    const confirmBy =
+        standardConfirmBy.getTime() > backfillAt.getTime()
+            ? standardConfirmBy
+            : graceConfirmBy;
+
+    return { slot: "wednesday", scheduledAt, confirmBy };
+}
+
 export function assignMeetupSlot(
     mutualAt: Date,
     config: MeetupSlotConfig = getMeetupSlotConfig(),
@@ -188,4 +227,14 @@ export function bothUsersConfirmedSlot(row: {
     userBSlotConfirmedAt: Date | null;
 }): boolean {
     return Boolean(row.userASlotConfirmedAt && row.userBSlotConfirmedAt);
+}
+
+const SLOT_CONFIRM_STATUSES = ["mutual", "being_arranged"] as const;
+
+export type SlotConfirmStatus = (typeof SLOT_CONFIRM_STATUSES)[number];
+
+export function isSlotConfirmEligibleStatus(
+    status: string,
+): status is SlotConfirmStatus {
+    return (SLOT_CONFIRM_STATUSES as readonly string[]).includes(status);
 }

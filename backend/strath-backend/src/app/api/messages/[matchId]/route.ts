@@ -56,7 +56,7 @@ export async function GET(
             return errorResponse(new Error("Match not found or unauthorized"), 404);
         }
 
-        const gate = await assertChatUnlocked(matchId);
+        const gate = await assertChatUnlocked(matchId, session.user.id);
         if (gate) return gate;
 
         const chatHistory = await db.query.messages.findMany({
@@ -121,7 +121,7 @@ export async function POST(
             return errorResponse(new Error("Match not found or unauthorized"), 404);
         }
 
-        const gate = await assertChatUnlocked(matchId);
+        const gate = await assertChatUnlocked(matchId, session.user.id);
         if (gate) return gate;
 
         const partnerId = match.user1Id === session.user.id ? match.user2Id : match.user1Id;

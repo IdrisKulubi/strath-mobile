@@ -108,15 +108,17 @@ const CHAT_UNLOCKED_STATUSES: MutualDate['arrangementStatus'][] = [
     'completed',
 ];
 
-/** Messaging is available for mutual matches once a chat thread exists. */
+/** Messaging is available once a chat thread exists and the viewer has confirmed their assigned slot. */
 export function isChatUnlocked(match: MutualDate): boolean {
     if (!match.legacyMatchId) return false;
-    return CHAT_UNLOCKED_STATUSES.includes(match.arrangementStatus);
+    if (!CHAT_UNLOCKED_STATUSES.includes(match.arrangementStatus)) return false;
+    if (match.needsSlotConfirmation && !match.viewerSlotConfirmed) return false;
+    return true;
 }
 
 export const ARRANGEMENT_STATUS_LABELS: Record<MutualDate['arrangementStatus'], string> = {
     mutual: 'You both said yes',
-    being_arranged: "We're arranging this one for you",
+    being_arranged: 'Confirm your date',
     upcoming: 'Date confirmed',
     completed: 'Completed',
     cancelled: 'Cancelled',

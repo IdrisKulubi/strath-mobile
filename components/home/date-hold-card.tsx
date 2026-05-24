@@ -13,7 +13,7 @@ import {
     MatchHoldCancelReason,
     useCancelMatchHold,
 } from '@/hooks/use-daily-matches';
-import { MeetupSlotConfirm } from '@/components/dates/meetup-slot-confirm';
+import { formatMeetupSlot } from '@/lib/meetup-slot';
 
 interface DateHoldCardProps {
     hold: MatchHold;
@@ -98,17 +98,23 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                     <Text style={[styles.title, { color: colors.foreground }]}>{copy.title}</Text>
                     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{copy.subtitle}</Text>
 
-                    {hold.slotConfirmation?.needsSlotConfirmation ? (
-                        <MeetupSlotConfirm
-                            mutualMatchId={hold.mutualMatchId}
-                            partnerFirstName={partnerName}
-                            scheduledAt={hold.slotConfirmation.scheduledAt}
-                            confirmBy={hold.slotConfirmation.confirmBy}
-                            viewerSlotConfirmed={hold.slotConfirmation.viewerSlotConfirmed}
-                            partnerSlotConfirmed={hold.slotConfirmation.partnerSlotConfirmed}
-                            confirmWindowOpen={hold.slotConfirmation.confirmWindowOpen}
-                        />
-                    ) : (hold.scheduledAt || hold.venueName) ? (
+                    {hold.slotConfirmation?.needsSlotConfirmation && hold.slotConfirmation.viewerSlotConfirmed ? (
+                        <View style={[styles.detailsBlock, { borderColor: cardBorder }]}>
+                            {hold.slotConfirmation.scheduledAt ? (
+                                <View style={styles.detailRow}>
+                                    <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+                                    <Text style={[styles.detailText, { color: colors.foreground }]}>
+                                        {formatMeetupSlot(hold.slotConfirmation.scheduledAt)}
+                                    </Text>
+                                </View>
+                            ) : null}
+                            <Text style={[styles.waitingPartner, { color: colors.mutedForeground }]}>
+                                {hold.slotConfirmation.partnerSlotConfirmed
+                                    ? 'Finalizing your date.'
+                                    : `Waiting for ${partnerName} to confirm.`}
+                            </Text>
+                        </View>
+                    ) : !hold.slotConfirmation?.needsSlotConfirmation && (hold.scheduledAt || hold.venueName) ? (
                         <View style={[styles.detailsBlock, { borderColor: cardBorder }]}>
                             {hold.scheduledAt ? (
                                 <View style={styles.detailRow}>
@@ -339,13 +345,22 @@ function buildCopy(hold: MatchHold): HoldCopy {
             };
         case 'being_arranged':
             return {
-                statusLabel: 'Arranging your date',
-                statusIcon: 'sparkles',
-                title: `Setting up your date with ${name}`,
-                subtitle:
-                    'We’re working with you both to pick a time and venue. Hang tight — new intros are on pause.',
-                footnote: 'You’ll get a push notification once it’s confirmed.',
-                primaryCta: { label: 'See arrangement', kind: 'view' },
+                statusLabel: hold.slotConfirmation?.needsSlotConfirmation
+                    ? 'Confirm your date'
+                    : 'Arranging your date',
+                statusIcon: hold.slotConfirmation?.needsSlotConfirmation ? 'calendar' : 'calendar-outline',
+                title: hold.slotConfirmation?.needsSlotConfirmation
+                    ? `Confirm your date with ${name}`
+                    : `Setting up your date with ${name}`,
+                subtitle: hold.slotConfirmation?.needsSlotConfirmation
+                    ? 'Your campus time is assigned. Confirm below to continue.'
+                    : 'Your date is being finalized. New intros stay paused.',
+                footnote: hold.slotConfirmation?.needsSlotConfirmation
+                    ? 'Messaging unlocks after you confirm.'
+                    : 'You will get a push notification once it is confirmed.',
+                primaryCta: hold.slotConfirmation?.needsSlotConfirmation
+                    ? null
+                    : { label: 'See arrangement', kind: 'view' },
             };
         case 'upcoming':
             return {
@@ -500,6 +515,11 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 14,
         fontWeight: '500',
+    },
+    waitingPartner: {
+        fontSize: 13,
+        lineHeight: 18,
+        marginTop: 4,
     },
     ctaStack: {
         marginTop: 4,

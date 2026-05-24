@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, lte, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
 import db from "@/db/drizzle";
 import { db as readDb } from "@/lib/db";
 import {
@@ -13,6 +13,7 @@ import {
     bothUsersConfirmedSlot,
     formatMeetupSlotForDisplay,
     isConfirmWindowOpen,
+    isSlotConfirmEligibleStatus,
     type MeetupSlotKind,
 } from "@/lib/services/meetup-slot-service";
 import { syncMutualMatchFromDateMatch } from "@/lib/services/mutual-match-service";
@@ -46,7 +47,7 @@ export function buildSlotConfirmationView(
         ? isConfirmWindowOpen(confirmBy)
         : false;
     const needsSlotConfirmation =
-        row.status === "mutual"
+        isSlotConfirmEligibleStatus(row.status)
         && Boolean(row.scheduledAt && confirmBy)
         && !bothUsersConfirmedSlot({
             userASlotConfirmedAt: row.userASlotConfirmedAt,
@@ -123,7 +124,9 @@ export async function tryFinalizeConfirmedMeetup(
         where: eq(mutualMatches.id, mutualMatchId),
     });
     if (!row) return { finalized: false, reason: "not_found" };
-    if (row.status !== "mutual") return { finalized: false, reason: "wrong_status" };
+    if (!isSlotConfirmEligibleStatus(row.status)) {
+        return { finalized: false, reason: "wrong_status" };
+    }
 
     if (
         !bothUsersConfirmedSlot({
@@ -212,7 +215,7 @@ export async function confirmMeetupSlot(
     if (!row) return { status: "not_found" };
     if (row.userAId !== userId && row.userBId !== userId) return { status: "forbidden" };
     if (row.status === "expired") return { status: "expired" };
-    if (row.status !== "mutual") {
+    if (!isSlotConfirmEligibleStatus(row.status)) {
         const slot = buildSlotConfirmationView(row, userId);
         return { status: "confirmed", slot, arrangementStatus: row.status };
     }
@@ -265,7 +268,7 @@ export async function confirmMeetupSlot(
 export async function expireUnconfirmedMeetups(mutualMatchId?: string): Promise<number> {
     const now = new Date();
     const conditions = [
-        eq(mutualMatches.status, "mutual"),
+        inArray(mutualMatches.status, ["mutual", "being_arranged"]),
         isNotNull(mutualMatches.slotConfirmBy),
         lte(mutualMatches.slotConfirmBy, now),
         or(

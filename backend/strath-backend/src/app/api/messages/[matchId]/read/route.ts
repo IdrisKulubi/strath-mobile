@@ -56,7 +56,7 @@ export async function PATCH(
             return errorResponse(new Error("Match not found or unauthorized"), 404);
         }
 
-        const gate = await assertChatUnlocked(matchId);
+        const gate = await assertChatUnlocked(matchId, session.user.id);
         if (gate) return gate;
 
         console.log('[MarkAsRead API] Marking messages as read for match:', matchId, 'user:', session.user.id);

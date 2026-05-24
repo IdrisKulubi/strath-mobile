@@ -140,15 +140,6 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                 </View>
             )}
 
-            {match.arrangementStatus === 'being_arranged' && (
-                <View style={[styles.scheduledBlock, { backgroundColor: isDark ? 'rgba(233,30,140,0.08)' : 'rgba(233,30,140,0.06)', borderColor: 'rgba(233,30,140,0.25)' }]}>
-                    <Ionicons name="sparkles" size={16} color={colors.primary} />
-                    <Text style={[styles.scheduledText, { color: colors.foreground }]}>
-                        Our team will reach out soon.
-                    </Text>
-                </View>
-            )}
-
             {match.needsSlotConfirmation && match.confirmBy ? (
                 <MeetupSlotConfirm
                     mutualMatchId={match.id}
@@ -168,6 +159,12 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                         </Text>
                     </View>
                 </View>
+            ) : null}
+
+            {match.needsSlotConfirmation && !match.viewerSlotConfirmed ? (
+                <Text style={[styles.chatBlockedHint, { color: colors.mutedForeground }]}>
+                    Confirm your date above before messaging.
+                </Text>
             ) : null}
 
             {chatUnlocked && (
@@ -331,6 +328,10 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 14,
         fontWeight: '600',
+    },
+    chatBlockedHint: {
+        fontSize: 13,
+        lineHeight: 18,
     },
     chatUnreadBadge: {
         minWidth: 22,
