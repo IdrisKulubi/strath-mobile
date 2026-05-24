@@ -20,27 +20,27 @@ export function getMatchTier(score: number): MatchTier {
     if (score >= 90) {
         return {
             id: "strong",
-            label: "Strong vibe match",
-            helper: "A standout curated pick for today",
+            label: "Strong match",
+            helper: "One of your best picks today",
         };
     }
     if (score >= 80) {
         return {
             id: "curated",
-            label: "Curated pick for today",
-            helper: "A thoughtfully chosen match for you",
+            label: "On your shortlist",
+            helper: "Chosen for your profile today",
         };
     }
     if (score >= 72) {
         return {
             id: "good",
-            label: "A good fit for today",
-            helper: "Handpicked based on what you share",
+            label: "In today's five",
+            helper: "Picked from profiles near you",
         };
     }
     return {
         id: "fallback",
-        label: "Curated for you",
-        helper: "A curated pick for today",
+        label: "Suggested for you",
+        helper: "From today's introductions",
     };
 }

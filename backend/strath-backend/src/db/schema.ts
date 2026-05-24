@@ -505,11 +505,11 @@ export const candidatePairs = pgTable(
         shownToAAt: timestamp("shown_to_a_at").defaultNow().notNull(),
         shownToBAt: timestamp("shown_to_b_at").defaultNow().notNull(),
         aDecision: text("a_decision")
-            .$type<"pending" | "open_to_meet" | "maybe" | "passed">()
+            .$type<"pending" | "open_to_meet" | "passed">()
             .default("pending")
             .notNull(),
         bDecision: text("b_decision")
-            .$type<"pending" | "open_to_meet" | "maybe" | "passed">()
+            .$type<"pending" | "open_to_meet" | "passed">()
             .default("pending")
             .notNull(),
         status: text("status")
@@ -596,7 +596,7 @@ export const recommendationEvents = pgTable(
         mutualProbabilityScore: integer("mutual_probability_score"),
         shownAt: timestamp("shown_at").defaultNow().notNull(),
         viewedAt: timestamp("viewed_at"),
-        decision: text("decision").$type<"shown" | "viewed" | "open_to_meet" | "maybe" | "passed" | "ignored">(),
+        decision: text("decision").$type<"shown" | "viewed" | "open_to_meet" | "passed" | "ignored">(),
         decidedAt: timestamp("decided_at"),
         createdCandidatePairId: uuid("created_candidate_pair_id").references(() => candidatePairs.id, { onDelete: "set null" }),
         metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
@@ -656,7 +656,7 @@ export const userMatchInterests = pgTable(
             .notNull()
             .references(() => user.id, { onDelete: "cascade" }),
         decision: text("decision")
-            .$type<"open_to_meet" | "maybe" | "passed">()
+            .$type<"open_to_meet" | "passed">()
             .notNull(),
         source: text("source")
             .$type<"daily_recommendations" | "browse" | "admin_curated" | "available_now">()

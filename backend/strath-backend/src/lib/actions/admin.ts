@@ -126,17 +126,11 @@ export async function getAdminDateRequests(statusFilter?: string) {
         };
     }
 
-    function decisionMeta(decision: "open_to_meet" | "maybe" | "passed", pairStatus: string) {
+    function decisionMeta(decision: "open_to_meet" | "passed", pairStatus: string) {
         if (decision === "open_to_meet") {
             return {
                 kind: "open_to_meet" as const,
                 label: pairStatus === "active" ? "Interested" : "Interest ended",
-            };
-        }
-        if (decision === "maybe") {
-            return {
-                kind: "maybe" as const,
-                label: pairStatus === "active" ? "Maybe later" : "Maybe ended",
             };
         }
         return { kind: "passed" as const, label: "Passed" };
@@ -252,7 +246,6 @@ export async function getAdminDateRequests(statusFilter?: string) {
         stats: {
             all: rows.length,
             openToMeet: decisionRows.filter((row) => row.kind === "open_to_meet").length,
-            maybe: decisionRows.filter((row) => row.kind === "maybe").length,
             passed: decisionRows.filter((row) => row.kind === "passed").length,
             mutual: mutualRows.length,
             legacy: legacyRows.length,
@@ -296,7 +289,6 @@ type DailyDiscoveryHealthRow = {
     overFive: number;
     decisions: number;
     interested: number;
-    maybe: number;
     passed: number;
     viewed: number;
     unmatchedOpenInterests: number;
@@ -369,9 +361,8 @@ export async function getAdminDailyDiscoveryHealth() {
             coalesce((select count(*)::int from viewer_counts where candidate_count = 5), 0) as "exactlyFive",
             coalesce((select count(*)::int from viewer_counts where candidate_count < 5), 0) as "underFive",
             coalesce((select count(*)::int from viewer_counts where candidate_count > 5), 0) as "overFive",
-            coalesce((select count(*)::int from today_events where decision in ('open_to_meet', 'maybe', 'passed')), 0) as "decisions",
+            coalesce((select count(*)::int from today_events where decision in ('open_to_meet', 'passed')), 0) as "decisions",
             coalesce((select count(*)::int from today_events where decision = 'open_to_meet'), 0) as "interested",
-            coalesce((select count(*)::int from today_events where decision = 'maybe'), 0) as "maybe",
             coalesce((select count(*)::int from today_events where decision = 'passed'), 0) as "passed",
             coalesce((select count(*)::int from today_events where decision = 'viewed'), 0) as "viewed",
             coalesce((select count(*)::int from open_interests where matched_candidate_pair_id is null), 0) as "unmatchedOpenInterests",
@@ -395,7 +386,6 @@ export async function getAdminDailyDiscoveryHealth() {
         overFive: Number(row?.overFive ?? 0),
         decisions: Number(row?.decisions ?? 0),
         interested: Number(row?.interested ?? 0),
-        maybe: Number(row?.maybe ?? 0),
         passed: Number(row?.passed ?? 0),
         viewed: Number(row?.viewed ?? 0),
         unmatchedOpenInterests: Number(row?.unmatchedOpenInterests ?? 0),

@@ -72,7 +72,6 @@ export type ManualMatchmakingProfile = {
         totalPairs: number;
         interested: number;
         passed: number;
-        maybe: number;
         mutual: number;
     };
 };
@@ -250,7 +249,7 @@ async function getPoolData() {
     const ensureStats = (userId: string) => {
         const existing = statsByUserId.get(userId);
         if (existing) return existing;
-        const fresh = { totalPairs: 0, interested: 0, passed: 0, maybe: 0, mutual: 0 };
+        const fresh = { totalPairs: 0, interested: 0, passed: 0, mutual: 0 };
         statsByUserId.set(userId, fresh);
         return fresh;
     };
@@ -264,7 +263,6 @@ async function getPoolData() {
             stats.totalPairs += 1;
             if (side.decision === "open_to_meet") stats.interested += 1;
             if (side.decision === "passed") stats.passed += 1;
-            if (side.decision === "maybe") stats.maybe += 1;
             if (pair.status === "mutual") stats.mutual += 1;
         }
     }
@@ -324,7 +322,7 @@ async function getPoolData() {
             activePairId: activePair?.id ?? null,
             activeMutualMatchId: activeMutual?.id ?? null,
             activePartnerName: partnerId ? profileNameByUserId.get(partnerId) ?? partnerId : null,
-            stats: statsByUserId.get(row.userId) ?? { totalPairs: 0, interested: 0, passed: 0, maybe: 0, mutual: 0 },
+            stats: statsByUserId.get(row.userId) ?? { totalPairs: 0, interested: 0, passed: 0, mutual: 0 },
         };
     });
 

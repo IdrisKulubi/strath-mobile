@@ -11,7 +11,7 @@ export interface UserProfileDetail {
     profilePhoto?: string;
     compatibilityScore: number;
     reasons: string[];
-    currentUserDecision: 'pending' | 'open_to_meet' | 'maybe' | 'passed';
+    currentUserDecision: 'pending' | 'open_to_meet' | 'passed';
     bio?: string;
     aboutMe?: string;
     interests?: string[];

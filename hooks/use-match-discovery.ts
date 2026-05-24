@@ -20,7 +20,7 @@ export type RecommendationSource =
   | 'admin_curated'
   | 'available_now';
 
-export type RecommendationDecision = 'open_to_meet' | 'maybe' | 'passed';
+export type RecommendationDecision = 'open_to_meet' | 'passed';
 export type CurrentRecommendationDecision = 'pending' | RecommendationDecision;
 
 export interface MatchPreferences {

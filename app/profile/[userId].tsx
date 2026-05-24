@@ -126,7 +126,7 @@ export default function ProfileViewScreen() {
     }, [router]);
 
     const updateProfileDecision = useCallback(
-        (decision: 'open_to_meet' | 'maybe' | 'passed') => {
+        (decision: 'open_to_meet' | 'passed') => {
             if (!userId) return;
             queryClient.setQueryData(
                 ['userProfile', userId],
@@ -266,69 +266,8 @@ export default function ProfileViewScreen() {
         userId,
     ]);
 
-    const handleMaybe = useCallback(() => {
-        if (!profile?.pairId) {
-            if (!canUseRecommendationDecision || !userId || !recommendationSource) return;
-
-            recommendationDecision.mutate(
-                {
-                    candidateUserId: userId,
-                    decision: 'maybe',
-                    source: recommendationSource,
-                    matchType: recommendationMatchType,
-                },
-                {
-                    onSuccess: () => {
-                        updateProfileDecision('maybe');
-                        toast.show({
-                            message: 'Saved for later.',
-                            variant: 'success',
-                            position: 'bottom',
-                        });
-                        setInfoSheet({ visible: true, type: 'maybe' });
-                    },
-                    onError: () => {
-                        toast.show({
-                            message: 'Could not save maybe later right now. Please try again.',
-                            variant: 'danger',
-                            position: 'bottom',
-                        });
-                    },
-                }
-            );
-            return;
-        }
-
-        respondToPair.mutate(
-            { pairId: profile.pairId, decision: 'maybe' },
-            {
-                onSuccess: () => {
-                    updateProfileDecision('maybe');
-                    setInfoSheet({ visible: true, type: 'maybe' });
-                },
-                onError: () => {
-                    toast.show({
-                        message: 'Could not save maybe later right now. Please try again.',
-                        variant: 'danger',
-                        position: 'bottom',
-                    });
-                },
-            }
-        );
-    }, [
-        canUseRecommendationDecision,
-        profile?.pairId,
-        recommendationDecision,
-        recommendationMatchType,
-        recommendationSource,
-        respondToPair,
-        toast,
-        updateProfileDecision,
-        userId,
-    ]);
-
     const handleCloseInfoSheet = useCallback(() => {
-        const wasPass = infoSheet.type === 'pass' || infoSheet.type === 'maybe';
+        const wasPass = infoSheet.type === 'pass';
         setInfoSheet((state) => ({ ...state, visible: false }));
         if (wasPass) {
             router.back();
@@ -597,7 +536,6 @@ export default function ProfileViewScreen() {
 
             <ProfileViewCta
                 onOpenToMeet={handleOpenToMeet}
-                onMaybe={profile.pairId || canUseRecommendationDecision ? handleMaybe : undefined}
                 onPass={profile.pairId || canUseRecommendationDecision ? handlePass : undefined}
                 completed={profile.currentUserDecision !== 'pending'}
                 disabled={(!profile.pairId && !canUseRecommendationDecision) || respondToPair.isPending || recommendationDecision.isPending}

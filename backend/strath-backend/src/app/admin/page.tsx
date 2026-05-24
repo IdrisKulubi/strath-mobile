@@ -161,7 +161,7 @@ export default async function AdminOverviewPage() {
                     <div className="rounded-lg bg-white/5 px-4 py-3">
                         <p className="text-xs uppercase tracking-wide text-gray-500">Decision split</p>
                         <p className="mt-1 text-sm text-gray-300">
-                            {discoveryHealth.interested} interested, {discoveryHealth.maybe} maybe, {discoveryHealth.passed} passed, {discoveryHealth.viewed} viewed.
+                            {discoveryHealth.interested} interested, {discoveryHealth.passed} passed, {discoveryHealth.viewed} viewed.
                         </p>
                     </div>
                     <div className="rounded-lg bg-white/5 px-4 py-3">

@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 
-export type DecisionSheetType = 'open_to_meet' | 'maybe' | 'pass' | 'view_profile' | 'already_responded';
+export type DecisionSheetType = 'open_to_meet' | 'pass' | 'view_profile' | 'already_responded';
 
 interface DecisionInfoSheetProps {
     visible: boolean;
@@ -32,16 +32,6 @@ const CONTENT: Record<
             "We only spill if they're open too.",
             "You'll see each other in Dates when you both say yes.",
             "From there — vibe check, chat, or plan to link.",
-        ],
-        ctaLabel: 'Got it',
-    },
-    maybe: {
-        icon: 'time-outline',
-        title: 'Saved for later',
-        steps: [
-            "We'll move this intro out of today's set.",
-            "They won't see this as a pass.",
-            "If the pool is tight, we can recycle this later.",
         ],
         ctaLabel: 'Got it',
     },
@@ -85,13 +75,11 @@ export function DecisionInfoSheet({ visible, type, firstName, onClose }: Decisio
 
     const content = CONTENT[type];
     const accentColor =
-        type === 'maybe'
-            ? colors.warning
-            : type === 'pass'
-              ? colors.mutedForeground
-              : type === 'already_responded'
-                ? colors.success
-                : colors.primary;
+        type === 'pass'
+            ? colors.mutedForeground
+            : type === 'already_responded'
+              ? colors.success
+              : colors.primary;
     const displayTitle = firstName
         ? content.title.replace('their', `${firstName}'s`).replace('your', 'your')
         : content.title;
@@ -165,8 +153,6 @@ export function DecisionInfoSheet({ visible, type, firstName, onClose }: Decisio
                             <Text style={[styles.title, { color: colors.foreground }]}>
                                 {firstName && type === 'open_to_meet'
                                     ? `Interest sent to ${firstName} 💜`
-                                    : firstName && type === 'maybe'
-                                        ? `${firstName} moved to maybe later`
                                     : firstName && type === 'pass'
                                         ? `${firstName} removed from today's set`
                                         : displayTitle}

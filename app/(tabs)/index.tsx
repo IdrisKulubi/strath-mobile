@@ -1,12 +1,14 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     RefreshControl,
     ScrollView,
     StatusBar,
     StyleSheet,
+    useWindowDimensions,
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,6 +34,7 @@ import {
     useDailyRecommendations,
     useRecommendationDecision,
 } from '@/hooks/use-match-discovery';
+import { useHomeIntroLayout } from '@/hooks/use-home-intro-layout';
 
 function HomeSkeleton() {
     return (
@@ -59,6 +62,10 @@ export default function HomeScreen() {
     }>({ visible: false, type: 'open_to_meet' });
     const [refreshing, setRefreshing] = useState(false);
     const [savedDecisions, setSavedDecisions] = useState<Record<string, RecommendationDecision>>({});
+    const [carouselIndex, setCarouselIndex] = useState(0);
+    const [prefsExpanded, setPrefsExpanded] = useState(false);
+    const { height: windowHeight } = useWindowDimensions();
+    const tabBarHeight = useBottomTabBarHeight();
 
     const { data: profile } = useProfile();
     const dailyMatches = useDailyMatches();
@@ -73,6 +80,15 @@ export default function HomeScreen() {
         () => shouldShowRecommendations ? (dailyRecommendations.data?.recommendations ?? []).slice(0, 5) : [],
         [dailyRecommendations.data?.recommendations, shouldShowRecommendations]
     );
+    const showCarousel = !activeHold && (hasPriorityMatch || (shouldShowRecommendations && recommendations.length > 0));
+    const showPrefsPanel = !hasPriorityMatch && !activeHold;
+    const { cardHeight, headerCompact, itemWidthRatio } = useHomeIntroLayout(prefsExpanded, showPrefsPanel);
+
+    const scrollMinHeight = windowHeight - tabBarHeight;
+
+    useEffect(() => {
+        setCarouselIndex(0);
+    }, [hasPriorityMatch, recommendations.length, priorityMatches.length]);
 
     const handleRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -99,15 +115,13 @@ export default function HomeScreen() {
 
     const handleDailyMatchDecision = useCallback(async (
         match: DailyMatch,
-        decision: 'open_to_meet' | 'maybe' | 'passed'
+        decision: 'open_to_meet' | 'passed'
     ) => {
         try {
             await pairDecision.mutateAsync({ pairId: match.pairId, decision });
             const message = decision === 'open_to_meet'
                 ? `Interest saved for ${match.firstName}.`
-                : decision === 'maybe'
-                    ? `${match.firstName} saved for later.`
-                    : `${match.firstName} passed.`;
+                : `${match.firstName} passed.`;
             toast.show({
                 message,
                 variant: decision === 'passed' ? 'default' : 'success',
@@ -174,9 +188,7 @@ export default function HomeScreen() {
                 ? `It's mutual with ${firstName}. Check Dates.`
                 : decision === 'open_to_meet'
                 ? `Interest saved. We'll tell you if it becomes mutual.`
-                : decision === 'maybe'
-                    ? `${firstName} saved for later.`
-                    : `${firstName} passed. Tomorrow's picks will learn from this.`;
+                : `${firstName} passed. Tomorrow's picks will learn from this.`;
             toast.show({
                 message,
                 variant: decision === 'passed' ? 'default' : 'success',
@@ -198,48 +210,71 @@ export default function HomeScreen() {
         }
     }, [queryClient, recommendationDecision, toast]);
 
+    const mainContent = dailyMatches.isLoading || (shouldShowRecommendations && dailyRecommendations.isLoading) ? (
+        <HomeSkeleton />
+    ) : activeHold ? (
+        <DateHoldCard hold={activeHold} />
+    ) : hasPriorityMatch ? (
+        <DailyMatchesList
+            matches={priorityMatches}
+            onOpenToMeet={(match) => handleDailyMatchDecision(match, 'open_to_meet')}
+            onPass={(match) => handleDailyMatchDecision(match, 'passed')}
+            onViewProfile={handleViewDailyMatchProfile}
+            actionsDisabled={pairDecision.isPending}
+            onFocusedIndexChange={setCarouselIndex}
+            cardHeight={cardHeight}
+            itemWidthRatio={itemWidthRatio}
+            sectionCompact={!prefsExpanded}
+        />
+    ) : dailyMatches.data?.mode === 'manual_curation' && recommendations.length === 0 ? (
+        <ManualCurationCard curation={dailyMatches.data.manualCuration} />
+    ) : (
+        <DailyRecommendationsPreview
+            recommendations={recommendations}
+            isError={dailyRecommendations.isError}
+            savedDecisions={savedDecisions}
+            onViewProfile={handleViewRecommendationProfile}
+            onDecision={handleRecommendationDecision}
+            actionsDisabled={recommendationDecision.isPending}
+            onFocusedIndexChange={setCarouselIndex}
+            cardHeight={cardHeight}
+            itemWidthRatio={itemWidthRatio}
+            sectionCompact={!prefsExpanded}
+        />
+    );
+
     return (
         <TabSwipeView route="/(tabs)">
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
                 <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
                 <ScrollView
                     style={styles.scroll}
-                    contentContainerStyle={styles.content}
+                    contentContainerStyle={[
+                        styles.content,
+                        showCarousel && styles.contentCarousel,
+                        { minHeight: scrollMinHeight },
+                    ]}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
                     showsVerticalScrollIndicator={false}
+                    scrollEnabled={!showCarousel || prefsExpanded}
                 >
                     <HomeHeader
                         firstName={profile?.firstName}
                         matchCount={hasPriorityMatch ? priorityMatches.length : recommendations.length}
+                        focusedIndex={carouselIndex}
+                        compact={showCarousel && headerCompact}
                     />
 
-                    {!hasPriorityMatch && !activeHold && <MatchPreferencePanel />}
+                    {showPrefsPanel ? (
+                        <MatchPreferencePanel
+                            expanded={prefsExpanded}
+                            onExpandedChange={setPrefsExpanded}
+                        />
+                    ) : null}
 
-                    {dailyMatches.isLoading || (shouldShowRecommendations && dailyRecommendations.isLoading) ? (
-                        <HomeSkeleton />
-                    ) : activeHold ? (
-                        <DateHoldCard hold={activeHold} />
-                    ) : hasPriorityMatch ? (
-                        <DailyMatchesList
-                            matches={priorityMatches}
-                            onOpenToMeet={(match) => handleDailyMatchDecision(match, 'open_to_meet')}
-                            onMaybe={(match) => handleDailyMatchDecision(match, 'maybe')}
-                            onPass={(match) => handleDailyMatchDecision(match, 'passed')}
-                            onViewProfile={handleViewDailyMatchProfile}
-                            actionsDisabled={pairDecision.isPending}
-                        />
-                    ) : dailyMatches.data?.mode === 'manual_curation' && recommendations.length === 0 ? (
-                        <ManualCurationCard curation={dailyMatches.data.manualCuration} />
-                    ) : (
-                        <DailyRecommendationsPreview
-                            recommendations={recommendations}
-                            isError={dailyRecommendations.isError}
-                            savedDecisions={savedDecisions}
-                            onViewProfile={handleViewRecommendationProfile}
-                            onDecision={handleRecommendationDecision}
-                            actionsDisabled={recommendationDecision.isPending}
-                        />
-                    )}
+                    <View style={showCarousel ? styles.carouselHost : undefined}>
+                        {mainContent}
+                    </View>
                 </ScrollView>
 
                 <DecisionInfoSheet
@@ -262,6 +297,13 @@ const styles = StyleSheet.create({
     },
     content: {
         paddingBottom: 32,
+    },
+    contentCarousel: {
+        flexGrow: 1,
+        paddingBottom: 8,
+    },
+    carouselHost: {
+        flex: 1,
     },
     skeletonWrap: {
         paddingHorizontal: 16,

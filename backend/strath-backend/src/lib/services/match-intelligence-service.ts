@@ -50,8 +50,8 @@ export type RecommendationSource =
     | "admin_curated"
     | "available_now";
 
-export type RecommendationDecision = "shown" | "viewed" | "open_to_meet" | "maybe" | "passed" | "ignored";
-export type CurrentRecommendationDecision = "pending" | Exclude<RecommendationDecision, "shown" | "viewed" | "ignored">;
+export type RecommendationDecision = "shown" | "viewed" | "open_to_meet" | "passed" | "ignored";
+export type CurrentRecommendationDecision = "pending" | "open_to_meet" | "passed";
 
 export type BrowseMode = "similar" | "different" | "new" | "available";
 
@@ -1024,7 +1024,7 @@ export async function recordRecommendationEvent(input: {
             mutualProbabilityScore: input.mutualProbabilityScore,
             decision: input.event,
             viewedAt: input.event === "viewed" ? now : null,
-            decidedAt: ["open_to_meet", "maybe", "passed", "ignored"].includes(input.event) ? now : null,
+            decidedAt: ["open_to_meet", "passed", "ignored"].includes(input.event) ? now : null,
             metadata: input.metadata ?? {},
         })
         .returning();
@@ -1036,10 +1036,10 @@ async function updateSignalsAfterDecision(userId: string, decision: Exclude<Reco
         where: eq(userMatchSignals.userId, userId),
     });
     const openToMeetCount = (existing?.openToMeetCount ?? 0) + (decision === "open_to_meet" ? 1 : 0);
-    const maybeCount = (existing?.maybeCount ?? 0) + (decision === "maybe" ? 1 : 0);
+    const maybeCount = existing?.maybeCount ?? 0;
     const passCount = (existing?.passCount ?? 0) + (decision === "passed" ? 1 : 0);
     const total = openToMeetCount + maybeCount + passCount;
-    const responseRate = total > 0 ? clampScore(((openToMeetCount + maybeCount) / total) * 100) : existing?.responseRate ?? 0;
+    const responseRate = total > 0 ? clampScore((openToMeetCount / total) * 100) : existing?.responseRate ?? 0;
     const passRiskPenalty = total >= 5 ? clampScore((passCount / total) * 35) : existing?.passRiskPenalty ?? 0;
 
     await db

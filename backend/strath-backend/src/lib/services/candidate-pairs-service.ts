@@ -54,7 +54,7 @@ function getFairnessRelaxConfig(): FairnessRelaxConfig {
     };
 }
 
-export type CandidateDecision = "pending" | "open_to_meet" | "maybe" | "passed";
+export type CandidateDecision = "pending" | "open_to_meet" | "passed";
 export type CandidatePairStatus = "active" | "queued" | "mutual" | "closed" | "expired";
 export type MutualMatchStatus =
     | "mutual"
@@ -93,10 +93,6 @@ export function resolveCandidatePairStatus(
 ): CandidatePairStatus {
     if (aDecision === "passed" || bDecision === "passed") {
         return "closed";
-    }
-
-    if (aDecision === "maybe" || bDecision === "maybe") {
-        return "expired";
     }
 
     if (aDecision === "open_to_meet" && bDecision === "open_to_meet") {
@@ -527,12 +523,12 @@ async function getOpenSlotClearingWindowForUser(userId: string, now = new Date()
                 or(
                     and(
                         eq(candidatePairs.userAId, userId),
-                        inArray(candidatePairs.aDecision, ["passed", "maybe"]),
+                        eq(candidatePairs.aDecision, "passed"),
                         inArray(candidatePairs.status, ["closed", "expired"]),
                     ),
                     and(
                         eq(candidatePairs.userBId, userId),
-                        inArray(candidatePairs.bDecision, ["passed", "maybe"]),
+                        eq(candidatePairs.bDecision, "passed"),
                         inArray(candidatePairs.status, ["closed", "expired"]),
                     ),
                 ),
@@ -804,7 +800,7 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
 
     const openSlotClearingWindow = await getOpenSlotClearingWindowForUser(userId);
     if (openSlotClearingWindow) {
-        console.log("[candidate-pairs] WINDOW: pass/maybe already used a slot - skip refill", {
+        console.log("[candidate-pairs] WINDOW: pass already used a slot - skip refill", {
             userId,
             pairId: openSlotClearingWindow.id,
             windowExpiresAt: openSlotClearingWindow.expiresAt,

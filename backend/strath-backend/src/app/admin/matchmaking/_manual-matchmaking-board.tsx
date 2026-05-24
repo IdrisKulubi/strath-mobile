@@ -587,7 +587,6 @@ function ComparePanel({
                         <span>Total pairs: {profile.stats.totalPairs}</span>
                         <span>Interested: {profile.stats.interested}</span>
                         <span>Passed: {profile.stats.passed}</span>
-                        <span>Maybe: {profile.stats.maybe}</span>
                         <span>Mutual: {profile.stats.mutual}</span>
                     </div>
                 </div>
