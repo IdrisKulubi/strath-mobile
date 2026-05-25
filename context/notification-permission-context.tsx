@@ -2,9 +2,11 @@ import React, {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
     useState,
 } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import { PrePermissionSheet } from '@/components/notifications/pre-permission-sheet';
 import {
@@ -12,7 +14,10 @@ import {
     shouldShowPrePermissionPrompt,
     type PrePermissionContext,
 } from '@/lib/notification-permission-prompt';
-import { requestPushPermissionAndRegister } from '@/lib/push-registration';
+import {
+    enablePushNotificationsFromUserAction,
+    registerPushTokenIfGranted,
+} from '@/lib/push-registration';
 
 interface PromptOptions {
     context: PrePermissionContext;
@@ -62,9 +67,21 @@ export function NotificationPermissionProvider({
     const handleEnable = useCallback(async () => {
         await markPrePermissionPromptSeen(sheetContext, 'accepted');
         closeSheet();
-        const token = await requestPushPermissionAndRegister();
-        setExpoPushToken(token);
+        const token = await enablePushNotificationsFromUserAction();
+        if (token) {
+            setExpoPushToken(token);
+        }
     }, [closeSheet, setExpoPushToken, sheetContext]);
+
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+            if (nextState !== 'active') return;
+            void registerPushTokenIfGranted().then((token) => {
+                if (token) setExpoPushToken(token);
+            });
+        });
+        return () => subscription.remove();
+    }, [setExpoPushToken]);
 
     const handleDismiss = useCallback(async () => {
         await markPrePermissionPromptSeen(sheetContext, 'dismissed');

@@ -9,6 +9,7 @@ import { clearSession, getAuthToken } from '@/lib/auth-helpers';
 import { AI_CONSENT_DISCLOSURE, AI_PROVIDER_NAME } from '@/lib/ai-consent';
 import { useNotificationPermissionPrompt } from '@/context/notification-permission-context';
 import { getPushPermissionStatus } from '@/lib/notification-permission-prompt';
+import { enablePushNotificationsFromUserAction } from '@/lib/push-registration';
 
 export default function SettingsScreen() {
     const router = useRouter();
@@ -81,6 +82,10 @@ export default function SettingsScreen() {
         const status = await getPushPermissionStatus();
         if (status === 'granted') {
             await handleOpenNotificationSettings();
+            return;
+        }
+        if (status === 'denied') {
+            await enablePushNotificationsFromUserAction();
             return;
         }
         await promptIfAppropriate({ context: 'settings' });

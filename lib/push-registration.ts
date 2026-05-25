@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
@@ -25,6 +25,53 @@ export async function configureAndroidNotificationChannel(): Promise<void> {
         enableVibrate: true,
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
+}
+
+/** Opens the Strathspace app page in system settings (notifications toggle lives here). */
+export async function openAppNotificationSettings(): Promise<boolean> {
+    try {
+        await Linking.openSettings();
+        return true;
+    } catch {
+        Alert.alert(
+            'Notifications',
+            Platform.OS === 'ios'
+                ? 'Open Settings, tap Strathspace, then turn on Notifications.'
+                : 'Open Settings, tap Apps, then Strathspace, and turn on Notifications.',
+        );
+        return false;
+    }
+}
+
+/**
+ * User tapped Enable on the pre-permission sheet or settings.
+ * Shows the system dialog when allowed; otherwise opens app notification settings.
+ */
+export async function enablePushNotificationsFromUserAction(): Promise<string | null> {
+    if (!Device.isDevice) {
+        Alert.alert('Notifications', 'Push notifications require a physical device.');
+        return null;
+    }
+
+    const existing = await Notifications.getPermissionsAsync();
+
+    if (existing.status === 'granted') {
+        return registerPushTokenIfGranted();
+    }
+
+    const canRequestInApp =
+        existing.status === 'undetermined' || existing.canAskAgain !== false;
+
+    if (canRequestInApp) {
+        const requested = await Notifications.requestPermissionsAsync();
+        if (requested.status === 'granted') {
+            await configureAndroidNotificationChannel();
+            return requestPushPermissionAndRegister();
+        }
+    }
+
+    await openAppNotificationSettings();
+    return null;
 }
 
 /**
