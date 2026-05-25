@@ -108,10 +108,22 @@ const CHAT_UNLOCKED_STATUSES: MutualDate['arrangementStatus'][] = [
     'completed',
 ];
 
-/** Messaging is available once a chat thread exists and the viewer has confirmed their assigned slot. */
+/** Dates tab: hide Message until slot is confirmed (all statuses including arranging). */
 export function isChatUnlocked(match: MutualDate): boolean {
     if (!match.legacyMatchId) return false;
     if (!CHAT_UNLOCKED_STATUSES.includes(match.arrangementStatus)) return false;
+    if (match.needsSlotConfirmation && !match.viewerSlotConfirmed) return false;
+    return true;
+}
+
+/**
+ * Chat thread APIs: mirrors backend assertChatUnlocked — arranging pairs may message
+ * while confirm UI stays on Dates; mutual matches still require slot confirm.
+ */
+export function isChatThreadUnlocked(match: MutualDate): boolean {
+    if (!match.legacyMatchId) return false;
+    if (!CHAT_UNLOCKED_STATUSES.includes(match.arrangementStatus)) return false;
+    if (match.arrangementStatus === 'being_arranged') return true;
     if (match.needsSlotConfirmation && !match.viewerSlotConfirmed) return false;
     return true;
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useEffect, useState, useMemo } from 'react';
 import {
     View,
     FlatList,
@@ -17,7 +17,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { useChat, Message } from '@/hooks/use-chat';
 import { useConversations, findConversation } from '@/hooks/use-conversations';
 import { useUnmatch } from '@/hooks/use-unmatch';
-import { MessageBubble, ChatInput, ChatHeader } from '@/components/chat';
+import { MessageBubble, ChatInput, ChatHeader, ChatAccessGate } from '@/components/chat';
+import { useMutualMatches, isChatThreadUnlocked } from '@/hooks/use-date-requests';
 import { SafetyToolkitModal } from '@/components/chat/safety-toolkit-modal';
 import { BlockReportModal } from '@/components/discover/block-report-modal';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -50,6 +51,16 @@ export default function ChatScreen() {
 
     // Hooks
     const { mutate: unmatch } = useUnmatch();
+    const { data: mutualDates = [], isLoading: mutualDatesLoading } = useMutualMatches();
+
+    const mutualMatch = useMemo(
+        () => mutualDates.find((m) => m.legacyMatchId === matchId),
+        [mutualDates, matchId],
+    );
+
+    const chatBlockedFromMutual = Boolean(
+        mutualMatch && !isChatThreadUnlocked(mutualMatch),
+    );
 
     const {
         messages,
@@ -57,7 +68,10 @@ export default function ChatScreen() {
         sendMessage,
         isSending,
         currentUserId,
-    } = useChat(matchId || '');
+        isAccessDenied,
+    } = useChat(matchId || '', { enabled: !chatBlockedFromMutual });
+
+    const showAccessGate = chatBlockedFromMutual || isAccessDenied;
 
     const { data: conversations } = useConversations();
     const thread = findConversation(conversations, matchId || '');
@@ -230,8 +244,81 @@ export default function ChatScreen() {
         );
     }, [thread, partner?.name]);
 
+    const renderChatBody = () => {
+        if (showAccessGate && mutualMatch) {
+            return (
+                <ChatAccessGate
+                    match={mutualMatch}
+                    partnerName={partner?.name ?? mutualMatch.withUser.firstName}
+                    partnerImage={partner?.image ?? mutualMatch.withUser.profilePhoto}
+                />
+            );
+        }
+
+        if (showAccessGate && mutualDatesLoading) {
+            return (
+                <View style={styles.loadingContainer}>
+                    {[1, 2, 3].map((i) => (
+                        <View key={i} style={[styles.skeletonRow, i % 2 === 0 ? styles.skeletonRight : styles.skeletonLeft]}>
+                            <Skeleton width={i % 2 === 0 ? 200 : 150} height={50} borderRadius={18} />
+                        </View>
+                    ))}
+                </View>
+            );
+        }
+
+        if (showAccessGate) {
+            return (
+                <View style={styles.emptyContainer}>
+                    <Text className="text-foreground text-center text-lg font-semibold mb-2">
+                        Confirm your date to message
+                    </Text>
+                    <Text className="text-muted-foreground text-center text-base">
+                        Open the Dates tab to confirm your meetup before chatting with{' '}
+                        {partner?.name || 'your match'}.
+                    </Text>
+                </View>
+            );
+        }
+
+        return (
+            <KeyboardAvoidingView
+                style={styles.keyboardView}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={0}
+            >
+                <FlatList
+                    ref={flatListRef}
+                    data={messages}
+                    renderItem={renderMessage}
+                    keyExtractor={keyExtractor}
+                    contentContainerStyle={[
+                        styles.messageList,
+                        messages.length === 0 && styles.emptyList,
+                    ]}
+                    ListHeaderComponent={renderListHeader}
+                    ListEmptyComponent={renderEmptyState}
+                    showsVerticalScrollIndicator={false}
+                    onContentSizeChange={() => {
+                        if (messages.length > 0) {
+                            flatListRef.current?.scrollToEnd({ animated: false });
+                        }
+                    }}
+                />
+
+                <ChatInput
+                    onSend={handleSend}
+                    isSending={isSending}
+                    onMediaPress={() => undefined}
+                    onGifPress={() => undefined}
+                    onMusicPress={() => undefined}
+                />
+            </KeyboardAvoidingView>
+        );
+    };
+
     // Loading state - only show skeletons on the VERY FIRST load when no messages exist
-    if (isInitialLoading && messages.length === 0) {
+    if (!showAccessGate && isInitialLoading && messages.length === 0) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
                 <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
@@ -286,40 +373,7 @@ export default function ChatScreen() {
                             onMorePress={() => setIsSafetyModalVisible(true)}
                         />
 
-                       
-
-                        <KeyboardAvoidingView
-                            style={styles.keyboardView}
-                            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                            keyboardVerticalOffset={0}
-                        >
-                            <FlatList
-                                ref={flatListRef}
-                                data={messages}
-                                renderItem={renderMessage}
-                                keyExtractor={keyExtractor}
-                                contentContainerStyle={[
-                                    styles.messageList,
-                                    messages.length === 0 && styles.emptyList,
-                                ]}
-                                ListHeaderComponent={renderListHeader}
-                                ListEmptyComponent={renderEmptyState}
-                                showsVerticalScrollIndicator={false}
-                                onContentSizeChange={() => {
-                                    if (messages.length > 0) {
-                                        flatListRef.current?.scrollToEnd({ animated: false });
-                                    }
-                                }}
-                            />
-
-                            <ChatInput
-                                onSend={handleSend}
-                                isSending={isSending}
-                                onMediaPress={() => undefined}
-                                onGifPress={() => undefined}
-                                onMusicPress={() => undefined}
-                            />
-                        </KeyboardAvoidingView>
+                        {renderChatBody()}
 
                         <SafetyToolkitModal
                             visible={isSafetyModalVisible}

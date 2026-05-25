@@ -19,6 +19,18 @@ const MessageSchema = z.object({
 
 export type Message = z.infer<typeof MessageSchema>;
 
+export class ChatAccessDeniedError extends Error {
+    constructor() {
+        super('Confirm your assigned date before messaging.');
+        this.name = 'ChatAccessDeniedError';
+    }
+}
+
+interface UseChatOptions {
+    /** When false, skips fetch, read receipts, and polling. */
+    enabled?: boolean;
+}
+
 // Fetch messages for a match
 async function fetchMessages(matchId: string): Promise<Message[]> {
     const token = await getAuthToken();
@@ -29,6 +41,10 @@ async function fetchMessages(matchId: string): Promise<Message[]> {
             'Content-Type': 'application/json',
         },
     });
+
+    if (response.status === 403) {
+        throw new ChatAccessDeniedError();
+    }
 
     if (!response.ok) {
         throw new Error('Failed to fetch messages');
@@ -103,8 +119,9 @@ import { getCurrentUserId } from '@/lib/auth-helpers';
  * - Pauses when app is backgrounded
  * - Supports optimistic updates
  */
-export function useChat(matchId: string) {
+export function useChat(matchId: string, options?: UseChatOptions) {
     const queryClient = useQueryClient();
+    const enabled = options?.enabled !== false && !!matchId;
     const [isAppActive, setIsAppActive] = useState(true);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -125,7 +142,7 @@ export function useChat(matchId: string) {
 
     // Mark messages as read when chat opens
     useEffect(() => {
-        if (matchId) {
+        if (matchId && enabled) {
             markMessagesAsRead(matchId).then(() => {
                 // Invalidate matches cache to update unread counts in the list
                 queryClient.invalidateQueries({ queryKey: ['matches'] });
@@ -135,7 +152,7 @@ export function useChat(matchId: string) {
                 queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
             });
         }
-    }, [matchId, queryClient]);
+    }, [matchId, queryClient, enabled]);
 
     // Fetch messages with smart polling
     // isPending is only true on initial load (no cached data), not during refetches
@@ -152,7 +169,11 @@ export function useChat(matchId: string) {
         queryFn: () => fetchMessages(matchId),
         refetchInterval: isAppActive ? 3000 : false, // Poll every 3s when active
         refetchIntervalInBackground: false,
-        enabled: !!matchId,
+        enabled,
+        retry: (failureCount, error) => {
+            if (error instanceof ChatAccessDeniedError) return false;
+            return failureCount < 2;
+        },
         staleTime: 2000, // Consider data stale after 2s
         gcTime: 5 * 60 * 1000, // Keep in cache for 5 min
         placeholderData: (previousData) => previousData, // Keep previous data during refetch
@@ -202,12 +223,15 @@ export function useChat(matchId: string) {
         },
     });
 
+    const isAccessDenied = isError && error instanceof ChatAccessDeniedError;
+
     return {
         messages,
-        isInitialLoading: isPending && messages.length === 0, // Truly only valid for the first load
+        isInitialLoading: enabled && isPending && messages.length === 0,
         isLoading: isPending,
         isFetching,
         isError,
+        isAccessDenied,
         error,
         refetch,
         sendMessage: sendMessageMutation.mutate,

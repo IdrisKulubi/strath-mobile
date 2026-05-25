@@ -3,7 +3,10 @@ import { eq } from "drizzle-orm";
 import db from "@/db/drizzle";
 import { mutualMatches } from "@/db/schema";
 import { errorResponse } from "@/lib/api-response";
-import { buildSlotConfirmationView } from "@/lib/services/meetup-confirmation-service";
+import {
+    buildSlotConfirmationView,
+    type SlotConfirmationView,
+} from "@/lib/services/meetup-confirmation-service";
 
 /** Statuses where the mobile Messages tab lists the thread and chat APIs allow access. */
 export const CHAT_UNLOCKED_STATUSES = [
@@ -17,6 +20,20 @@ export type ChatUnlockedStatus = (typeof CHAT_UNLOCKED_STATUSES)[number];
 
 export function isChatUnlockedStatus(status: string): status is ChatUnlockedStatus {
     return (CHAT_UNLOCKED_STATUSES as readonly string[]).includes(status);
+}
+
+/**
+ * Slot confirmation blocks chat for new `mutual` matches only.
+ * Legacy pairs in `being_arranged` may message while confirm UI remains on Dates.
+ */
+export function shouldBlockChatForSlotConfirmation(
+    status: string,
+    slot: Pick<SlotConfirmationView, "needsSlotConfirmation" | "viewerSlotConfirmed">,
+): boolean {
+    if (status === "being_arranged") {
+        return false;
+    }
+    return slot.needsSlotConfirmation && !slot.viewerSlotConfirmed;
 }
 
 /**
@@ -35,7 +52,7 @@ export async function assertChatUnlocked(matchId: string, userId: string) {
     }
 
     const slot = buildSlotConfirmationView(mm, userId);
-    if (slot.needsSlotConfirmation && !slot.viewerSlotConfirmed) {
+    if (shouldBlockChatForSlotConfirmation(mm.status, slot)) {
         return errorResponse(
             new Error("Confirm your assigned date before messaging."),
             403,
