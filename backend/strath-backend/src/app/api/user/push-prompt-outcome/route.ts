@@ -25,7 +25,7 @@ async function getSessionWithFallback(req: NextRequest) {
             });
 
             if (dbSession && dbSession.expiresAt > new Date()) {
-                session = { session: dbSession, user: dbSession.user } as typeof session;
+                session = { session: dbSession, user: dbSession.user } as any;
             }
         }
     }
