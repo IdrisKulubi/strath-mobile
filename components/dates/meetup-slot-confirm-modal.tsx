@@ -1,11 +1,12 @@
 import React from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text as RNText, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { MeetupSlotConfirm } from '@/components/dates/meetup-slot-confirm';
-import { SPACING, RADIUS } from '@/lib/design-tokens';
+import { SPACING, RADIUS, TYPOGRAPHY } from '@/lib/design-tokens';
 import type { MatchHold } from '@/hooks/use-daily-matches';
 
 interface MeetupSlotConfirmModalProps {
@@ -19,7 +20,8 @@ export function MeetupSlotConfirmModal({
     hold,
     onCancelHold,
 }: MeetupSlotConfirmModalProps) {
-    const { colors } = useTheme();
+    const { colors, isDark } = useTheme();
+    const cancelTint = isDark ? 'rgba(217, 74, 143, 0.14)' : 'rgba(184, 50, 122, 0.12)';
     const partnerName = hold.partner.firstName ?? 'your match';
     const slot = hold.slotConfirmation;
 
@@ -30,57 +32,89 @@ export function MeetupSlotConfirmModal({
             presentationStyle="fullScreen"
             onRequestClose={() => {}}
         >
-            <View style={[styles.screen, { backgroundColor: colors.background }]}>
-                <View style={styles.header}>
-                    <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-                        Confirm your date
-                    </Text>
-                    <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
-                        Confirm before you browse matches or message {partnerName}.
-                    </Text>
-                </View>
-
-                <View style={[styles.partnerCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                    <View style={[styles.avatarWrap, { borderColor: colors.border }]}>
-                        {hold.partner.profilePhoto ? (
-                            <CachedImage uri={hold.partner.profilePhoto} style={styles.avatar} />
-                        ) : (
-                            <View style={[styles.avatarFallback, { backgroundColor: colors.muted }]}>
-                                <Ionicons name="person" size={28} color={colors.mutedForeground} />
-                            </View>
-                        )}
-                    </View>
-                    <View style={styles.partnerText}>
-                        <Text style={[styles.partnerName, { color: colors.foreground }]}>
-                            {partnerName}
-                            {hold.partner.age ? `, ${hold.partner.age}` : ''}
-                        </Text>
-                        {hold.partner.course || hold.partner.university ? (
-                            <Text style={[styles.partnerMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
-                                {[hold.partner.course, hold.partner.university].filter(Boolean).join(' · ')}
+            <SafeAreaView
+                edges={['top', 'bottom', 'left', 'right']}
+                style={[styles.screen, { backgroundColor: colors.background }]}
+            >
+                <ScrollView
+                    style={styles.scroll}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                    bounces={false}
+                >
+                    <View style={styles.content}>
+                        <View style={styles.header}>
+                            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+                                Confirm your date
                             </Text>
-                        ) : null}
-                    </View>
-                </View>
+                            <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
+                                Confirm before you browse matches or message {partnerName}.
+                            </Text>
+                        </View>
 
-                <MeetupSlotConfirm
-                    mutualMatchId={hold.mutualMatchId}
-                    partnerFirstName={partnerName}
-                    scheduledAt={slot.scheduledAt}
-                    confirmBy={slot.confirmBy}
-                    viewerSlotConfirmed={slot.viewerSlotConfirmed}
-                    partnerSlotConfirmed={slot.partnerSlotConfirmed}
-                    confirmWindowOpen={slot.confirmWindowOpen}
-                />
+                        <View style={styles.partnerHero}>
+                            <View style={[styles.avatarWrap, { borderColor: colors.border }]}>
+                                {hold.partner.profilePhoto ? (
+                                    <CachedImage uri={hold.partner.profilePhoto} style={styles.avatar} />
+                                ) : (
+                                    <View style={[styles.avatarFallback, { backgroundColor: colors.muted }]}>
+                                        <Ionicons name="person" size={36} color={colors.mutedForeground} />
+                                    </View>
+                                )}
+                            </View>
+                            <Text style={[styles.partnerName, { color: colors.foreground }]}>
+                                {partnerName}
+                                {hold.partner.age ? `, ${hold.partner.age}` : ''}
+                            </Text>
+                            {hold.partner.course || hold.partner.university ? (
+                                <Text
+                                    style={[styles.partnerMeta, { color: colors.mutedForeground }]}
+                                    numberOfLines={2}
+                                >
+                                    {[hold.partner.course, hold.partner.university]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                </Text>
+                            ) : null}
+                        </View>
+
+                        <MeetupSlotConfirm
+                            layout="modal"
+                            mutualMatchId={hold.mutualMatchId}
+                            partnerFirstName={partnerName}
+                            scheduledAt={slot.scheduledAt}
+                            confirmBy={slot.confirmBy}
+                            viewerSlotConfirmed={slot.viewerSlotConfirmed}
+                            partnerSlotConfirmed={slot.partnerSlotConfirmed}
+                            confirmWindowOpen={slot.confirmWindowOpen}
+                        />
+                    </View>
+                </ScrollView>
 
                 {onCancelHold ? (
-                    <Pressable onPress={onCancelHold} accessibilityRole="button">
-                        <Text style={[styles.cancelLink, { color: colors.mutedForeground }]}>
-                            Cancel this match
-                        </Text>
-                    </Pressable>
+                    <View style={styles.footer}>
+                        <TouchableOpacity
+                            onPress={onCancelHold}
+                            accessibilityRole="button"
+                            activeOpacity={0.85}
+                        >
+                            <View
+                                style={[
+                                    styles.cancelButton,
+                                    {
+                                        borderColor: colors.primary,
+                                        backgroundColor: cancelTint,
+                                    },
+                                ]}
+                            >
+                                <RNText style={[styles.cancelLabel, { color: colors.primary }]}>
+                                    Cancel this match
+                                </RNText>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
                 ) : null}
-            </View>
+            </SafeAreaView>
         </Modal>
     );
 }
@@ -88,36 +122,48 @@ export function MeetupSlotConfirmModal({
 const styles = StyleSheet.create({
     screen: {
         flex: 1,
-        paddingHorizontal: SPACING.base,
-        paddingTop: SPACING.large,
-        paddingBottom: SPACING.section,
-        gap: SPACING.base,
+    },
+    scroll: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        paddingHorizontal: SPACING.screenX,
+        paddingVertical: SPACING.section,
+    },
+    content: {
+        alignItems: 'center',
+        gap: SPACING.section,
+        width: '100%',
+        maxWidth: 400,
+        alignSelf: 'center',
     },
     header: {
+        alignItems: 'center',
         gap: SPACING.tight,
+        paddingHorizontal: SPACING.compact,
     },
     headerTitle: {
-        fontSize: 22,
-        fontWeight: '700',
-        letterSpacing: -0.3,
+        ...TYPOGRAPHY.display,
+        textAlign: 'center',
+        letterSpacing: -0.4,
     },
     headerSubtitle: {
-        fontSize: 14,
-        lineHeight: 20,
+        ...TYPOGRAPHY.caption,
+        textAlign: 'center',
+        maxWidth: 300,
     },
-    partnerCard: {
-        flexDirection: 'row',
+    partnerHero: {
         alignItems: 'center',
         gap: SPACING.compact,
-        borderRadius: RADIUS.md,
-        borderWidth: StyleSheet.hairlineWidth,
-        padding: SPACING.compact,
+        paddingHorizontal: SPACING.compact,
     },
     avatarWrap: {
-        width: 52,
-        height: 52,
-        borderRadius: 26,
-        borderWidth: 1,
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        borderWidth: StyleSheet.hairlineWidth,
         overflow: 'hidden',
     },
     avatar: {
@@ -129,21 +175,34 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    partnerText: {
-        flex: 1,
-        gap: 2,
-    },
     partnerName: {
-        fontSize: 17,
-        fontWeight: '600',
+        ...TYPOGRAPHY.title,
+        textAlign: 'center',
     },
     partnerMeta: {
-        fontSize: 13,
-    },
-    cancelLink: {
-        fontSize: 14,
-        fontWeight: '600',
+        ...TYPOGRAPHY.caption,
         textAlign: 'center',
-        marginTop: SPACING.tight,
+    },
+    footer: {
+        paddingHorizontal: SPACING.screenX,
+        paddingTop: SPACING.compact,
+        paddingBottom: SPACING.base,
+        width: '100%',
+        maxWidth: 400,
+        alignSelf: 'center',
+    },
+    cancelButton: {
+        width: '100%',
+        minHeight: 52,
+        borderRadius: RADIUS.lg,
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: SPACING.base,
+    },
+    cancelLabel: {
+        fontSize: 16,
+        fontWeight: '700',
+        textAlign: 'center',
     },
 });

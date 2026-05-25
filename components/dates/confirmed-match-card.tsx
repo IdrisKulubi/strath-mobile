@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable, Text as RNText, TouchableOpacity } from 'react-native';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -16,6 +16,7 @@ import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { MutualDate, ARRANGEMENT_STATUS_LABELS, isChatUnlocked } from '@/hooks/use-date-requests';
 import { MeetupSlotConfirm } from '@/components/dates/meetup-slot-confirm';
+import { RADIUS, SPACING } from '@/lib/design-tokens';
 
 interface ConfirmedMatchCardProps {
     match: MutualDate;
@@ -97,11 +98,6 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                         {match.withUser.firstName}
                         {match.withUser.age ? `, ${match.withUser.age}` : ''}
                     </Text>
-                    {match.withUser.compatibilityScore != null && (
-                        <Text style={[styles.vibeText, { color: colors.primary }]}>
-                            {match.withUser.compatibilityScore}% match
-                        </Text>
-                    )}
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
             </Pressable>
@@ -180,39 +176,39 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
             ) : null}
 
             {chatUnlocked && (
-                <Pressable
+                <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`Message ${match.withUser.firstName}`}
+                    activeOpacity={0.85}
                     onPress={handleOpenChat}
-                    style={({ pressed }) => [
-                        styles.chatChip,
-                        match.arrangementStatus === 'mutual' && styles.chatChipPrimary,
-                        {
-                            borderColor: match.arrangementStatus === 'mutual' ? colors.primary : colors.border,
-                            backgroundColor: match.arrangementStatus === 'mutual'
-                                ? `${colors.primary}14`
-                                : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'),
-                            opacity: pressed ? 0.7 : 1,
-                        },
-                    ]}
                 >
-                    <Ionicons
-                        name="chatbubble-ellipses-outline"
-                        size={18}
-                        color={match.arrangementStatus === 'mutual' ? colors.primary : colors.foreground}
-                    />
-                    <Text style={[
-                        styles.chatChipText,
-                        { color: match.arrangementStatus === 'mutual' ? colors.primary : colors.foreground },
-                    ]} numberOfLines={1}>
-                        Message {match.withUser.firstName}
-                    </Text>
-                    {unreadCount > 0 ? (
-                        <View style={[styles.chatUnreadBadge, { backgroundColor: colors.primary }]}>
-                            <Text style={styles.chatUnreadBadgeText}>{unreadLabel}</Text>
-                        </View>
-                    ) : (
-                        <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
-                    )}
-                </Pressable>
+                    <View
+                        style={[
+                            styles.messageButton,
+                            {
+                                borderColor: colors.primary,
+                                backgroundColor: isDark
+                                    ? 'rgba(217, 74, 143, 0.14)'
+                                    : 'rgba(184, 50, 122, 0.1)',
+                            },
+                        ]}
+                    >
+                        <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primary} />
+                        <RNText
+                            style={[styles.messageButtonLabel, { color: colors.primary }]}
+                            numberOfLines={1}
+                        >
+                            Message {match.withUser.firstName}
+                        </RNText>
+                        {unreadCount > 0 ? (
+                            <View style={[styles.chatUnreadBadge, { backgroundColor: colors.primary }]}>
+                                <RNText style={styles.chatUnreadBadgeText}>{unreadLabel}</RNText>
+                            </View>
+                        ) : (
+                            <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                        )}
+                    </View>
+                </TouchableOpacity>
             )}
         </Animated.View>
     );
@@ -267,10 +263,6 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '700',
     },
-    vibeText: {
-        fontSize: 13,
-        fontWeight: '500',
-    },
     reasonsBlock: {
         borderRadius: 10,
         borderWidth: 1,
@@ -323,23 +315,21 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         flex: 1,
     },
-    chatChip: {
+    messageButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-        borderRadius: 14,
-        borderWidth: 1,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        minHeight: 46,
+        gap: SPACING.compact,
+        width: '100%',
+        minHeight: 52,
+        borderRadius: RADIUS.lg,
+        borderWidth: 2,
+        paddingHorizontal: SPACING.base,
+        paddingVertical: SPACING.compact,
     },
-    chatChipPrimary: {
-        minHeight: 50,
-    },
-    chatChipText: {
+    messageButtonLabel: {
         flex: 1,
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 16,
+        fontWeight: '700',
     },
     partnerTurnHint: {
         fontSize: 13,

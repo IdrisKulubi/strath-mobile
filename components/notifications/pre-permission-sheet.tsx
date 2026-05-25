@@ -1,8 +1,9 @@
 import React from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text as RNText, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
+import { RADIUS, SPACING } from '@/lib/design-tokens';
 import type { PrePermissionContext } from '@/lib/notification-permission-prompt';
 
 interface PrePermissionSheetProps {
@@ -55,8 +56,9 @@ export function PrePermissionSheet({
     onEnable,
     onDismiss,
 }: PrePermissionSheetProps) {
-    const { colors } = useTheme();
+    const { colors, isDark } = useTheme();
     const copy = copyForContext(context, partnerName);
+    const pinkTint = isDark ? 'rgba(217, 74, 143, 0.14)' : 'rgba(184, 50, 122, 0.1)';
 
     return (
         <Modal
@@ -75,22 +77,46 @@ export function PrePermissionSheet({
                     </View>
                     <Text style={[styles.title, { color: colors.foreground }]}>{copy.title}</Text>
                     <Text style={[styles.body, { color: colors.mutedForeground }]}>{copy.body}</Text>
-                    <Pressable
+
+                    <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={copy.enableLabel}
+                        activeOpacity={0.88}
                         onPress={onEnable}
-                        style={({ pressed }) => [
-                            styles.primaryBtn,
-                            { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 },
-                        ]}
                     >
-                        <Text style={[styles.primaryLabel, { color: colors.primaryForeground }]}>
-                            {copy.enableLabel}
-                        </Text>
-                    </Pressable>
-                    <Pressable onPress={onDismiss} style={styles.secondaryBtn}>
-                        <Text style={[styles.secondaryLabel, { color: colors.mutedForeground }]}>
-                            Not now
-                        </Text>
-                    </Pressable>
+                        <View
+                            style={[
+                                styles.primaryBtn,
+                                {
+                                    backgroundColor: colors.primary,
+                                    borderColor: colors.primary,
+                                },
+                            ]}
+                        >
+                            <RNText style={styles.primaryLabel}>{copy.enableLabel}</RNText>
+                        </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Not now"
+                        activeOpacity={0.85}
+                        onPress={onDismiss}
+                    >
+                        <View
+                            style={[
+                                styles.secondaryBtn,
+                                {
+                                    borderColor: colors.primary,
+                                    backgroundColor: pinkTint,
+                                },
+                            ]}
+                        >
+                            <RNText style={[styles.secondaryLabel, { color: colors.primary }]}>
+                                Not now
+                            </RNText>
+                        </View>
+                    </TouchableOpacity>
                 </Pressable>
             </Pressable>
         </Modal>
@@ -104,22 +130,22 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     sheet: {
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        borderWidth: 1,
-        paddingHorizontal: 24,
+        borderTopLeftRadius: RADIUS.xl,
+        borderTopRightRadius: RADIUS.xl,
+        borderWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: SPACING.section,
         paddingTop: 28,
         paddingBottom: 36,
-        gap: 12,
+        gap: SPACING.compact,
     },
     iconWrap: {
         width: 52,
         height: 52,
-        borderRadius: 14,
+        borderRadius: RADIUS.md,
         alignItems: 'center',
         justifyContent: 'center',
         alignSelf: 'center',
-        marginBottom: 4,
+        marginBottom: SPACING.micro,
     },
     title: {
         fontSize: 20,
@@ -130,23 +156,34 @@ const styles = StyleSheet.create({
         fontSize: 15,
         lineHeight: 22,
         textAlign: 'center',
-        marginBottom: 8,
+        marginBottom: SPACING.tight,
     },
     primaryBtn: {
-        borderRadius: 14,
-        paddingVertical: 14,
+        width: '100%',
+        minHeight: 52,
+        borderRadius: RADIUS.lg,
+        borderWidth: 2,
         alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: SPACING.base,
     },
     primaryLabel: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
+        color: '#FFFFFF',
     },
     secondaryBtn: {
-        paddingVertical: 10,
+        width: '100%',
+        minHeight: 52,
+        borderRadius: RADIUS.lg,
+        borderWidth: 2,
         alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: SPACING.base,
     },
     secondaryLabel: {
-        fontSize: 15,
-        fontWeight: '500',
+        fontSize: 16,
+        fontWeight: '700',
+        textAlign: 'center',
     },
 });

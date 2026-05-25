@@ -338,7 +338,7 @@ function buildCopy(hold: MatchHold): HoldCopy {
                 statusIcon: 'heart',
                 title: `You and ${name} both said yes`,
                 subtitle: hold.slotConfirmation?.needsSlotConfirmation
-                    ? 'Confirm your assigned campus date below. New intros stay paused until this is settled.'
+                    ? 'Confirm your assigned StrathSpace date below. New intros stay paused until this is settled.'
                     : 'Say hi in chat while your date is lined up. New intros are paused for this match.',
                 footnote: 'You can cancel any time and we will keep matching you.',
                 primaryCta: { label: 'Message in Dates', kind: 'view' },
