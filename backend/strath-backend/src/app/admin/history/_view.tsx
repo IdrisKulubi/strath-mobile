@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Clock3, MapPin, Star, UserX, XCircle, CheckCircle2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { formatNairobiDateTime } from "@/lib/nairobi-datetime";
 import { PairAvatars } from "@/components/admin/ops/pair-avatars";
 import { PairDetailSheet } from "@/components/admin/ops/pair-detail-sheet";
 import { EmptyState } from "@/components/admin/ops/empty-state";
@@ -236,7 +237,7 @@ function HistoryRow({
 
                 <div className="hidden w-32 text-right text-[11px] text-white/40 sm:block">
                     {pair.scheduledAt
-                        ? new Date(pair.scheduledAt).toLocaleDateString("en-KE", {
+                        ? formatNairobiDateTime(pair.scheduledAt, {
                               month: "short",
                               day: "numeric",
                               hour: "2-digit",

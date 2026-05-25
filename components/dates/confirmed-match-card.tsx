@@ -52,9 +52,10 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
     const router = useRouter();
     const statusColor = arrangementColors[match.arrangementStatus];
     const formattedScheduledAt = match.scheduledAt
-        ? new Intl.DateTimeFormat(undefined, {
+        ? new Intl.DateTimeFormat('en-KE', {
             dateStyle: 'full',
             timeStyle: 'short',
+            timeZone: 'Africa/Nairobi',
         }).format(new Date(match.scheduledAt))
         : null;
 

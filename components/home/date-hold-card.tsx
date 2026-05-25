@@ -390,7 +390,8 @@ function buildCopy(hold: MatchHold): HoldCopy {
 function formatDate(iso: string): string {
     try {
         const d = new Date(iso);
-        return d.toLocaleString(undefined, {
+        return d.toLocaleString('en-KE', {
+            timeZone: 'Africa/Nairobi',
             weekday: 'short',
             month: 'short',
             day: 'numeric',

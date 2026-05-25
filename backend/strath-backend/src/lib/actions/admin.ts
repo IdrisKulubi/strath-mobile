@@ -30,6 +30,7 @@ import {
     type GenderBucket,
 } from "@/lib/services/admission-service";
 import { bridgeMutualToBeingArranged, syncMutualMatchFromDateMatch } from "@/lib/services/mutual-match-service";
+import { formatNairobiDateTime, parseNairobiDateTimeLocal } from "@/lib/nairobi-datetime";
 import { Expo, type ExpoPushMessage } from "expo-server-sdk";
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -782,13 +783,15 @@ export async function scheduleDate(formData: FormData) {
     });
     if (!location) throw new Error("Location not found");
 
+    const scheduledAtUtc = parseNairobiDateTimeLocal(scheduledAt);
+
     await db.update(dateMatches)
         .set({
             status: "scheduled",
             locationId: location.id,
             venueName: location.name,
             venueAddress: location.address,
-            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+            scheduledAt: scheduledAtUtc,
         })
         .where(eq(dateMatches.id, matchId));
 
@@ -814,7 +817,7 @@ export async function scheduleDate(formData: FormData) {
 
     const nameA = profileA?.firstName ?? userA?.name?.split(" ")[0] ?? "your match";
     const nameB = profileB?.firstName ?? userB?.name?.split(" ")[0] ?? "your match";
-    const dateStr = new Date(scheduledAt).toLocaleString("en-KE", {
+    const dateStr = formatNairobiDateTime(scheduledAtUtc, {
         dateStyle: "medium",
         timeStyle: "short",
     });
