@@ -36,8 +36,6 @@ async function main() {
                 inArray(candidatePairs.status, ["active", "expired"]),
                 ne(candidatePairs.aDecision, "passed"),
                 ne(candidatePairs.bDecision, "passed"),
-                ne(candidatePairs.aDecision, "maybe"),
-                ne(candidatePairs.bDecision, "maybe"),
             ),
         );
 
