@@ -16,6 +16,7 @@ import {
     LayoutDashboard,
     MapPinned,
     Megaphone,
+    Bell,
     ShieldCheck,
     Sparkles,
     Users,
@@ -78,6 +79,7 @@ const groups: NavGroup[] = [
         items: [
             { href: "/admin/users", label: "Users", icon: Users },
             { href: "/admin/metrics", label: "Metrics", icon: BarChart3 },
+            { href: "/admin/push-notifications", label: "Push notifications", icon: Bell },
         ],
     },
 ];

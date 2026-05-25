@@ -1,24 +1,23 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { session as sessionTable, user } from "@/db/schema";
+import { session as sessionTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 import { z } from "zod";
 
-const pushTokenSchema = z.object({
-    pushToken: z.string().min(1),
+const outcomeSchema = z.object({
+    context: z.enum(["mutual_match", "after_confirm", "settings"]),
+    outcome: z.enum(["accepted", "dismissed"]),
 });
 
-// Helper to get session with Bearer token fallback
 async function getSessionWithFallback(req: NextRequest) {
     let session = await auth.api.getSession({ headers: req.headers });
 
-    // Fallback: Manual token check if getSession fails (for Bearer token auth from mobile)
     if (!session) {
         const authHeader = req.headers.get("authorization");
-        if (authHeader && authHeader.startsWith("Bearer ")) {
+        if (authHeader?.startsWith("Bearer ")) {
             const token = authHeader.split(" ")[1];
             const dbSession = await db.query.session.findFirst({
                 where: eq(sessionTable.token, token),
@@ -26,7 +25,7 @@ async function getSessionWithFallback(req: NextRequest) {
             });
 
             if (dbSession && dbSession.expiresAt > new Date()) {
-                session = { session: dbSession, user: dbSession.user } as any;
+                session = { session: dbSession, user: dbSession.user } as typeof session;
             }
         }
     }
@@ -40,21 +39,11 @@ export async function POST(req: NextRequest) {
         if (!session?.user?.id) return errorResponse(new Error("Unauthorized"), 401);
 
         const body = await req.json();
-        const { pushToken } = pushTokenSchema.parse(body);
+        const { context, outcome } = outcomeSchema.parse(body);
 
-        const existing = await db.query.user.findFirst({
-            where: eq(user.id, session.user.id),
-            columns: { pushToken: true },
-        });
-
-        await db
-            .update(user)
-            .set({ pushToken })
-            .where(eq(user.id, session.user.id));
-
-        await logEvent(EVENT_TYPES.PUSH_TOKEN_REGISTERED, session.user.id, {
-            hadTokenBefore: Boolean(existing?.pushToken),
-            context: "api_register",
+        await logEvent(EVENT_TYPES.PUSH_PRE_PROMPT, session.user.id, {
+            context,
+            outcome,
         });
 
         return successResponse({ success: true });

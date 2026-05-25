@@ -10,6 +10,8 @@ export const EVENT_TYPES = {
     DATE_SCHEDULED: "date_scheduled",
     DATE_ATTENDED: "date_attended",
     FEEDBACK_SUBMITTED: "feedback_submitted",
+    PUSH_TOKEN_REGISTERED: "push_token_registered",
+    PUSH_PRE_PROMPT: "push_pre_prompt",
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
