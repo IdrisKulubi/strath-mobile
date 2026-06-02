@@ -71,6 +71,18 @@ export async function compareFacesWithRekognition(
     };
 }
 
+export function isRekognitionSourceFaceNotFoundError(error: unknown) {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+
+    const normalizedMessage = error.message.toLowerCase();
+    return (
+        normalizedMessage.includes("no face") &&
+        normalizedMessage.includes("source")
+    );
+}
+
 export async function detectFacesWithRekognition(
     imageBytes: Uint8Array,
 ): Promise<RekognitionFaceDetectionResult> {

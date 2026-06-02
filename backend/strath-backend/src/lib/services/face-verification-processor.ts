@@ -19,6 +19,7 @@ import { resolveFaceVerificationOutcome } from "@/lib/services/face-verification
 import {
     compareFacesWithRekognition,
     detectFacesWithRekognition,
+    isRekognitionSourceFaceNotFoundError,
 } from "@/lib/services/face-verification-provider-rekognition";
 import { getFaceVerificationComparisonBytes } from "@/lib/services/face-verification-storage";
 import { getProfilePhotoAssetsByKeys } from "@/lib/services/profile-photo-assets";
@@ -58,21 +59,6 @@ export async function processFaceVerificationSession(sessionId: string) {
     try {
         const sourceAssetKey = session.selfieAssetKeys[0];
         const sourceBytes = await getFaceVerificationComparisonBytes(sourceAssetKey);
-        const sourceFaceDetection = await detectFacesWithRekognition(sourceBytes);
-
-        if (sourceFaceDetection.facesDetected === 0) {
-            return finalizeFaceVerificationProcessing(session.userId, session.id, {
-                status: FACE_VERIFICATION_STATUSES.RETRY_REQUIRED,
-                failureReasons: ["selfie_face_not_detected"],
-                decisionSummary: {
-                    processedAt: new Date().toISOString(),
-                    matchedPhotoCount: 0,
-                    comparedPhotoCount: 0,
-                    sourceFacesDetected: 0,
-                },
-                results: [],
-            });
-        }
 
         const profilePhotoAssetRows = await getProfilePhotoAssetsByKeys(session.profileAssetKeys);
         const targetAssetKeys = selectTargetAssetKeysForVerification(
@@ -89,7 +75,6 @@ export async function processFaceVerificationSession(sessionId: string) {
                     processedAt: new Date().toISOString(),
                     matchedPhotoCount: 0,
                     comparedPhotoCount: 0,
-                    sourceFacesDetected: sourceFaceDetection.facesDetected,
                     candidateProfilePhotoCount: session.profileAssetKeys.length,
                     usableProfilePhotoCount: targetAssetKeys.length,
                 },
@@ -99,7 +84,7 @@ export async function processFaceVerificationSession(sessionId: string) {
 
         const photoAssetMap = new Map(profilePhotoAssetRows.map((asset) => [asset.objectKey, asset]));
 
-        const comparisonResults: Array<{
+        type ComparisonRow = {
             sourceAssetKey: string;
             targetAssetKey: string;
             similarity: number | null;
@@ -108,92 +93,118 @@ export async function processFaceVerificationSession(sessionId: string) {
             qualityFlags: string[];
             decision: string;
             rawProviderResponseRedacted: Record<string, unknown>;
-        }> = [];
+        };
 
-        const targetResults = await runWithConcurrency(
-            targetAssetKeys,
-            comparisonConcurrency,
-            async (targetAssetKey) => {
-                try {
-                    const assetMetadata = photoAssetMap.get(targetAssetKey);
+        const comparisonResults: ComparisonRow[] = [];
+        let matchedPhotoCount = 0;
+        let sourceFacesDetected: number | null = null;
+        let sourceFaceConfidence: number | null = null;
+        let nextTargetIndex = 0;
 
-                    if (assetMetadata?.faceCount === 0) {
-                        return {
-                            sourceAssetKey,
-                            targetAssetKey,
-                            similarity: null,
-                            faceConfidence: sourceFaceDetection.bestFaceConfidence,
-                            facesDetected: 0,
-                            qualityFlags: ["no_face_detected"],
-                            decision: "not_matched",
-                            rawProviderResponseRedacted: {
-                                sourceFacesDetected: sourceFaceDetection.facesDetected,
-                                targetFacesDetected: 0,
-                                fromAssetMetadata: true,
-                            },
-                        };
-                    }
+        while (nextTargetIndex < targetAssetKeys.length && matchedPhotoCount < minimumMatchCount) {
+            const remaining = targetAssetKeys.length - nextTargetIndex;
+            const batchSize = Math.min(comparisonConcurrency, remaining);
+            const batchKeys = targetAssetKeys.slice(nextTargetIndex, nextTargetIndex + batchSize);
+            nextTargetIndex += batchSize;
 
-                    const targetBytes = await getFaceVerificationComparisonBytes(targetAssetKey);
-                    const targetFacesDetected = assetMetadata?.faceCount ?? null;
+            const batchResults = await runWithConcurrency(batchKeys, batchSize, async (targetAssetKey) =>
+                compareTargetPhoto({
+                    sourceAssetKey,
+                    sourceBytes,
+                    targetAssetKey,
+                    photoAssetMap,
+                    similarityThreshold,
+                    sourceFaceConfidence,
+                }),
+            );
 
-                    if (targetFacesDetected === null) {
-                        const targetFaceDetection = await detectFacesWithRekognition(targetBytes);
-                        if (targetFaceDetection.facesDetected === 0) {
-                            return {
-                                sourceAssetKey,
-                                targetAssetKey,
-                                similarity: null,
-                                faceConfidence: sourceFaceDetection.bestFaceConfidence,
-                                facesDetected: 0,
-                                qualityFlags: ["no_face_detected"],
-                                decision: "not_matched",
-                                rawProviderResponseRedacted: {
-                                    sourceFacesDetected: sourceFaceDetection.facesDetected,
-                                    targetFacesDetected: 0,
-                                },
-                            };
-                        }
-                    }
-
-                    const result = await compareFacesWithRekognition(
-                        sourceBytes,
-                        targetBytes,
-                        similarityThreshold,
-                    );
-
-                    return {
-                        sourceAssetKey,
-                        targetAssetKey,
-                        similarity: result.similarity,
-                        faceConfidence: result.faceConfidence,
-                        facesDetected: result.facesDetected,
-                        qualityFlags: result.qualityFlags,
-                        decision:
-                            (result.similarity ?? 0) >= similarityThreshold ? "matched" : "not_matched",
-                        rawProviderResponseRedacted: result.rawProviderResponseRedacted,
-                    };
-                } catch (error) {
-                    console.error("[FaceVerification] CompareFaces failed for target", targetAssetKey, error);
-                    const providerErrorCode = getFaceVerificationProcessingErrorCode(error);
-                    return {
-                        sourceAssetKey,
-                        targetAssetKey,
-                        similarity: null,
-                        faceConfidence: null,
-                        facesDetected: 0,
-                        qualityFlags: [providerErrorCode],
-                        decision: "error",
-                        rawProviderResponseRedacted: {
-                            providerErrorCode,
-                            providerError: error instanceof Error ? error.message : "unknown_error",
+            for (const row of batchResults) {
+                if (row.selfieFaceNotDetected) {
+                    return finalizeFaceVerificationProcessing(session.userId, session.id, {
+                        status: FACE_VERIFICATION_STATUSES.RETRY_REQUIRED,
+                        failureReasons: ["selfie_face_not_detected"],
+                        decisionSummary: {
+                            processedAt: new Date().toISOString(),
+                            matchedPhotoCount: 0,
+                            comparedPhotoCount: comparisonResults.length,
+                            sourceFacesDetected: 0,
                         },
-                    };
+                        results: comparisonResults,
+                    });
                 }
-            },
-        );
 
-        comparisonResults.push(...targetResults);
+                if (row.sourceFacesDetected !== null) {
+                    sourceFacesDetected = row.sourceFacesDetected;
+                }
+                if (row.sourceFaceConfidence !== null) {
+                    sourceFaceConfidence = row.sourceFaceConfidence;
+                }
+
+                comparisonResults.push(row.result);
+                if (row.result.decision === "matched") {
+                    matchedPhotoCount += 1;
+                }
+            }
+        }
+
+        if (matchedPhotoCount >= minimumMatchCount) {
+            while (nextTargetIndex < targetAssetKeys.length) {
+                comparisonResults.push(
+                    buildSkippedComparisonRow(
+                        sourceAssetKey,
+                        targetAssetKeys[nextTargetIndex],
+                        "early_exit_pass",
+                    ),
+                );
+                nextTargetIndex += 1;
+            }
+        } else {
+            while (nextTargetIndex < targetAssetKeys.length) {
+                const remaining = targetAssetKeys.length - nextTargetIndex;
+                const batchSize = Math.min(comparisonConcurrency, remaining);
+                const batchKeys = targetAssetKeys.slice(nextTargetIndex, nextTargetIndex + batchSize);
+                nextTargetIndex += batchSize;
+
+                const batchResults = await runWithConcurrency(batchKeys, batchSize, async (targetAssetKey) =>
+                    compareTargetPhoto({
+                        sourceAssetKey,
+                        sourceBytes,
+                        targetAssetKey,
+                        photoAssetMap,
+                        similarityThreshold,
+                        sourceFaceConfidence,
+                    }),
+                );
+
+                for (const row of batchResults) {
+                    if (row.selfieFaceNotDetected) {
+                        return finalizeFaceVerificationProcessing(session.userId, session.id, {
+                            status: FACE_VERIFICATION_STATUSES.RETRY_REQUIRED,
+                            failureReasons: ["selfie_face_not_detected"],
+                            decisionSummary: {
+                                processedAt: new Date().toISOString(),
+                                matchedPhotoCount: 0,
+                                comparedPhotoCount: comparisonResults.length,
+                                sourceFacesDetected: 0,
+                            },
+                            results: comparisonResults,
+                        });
+                    }
+
+                    if (row.sourceFacesDetected !== null) {
+                        sourceFacesDetected = row.sourceFacesDetected;
+                    }
+                    if (row.sourceFaceConfidence !== null) {
+                        sourceFaceConfidence = row.sourceFaceConfidence;
+                    }
+
+                    comparisonResults.push(row.result);
+                    if (row.result.decision === "matched") {
+                        matchedPhotoCount += 1;
+                    }
+                }
+            }
+        }
 
         const outcome = resolveFaceVerificationOutcome({
             comparisonResults,
@@ -206,7 +217,7 @@ export async function processFaceVerificationSession(sessionId: string) {
             failureReasons: outcome.failureReasons,
             decisionSummary: {
                 processedAt: new Date().toISOString(),
-                sourceFacesDetected: sourceFaceDetection.facesDetected,
+                sourceFacesDetected: sourceFacesDetected ?? undefined,
                 candidateProfilePhotoCount: session.profileAssetKeys.length,
                 usableProfilePhotoCount: targetAssetKeys.length,
                 ...outcome.decisionSummary,
@@ -250,6 +261,145 @@ function selectTargetAssetKeysForVerification(
     });
 
     return orderedKeys.slice(0, getFaceVerificationMaxProfileComparisons());
+}
+
+function buildSkippedComparisonRow(
+    sourceAssetKey: string,
+    targetAssetKey: string,
+    reason = "not_evaluated",
+) {
+    return {
+        sourceAssetKey,
+        targetAssetKey,
+        similarity: null,
+        faceConfidence: null,
+        facesDetected: 0,
+        qualityFlags: [],
+        decision: "skipped",
+        rawProviderResponseRedacted: { reason },
+    };
+}
+
+async function compareTargetPhoto(input: {
+    sourceAssetKey: string;
+    sourceBytes: Uint8Array;
+    targetAssetKey: string;
+    photoAssetMap: Map<
+        string,
+        {
+            objectKey: string;
+            verificationReady: boolean;
+            faceCount: number;
+            lastAnalyzedAt: Date | null;
+        }
+    >;
+    similarityThreshold: number;
+    sourceFaceConfidence: number | null;
+}) {
+    const { sourceAssetKey, sourceBytes, targetAssetKey, photoAssetMap, similarityThreshold } = input;
+
+    try {
+        const assetMetadata = photoAssetMap.get(targetAssetKey);
+
+        if (assetMetadata?.faceCount === 0) {
+            return {
+                selfieFaceNotDetected: false,
+                sourceFacesDetected: 1,
+                sourceFaceConfidence: input.sourceFaceConfidence,
+                result: {
+                    sourceAssetKey,
+                    targetAssetKey,
+                    similarity: null,
+                    faceConfidence: input.sourceFaceConfidence,
+                    facesDetected: 0,
+                    qualityFlags: ["no_face_detected"],
+                    decision: "not_matched",
+                    rawProviderResponseRedacted: {
+                        targetFacesDetected: 0,
+                        fromAssetMetadata: true,
+                    },
+                },
+            };
+        }
+
+        const targetBytes = await getFaceVerificationComparisonBytes(targetAssetKey);
+        const targetFacesDetected = assetMetadata?.faceCount ?? null;
+
+        if (targetFacesDetected === null) {
+            const targetFaceDetection = await detectFacesWithRekognition(targetBytes);
+            if (targetFaceDetection.facesDetected === 0) {
+                return {
+                    selfieFaceNotDetected: false,
+                    sourceFacesDetected: 1,
+                    sourceFaceConfidence: input.sourceFaceConfidence,
+                    result: {
+                        sourceAssetKey,
+                        targetAssetKey,
+                        similarity: null,
+                        faceConfidence: input.sourceFaceConfidence,
+                        facesDetected: 0,
+                        qualityFlags: ["no_face_detected"],
+                        decision: "not_matched",
+                        rawProviderResponseRedacted: {
+                            targetFacesDetected: 0,
+                        },
+                    },
+                };
+            }
+        }
+
+        const result = await compareFacesWithRekognition(sourceBytes, targetBytes, similarityThreshold);
+        const sourceFaceFromCompare = result.rawProviderResponseRedacted.sourceFaceConfidence;
+        const parsedSourceConfidence =
+            typeof sourceFaceFromCompare === "number" ? sourceFaceFromCompare : null;
+
+        return {
+            selfieFaceNotDetected: false,
+            sourceFacesDetected: 1,
+            sourceFaceConfidence: parsedSourceConfidence ?? input.sourceFaceConfidence,
+            result: {
+                sourceAssetKey,
+                targetAssetKey,
+                similarity: result.similarity,
+                faceConfidence: result.faceConfidence,
+                facesDetected: result.facesDetected,
+                qualityFlags: result.qualityFlags,
+                decision: (result.similarity ?? 0) >= similarityThreshold ? "matched" : "not_matched",
+                rawProviderResponseRedacted: result.rawProviderResponseRedacted,
+            },
+        };
+    } catch (error) {
+        if (isRekognitionSourceFaceNotFoundError(error)) {
+            return {
+                selfieFaceNotDetected: true,
+                sourceFacesDetected: 0,
+                sourceFaceConfidence: null,
+                result: buildSkippedComparisonRow(sourceAssetKey, targetAssetKey, "selfie_no_face"),
+            };
+        }
+
+        console.error("[FaceVerification] CompareFaces failed for target", targetAssetKey, error);
+        const providerErrorCode = getFaceVerificationProcessingErrorCode(error);
+
+        return {
+            selfieFaceNotDetected: false,
+            sourceFacesDetected: null,
+            sourceFaceConfidence: input.sourceFaceConfidence,
+            result: {
+                sourceAssetKey,
+                targetAssetKey,
+                similarity: null,
+                faceConfidence: null,
+                facesDetected: 0,
+                qualityFlags: [providerErrorCode],
+                decision: "error",
+                rawProviderResponseRedacted: {
+                    providerErrorCode,
+                    providerError: error instanceof Error ? error.message : "unknown_error",
+                },
+            },
+        };
+    }
 }
 
 function getRequiredMatchCount(targetAssetCount: number) {

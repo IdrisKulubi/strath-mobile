@@ -6,6 +6,7 @@ import { getFaceVerificationAdminOverview } from "@/lib/services/face-verificati
 import {
     processVerificationSessionAction,
     reviewVerificationSessionAction,
+    updateVerificationAssistanceStatusAction,
 } from "./_actions";
 
 function MetricCard({
@@ -219,6 +220,95 @@ export default async function AdminVerificationPage() {
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+                <div className="mb-4">
+                    <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+                        Assistance requests
+                    </h2>
+                    <p className="mt-1 text-xs text-gray-500">
+                        Users who asked for help after their first verification attempt failed.
+                    </p>
+                </div>
+
+                {overview.assistanceRequests.length === 0 ? (
+                    <p className="text-sm text-gray-400">No assistance requests yet.</p>
+                ) : (
+                    <div className="space-y-4">
+                        {overview.assistanceRequests.map((request) => (
+                            <div
+                                key={request.id}
+                                className="rounded-xl border border-white/10 bg-black/20 p-4"
+                            >
+                                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                                    <div className="space-y-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <StatusBadge status={request.status} />
+                                            <span className="text-xs text-gray-500">
+                                                Attempt {request.attemptNumber}
+                                            </span>
+                                        </div>
+                                        <p className="font-semibold text-white">{request.displayName}</p>
+                                        <p className="text-sm text-gray-400">{request.email}</p>
+                                        <p className="text-xs text-gray-500">
+                                            {request.phoneNumber || "No phone number on file"}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                            Session: {request.sessionId} · {formatDate(request.createdAt)}
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {request.status === "new" ? (
+                                            <form action={updateVerificationAssistanceStatusAction}>
+                                                <input type="hidden" name="assistanceId" value={request.id} />
+                                                <input type="hidden" name="status" value="contacted" />
+                                                <button
+                                                    type="submit"
+                                                    className="rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white"
+                                                >
+                                                    Mark contacted
+                                                </button>
+                                            </form>
+                                        ) : null}
+                                        {request.status !== "resolved" ? (
+                                            <form action={updateVerificationAssistanceStatusAction}>
+                                                <input type="hidden" name="assistanceId" value={request.id} />
+                                                <input type="hidden" name="status" value="resolved" />
+                                                <button
+                                                    type="submit"
+                                                    className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-semibold text-green-200"
+                                                >
+                                                    Mark resolved
+                                                </button>
+                                            </form>
+                                        ) : null}
+                                    </div>
+                                </div>
+                                <div className="mb-3">
+                                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                                        Message
+                                    </p>
+                                    <p className="whitespace-pre-wrap text-sm text-gray-200">{request.message}</p>
+                                </div>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    <DetailField
+                                        label="Verification status"
+                                        value={request.verificationStatus.replace(/_/g, " ")}
+                                    />
+                                    <DetailField
+                                        label="Failure reasons"
+                                        value={
+                                            request.failureReasons?.length
+                                                ? request.failureReasons.join(", ")
+                                                : "-"
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             <div className="rounded-xl border border-white/10 bg-white/5 p-6">

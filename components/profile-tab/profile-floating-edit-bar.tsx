@@ -1,52 +1,24 @@
-import React, { useCallback } from 'react';
-import { Pressable, StyleSheet, Text as RNText, View, Platform } from 'react-native';
+import React from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 
-import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
-import { useTheme } from '@/hooks/use-theme';
+import { SPACING } from '@/lib/design-tokens';
 
-/** Space reserved above tab bar for the floating pill */
-export const PROFILE_FLOATING_BAR_HEIGHT = 48;
+import { ProfileEditProfileButton } from './profile-edit-profile-button';
+
+/** Space reserved above tab bar for the floating edit control */
+export const PROFILE_FLOATING_BAR_HEIGHT = 56;
 
 interface ProfileFloatingEditBarProps {
     onEditPress: () => void;
 }
 
 export function ProfileFloatingEditBar({ onEditPress }: ProfileFloatingEditBarProps) {
-    const { colors, isDark } = useTheme();
     const tabBarHeight = useBottomTabBarHeight();
 
-    const handlePress = useCallback(() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        onEditPress();
-    }, [onEditPress]);
-
     return (
-        <View
-            pointerEvents="box-none"
-            style={[styles.host, { bottom: tabBarHeight }]}
-        >
-            <Pressable
-                onPress={handlePress}
-                accessibilityRole="button"
-                accessibilityLabel="Edit profile"
-                style={({ pressed }) => [
-                    styles.pill,
-                    {
-                        borderColor: colors.border,
-                        backgroundColor: pressed
-                            ? (isDark ? 'rgba(255, 255, 255, 0.1)' : colors.muted)
-                            : isDark
-                              ? 'rgba(255, 255, 255, 0.04)'
-                              : 'rgba(255, 255, 255, 0.85)',
-                    },
-                ]}
-            >
-                <Ionicons name="pencil" size={15} color={colors.primary} />
-                <RNText style={[styles.label, { color: colors.foreground }]}>Edit profile</RNText>
-            </Pressable>
+        <View pointerEvents="box-none" style={[styles.host, { bottom: tabBarHeight }]}>
+            <ProfileEditProfileButton onPress={onEditPress} layout="floating" />
         </View>
     );
 }
@@ -64,20 +36,6 @@ const styles = StyleSheet.create({
         zIndex: 30,
         alignItems: 'center',
         paddingBottom: SPACING.compact,
-    },
-    pill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        paddingHorizontal: SPACING.compact + 2,
-        paddingVertical: SPACING.tight,
-        borderRadius: RADIUS.full,
-        borderWidth: StyleSheet.hairlineWidth,
-        minHeight: 36,
-    },
-    label: {
-        ...TYPOGRAPHY.label,
-        fontWeight: '600',
+        paddingHorizontal: SPACING.screenX,
     },
 });

@@ -301,6 +301,33 @@ export const faceVerificationResults = pgTable("face_verification_results", {
     decisionIdx: index("face_verification_results_decision_idx").on(table.decision),
 }));
 
+export const faceVerificationAssistance = pgTable(
+    "face_verification_assistance",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        sessionId: uuid("session_id")
+            .notNull()
+            .references(() => faceVerificationSessions.id, { onDelete: "cascade" }),
+        attemptNumber: integer("attempt_number").notNull(),
+        email: text("email").notNull(),
+        phoneNumber: text("phone_number"),
+        message: text("message").notNull(),
+        failureReasons: jsonb("failure_reasons").$type<string[]>().default([]).notNull(),
+        verificationStatus: text("verification_status").notNull(),
+        status: text("status").$type<"new" | "contacted" | "resolved">().default("new").notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdx: index("face_verification_assistance_user_idx").on(table.userId),
+        sessionUniqueIdx: uniqueIndex("face_verification_assistance_session_idx").on(table.sessionId),
+        statusIdx: index("face_verification_assistance_status_idx").on(table.status),
+        createdAtIdx: index("face_verification_assistance_created_at_idx").on(table.createdAt),
+    }),
+);
+
 export const profilePhotoAssets = pgTable("profile_photo_assets", {
     id: uuid("id").defaultRandom().primaryKey(),
     userId: text("user_id")
@@ -1015,6 +1042,7 @@ export const userRelations = relations(user, ({ one, many }) => ({
     matchSignals: one(userMatchSignals),
     faceVerificationSessions: many(faceVerificationSessions),
     faceVerificationJobs: many(faceVerificationJobs),
+    faceVerificationAssistance: many(faceVerificationAssistance),
     profilePhotoAssets: many(profilePhotoAssets),
     sessions: many(session),
     accounts: many(account),
@@ -1086,6 +1114,18 @@ export const faceVerificationSessionsRelations = relations(faceVerificationSessi
     }),
     results: many(faceVerificationResults),
     jobs: many(faceVerificationJobs),
+    assistance: one(faceVerificationAssistance),
+}));
+
+export const faceVerificationAssistanceRelations = relations(faceVerificationAssistance, ({ one }) => ({
+    user: one(user, {
+        fields: [faceVerificationAssistance.userId],
+        references: [user.id],
+    }),
+    session: one(faceVerificationSessions, {
+        fields: [faceVerificationAssistance.sessionId],
+        references: [faceVerificationSessions.id],
+    }),
 }));
 
 export const faceVerificationResultsRelations = relations(faceVerificationResults, ({ one }) => ({
@@ -1980,6 +2020,8 @@ export type ProfilePhotoAsset = typeof profilePhotoAssets.$inferSelect;
 export type NewProfilePhotoAsset = typeof profilePhotoAssets.$inferInsert;
 export type FaceVerificationJob = typeof faceVerificationJobs.$inferSelect;
 export type NewFaceVerificationJob = typeof faceVerificationJobs.$inferInsert;
+export type FaceVerificationAssistance = typeof faceVerificationAssistance.$inferSelect;
+export type NewFaceVerificationAssistance = typeof faceVerificationAssistance.$inferInsert;
 export type StudySession = typeof studySessions.$inferSelect;
 export type NewStudySession = typeof studySessions.$inferInsert;
 export type WingmanLink = typeof wingmanLinks.$inferSelect;

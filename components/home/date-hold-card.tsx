@@ -1,6 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeIn, SlideInUp } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
@@ -30,6 +29,20 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
 
     const copy = useMemo(() => buildCopy(hold), [hold]);
 
+    const handlePrimaryCta = useCallback(() => {
+        if (copy.primaryCta?.kind === 'feedback' && hold.dateMatchId) {
+            router.push({
+                pathname: '/feedback/[dateId]',
+                params: {
+                    dateId: hold.dateMatchId,
+                    name: partnerName,
+                },
+            });
+            return;
+        }
+        router.push('/(tabs)/dates');
+    }, [copy.primaryCta, hold.dateMatchId, partnerName, router]);
+
     const handleCancel = (reason: MatchHoldCancelReason, notes?: string) => {
         cancel.mutate(
             { mutualMatchId: hold.mutualMatchId, reason, notes: notes ?? null },
@@ -51,10 +64,14 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
         );
     };
 
-    const cardBorder = isDark ? 'rgba(233,30,140,0.3)' : 'rgba(233,30,140,0.22)';
+    const primaryCtaFill = isDark ? 'rgba(217,74,143,0.12)' : 'rgba(184,50,122,0.08)';
+    const primaryCtaFillPressed = isDark ? 'rgba(217,74,143,0.2)' : 'rgba(184,50,122,0.12)';
+    const secondaryCtaFill = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
+    const secondaryCtaFillPressed = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)';
+
     return (
         <Animated.View entering={FadeInDown.duration(400)} style={styles.outer}>
-            <View style={[styles.card, { borderColor: cardBorder, backgroundColor: colors.card }]}>
+            <View style={[styles.card, { backgroundColor: colors.card }]}>
                 <View style={styles.content}>
                     <View style={styles.statusPillRow}>
                         <View style={[styles.statusPill, { backgroundColor: colors.primary }]}>
@@ -66,7 +83,7 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                     </View>
 
                     <View style={styles.partnerRow}>
-                        <View style={[styles.avatarWrap, { borderColor: cardBorder }]}>
+                        <View style={[styles.avatarWrap, { borderColor: colors.border }]}>
                             {hold.partner.profilePhoto ? (
                                 <CachedImage uri={hold.partner.profilePhoto} style={styles.avatar} />
                             ) : (
@@ -99,7 +116,7 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{copy.subtitle}</Text>
 
                     {hold.slotConfirmation?.needsSlotConfirmation && hold.slotConfirmation.viewerSlotConfirmed ? (
-                        <View style={[styles.detailsBlock, { borderColor: cardBorder }]}>
+                        <View style={[styles.detailsBlock, { borderColor: colors.border }]}>
                             {hold.slotConfirmation.scheduledAt ? (
                                 <View style={styles.detailRow}>
                                     <Ionicons name="calendar-outline" size={18} color={colors.primary} />
@@ -115,7 +132,7 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                             </Text>
                         </View>
                     ) : !hold.slotConfirmation?.needsSlotConfirmation && (hold.scheduledAt || hold.venueName) ? (
-                        <View style={[styles.detailsBlock, { borderColor: cardBorder }]}>
+                        <View style={[styles.detailsBlock, { borderColor: colors.border }]}>
                             {hold.scheduledAt ? (
                                 <View style={styles.detailRow}>
                                     <Ionicons name="calendar-outline" size={18} color={colors.primary} />
@@ -140,28 +157,19 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                         {copy.primaryCta ? (
                             <Pressable
                                 accessibilityRole="button"
-                                onPress={() => {
-                                    if (copy.primaryCta?.kind === 'feedback' && hold.dateMatchId) {
-                                        router.push({
-                                            pathname: '/feedback/[dateId]',
-                                            params: {
-                                                dateId: hold.dateMatchId,
-                                                name: partnerName,
-                                            },
-                                        });
-                                    } else {
-                                        router.push('/(tabs)/dates');
-                                    }
-                                }}
+                                onPress={handlePrimaryCta}
                                 style={({ pressed }) => [
                                     styles.primaryCta,
-                                    { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 },
+                                    {
+                                        borderColor: colors.primary,
+                                        backgroundColor: pressed ? primaryCtaFillPressed : primaryCtaFill,
+                                        opacity: pressed ? 0.92 : 1,
+                                    },
                                 ]}
                             >
-                                <Text style={[styles.primaryCtaLabel, { color: colors.primaryForeground }]}>
+                                <Text style={[styles.primaryCtaLabel, { color: colors.primary }]}>
                                     {copy.primaryCta.label}
                                 </Text>
-                                <Ionicons name="arrow-forward" size={18} color={colors.primaryForeground} />
                             </Pressable>
                         ) : null}
 
@@ -170,10 +178,14 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                             onPress={() => setShowCancel(true)}
                             style={({ pressed }) => [
                                 styles.secondaryCta,
-                                { borderColor: cardBorder, opacity: pressed ? 0.85 : 1 },
+                                {
+                                    borderColor: colors.border,
+                                    backgroundColor: pressed ? secondaryCtaFillPressed : secondaryCtaFill,
+                                    opacity: pressed ? 0.88 : 1,
+                                },
                             ]}
                         >
-                            <Text style={[styles.secondaryCtaLabel, { color: colors.foreground }]}>
+                            <Text style={[styles.secondaryCtaLabel, { color: colors.mutedForeground }]}>
                                 {hold.status === 'completed_pending_feedback'
                                     ? 'Mark as not interested'
                                     : 'Cancel — keep matching me'}
@@ -423,7 +435,6 @@ const styles = StyleSheet.create({
     },
     card: {
         borderRadius: 28,
-        borderWidth: 1,
         overflow: 'hidden',
     },
     content: {
@@ -502,7 +513,7 @@ const styles = StyleSheet.create({
     detailsBlock: {
         marginTop: 4,
         borderRadius: 16,
-        borderWidth: StyleSheet.hairlineWidth,
+        borderWidth: 1,
         paddingHorizontal: 14,
         paddingVertical: 12,
         gap: 10,
@@ -531,20 +542,24 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        paddingVertical: 14,
-        paddingHorizontal: 20,
-        borderRadius: 16,
+        minHeight: 48,
+        paddingHorizontal: 16,
+        borderRadius: 14,
+        borderWidth: 1,
+        backgroundColor: 'transparent',
     },
     primaryCtaLabel: {
-        fontSize: 16,
-        fontWeight: '700',
+        fontSize: 15,
+        fontWeight: '800',
+        letterSpacing: -0.2,
     },
     secondaryCta: {
-        paddingVertical: 12,
-        paddingHorizontal: 20,
+        minHeight: 46,
+        paddingHorizontal: 16,
         borderRadius: 14,
         borderWidth: 1,
         alignItems: 'center',
+        justifyContent: 'center',
     },
     secondaryCtaLabel: {
         fontSize: 14,

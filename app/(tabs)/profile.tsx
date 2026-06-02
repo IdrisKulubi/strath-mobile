@@ -18,6 +18,7 @@ import {
     ProfileContentSection,
     ProfileDetailsGrid,
     ProfileSocialsCard,
+    ProfileEditProfileButton,
     ProfileFloatingEditBar,
     profileScrollBottomInset,
     type ProfileDetailItem,
@@ -193,6 +194,8 @@ export default function ProfileScreen() {
                         completionPercentage={completion}
                         onSettingsPress={() => handlePress('/settings')}
                     />
+
+                    <ProfileEditProfileButton onPress={() => handlePress('/edit-profile')} />
 
                     {completion < 100 && (
                         <CompletionProgressCard

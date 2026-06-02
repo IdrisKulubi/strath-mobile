@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin } from "@/lib/admin-auth";
+import { updateFaceVerificationAssistanceStatus } from "@/lib/services/face-verification-assistance-service";
 import {
     markFaceVerificationSessionReviewed,
     queueFaceVerificationSessionForProcessing,
@@ -45,5 +46,23 @@ export async function reviewVerificationSessionAction(formData: FormData) {
     }
 
     await markFaceVerificationSessionReviewed(sessionId, status, reason.trim());
+    revalidatePath("/admin/verification");
+}
+
+export async function updateVerificationAssistanceStatusAction(formData: FormData) {
+    await requireAdmin();
+
+    const assistanceId = formData.get("assistanceId");
+    const status = formData.get("status");
+
+    if (typeof assistanceId !== "string" || !assistanceId) {
+        throw new Error("Missing assistance request id");
+    }
+
+    if (status !== "contacted" && status !== "resolved") {
+        throw new Error("Invalid assistance status");
+    }
+
+    await updateFaceVerificationAssistanceStatus(assistanceId, status);
     revalidatePath("/admin/verification");
 }

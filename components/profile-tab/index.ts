@@ -7,6 +7,7 @@ export { WingmanNotesCard, type WingmanNote } from './wingman-notes-card';
 export { ProfileContentSection } from './profile-content-section';
 export { ProfileDetailsGrid, type ProfileDetailItem } from './profile-details-grid';
 export { ProfileSocialsCard } from './profile-socials-card';
+export { ProfileEditProfileButton } from './profile-edit-profile-button';
 export {
     ProfileFloatingEditBar,
     profileScrollBottomInset,

@@ -7,8 +7,9 @@ const DEFAULT_PROCESSING_MODE = "async";
 const DEFAULT_CRON_BATCH_SIZE = 20;
 const DEFAULT_WORKER_BATCH_SIZE = 20;
 const DEFAULT_WORKER_CONCURRENCY = 4;
-const DEFAULT_COMPARISON_CONCURRENCY = 2;
+const DEFAULT_COMPARISON_CONCURRENCY = 3;
 const DEFAULT_MAX_PROFILE_COMPARISONS = 4;
+const DEFAULT_INLINE_BUDGET_MS = 12_000;
 const DEFAULT_JOB_LEASE_SECONDS = 120;
 const DEFAULT_JOB_MAX_ATTEMPTS = 5;
 const DEFAULT_JOB_RETRY_DELAY_SECONDS = 15;
@@ -75,6 +76,11 @@ export function getFaceVerificationWorkerConcurrency() {
 export function getFaceVerificationComparisonConcurrency() {
     const value = Number(process.env.FACE_VERIFICATION_COMPARISON_CONCURRENCY ?? DEFAULT_COMPARISON_CONCURRENCY);
     return Number.isFinite(value) && value >= 1 ? Math.min(Math.floor(value), 5) : DEFAULT_COMPARISON_CONCURRENCY;
+}
+
+export function getFaceVerificationInlineBudgetMs() {
+    const value = Number(process.env.FACE_VERIFICATION_INLINE_BUDGET_MS ?? DEFAULT_INLINE_BUDGET_MS);
+    return Number.isFinite(value) && value >= 3000 ? Math.min(Math.floor(value), 45_000) : DEFAULT_INLINE_BUDGET_MS;
 }
 
 export function getFaceVerificationMaxProfileComparisons() {
