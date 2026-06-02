@@ -1,5 +1,6 @@
 "use server";
 
+import { getAdminUserSummaryFromMap, loadAdminUserSummaries } from "@/lib/admin-user-summary";
 import { requireAdmin } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
 import {
@@ -105,27 +106,11 @@ export async function getAdminDateRequests(statusFilter?: string) {
     const visiblePairs = pairs.filter((pair) => !archivedPairIds.has(pair.id));
     const visibleMutuals = mutuals.filter((match) => !archivedPairIds.has(match.candidatePairId));
 
-    async function getAdminUserSummary(userId: string) {
-        const profile = await db.query.profiles.findFirst({
-            where: eq(profiles.userId, userId),
-            with: { user: true },
-        });
-        const fallbackUser = profile?.user
-            ? null
-            : await db.query.user.findFirst({ where: eq(user.id, userId) });
-
-        return {
-            id: userId,
-            firstName: profile?.firstName || profile?.user?.name?.split(" ")[0] || fallbackUser?.name?.split(" ")[0] || "Unknown",
-            name: profile ? [profile.firstName, profile.lastName].filter(Boolean).join(" ") : fallbackUser?.name ?? "Unknown",
-            profilePhoto: profile?.profilePhoto ?? profile?.user?.profilePhoto ?? profile?.user?.image ?? fallbackUser?.profilePhoto ?? fallbackUser?.image,
-            email: profile?.user?.email ?? fallbackUser?.email,
-            phone: profile?.phoneNumber ?? profile?.user?.phoneNumber ?? fallbackUser?.phoneNumber,
-            location: profile?.currentLocation,
-            university: profile?.university,
-            course: profile?.course,
-        };
-    }
+    const userSummaries = await loadAdminUserSummaries([
+        ...legacyRequests.flatMap((request) => [request.fromUserId, request.toUserId]),
+        ...visiblePairs.flatMap((pair) => [pair.userAId, pair.userBId]),
+        ...visibleMutuals.flatMap((match) => [match.userAId, match.userBId]),
+    ]);
 
     function decisionMeta(decision: "open_to_meet" | "passed", pairStatus: string) {
         if (decision === "open_to_meet") {
@@ -137,102 +122,94 @@ export async function getAdminDateRequests(statusFilter?: string) {
         return { kind: "passed" as const, label: "Passed" };
     }
 
-    const legacyRows = await Promise.all(
-        legacyRequests.map(async (request) => ({
-            id: `legacy-${request.id}`,
-            pairId: null,
-            mutualMatchId: null,
-            source: "legacy_request" as const,
-            kind: "legacy_request" as const,
-            label: "Direct invite",
-            status: request.status,
-            decision: null,
-            pairStatus: null,
-            compatibilityScore: null,
-            matchReasons: [] as string[],
-            message: request.message,
-            vibe: request.vibe,
-            createdAt: request.createdAt.toISOString(),
-            updatedAt: request.updatedAt.toISOString(),
-            fromUser: await getAdminUserSummary(request.fromUserId),
-            toUser: await getAdminUserSummary(request.toUserId),
-        })),
-    );
+    const legacyRows = legacyRequests.map((request) => ({
+        id: `legacy-${request.id}`,
+        pairId: null,
+        mutualMatchId: null,
+        source: "legacy_request" as const,
+        kind: "legacy_request" as const,
+        label: "Direct invite",
+        status: request.status,
+        decision: null,
+        pairStatus: null,
+        compatibilityScore: null,
+        matchReasons: [] as string[],
+        message: request.message,
+        vibe: request.vibe,
+        createdAt: request.createdAt.toISOString(),
+        updatedAt: request.updatedAt.toISOString(),
+        fromUser: getAdminUserSummaryFromMap(userSummaries, request.fromUserId),
+        toUser: getAdminUserSummaryFromMap(userSummaries, request.toUserId),
+    }));
 
-    const decisionRows = (
-        await Promise.all(
-            visiblePairs.flatMap((pair) => {
-                const rows = [];
-                if (pair.aDecision !== "pending") {
-                    const meta = decisionMeta(pair.aDecision, pair.status);
-                    rows.push((async () => ({
-                        id: `pair-${pair.id}-a`,
-                        pairId: pair.id,
-                        mutualMatchId: null,
-                        source: "candidate_pair" as const,
-                        kind: meta.kind,
-                        label: meta.label,
-                        status: pair.aDecision,
-                        decision: pair.aDecision,
-                        pairStatus: pair.status,
-                        compatibilityScore: pair.compatibilityScore,
-                        matchReasons: pair.matchReasons,
-                        message: null,
-                        vibe: null,
-                        createdAt: pair.createdAt.toISOString(),
-                        updatedAt: pair.updatedAt.toISOString(),
-                        fromUser: await getAdminUserSummary(pair.userAId),
-                        toUser: await getAdminUserSummary(pair.userBId),
-                    }))());
-                }
-                if (pair.bDecision !== "pending") {
-                    const meta = decisionMeta(pair.bDecision, pair.status);
-                    rows.push((async () => ({
-                        id: `pair-${pair.id}-b`,
-                        pairId: pair.id,
-                        mutualMatchId: null,
-                        source: "candidate_pair" as const,
-                        kind: meta.kind,
-                        label: meta.label,
-                        status: pair.bDecision,
-                        decision: pair.bDecision,
-                        pairStatus: pair.status,
-                        compatibilityScore: pair.compatibilityScore,
-                        matchReasons: pair.matchReasons,
-                        message: null,
-                        vibe: null,
-                        createdAt: pair.createdAt.toISOString(),
-                        updatedAt: pair.updatedAt.toISOString(),
-                        fromUser: await getAdminUserSummary(pair.userBId),
-                        toUser: await getAdminUserSummary(pair.userAId),
-                    }))());
-                }
-                return rows;
-            }),
-        )
-    ).flat();
+    const decisionRows = visiblePairs.flatMap((pair) => {
+        const rows = [];
+        if (pair.aDecision !== "pending") {
+            const meta = decisionMeta(pair.aDecision, pair.status);
+            rows.push({
+                id: `pair-${pair.id}-a`,
+                pairId: pair.id,
+                mutualMatchId: null,
+                source: "candidate_pair" as const,
+                kind: meta.kind,
+                label: meta.label,
+                status: pair.aDecision,
+                decision: pair.aDecision,
+                pairStatus: pair.status,
+                compatibilityScore: pair.compatibilityScore,
+                matchReasons: pair.matchReasons,
+                message: null,
+                vibe: null,
+                createdAt: pair.createdAt.toISOString(),
+                updatedAt: pair.updatedAt.toISOString(),
+                fromUser: getAdminUserSummaryFromMap(userSummaries, pair.userAId),
+                toUser: getAdminUserSummaryFromMap(userSummaries, pair.userBId),
+            });
+        }
+        if (pair.bDecision !== "pending") {
+            const meta = decisionMeta(pair.bDecision, pair.status);
+            rows.push({
+                id: `pair-${pair.id}-b`,
+                pairId: pair.id,
+                mutualMatchId: null,
+                source: "candidate_pair" as const,
+                kind: meta.kind,
+                label: meta.label,
+                status: pair.bDecision,
+                decision: pair.bDecision,
+                pairStatus: pair.status,
+                compatibilityScore: pair.compatibilityScore,
+                matchReasons: pair.matchReasons,
+                message: null,
+                vibe: null,
+                createdAt: pair.createdAt.toISOString(),
+                updatedAt: pair.updatedAt.toISOString(),
+                fromUser: getAdminUserSummaryFromMap(userSummaries, pair.userBId),
+                toUser: getAdminUserSummaryFromMap(userSummaries, pair.userAId),
+            });
+        }
+        return rows;
+    });
 
-    const mutualRows = await Promise.all(
-        visibleMutuals.map(async (match) => ({
-            id: `mutual-${match.id}`,
-            pairId: match.candidatePairId,
-            mutualMatchId: match.id,
-            source: "mutual_match" as const,
-            kind: "mutual_match" as const,
-            label: match.status === "cancelled" || match.status === "expired" ? "Mutual ended" : "Mutual match",
-            status: match.status,
-            decision: "accepted",
-            pairStatus: match.status,
-            compatibilityScore: null,
-            matchReasons: [] as string[],
-            message: null,
-            vibe: null,
-            createdAt: match.createdAt.toISOString(),
-            updatedAt: match.updatedAt.toISOString(),
-            fromUser: await getAdminUserSummary(match.userAId),
-            toUser: await getAdminUserSummary(match.userBId),
-        })),
-    );
+    const mutualRows = visibleMutuals.map((match) => ({
+        id: `mutual-${match.id}`,
+        pairId: match.candidatePairId,
+        mutualMatchId: match.id,
+        source: "mutual_match" as const,
+        kind: "mutual_match" as const,
+        label: match.status === "cancelled" || match.status === "expired" ? "Mutual ended" : "Mutual match",
+        status: match.status,
+        decision: "accepted",
+        pairStatus: match.status,
+        compatibilityScore: null,
+        matchReasons: [] as string[],
+        message: null,
+        vibe: null,
+        createdAt: match.createdAt.toISOString(),
+        updatedAt: match.updatedAt.toISOString(),
+        fromUser: getAdminUserSummaryFromMap(userSummaries, match.userAId),
+        toUser: getAdminUserSummaryFromMap(userSummaries, match.userBId),
+    }));
 
     const rows = [...decisionRows, ...mutualRows, ...legacyRows].sort(
         (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
@@ -507,34 +484,35 @@ export async function getAdminPendingDates() {
         .where(eq(dateMatches.status, "pending_setup"))
         .orderBy(desc(dateMatches.createdAt));
 
-    return Promise.all(
-        rows.map(async (dm) => {
-            const [profileA, profileB] = await Promise.all([
-                db.query.profiles.findFirst({ where: eq(profiles.userId, dm.userAId), with: { user: true } }),
-                db.query.profiles.findFirst({ where: eq(profiles.userId, dm.userBId), with: { user: true } }),
-            ]);
-            return {
-                ...dm,
-                createdAt: dm.createdAt.toISOString(),
-                userA: {
-                    id: dm.userAId,
-                    firstName: profileA?.firstName ?? profileA?.user?.name?.split(" ")[0] ?? "Unknown",
-                    profilePhoto: profileA?.profilePhoto ?? profileA?.user?.image,
-                    phone: profileA?.phoneNumber ?? profileA?.user?.phoneNumber,
-                    email: profileA?.user?.email,
-                    location: profileA?.currentLocation,
-                },
-                userB: {
-                    id: dm.userBId,
-                    firstName: profileB?.firstName ?? profileB?.user?.name?.split(" ")[0] ?? "Unknown",
-                    profilePhoto: profileB?.profilePhoto ?? profileB?.user?.image,
-                    phone: profileB?.phoneNumber ?? profileB?.user?.phoneNumber,
-                    email: profileB?.user?.email,
-                    location: profileB?.currentLocation,
-                },
-            };
-        })
+    const userSummaries = await loadAdminUserSummaries(
+        rows.flatMap((dm) => [dm.userAId, dm.userBId]),
     );
+
+    return rows.map((dm) => {
+        const userA = getAdminUserSummaryFromMap(userSummaries, dm.userAId);
+        const userB = getAdminUserSummaryFromMap(userSummaries, dm.userBId);
+
+        return {
+            ...dm,
+            createdAt: dm.createdAt.toISOString(),
+            userA: {
+                id: dm.userAId,
+                firstName: userA.firstName,
+                profilePhoto: userA.profilePhoto,
+                phone: userA.phone,
+                email: userA.email,
+                location: userA.location,
+            },
+            userB: {
+                id: dm.userBId,
+                firstName: userB.firstName,
+                profilePhoto: userB.profilePhoto,
+                phone: userB.phone,
+                email: userB.email,
+                location: userB.location,
+            },
+        };
+    });
 }
 
 export async function getAdminScheduledDates() {
@@ -546,32 +524,48 @@ export async function getAdminScheduledDates() {
         .where(eq(dateMatches.status, "scheduled"))
         .orderBy(desc(dateMatches.scheduledAt), desc(dateMatches.createdAt));
 
-    return Promise.all(
-        rows.map(async (dm) => {
-            const [profileA, profileB, feedbackRows] = await Promise.all([
-                db.query.profiles.findFirst({ where: eq(profiles.userId, dm.userAId), with: { user: true } }),
-                db.query.profiles.findFirst({ where: eq(profiles.userId, dm.userBId), with: { user: true } }),
-                db.query.dateFeedback.findMany({ where: eq(dateFeedback.dateMatchId, dm.id) }),
-            ]);
-            return {
-                ...dm,
-                createdAt: dm.createdAt.toISOString(),
-                scheduledAt: dm.scheduledAt?.toISOString() ?? null,
-                userA: {
-                    firstName: profileA?.firstName ?? profileA?.user?.name?.split(" ")[0] ?? "Unknown",
-                    profilePhoto: profileA?.profilePhoto ?? profileA?.user?.image,
-                },
-                userB: {
-                    firstName: profileB?.firstName ?? profileB?.user?.name?.split(" ")[0] ?? "Unknown",
-                    profilePhoto: profileB?.profilePhoto ?? profileB?.user?.image,
-                },
-                feedbackCount: feedbackRows.length,
-                avgRating: feedbackRows.length > 0
-                    ? Math.round((feedbackRows.reduce((s, f) => s + f.rating, 0) / feedbackRows.length) * 10) / 10
-                    : null,
-            };
-        })
-    );
+    const [userSummaries, feedbackRows] = await Promise.all([
+        loadAdminUserSummaries(rows.flatMap((dm) => [dm.userAId, dm.userBId])),
+        rows.length > 0
+            ? db.query.dateFeedback.findMany({
+                  where: inArray(
+                      dateFeedback.dateMatchId,
+                      rows.map((dm) => dm.id),
+                  ),
+              })
+            : Promise.resolve([]),
+    ]);
+
+    const feedbackByMatchId = new Map<string, typeof feedbackRows>();
+    for (const feedback of feedbackRows) {
+        const existing = feedbackByMatchId.get(feedback.dateMatchId) ?? [];
+        existing.push(feedback);
+        feedbackByMatchId.set(feedback.dateMatchId, existing);
+    }
+
+    return rows.map((dm) => {
+        const userA = getAdminUserSummaryFromMap(userSummaries, dm.userAId);
+        const userB = getAdminUserSummaryFromMap(userSummaries, dm.userBId);
+        const matchFeedback = feedbackByMatchId.get(dm.id) ?? [];
+
+        return {
+            ...dm,
+            createdAt: dm.createdAt.toISOString(),
+            scheduledAt: dm.scheduledAt?.toISOString() ?? null,
+            userA: {
+                firstName: userA.firstName,
+                profilePhoto: userA.profilePhoto,
+            },
+            userB: {
+                firstName: userB.firstName,
+                profilePhoto: userB.profilePhoto,
+            },
+            feedbackCount: matchFeedback.length,
+            avgRating: matchFeedback.length > 0
+                ? Math.round((matchFeedback.reduce((sum, item) => sum + item.rating, 0) / matchFeedback.length) * 10) / 10
+                : null,
+        };
+    });
 }
 
 export async function getAdminDateHistory() {
@@ -589,32 +583,48 @@ export async function getAdminDateHistory() {
         )
         .orderBy(desc(dateMatches.scheduledAt), desc(dateMatches.createdAt));
 
-    return Promise.all(
-        rows.map(async (dm) => {
-            const [profileA, profileB, feedbackRows] = await Promise.all([
-                db.query.profiles.findFirst({ where: eq(profiles.userId, dm.userAId), with: { user: true } }),
-                db.query.profiles.findFirst({ where: eq(profiles.userId, dm.userBId), with: { user: true } }),
-                db.query.dateFeedback.findMany({ where: eq(dateFeedback.dateMatchId, dm.id) }),
-            ]);
-            return {
-                ...dm,
-                createdAt: dm.createdAt.toISOString(),
-                scheduledAt: dm.scheduledAt?.toISOString() ?? null,
-                userA: {
-                    firstName: profileA?.firstName ?? profileA?.user?.name?.split(" ")[0] ?? "Unknown",
-                    profilePhoto: profileA?.profilePhoto ?? profileA?.user?.image,
-                },
-                userB: {
-                    firstName: profileB?.firstName ?? profileB?.user?.name?.split(" ")[0] ?? "Unknown",
-                    profilePhoto: profileB?.profilePhoto ?? profileB?.user?.image,
-                },
-                feedbackCount: feedbackRows.length,
-                avgRating: feedbackRows.length > 0
-                    ? Math.round((feedbackRows.reduce((s, f) => s + f.rating, 0) / feedbackRows.length) * 10) / 10
-                    : null,
-            };
-        })
-    );
+    const [userSummaries, feedbackRows] = await Promise.all([
+        loadAdminUserSummaries(rows.flatMap((dm) => [dm.userAId, dm.userBId])),
+        rows.length > 0
+            ? db.query.dateFeedback.findMany({
+                  where: inArray(
+                      dateFeedback.dateMatchId,
+                      rows.map((dm) => dm.id),
+                  ),
+              })
+            : Promise.resolve([]),
+    ]);
+
+    const feedbackByMatchId = new Map<string, typeof feedbackRows>();
+    for (const feedback of feedbackRows) {
+        const existing = feedbackByMatchId.get(feedback.dateMatchId) ?? [];
+        existing.push(feedback);
+        feedbackByMatchId.set(feedback.dateMatchId, existing);
+    }
+
+    return rows.map((dm) => {
+        const userA = getAdminUserSummaryFromMap(userSummaries, dm.userAId);
+        const userB = getAdminUserSummaryFromMap(userSummaries, dm.userBId);
+        const matchFeedback = feedbackByMatchId.get(dm.id) ?? [];
+
+        return {
+            ...dm,
+            createdAt: dm.createdAt.toISOString(),
+            scheduledAt: dm.scheduledAt?.toISOString() ?? null,
+            userA: {
+                firstName: userA.firstName,
+                profilePhoto: userA.profilePhoto,
+            },
+            userB: {
+                firstName: userB.firstName,
+                profilePhoto: userB.profilePhoto,
+            },
+            feedbackCount: matchFeedback.length,
+            avgRating: matchFeedback.length > 0
+                ? Math.round((matchFeedback.reduce((sum, item) => sum + item.rating, 0) / matchFeedback.length) * 10) / 10
+                : null,
+        };
+    });
 }
 
 export async function getAdminDateLocations(includeInactive = false) {
