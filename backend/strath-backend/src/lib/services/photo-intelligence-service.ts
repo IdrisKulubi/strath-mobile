@@ -20,6 +20,7 @@ import {
     getFaceVerificationComparisonBytes,
 } from "@/lib/services/face-verification-storage";
 import { requestPhotoEmbedding } from "@/lib/services/photo-embedding-client";
+import { syncProfilePhotoAssetsForUser } from "@/lib/services/profile-photo-assets";
 import {
     buildPhotoImprovementTips,
     calculatePhotoQualityScore,
@@ -351,6 +352,11 @@ export async function reanalyzeUserPhotos(userId: string) {
             photoUrl,
         });
 
+        const embedDelayMs = Number(process.env.PHOTO_INTELLIGENCE_REQUEST_DELAY_MS ?? 300);
+        if (Number.isFinite(embedDelayMs) && embedDelayMs > 0) {
+            await new Promise((resolve) => setTimeout(resolve, embedDelayMs));
+        }
+
         const duplicateCount = hashes.get(result.photoHash) ?? 0;
         hashes.set(result.photoHash, duplicateCount + 1);
         const duplicateScore = duplicateCount > 0 ? 20 : 100;
@@ -400,4 +406,155 @@ export function isPhotoUsableForFirstSession(input: {
     hasUsableProfilePhoto: boolean;
 }) {
     return input.hasUsableProfilePhoto && input.photoQualityScore >= USABLE_PHOTO_QUALITY_THRESHOLD;
+}
+
+export interface BackfillPhotoEmbeddingsOptions {
+    /** Max users to process in this run (default 25). */
+    limit?: number;
+    /** Skip this many photo-bearing users (default 0). */
+    offset?: number;
+    /** Process only this user when set. */
+    userId?: string;
+    /** Skip users who already have at least one row in profile_photo_embeddings. */
+    onlyMissingEmbeddings?: boolean;
+}
+
+export interface BackfillPhotoEmbeddingsResult {
+    totalCandidates: number;
+    processed: number;
+    succeeded: number;
+    failed: number;
+    embeddingsCreated: number;
+    nextOffset: number | null;
+    results: Array<{
+        userId: string;
+        status: "ok" | "error";
+        analyzed?: number;
+        embeddingsBefore?: number;
+        embeddingsAfter?: number;
+        error?: string;
+    }>;
+}
+
+export async function backfillPhotoEmbeddings(
+    options: BackfillPhotoEmbeddingsOptions = {},
+): Promise<BackfillPhotoEmbeddingsResult> {
+    const limit = Math.min(Math.max(options.limit ?? 25, 1), 100);
+    const offset = Math.max(options.offset ?? 0, 0);
+
+    if (!process.env.PHOTO_INTELLIGENCE_SERVICE_URL?.trim()) {
+        throw new Error("PHOTO_INTELLIGENCE_SERVICE_URL must be set to backfill embeddings.");
+    }
+
+    let candidates: { userId: string; photoUrls: string[] }[];
+
+    if (options.userId) {
+        const profile = await readDb.query.profiles.findFirst({
+            where: eq(profiles.userId, options.userId),
+        });
+        if (!profile) {
+            return {
+                totalCandidates: 0,
+                processed: 0,
+                succeeded: 0,
+                failed: 0,
+                embeddingsCreated: 0,
+                nextOffset: null,
+                results: [],
+            };
+        }
+        const photoUrls = collectProfilePhotoUrls(profile);
+        candidates = photoUrls.length > 0 ? [{ userId: profile.userId, photoUrls }] : [];
+    } else {
+        const allProfiles = await readDb.query.profiles.findMany({
+            columns: {
+                userId: true,
+                profilePhoto: true,
+                photos: true,
+            },
+        });
+
+        candidates = allProfiles
+            .map((profile) => ({
+                userId: profile.userId,
+                photoUrls: collectProfilePhotoUrls(profile),
+            }))
+            .filter((profile) => profile.photoUrls.length > 0);
+    }
+
+    if (options.onlyMissingEmbeddings && candidates.length > 0) {
+        const embeddedUserIds = await readDb
+            .selectDistinct({ userId: profilePhotoEmbeddings.userId })
+            .from(profilePhotoEmbeddings);
+        const embedded = new Set(embeddedUserIds.map((row) => row.userId));
+        candidates = candidates.filter((candidate) => !embedded.has(candidate.userId));
+    }
+
+    const batch = candidates.slice(offset, offset + limit);
+    const results: BackfillPhotoEmbeddingsResult["results"] = [];
+    let succeeded = 0;
+    let failed = 0;
+    let embeddingsCreated = 0;
+
+    for (const candidate of batch) {
+        const embeddingsBefore = await countEmbeddingsForUser(candidate.userId);
+
+        try {
+            await syncProfilePhotoAssetsForUser(candidate.userId, candidate.photoUrls).catch((error) => {
+                console.warn("[photo-intelligence] asset sync failed during backfill", candidate.userId, error);
+            });
+
+            const reanalyze = await reanalyzeUserPhotos(candidate.userId);
+            const embeddingsAfter = await countEmbeddingsForUser(candidate.userId);
+            const created = Math.max(0, embeddingsAfter - embeddingsBefore);
+            embeddingsCreated += created;
+            succeeded += 1;
+
+            results.push({
+                userId: candidate.userId,
+                status: "ok",
+                analyzed: reanalyze.analyzed,
+                embeddingsBefore,
+                embeddingsAfter,
+            });
+        } catch (error) {
+            failed += 1;
+            results.push({
+                userId: candidate.userId,
+                status: "error",
+                embeddingsBefore,
+                error: error instanceof Error ? error.message : "unknown_error",
+            });
+        }
+    }
+
+    const nextOffset = offset + batch.length < candidates.length ? offset + batch.length : null;
+
+    return {
+        totalCandidates: candidates.length,
+        processed: batch.length,
+        succeeded,
+        failed,
+        embeddingsCreated,
+        nextOffset,
+        results,
+    };
+}
+
+function collectProfilePhotoUrls(profile: Pick<typeof profiles.$inferSelect, "profilePhoto" | "photos">) {
+    return Array.from(
+        new Set(
+            [profile.profilePhoto, ...asStringArray(profile.photos)].filter(
+                (value): value is string => typeof value === "string" && value.trim().length > 0,
+            ),
+        ),
+    );
+}
+
+async function countEmbeddingsForUser(userId: string) {
+    const rows = await readDb.query.profilePhotoEmbeddings.findMany({
+        where: eq(profilePhotoEmbeddings.userId, userId),
+        columns: { id: true },
+    });
+    return rows.length;
 }

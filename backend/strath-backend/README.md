@@ -91,6 +91,18 @@ Admin routes:
 - `GET /api/admin/photo-quality/low-quality-profiles`
 - `GET /api/admin/photo-quality/needs-review`
 - `POST /api/admin/photo-quality/reanalyze-user`
+- `POST /api/admin/photo-quality/backfill` — batch analyze + embed (use `offset` until `nextOffset` is null)
+
+**Backfill embeddings in production** (after Vercel has `PHOTO_INTELLIGENCE_*` vars):
+
+```bash
+curl -X POST "https://YOUR_BACKEND/api/admin/photo-quality/backfill" \
+  -H "Authorization: Bearer YOUR_CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"limit":20,"offset":0,"onlyMissingEmbeddings":true}'
+```
+
+Repeat with `"offset":20`, then `40`, … until the response has `"nextOffset": null`.
 
 Apply migration `drizzle/0022_photo_aware_matching.sql` before enabling in production.
 

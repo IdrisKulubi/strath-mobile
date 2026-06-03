@@ -2,6 +2,14 @@
 
 Python service for StrathSpace photo embeddings. Deploy on Railway and point the Next.js backend at it.
 
+**Railway root directory** (repo root is `strath-mobile`):
+
+```text
+services/photo-intelligence-worker
+```
+
+Do **not** use `strath-mobile/services/photo-intelligence-worker` — that path does not exist inside the GitHub repo.
+
 ## Endpoints
 
 - `GET /health` — health check

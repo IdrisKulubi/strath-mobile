@@ -71,7 +71,7 @@ def _hash_embedding(image_bytes: bytes) -> list[float]:
 
 
 async def _download_image(photo_url: str) -> bytes:
-    async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
         response = await client.get(photo_url)
         response.raise_for_status()
         return response.content
