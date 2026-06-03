@@ -355,6 +355,116 @@ export const profilePhotoAssets = pgTable("profile_photo_assets", {
     readyIdx: index("profile_photo_assets_ready_idx").on(table.verificationReady, table.lastAnalyzedAt),
 }));
 
+export const profilePhotoAnalysis = pgTable(
+    "profile_photo_analysis",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        profileId: uuid("profile_id").references(() => profiles.id, { onDelete: "cascade" }),
+        photoUrl: text("photo_url").notNull(),
+        photoHash: text("photo_hash"),
+        qualityScore: integer("quality_score").default(0).notNull(),
+        faceVisible: boolean("face_visible").default(false).notNull(),
+        imageClear: boolean("image_clear").default(false).notNull(),
+        lightingScore: integer("lighting_score").default(0).notNull(),
+        blurScore: integer("blur_score").default(0).notNull(),
+        duplicateScore: integer("duplicate_score").default(0).notNull(),
+        hasMultiplePeople: boolean("has_multiple_people").default(false).notNull(),
+        isScreenshotOrMeme: boolean("is_screenshot_or_meme").default(false).notNull(),
+        isObjectOrLandscapeOnly: boolean("is_object_or_landscape_only").default(false).notNull(),
+        moderationStatus: text("moderation_status")
+            .$type<"pending" | "approved" | "rejected" | "needs_review">()
+            .default("pending")
+            .notNull(),
+        moderationReason: text("moderation_reason"),
+        embeddingProvider: text("embedding_provider"),
+        embeddingModel: text("embedding_model"),
+        embeddingId: uuid("embedding_id"),
+        analysisVersion: text("analysis_version").default("v1").notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userIdx: index("profile_photo_analysis_user_idx").on(table.userId),
+        profileIdx: index("profile_photo_analysis_profile_idx").on(table.profileId),
+        photoUrlIdx: index("profile_photo_analysis_photo_url_idx").on(table.photoUrl),
+        moderationIdx: index("profile_photo_analysis_moderation_idx").on(table.moderationStatus),
+        qualityIdx: index("profile_photo_analysis_quality_idx").on(table.qualityScore),
+        userPhotoUrlIdx: uniqueIndex("profile_photo_analysis_user_photo_url_idx").on(table.userId, table.photoUrl),
+    }),
+);
+
+export const profilePhotoEmbeddings = pgTable(
+    "profile_photo_embeddings",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        photoAnalysisId: uuid("photo_analysis_id").references(() => profilePhotoAnalysis.id, { onDelete: "cascade" }),
+        embedding: vector("embedding", { dimension: 768 }),
+        provider: text("provider").notNull(),
+        model: text("model").notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdx: index("profile_photo_embeddings_user_idx").on(table.userId),
+        analysisIdx: index("profile_photo_embeddings_analysis_idx").on(table.photoAnalysisId),
+    }),
+);
+
+export const userVisualPreferenceSignals = pgTable(
+    "user_visual_preference_signals",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        likedEmbeddingCentroid: jsonb("liked_embedding_centroid").$type<number[] | null>(),
+        passedEmbeddingCentroid: jsonb("passed_embedding_centroid").$type<number[] | null>(),
+        totalVisualLikes: integer("total_visual_likes").default(0).notNull(),
+        totalVisualPasses: integer("total_visual_passes").default(0).notNull(),
+        totalVisualViews: integer("total_visual_views").default(0).notNull(),
+        preferenceConfidence: integer("preference_confidence").default(0).notNull(),
+        lastUpdatedFromEventId: uuid("last_updated_from_event_id"),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userUniqueIdx: uniqueIndex("user_visual_preference_signals_user_unique_idx").on(table.userId),
+    }),
+);
+
+export const profileInteractionEvents = pgTable(
+    "profile_interaction_events",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        actorUserId: text("actor_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        targetUserId: text("target_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        eventType: text("event_type")
+            .$type<"profile_view" | "profile_like" | "profile_pass" | "profile_skip" | "profile_open">()
+            .notNull(),
+        source: text("source"),
+        timeSpentMs: integer("time_spent_ms"),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        actorIdx: index("profile_interaction_events_actor_idx").on(table.actorUserId),
+        targetIdx: index("profile_interaction_events_target_idx").on(table.targetUserId),
+        eventTypeIdx: index("profile_interaction_events_type_idx").on(table.eventType),
+        createdAtIdx: index("profile_interaction_events_created_at_idx").on(table.createdAt),
+    }),
+);
+
 export const faceVerificationJobs = pgTable("face_verification_jobs", {
     id: uuid("id").defaultRandom().primaryKey(),
     jobType: text("job_type").notNull(),
@@ -479,6 +589,11 @@ export const userMatchSignals = pgTable(
         matchQualityScore: integer("match_quality_score").default(0).notNull(),
         ghostingPenalty: integer("ghosting_penalty").default(0).notNull(),
         passRiskPenalty: integer("pass_risk_penalty").default(0).notNull(),
+        photoQualityScore: integer("photo_quality_score").default(0).notNull(),
+        visualPreferenceConfidence: integer("visual_preference_confidence").default(0).notNull(),
+        hasUsableProfilePhoto: boolean("has_usable_profile_photo").default(false).notNull(),
+        photoAnalysisCompleted: boolean("photo_analysis_completed").default(false).notNull(),
+        photoAnalysisUpdatedAt: timestamp("photo_analysis_updated_at"),
         updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
     },
     (table) => ({
@@ -1044,6 +1159,11 @@ export const userRelations = relations(user, ({ one, many }) => ({
     faceVerificationJobs: many(faceVerificationJobs),
     faceVerificationAssistance: many(faceVerificationAssistance),
     profilePhotoAssets: many(profilePhotoAssets),
+    profilePhotoAnalysis: many(profilePhotoAnalysis),
+    profilePhotoEmbeddings: many(profilePhotoEmbeddings),
+    visualPreferenceSignals: one(userVisualPreferenceSignals),
+    profileInteractionEventsAsActor: many(profileInteractionEvents, { relationName: "interactionActor" }),
+    profileInteractionEventsAsTarget: many(profileInteractionEvents, { relationName: "interactionTarget" }),
     sessions: many(session),
     accounts: many(account),
 }));
@@ -1139,6 +1259,49 @@ export const profilePhotoAssetsRelations = relations(profilePhotoAssets, ({ one 
     user: one(user, {
         fields: [profilePhotoAssets.userId],
         references: [user.id],
+    }),
+}));
+
+export const profilePhotoAnalysisRelations = relations(profilePhotoAnalysis, ({ one, many }) => ({
+    user: one(user, {
+        fields: [profilePhotoAnalysis.userId],
+        references: [user.id],
+    }),
+    profile: one(profiles, {
+        fields: [profilePhotoAnalysis.profileId],
+        references: [profiles.id],
+    }),
+    embeddings: many(profilePhotoEmbeddings),
+}));
+
+export const profilePhotoEmbeddingsRelations = relations(profilePhotoEmbeddings, ({ one }) => ({
+    user: one(user, {
+        fields: [profilePhotoEmbeddings.userId],
+        references: [user.id],
+    }),
+    photoAnalysis: one(profilePhotoAnalysis, {
+        fields: [profilePhotoEmbeddings.photoAnalysisId],
+        references: [profilePhotoAnalysis.id],
+    }),
+}));
+
+export const userVisualPreferenceSignalsRelations = relations(userVisualPreferenceSignals, ({ one }) => ({
+    user: one(user, {
+        fields: [userVisualPreferenceSignals.userId],
+        references: [user.id],
+    }),
+}));
+
+export const profileInteractionEventsRelations = relations(profileInteractionEvents, ({ one }) => ({
+    actor: one(user, {
+        fields: [profileInteractionEvents.actorUserId],
+        references: [user.id],
+        relationName: "interactionActor",
+    }),
+    target: one(user, {
+        fields: [profileInteractionEvents.targetUserId],
+        references: [user.id],
+        relationName: "interactionTarget",
     }),
 }));
 
@@ -2018,6 +2181,12 @@ export type FaceVerificationResult = typeof faceVerificationResults.$inferSelect
 export type NewFaceVerificationResult = typeof faceVerificationResults.$inferInsert;
 export type ProfilePhotoAsset = typeof profilePhotoAssets.$inferSelect;
 export type NewProfilePhotoAsset = typeof profilePhotoAssets.$inferInsert;
+export type ProfilePhotoAnalysis = typeof profilePhotoAnalysis.$inferSelect;
+export type NewProfilePhotoAnalysis = typeof profilePhotoAnalysis.$inferInsert;
+export type ProfilePhotoEmbedding = typeof profilePhotoEmbeddings.$inferSelect;
+export type NewProfilePhotoEmbedding = typeof profilePhotoEmbeddings.$inferInsert;
+export type UserVisualPreferenceSignal = typeof userVisualPreferenceSignals.$inferSelect;
+export type ProfileInteractionEvent = typeof profileInteractionEvents.$inferSelect;
 export type FaceVerificationJob = typeof faceVerificationJobs.$inferSelect;
 export type NewFaceVerificationJob = typeof faceVerificationJobs.$inferInsert;
 export type FaceVerificationAssistance = typeof faceVerificationAssistance.$inferSelect;

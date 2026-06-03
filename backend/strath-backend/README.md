@@ -74,6 +74,28 @@ This is the backend for the StrathSpace 2.0 mobile app, built with Next.js App R
 - `src/lib`: Utility functions (auth, db, matching, pusher, validation).
 - `src/scripts`: Database scripts (seed).
 
+## Photo-Aware Matching
+
+Photo quality, moderation, and bounded visual preference signals are documented in [docs/photo-intelligence-architecture.md](docs/photo-intelligence-architecture.md).
+
+User-facing routes:
+
+- `POST /api/photos/analyze`
+- `POST /api/photos/reanalyze`
+- `GET /api/photos/quality-score`
+- `GET /api/photos/improvement-tips`
+- `POST /api/profiles/view`, `POST /api/profiles/like`, `POST /api/profiles/pass`
+
+Admin routes:
+
+- `GET /api/admin/photo-quality/low-quality-profiles`
+- `GET /api/admin/photo-quality/needs-review`
+- `POST /api/admin/photo-quality/reanalyze-user`
+
+Apply migration `drizzle/0022_photo_aware_matching.sql` before enabling in production.
+
+Optional embedding worker: `services/photo-intelligence-worker` (Railway).
+
 ## Face Verification Operations
 
 Face verification is configured to run in async-first mode in production.

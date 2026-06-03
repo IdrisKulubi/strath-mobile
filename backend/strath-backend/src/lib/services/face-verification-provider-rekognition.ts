@@ -1,6 +1,7 @@
 import {
     CompareFacesCommand,
     DetectFacesCommand,
+    DetectModerationLabelsCommand,
     RekognitionClient,
 } from "@aws-sdk/client-rekognition";
 
@@ -81,6 +82,47 @@ export function isRekognitionSourceFaceNotFoundError(error: unknown) {
         normalizedMessage.includes("no face") &&
         normalizedMessage.includes("source")
     );
+}
+
+export interface RekognitionModerationResult {
+    moderationStatus: "approved" | "rejected" | "needs_review";
+    moderationReason: string | null;
+    flaggedLabels: string[];
+}
+
+export async function moderateImageWithRekognition(
+    imageBytes: Uint8Array,
+    minConfidence = 75,
+): Promise<RekognitionModerationResult> {
+    const response = await rekognitionClient.send(
+        new DetectModerationLabelsCommand({
+            Image: { Bytes: imageBytes },
+            MinConfidence: minConfidence,
+        }),
+    );
+
+    const labels = (response.ModerationLabels ?? [])
+        .filter((label) => (label.Confidence ?? 0) >= minConfidence)
+        .map((label) => label.Name ?? "")
+        .filter(Boolean);
+
+    if (labels.length === 0) {
+        return {
+            moderationStatus: "approved",
+            moderationReason: null,
+            flaggedLabels: [],
+        };
+    }
+
+    const explicit = labels.some((name) =>
+        /explicit|nudity|sexual|violence|visually disturbing|hate symbols/i.test(name),
+    );
+
+    return {
+        moderationStatus: explicit ? "rejected" : "needs_review",
+        moderationReason: labels.slice(0, 3).join(", "),
+        flaggedLabels: labels,
+    };
 }
 
 export async function detectFacesWithRekognition(

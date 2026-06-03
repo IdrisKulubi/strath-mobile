@@ -27,6 +27,15 @@ import { FACE_VERIFICATION_STATUSES } from "@/lib/services/face-verification-pol
 import { getActiveMatchHoldForUser, isUserOnMatchHold } from "@/lib/services/match-hold-service";
 import { isAdminMatchPreviewUser, resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
 import { scoreProfilePair } from "@/lib/services/match-ranking";
+import {
+    getPhotoSignalsForUsers,
+    isPhotoUsableForFirstSession,
+} from "@/lib/services/photo-intelligence-service";
+import { calculatePhotoPreferenceScore } from "@/lib/services/visual-preference-service";
+import {
+    recordProfileLike,
+    recordProfilePass,
+} from "@/lib/services/profile-interaction-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
@@ -86,6 +95,9 @@ export interface RankedRecommendation {
     mutualProbabilityScore: number;
     preferenceFitScore: number;
     profileQualityScore: number;
+    photoQualityScore: number;
+    photoPreferenceScore: number;
+    photoVisualDiversityScore: number;
     reason: string;
     reasons: string[];
     activityStatus: "active_now" | "active_today" | "active_recently" | "inactive";
@@ -269,9 +281,14 @@ export function finalRecommendationScore(input: {
     mutualProbabilityScore: number;
     preferenceFitScore: number;
     profileQualityScore: number;
+    photoQualityScore?: number;
+    photoPreferenceScore?: number;
+    photoVisualDiversityScore?: number;
+    photoQualityPenalty?: number;
     ghostingPenalty: number;
     passRiskPenalty: number;
     activeHoldPenalty: number;
+    isFirstSessionUser?: boolean;
 }) {
     const weights =
         input.preferenceMode === "active_only"
@@ -282,6 +299,10 @@ export function finalRecommendationScore(input: {
                     ? { compatibility: 0.18, activity: 0.2, response: 0.18, availability: 0.08, diversity: 0.18, mutual: 0.1, preference: 0.08, quality: 0.05 }
                     : { compatibility: 0.25, activity: 0.22, response: 0.18, availability: 0.08, diversity: 0.08, mutual: 0.11, preference: 0.08, quality: 0.05 };
 
+    const photoWeights = input.isFirstSessionUser
+        ? { quality: 0.08, preference: 0.03, visualDiversity: 0.02 }
+        : { quality: 0.08, preference: 0.05, visualDiversity: 0.05 };
+
     const score =
         input.compatibilityScore * weights.compatibility +
         input.activityScore * weights.activity +
@@ -290,7 +311,11 @@ export function finalRecommendationScore(input: {
         input.diversityScore * weights.diversity +
         input.mutualProbabilityScore * weights.mutual +
         input.preferenceFitScore * weights.preference +
-        input.profileQualityScore * weights.quality -
+        input.profileQualityScore * weights.quality +
+        (input.photoQualityScore ?? 50) * photoWeights.quality +
+        (input.photoPreferenceScore ?? 50) * photoWeights.preference +
+        (input.photoVisualDiversityScore ?? 50) * photoWeights.visualDiversity -
+        (input.photoQualityPenalty ?? 0) -
         input.ghostingPenalty -
         input.passRiskPenalty -
         input.activeHoldPenalty;
@@ -298,7 +323,18 @@ export function finalRecommendationScore(input: {
     return clampScore(score);
 }
 
-function buildReason(matchType: MatchType, scores: { activityScore: number; compatibilityScore: number; diversityScore: number; profileQualityScore: number }, baseReasons: string[]) {
+function buildReason(
+    matchType: MatchType,
+    scores: {
+        activityScore: number;
+        compatibilityScore: number;
+        diversityScore: number;
+        profileQualityScore: number;
+        photoQualityScore: number;
+        photoPreferenceScore: number;
+    },
+    baseReasons: string[],
+) {
     const reasons = new Set<string>();
     if (matchType === "high_activity") reasons.add("Active today");
     if (matchType === "complementary") reasons.add("Different but interesting");
@@ -308,6 +344,8 @@ function buildReason(matchType: MatchType, scores: { activityScore: number; comp
         if (reason && reasons.size < 3) reasons.add(reason);
     }
     if (scores.profileQualityScore >= 75 && reasons.size < 3) reasons.add("Complete profile");
+    if (scores.photoQualityScore >= 70 && reasons.size < 3) reasons.add("Clear profile");
+    if (scores.photoPreferenceScore >= 68 && reasons.size < 3) reasons.add("You may like their vibe");
     return [...reasons].slice(0, 3);
 }
 
@@ -598,13 +636,22 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
     }
 
     const candidateUserIds = candidates.map((candidate) => candidate.userId);
-    const [candidatePreferences, candidateSignals, exposureCounts, holdEntries, incomingInterestMap, viewerDecisionMap] = await Promise.all([
+    const viewerAccount = await readDb.query.user.findFirst({
+        where: eq(user.id, viewerUserId),
+    });
+    const isFirstSessionUser = viewerAccount
+        ? Date.now() - new Date(viewerAccount.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000
+        : false;
+
+    const [candidatePreferences, candidateSignals, exposureCounts, holdEntries, incomingInterestMap, viewerDecisionMap, photoSignalsMap] =
+        await Promise.all([
         getCandidatePreferences(candidateUserIds),
         getCandidateSignals(candidateUserIds),
         getRecentExposureCounts(viewerUserId),
         Promise.all(candidateUserIds.map(async (candidateUserId) => [candidateUserId, await isUserOnMatchHold(candidateUserId)] as const)),
         getIncomingOpenInterestMap(viewerUserId, candidateUserIds),
         getViewerDecisionMap(viewerUserId, candidateUserIds),
+        getPhotoSignalsForUsers(candidateUserIds),
     ]);
     const usersOnHold = new Set(holdEntries.filter(([, onHold]) => onHold).map(([candidateUserId]) => candidateUserId));
 
@@ -627,16 +674,26 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
         modePreference,
     });
 
-    const ranked = candidates.map((candidate) => {
+    const ranked = await Promise.all(candidates.map(async (candidate) => {
         const compatibility = scoreProfilePair(viewerProfile, candidate);
         const candidatePreference = candidatePreferences.get(candidate.userId);
         const candidateSignal = candidateSignals.get(candidate.userId);
+        const photoSignal = photoSignalsMap.get(candidate.userId) ?? {
+            photoQualityScore: 50,
+            hasUsableProfilePhoto: false,
+        };
         const compatibilityScore = compatibility.score;
         const activityScore = scoreActivityFromDate(candidate.user?.lastActive ?? candidate.lastActive);
         const responseScore = scoreResponse(candidateSignal);
         const availabilityScore = scoreAvailability(candidatePreference);
         const diversityScore = scoreDiversity(viewerProfile, candidate);
         const profileQualityScore = scoreProfileQuality(candidate);
+        const photoQualityScore = photoSignal.photoQualityScore || 50;
+        const photoPreferenceScore = await calculatePhotoPreferenceScore({
+            viewerUserId,
+            candidateUserId: candidate.userId,
+        });
+        const photoVisualDiversityScore = 50;
         const hasIncomingOpenInterest = incomingInterestMap.has(candidate.userId);
         const baseMutualProbabilityScore = clampScore((compatibilityScore * 0.45) + (responseScore * 0.3) + (activityScore * 0.15) + (availabilityScore * 0.1));
         const mutualProbabilityScore = hasIncomingOpenInterest ? 100 : baseMutualProbabilityScore;
@@ -652,6 +709,12 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
         const passRiskPenalty = candidateSignal?.passRiskPenalty ?? 0;
         const ghostingPenalty = candidateSignal?.ghostingPenalty ?? 0;
         const activeHoldPenalty = usersOnHold.has(candidate.userId) ? 8 : 0;
+        const photoQualityPenalty =
+            isFirstSessionUser && !isPhotoUsableForFirstSession(photoSignal)
+                ? 25
+                : photoQualityScore < 30
+                    ? 8
+                    : 0;
         const matchType = classifyMatchType({
             preferenceMode: modePreference,
             compatibilityScore,
@@ -669,14 +732,30 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             mutualProbabilityScore,
             preferenceFitScore: preferenceFit,
             profileQualityScore,
+            photoQualityScore,
+            photoPreferenceScore,
+            photoVisualDiversityScore,
+            photoQualityPenalty,
             ghostingPenalty,
             passRiskPenalty: passRiskPenalty + exposurePenalty,
             activeHoldPenalty,
+            isFirstSessionUser,
         });
         const finalScore = hasIncomingOpenInterest
             ? clampScore(Math.max(96, baseFinalScore + 24))
             : baseFinalScore;
-        const reasons = buildReason(matchType, { activityScore, compatibilityScore, diversityScore, profileQualityScore }, compatibility.reasons);
+        const reasons = buildReason(
+            matchType,
+            {
+                activityScore,
+                compatibilityScore,
+                diversityScore,
+                profileQualityScore,
+                photoQualityScore,
+                photoPreferenceScore,
+            },
+            compatibility.reasons,
+        );
         console.log("[match-intelligence] scored candidate", {
             viewerUserId,
             candidateUserId: candidate.userId,
@@ -713,12 +792,15 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             mutualProbabilityScore,
             preferenceFitScore: preferenceFit,
             profileQualityScore,
+            photoQualityScore,
+            photoPreferenceScore,
+            photoVisualDiversityScore,
             reason: reasons.join(", "),
             reasons,
             activityStatus: activityStatusFromScore(activityScore),
             profilePreview: toPreview(candidate),
         };
-    });
+    }));
 
     const sorted = ranked.sort((left, right) => right.finalScore - left.finalScore || right.activityScore - left.activityScore);
     console.log("[match-intelligence] ranking summary", {
@@ -815,7 +897,20 @@ async function getTodaysStableDailyRecommendations(userId: string): Promise<Rank
         const responseScore = event.responseScore ?? 55;
         const diversityScore = event.diversityScore ?? scoreDiversity(viewerProfile, candidate);
         const profileQualityScore = scoreProfileQuality(candidate);
-        const reasons = buildReason(matchType, { activityScore, compatibilityScore, diversityScore, profileQualityScore }, compatibility.reasons);
+        const photoQualityScore = 50;
+        const photoPreferenceScore = 50;
+        const reasons = buildReason(
+            matchType,
+            {
+                activityScore,
+                compatibilityScore,
+                diversityScore,
+                profileQualityScore,
+                photoQualityScore,
+                photoPreferenceScore,
+            },
+            compatibility.reasons,
+        );
 
         return [{
             candidateUserId: candidate.userId,
@@ -830,6 +925,9 @@ async function getTodaysStableDailyRecommendations(userId: string): Promise<Rank
             mutualProbabilityScore: event.mutualProbabilityScore ?? compatibilityScore,
             preferenceFitScore: event.finalScore ?? compatibilityScore,
             profileQualityScore,
+            photoQualityScore,
+            photoPreferenceScore,
+            photoVisualDiversityScore: 50,
             reason: reasons.join(", "),
             reasons,
             activityStatus: activityStatusFromScore(activityScore),
@@ -1322,6 +1420,16 @@ export async function handleRecommendationDecision(input: {
         matchType: input.matchType,
         event: input.decision,
     });
+
+    if (input.decision === "open_to_meet") {
+        await recordProfileLike(input.viewerUserId, input.candidateUserId, input.source).catch((error) => {
+            console.warn("[match-intelligence] profile like event failed", error);
+        });
+    } else if (input.decision === "passed") {
+        await recordProfilePass(input.viewerUserId, input.candidateUserId, input.source).catch((error) => {
+            console.warn("[match-intelligence] profile pass event failed", error);
+        });
+    }
 
     await updateSignalsAfterDecision(input.viewerUserId, input.decision);
     const interest = await upsertDirectedInterest({
