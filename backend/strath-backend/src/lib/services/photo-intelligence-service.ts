@@ -20,6 +20,7 @@ import {
     getFaceVerificationComparisonBytes,
 } from "@/lib/services/face-verification-storage";
 import { requestPhotoEmbedding } from "@/lib/services/photo-embedding-client";
+import { computeHashPhotoEmbedding } from "@/lib/services/photo-hash-embedding";
 import { syncProfilePhotoAssetsForUser } from "@/lib/services/profile-photo-assets";
 import {
     buildPhotoImprovementTips,
@@ -195,20 +196,69 @@ export async function analyzeProfilePhoto(input: {
     return { ...draft, id: saved.id };
 }
 
+function shouldFallbackToLocalHash(error: unknown) {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+
+    const message = error.message.toLowerCase();
+    return (
+        error.name === "TimeoutError" ||
+        message.includes("timeout") ||
+        message.includes("aborted") ||
+        message.includes("(502)") ||
+        message.includes("(503)") ||
+        message.includes("(504)") ||
+        message.includes("fetch failed") ||
+        message.includes("econnreset")
+    );
+}
+
+async function resolvePhotoEmbedding(input: { photoUrl: string; objectKey: string }) {
+    const preferLocal = process.env.PHOTO_INTELLIGENCE_PREFER_LOCAL_HASH === "true";
+    const allowLocalFallback = process.env.PHOTO_INTELLIGENCE_HASH_FALLBACK !== "false";
+    const hasRemoteService = Boolean(process.env.PHOTO_INTELLIGENCE_SERVICE_URL?.trim());
+
+    if (preferLocal) {
+        const imageBytes = await getFaceVerificationComparisonBytes(input.objectKey);
+        return computeHashPhotoEmbedding(imageBytes);
+    }
+
+    if (hasRemoteService) {
+        try {
+            const remote = await requestPhotoEmbedding({
+                photoUrl: input.photoUrl,
+                objectKey: input.objectKey,
+            });
+            if (remote) {
+                return remote;
+            }
+        } catch (error) {
+            if (!allowLocalFallback || !shouldFallbackToLocalHash(error)) {
+                throw error;
+            }
+
+            console.warn(
+                "[photo-embedding] remote service failed, using local hash embedding",
+                error instanceof Error ? error.message : error,
+            );
+        }
+    }
+
+    const imageBytes = await getFaceVerificationComparisonBytes(input.objectKey);
+    return computeHashPhotoEmbedding(imageBytes);
+}
+
 export async function generatePhotoEmbedding(input: {
     analysisId: string;
     userId: string;
     photoUrl: string;
     objectKey: string;
 }) {
-    const embeddingResult = await requestPhotoEmbedding({
+    const embeddingResult = await resolvePhotoEmbedding({
         photoUrl: input.photoUrl,
         objectKey: input.objectKey,
     });
-
-    if (!embeddingResult) {
-        return null;
-    }
 
     const [row] = await db
         .insert(profilePhotoEmbeddings)
@@ -425,6 +475,8 @@ export interface BackfillPhotoEmbeddingsResult {
     succeeded: number;
     failed: number;
     embeddingsCreated: number;
+    /** False when this batch was the last page of work. */
+    hasMore: boolean;
     nextOffset: number | null;
     results: Array<{
         userId: string;
@@ -459,6 +511,7 @@ export async function backfillPhotoEmbeddings(
                 succeeded: 0,
                 failed: 0,
                 embeddingsCreated: 0,
+                hasMore: false,
                 nextOffset: null,
                 results: [],
             };
@@ -528,7 +581,18 @@ export async function backfillPhotoEmbeddings(
         }
     }
 
-    const nextOffset = offset + batch.length < candidates.length ? offset + batch.length : null;
+    const hasMore =
+        batch.length > 0 &&
+        (options.onlyMissingEmbeddings
+            ? candidates.length > batch.length
+            : offset + batch.length < candidates.length);
+
+    // With only-missing, the candidate list shrinks after each batch — always take from 0.
+    const nextOffset = !hasMore
+        ? null
+        : options.onlyMissingEmbeddings
+          ? 0
+          : offset + batch.length;
 
     return {
         totalCandidates: candidates.length,
@@ -536,8 +600,77 @@ export async function backfillPhotoEmbeddings(
         succeeded,
         failed,
         embeddingsCreated,
+        hasMore,
         nextOffset,
         results,
+    };
+}
+
+export async function backfillAllPhotoEmbeddings(
+    options: BackfillPhotoEmbeddingsOptions & {
+        onBatchComplete?: (result: BackfillPhotoEmbeddingsResult, batchNumber: number, offset: number) => void;
+    } = {},
+): Promise<{
+    batches: number;
+    totalProcessed: number;
+    totalSucceeded: number;
+    totalFailed: number;
+    totalEmbeddings: number;
+    lastResult: BackfillPhotoEmbeddingsResult;
+}> {
+    let batchNumber = 0;
+    let offset = Math.max(options.offset ?? 0, 0);
+    let totalProcessed = 0;
+    let totalSucceeded = 0;
+    let totalFailed = 0;
+    let totalEmbeddings = 0;
+    let lastResult: BackfillPhotoEmbeddingsResult = {
+        totalCandidates: 0,
+        processed: 0,
+        succeeded: 0,
+        failed: 0,
+        embeddingsCreated: 0,
+        hasMore: false,
+        nextOffset: null,
+        results: [],
+    };
+
+    while (true) {
+        batchNumber += 1;
+        console.log(
+            `[backfill] batch ${batchNumber} starting (offset=${options.onlyMissingEmbeddings ? 0 : offset}, limit=${options.limit ?? 25})...`,
+        );
+
+        const batchOffset = options.onlyMissingEmbeddings ? 0 : offset;
+
+        lastResult = await backfillPhotoEmbeddings({
+            ...options,
+            offset: batchOffset,
+        });
+
+        options.onBatchComplete?.(lastResult, batchNumber, batchOffset);
+
+        totalProcessed += lastResult.processed;
+        totalSucceeded += lastResult.succeeded;
+        totalFailed += lastResult.failed;
+        totalEmbeddings += lastResult.embeddingsCreated;
+
+        if (!lastResult.hasMore || lastResult.processed === 0) {
+            break;
+        }
+
+        if (!options.onlyMissingEmbeddings && lastResult.nextOffset != null) {
+            offset = lastResult.nextOffset;
+        }
+    }
+
+    return {
+        batches: batchNumber,
+        totalProcessed,
+        totalSucceeded,
+        totalFailed,
+        totalEmbeddings,
+        lastResult,
     };
 }
 

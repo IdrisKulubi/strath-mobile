@@ -8,13 +8,17 @@
  *   npx tsx src/scripts/backfill-photo-embeddings.ts
  *   npx tsx src/scripts/backfill-photo-embeddings.ts --limit 10 --offset 0
  *   npx tsx src/scripts/backfill-photo-embeddings.ts --all
+ *   npx tsx src/scripts/backfill-photo-embeddings.ts --all --limit 20 --only-missing
  */
 
 import { config } from "dotenv";
 import { resolve } from "path";
 
-// Load .env.local before any service import (static imports run first otherwise).
 config({ path: resolve(process.cwd(), ".env.local") });
+
+if (process.env.PHOTO_INTELLIGENCE_PREFER_LOCAL_HASH === undefined) {
+    process.env.PHOTO_INTELLIGENCE_PREFER_LOCAL_HASH = "true";
+}
 
 function readArg(name: string) {
     const index = process.argv.indexOf(name);
@@ -26,8 +30,50 @@ function readArg(name: string) {
     return value && !value.startsWith("--") ? value : undefined;
 }
 
+function logBatchResult(
+    batchNumber: number,
+    offset: number,
+    result: {
+        processed: number;
+        succeeded: number;
+        failed: number;
+        embeddingsCreated: number;
+        hasMore: boolean;
+        nextOffset: number | null;
+        totalCandidates: number;
+        results: Array<{ status: string }>;
+    },
+) {
+    console.log(
+        JSON.stringify(
+            {
+                batch: batchNumber,
+                offset,
+                processed: result.processed,
+                succeeded: result.succeeded,
+                failed: result.failed,
+                embeddingsCreated: result.embeddingsCreated,
+                hasMore: result.hasMore,
+                nextOffset: result.nextOffset,
+                totalCandidates: result.totalCandidates,
+            },
+            null,
+            2,
+        ),
+    );
+
+    if (result.failed > 0) {
+        console.error(
+            "Failures:",
+            result.results.filter((row) => row.status === "error"),
+        );
+    }
+}
+
 async function main() {
-    const { backfillPhotoEmbeddings } = await import("@/lib/services/photo-intelligence-service");
+    const { backfillPhotoEmbeddings, backfillAllPhotoEmbeddings } = await import(
+        "@/lib/services/photo-intelligence-service"
+    );
 
     if (!process.env.DATABASE_URL?.trim()) {
         throw new Error("DATABASE_URL is missing from .env.local (check for a leading space on the key).");
@@ -49,51 +95,37 @@ async function main() {
     const userId = readArg("--user-id");
     const onlyMissingEmbeddings = process.argv.includes("--only-missing");
 
-    let offset = startOffset;
-    let totalProcessed = 0;
-    let totalEmbeddings = 0;
+    const sharedOptions = {
+        limit,
+        userId,
+        onlyMissingEmbeddings,
+    };
 
-    do {
-        const result = await backfillPhotoEmbeddings({
-            limit,
-            offset,
-            userId,
-            onlyMissingEmbeddings,
+    if (runAll) {
+        const summary = await backfillAllPhotoEmbeddings({
+            ...sharedOptions,
+            offset: startOffset,
+            onBatchComplete: (result, batchNumber, offset) => {
+                logBatchResult(batchNumber, offset, result);
+            },
         });
 
-        totalProcessed += result.processed;
-        totalEmbeddings += result.embeddingsCreated;
-
         console.log(
-            JSON.stringify(
-                {
-                    offset,
-                    processed: result.processed,
-                    succeeded: result.succeeded,
-                    failed: result.failed,
-                    embeddingsCreated: result.embeddingsCreated,
-                    nextOffset: result.nextOffset,
-                    totalCandidates: result.totalCandidates,
-                },
-                null,
-                2,
-            ),
+            `Done. batches=${summary.batches} usersProcessed=${summary.totalProcessed} embeddingsCreated=${summary.totalEmbeddings} failed=${summary.totalFailed}`,
         );
+        return;
+    }
 
-        if (result.failed > 0) {
-            console.error(
-                "Failures:",
-                result.results.filter((row) => row.status === "error"),
-            );
-        }
+    const result = await backfillPhotoEmbeddings({
+        ...sharedOptions,
+        offset: startOffset,
+    });
 
-        offset = result.nextOffset ?? offset + result.processed;
-        if (!runAll || result.nextOffset === null) {
-            break;
-        }
-    } while (true);
+    logBatchResult(1, startOffset, result);
 
-    console.log(`Done. usersProcessed=${totalProcessed} embeddingsCreated=${totalEmbeddings}`);
+    console.log(
+        `Done. usersProcessed=${result.processed} embeddingsCreated=${result.embeddingsCreated}${result.hasMore ? ` (more remain — rerun with --offset ${result.nextOffset ?? startOffset + result.processed} or use --all)` : ""}`,
+    );
 }
 
 main().catch((error) => {
