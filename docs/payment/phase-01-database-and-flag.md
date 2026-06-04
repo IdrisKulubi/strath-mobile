@@ -131,13 +131,19 @@ Add the database tables/columns the whole feature needs, and add the
    Do **not** expose it in `getPublicFeatureFlags()` yet — the mobile app reads
    it in phase 10.
 
-6. **Generate + apply the migration:**
+6. **Apply the migration** (pick one):
 
    ```bash
    cd strath-mobile/backend/strath-backend
-   npx drizzle-kit generate
-   npx drizzle-kit migrate
+   npx drizzle-kit push
    ```
+
+   Or run `drizzle/0023_payment_schema.sql` in the Neon SQL console.
+
+   **If you see** `column "paystack_reference" does not exist`: `drizzle-kit push`
+   likely created an incomplete `date_payments` table first. Run
+   `drizzle/0023_payment_schema_repair.sql` (or re-run `0023` after pulling the
+   guard block at the top of that file).
 
 7. **Seed the flag row as OFF** (so the admin toggle has something to flip).
    Either insert via a one-off SQL or let the admin flags UI create it. Default

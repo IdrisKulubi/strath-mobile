@@ -7,6 +7,7 @@ export const APP_FEATURE_KEYS = {
     demoLoginEnabled: "demo_login_enabled",
     signupCapEnabled: "signup_cap_enabled",
     adminMatchPreviewEnabled: "admin_match_preview_enabled",
+    paymentsEnabled: "payments_enabled",
 } as const;
 
 // Default caps applied when the flag row is missing config or for any

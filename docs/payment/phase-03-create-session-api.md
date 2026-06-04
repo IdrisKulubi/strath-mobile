@@ -1,6 +1,6 @@
 # Phase 3 — `create-session` API
 
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 **Depends on:** Phases 1, 2
 **User-visible:** No (callable via curl)
 
@@ -109,10 +109,10 @@ Body: { "dateMatchId": "uuid" }
 
 ## Done when
 
-- [ ] Authorized user gets a working Paystack checkout URL.
-- [ ] Exactly one pending `date_payments` row per `(match,user)`.
-- [ ] Amount is server-controlled (KES 499), never client-supplied.
-- [ ] All negative cases return correct status codes.
+- [x] Authorized user gets a working Paystack checkout URL.
+- [x] Exactly one pending `date_payments` row per `(match,user)`.
+- [x] Amount is server-controlled (KES 499), never client-supplied.
+- [x] All negative cases return correct status codes.
 
 ## Rollback
 

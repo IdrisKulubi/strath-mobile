@@ -1131,12 +1131,15 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
         "Gate new signups behind per-gender capacity limits during soft launch.",
     [APP_FEATURE_KEYS.adminMatchPreviewEnabled]:
         "Let admin accounts receive daily discovery results for QA while keeping admins out of normal users' candidate pools.",
+    [APP_FEATURE_KEYS.paymentsEnabled]:
+        "Require KES 499 Date Setup Fee (Paystack) before slot confirmation. Default off.",
 };
 
 const FLAG_LABELS: Record<string, string> = {
     [APP_FEATURE_KEYS.demoLoginEnabled]: "Demo Login",
     [APP_FEATURE_KEYS.signupCapEnabled]: "Signup Cap (Soft Launch)",
     [APP_FEATURE_KEYS.adminMatchPreviewEnabled]: "Admin Match Preview",
+    [APP_FEATURE_KEYS.paymentsEnabled]: "Date Setup Fee (Payments)",
 };
 
 const SUPPORTED_FLAG_KEYS = new Set<string>(Object.values(APP_FEATURE_KEYS));
