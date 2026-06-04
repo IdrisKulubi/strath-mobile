@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { Calendar, Check, Loader2 } from "lucide-react";
 import { useState } from "react";
 
+import { paymentBrand } from "@/components/payments/payment-brand";
+import { PaymentWebCard } from "@/components/payments/payment-web-shell";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export interface PaymentCheckoutClientProps {
     paymentToken: string;
@@ -17,6 +21,13 @@ export interface PaymentCheckoutClientProps {
     blockReason: string | null;
     appReturnUrl: string;
 }
+
+const INCLUDES = [
+    "Date coordination by StrathSpace",
+    "Confirmation with both people",
+    "Venue and time scheduling",
+    "Pre-date support",
+] as const;
 
 export function PaymentCheckoutClient(props: PaymentCheckoutClientProps) {
     const [loading, setLoading] = useState(false);
@@ -54,77 +65,91 @@ export function PaymentCheckoutClient(props: PaymentCheckoutClientProps) {
     if (props.currentUserPaid) {
         return (
             <div className="space-y-6 text-center">
-                <h1 className="text-2xl font-semibold text-white">You&apos;re confirmed</h1>
-                <p className="text-zinc-400">
-                    Waiting for {props.partnerFirstName} to confirm their Date Setup Fee.
-                </p>
-                <a
-                    href={props.appReturnUrl}
-                    className="inline-flex h-10 items-center justify-center rounded-md bg-white px-6 text-sm font-medium text-zinc-950"
-                >
-                    Return to StrathSpace
-                </a>
+                <div className={paymentBrand.successIconWrap}>
+                    <Check className="size-7" strokeWidth={2.5} aria-hidden />
+                </div>
+                <div className="space-y-2">
+                    <h1 className={paymentBrand.display}>You&apos;re confirmed</h1>
+                    <p className={paymentBrand.body}>
+                        Waiting for {props.partnerFirstName} to confirm their Date Setup Fee.
+                    </p>
+                </div>
+                <Button asChild className={paymentBrand.primaryButton}>
+                    <a href={props.appReturnUrl}>Return to StrathSpace</a>
+                </Button>
             </div>
         );
     }
 
     return (
-        <div className="space-y-8">
-            <div className="space-y-2 text-center">
-                <p className="text-sm font-medium uppercase tracking-wider text-violet-300/90">
-                    Date Setup Fee
-                </p>
-                <h1 className="text-3xl font-semibold tracking-tight text-white">
-                    Confirm your date
-                </h1>
-                <p className="text-sm text-zinc-400">
+        <div className="space-y-6">
+            <header className="space-y-2 text-center">
+                <p className={paymentBrand.label}>Date setup fee</p>
+                <h1 className={paymentBrand.display}>Confirm your date</h1>
+                <p className={paymentBrand.body}>
                     A one-time fee helps us coordinate your date with {props.partnerFirstName} and
                     keep StrathSpace intentional. This is not a subscription.
                 </p>
-            </div>
+            </header>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-                <p className="text-center text-4xl font-semibold text-white">{amountLabel}</p>
+            <PaymentWebCard className="space-y-6">
+                <p className={paymentBrand.amount}>{amountLabel}</p>
                 {props.scheduledAtLabel ? (
-                    <p className="mt-2 text-center text-sm text-zinc-400">
-                        Proposed time: {props.scheduledAtLabel}
+                    <p className="flex items-center justify-center gap-2 text-sm text-[#A39DAD]">
+                        <Calendar className="size-4 shrink-0 text-[#D94A8F]" aria-hidden />
+                        <span>Proposed time: {props.scheduledAtLabel}</span>
                     </p>
                 ) : null}
-                <ul className="mt-6 space-y-2 text-sm text-zinc-300">
-                    <li>Date coordination by StrathSpace</li>
-                    <li>Confirmation with both people</li>
-                    <li>Venue and time scheduling</li>
-                    <li>Pre-date support</li>
+                <ul className="space-y-2.5 border-t border-[#322A3D] pt-5">
+                    {INCLUDES.map((item) => (
+                        <li key={item} className="flex items-start gap-2.5">
+                            <Check
+                                className="mt-0.5 size-4 shrink-0 text-[#3DB87A]"
+                                strokeWidth={2.5}
+                                aria-hidden
+                            />
+                            <span className={paymentBrand.listItem}>{item}</span>
+                        </li>
+                    ))}
                 </ul>
-            </div>
+            </PaymentWebCard>
 
             {props.blockReason ? (
-                <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                <p className={paymentBrand.warningBanner} role="alert">
                     {props.blockReason}
                 </p>
             ) : null}
 
             {error ? (
-                <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                <p className={paymentBrand.errorBanner} role="alert">
                     {error}
                 </p>
             ) : null}
 
             <Button
                 type="button"
-                className="h-12 w-full rounded-xl bg-white text-base font-semibold text-zinc-950 hover:bg-zinc-100"
+                className={cn(paymentBrand.primaryButton, "shadow-none")}
                 disabled={!props.canPay || loading}
                 onClick={handlePay}
             >
-                {loading ? "Starting checkout…" : `Pay ${amountLabel} to confirm`}
+                {loading ? (
+                    <>
+                        <Loader2 className="size-5 animate-spin" aria-hidden />
+                        Starting checkout…
+                    </>
+                ) : (
+                    `Pay ${amountLabel} to confirm`
+                )}
             </Button>
 
-            <p className="text-center text-xs text-zinc-500">
-                By paying, you agree to StrathSpace&apos;s{" "}
-                <Link href="/terms" className="underline underline-offset-2 hover:text-zinc-300">
-                    Terms of Service
-                </Link>
-                .
+            <p className={paymentBrand.caption}>
+                <span className="block text-center">
+                    By paying, you agree to StrathSpace&apos;s{" "}
+                    <Link href="/terms" className={paymentBrand.inlineLink}>
+                        Terms of Service
+                    </Link>
+                    .
+                </span>
             </p>
         </div>
     );

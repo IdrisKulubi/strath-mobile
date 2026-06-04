@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { AlertCircle, Check, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { paymentBrand } from "@/components/payments/payment-brand";
 import { Button } from "@/components/ui/button";
 
 type CallbackState = "loading" | "success" | "failed" | "pending";
@@ -32,7 +34,7 @@ export function PaymentCallbackClient({ reference, appReturnUrl }: PaymentCallba
                 if (res.status === 404) {
                     setState("pending");
                     setMessage(
-                        "Payment received. Confirmation will complete shortly — return to the app.",
+                        "Payment received. Confirmation will complete shortly. Return to the app.",
                     );
                     return;
                 }
@@ -73,28 +75,51 @@ export function PaymentCallbackClient({ reference, appReturnUrl }: PaymentCallba
                 ? "Almost there"
                 : "Payment issue";
 
+    const iconWrap =
+        state === "success"
+            ? paymentBrand.successIconWrap
+            : state === "failed"
+              ? paymentBrand.errorIconWrap
+              : state === "pending"
+                ? paymentBrand.pendingIconWrap
+                : "mx-auto flex size-14 items-center justify-center rounded-full bg-[#322A3D] text-[#A39DAD]";
+
+    const Icon =
+        state === "success"
+            ? Check
+            : state === "failed"
+              ? AlertCircle
+              : Loader2;
+
     return (
         <div className="space-y-6 text-center">
-            <h1 className="text-2xl font-semibold text-white">{title}</h1>
-            {state === "loading" ? (
-                <p className="text-sm text-zinc-400">Please wait a moment.</p>
-            ) : (
-                <p className="text-sm text-zinc-400">{message}</p>
-            )}
+            <div className={iconWrap}>
+                <Icon
+                    className={state === "loading" ? "size-7 animate-spin" : "size-7"}
+                    strokeWidth={2.5}
+                    aria-hidden
+                />
+            </div>
 
-            <Button
-                asChild
-                className="h-11 w-full rounded-xl bg-white text-zinc-950 hover:bg-zinc-100"
-            >
+            <div className="space-y-2">
+                <h1 className={paymentBrand.display}>{title}</h1>
+                {state === "loading" ? (
+                    <p className={paymentBrand.body}>Please wait a moment.</p>
+                ) : (
+                    <p className={paymentBrand.body}>{message}</p>
+                )}
+            </div>
+
+            <Button asChild className={paymentBrand.primaryButton}>
                 <a href={deepLink}>Return to StrathSpace</a>
             </Button>
 
-            <p className="text-xs text-zinc-500">
+            <p className={paymentBrand.caption}>
                 If the app does not open, switch back to StrathSpace manually.
             </p>
 
-            <Link href="/" className="text-xs text-zinc-600 underline-offset-2 hover:text-zinc-400">
-                strathspace.com
+            <Link href={appReturnUrl} className={paymentBrand.inlineLink}>
+                Open app link
             </Link>
         </div>
     );
