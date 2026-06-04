@@ -15,7 +15,7 @@ import {
     userMatchSignals,
 } from "@/db/schema";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
-import { faceVerifiedProfileWhereClause } from "@/lib/matchmaking-pool-eligibility";
+import { faceVerifiedProfileWhereClause, hasCompletedInitialFaceVerification } from "@/lib/matchmaking-pool-eligibility";
 import { collectUsersIPassedIds } from "@/lib/matching/candidate-pool-policy";
 import {
     canonicalizePairUsers,
@@ -135,6 +135,11 @@ function startOfUtcDay(date = new Date()) {
 
 function utcDayKey(date = new Date()) {
     return startOfUtcDay(date).toISOString().slice(0, 10);
+}
+
+function isEligiblePoolCandidate(profile: CandidateProfile | null | undefined): profile is CandidateProfile {
+    if (!profile || profile.user?.deletedAt) return false;
+    return hasCompletedInitialFaceVerification(profile);
 }
 function clampScore(value: number) {
     return Math.max(0, Math.min(100, Math.round(value)));
@@ -875,9 +880,13 @@ async function getTodaysStableDailyRecommendations(userId: string): Promise<Rank
     if (!viewerProfile) return [];
 
     const byUserId = new Map(candidateProfiles.map((profile) => [profile.userId, profile]));
+    const staleShortlistIds: string[] = [];
     const stable = uniqueRows.flatMap((event) => {
         const candidate = byUserId.get(event.candidateUserId);
-        if (!candidate || candidate.user?.deletedAt) return [];
+        if (!isEligiblePoolCandidate(candidate)) {
+            staleShortlistIds.push(event.id);
+            return [];
+        }
 
         const compatibility = scoreProfilePair(viewerProfile, candidate);
         const matchType = event.matchType ?? classifyMatchType({
@@ -929,6 +938,15 @@ async function getTodaysStableDailyRecommendations(userId: string): Promise<Rank
             profilePreview: toPreview(candidate),
         }];
     }).slice(0, DAILY_LIMIT);
+
+    if (staleShortlistIds.length > 0) {
+        await db.delete(dailyShortlists).where(inArray(dailyShortlists.id, staleShortlistIds));
+        console.log("[match-intelligence] purged unverified shortlist rows", {
+            userId,
+            shortlistDay,
+            purgedCount: staleShortlistIds.length,
+        });
+    }
 
     console.log("[match-intelligence] reusing stable daily shortlist", {
         userId,
@@ -994,6 +1012,7 @@ export async function getDailyRecommendations(userId: string) {
     const preference = await getOrCreateMatchPreferences(userId);
     const hold = await getActiveMatchHoldForUser(userId);
 
+    // Stable shortlist excludes unverified candidates and purges stale rows on read.
     const stableRecommendations = await getTodaysStableDailyRecommendations(userId);
     if (stableRecommendations.length >= DAILY_LIMIT) {
         return {
