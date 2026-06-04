@@ -20,7 +20,6 @@ import {
     recordCandidatePairHistory,
 } from "@/lib/services/candidate-pairs-service";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
-import { resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
@@ -254,11 +253,6 @@ export async function adminRestoreMatchBetweenUsers(input: {
     const { anchorUserId, partnerUserId } = input;
     if (!anchorUserId || !partnerUserId || anchorUserId === partnerUserId) {
         throw new Error("Choose two different users");
-    }
-
-    const excluded = await resolveMatchExcludedUserIds();
-    if (excluded.has(anchorUserId) || excluded.has(partnerUserId)) {
-        throw new Error("Staff or admin accounts cannot be matched");
     }
 
     const blockReason = await getBlockingReasonBetweenUsers(anchorUserId, partnerUserId);

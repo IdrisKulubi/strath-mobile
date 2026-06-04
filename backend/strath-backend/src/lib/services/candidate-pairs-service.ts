@@ -1246,7 +1246,9 @@ export async function getActiveAdminCuratedCandidatePairsForUser(userId: string)
         )
         .orderBy(desc(candidatePairs.compatibilityScore), desc(candidatePairs.createdAt));
 
-    return formatCandidatePairRowsForUser(userId, rows, now, matchExcludedUserIds);
+    return formatCandidatePairRowsForUser(userId, rows, now, matchExcludedUserIds, {
+        includeExcludedPartners: true,
+    });
 }
 
 async function formatCandidatePairRowsForUser(
@@ -1254,11 +1256,12 @@ async function formatCandidatePairRowsForUser(
     rows: CandidatePairRow[],
     now: Date,
     matchExcludedUserIds: Set<string>,
+    options?: { includeExcludedPartners?: boolean },
 ) {
     const result = await Promise.all(
         rows.map(async (pair) => {
             const otherUserId = getOtherUserId(pair, userId);
-            if (matchExcludedUserIds.has(otherUserId)) {
+            if (!options?.includeExcludedPartners && matchExcludedUserIds.has(otherUserId)) {
                 return null;
             }
             const profile = await readDb.query.profiles.findFirst({
