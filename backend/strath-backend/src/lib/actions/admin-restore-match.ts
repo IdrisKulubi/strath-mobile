@@ -66,7 +66,7 @@ async function loadUserSummary(userId: string): Promise<RestoreMatchUserResult |
 
     return {
         id: userId,
-        name: displayName(profile, account.name ?? "User"),
+        name: displayName(profile ?? null, account.name ?? "User"),
         email: account.email ?? null,
         profilePhoto: profile?.profilePhoto ?? account.profilePhoto ?? account.image ?? null,
     };
