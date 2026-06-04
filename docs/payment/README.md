@@ -131,5 +131,5 @@ Tick these off as phases land.
 - [x] Phase 8 — expiry cron + credit
 - [x] Phase 9 — refund + credit APIs
 - [x] Phase 10 — mobile UI
-- [ ] Phase 11 — notifications
-- [ ] Phase 12 — admin
+- [x] Phase 11 — notifications
+- [x] Phase 12 — admin

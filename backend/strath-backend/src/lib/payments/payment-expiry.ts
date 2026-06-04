@@ -8,6 +8,7 @@ import {
     type ExpirePaymentMatchResult,
     type PaymentExpirySweepResult,
 } from "@/lib/payments/payment-expiry-types";
+import { notifyPaymentMatchExpired } from "@/lib/services/payment-push-notifications-service";
 
 const CREDIT_REASON = "partner_did_not_pay";
 
@@ -68,6 +69,7 @@ export async function expirePaymentMatch(dateMatchId: string): Promise<ExpirePay
 
         let credited = false;
         let lowIntentIncremented = false;
+        let payerUserId: string | null = null;
 
         const singlePayer = findSinglePaidPayer(payments);
         if (singlePayer) {
@@ -105,6 +107,7 @@ export async function expirePaymentMatch(dateMatchId: string): Promise<ExpirePay
                         .where(eq(datePayments.id, payerPayment.id));
 
                     credited = true;
+                    payerUserId = payerPayment.userId;
 
                     const nonPayerId =
                         match.userAId === payerPayment.userId
@@ -142,6 +145,9 @@ export async function expirePaymentMatch(dateMatchId: string): Promise<ExpirePay
             dateMatchId,
             credited,
             lowIntentIncremented,
+            userAId: match.userAId,
+            userBId: match.userBId,
+            payerUserId,
         };
     });
 }
@@ -166,6 +172,19 @@ export async function runPaymentExpirySweep(): Promise<PaymentExpirySweepResult>
         summary.expired += 1;
         if (result.credited) summary.credited += 1;
         if (result.lowIntentIncremented) summary.lowIntentIncremented += 1;
+
+        await notifyPaymentMatchExpired({
+            dateMatchId: result.dateMatchId,
+            userAId: result.userAId,
+            userBId: result.userBId,
+            credited: result.credited,
+            payerUserId: result.payerUserId,
+        }).catch((err) => {
+            console.warn("[payment-expiry] push notification failed", {
+                dateMatchId: result.dateMatchId,
+                err,
+            });
+        });
     }
 
     return summary;

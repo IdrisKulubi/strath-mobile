@@ -1,6 +1,6 @@
 # Phase 11 — Payment notifications
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 **Depends on:** Phases 5, 7, 8, 9
 **User-visible:** Yes (push notifications)
 
@@ -10,14 +10,18 @@ Push the right nudge at the right moment so payments actually complete:
 "you both said yes — confirm," "they paid, your turn," "both confirmed,"
 "expiring soon," and credit/refund outcomes.
 
-## Files to edit
+## Implemented
 
-- `src/lib/notification-types.ts` (backend) — add new type constants.
-- `strath-mobile/lib/services/notifications-service.ts` (mobile) — mirror them.
-- Call `sendPushNotification(token, { title, body, data: { type, dateId, ... } })`
-  from the relevant places (verify/webhook, expiry cron).
-- `hooks/use-push-notifications.ts` (mobile) — route payment taps to
-  `/(tabs)/dates`.
+| Area | Files |
+|---|---|
+| Type constants | `src/lib/notification-types.ts`, `strath-mobile/lib/services/notifications-service.ts` |
+| Push helpers | `src/lib/services/payment-push-notifications-service.ts` |
+| Slot assigned → pay nudge | `meetup-push-notifications-service.ts` (`sendPaymentRequiredPushes` when flag on) |
+| Partner paid / both paid | `payment-apply.ts` → `runPaidParticipantSideEffects` |
+| Expiring (~6h) | `meetup-confirm-reminder-service.ts` (payment branch + `slotConfirmReminderSentAt`) |
+| Expired + credit | `payment-expiry.ts` → `notifyPaymentMatchExpired` |
+| Refund | `payment-refund.ts` → `sendRefundCompletedPush` on `refund.processed` |
+| Mobile routing | `hooks/use-push-notifications.ts` |
 
 ## New notification types
 
@@ -35,13 +39,13 @@ REFUND_COMPLETED        // refund done
 
 | Type | Trigger point |
 |---|---|
-| `PAYMENT_REQUIRED` | When a mutual match becomes `awaiting_payment` (mutual creation, flag on). |
-| `PAYMENT_PARTNER_PAID` | In `markPaymentPaid` when `paid_user_count` goes 0→1 (notify the other user). |
-| `PAYMENT_BOTH_PAID` | In `markPaymentPaid` when it reaches `both_paid` (notify both). |
-| `PAYMENT_EXPIRING` | A reminder cron (can extend the existing `meetup-confirm-reminders`) ~6h before `payment_due_by`. |
-| `PAYMENT_EXPIRED` | In the expiry cron (phase 8). |
-| `CREDIT_GRANTED` | In the expiry cron when a credit is granted. |
-| `REFUND_COMPLETED` | In the refund webhook (phase 9). |
+| `PAYMENT_REQUIRED` | `sendMeetupSlotAssignedPushes` when `paymentsEnabled` + `dateMatchId` (mutual creation / backfill). |
+| `PAYMENT_PARTNER_PAID` | `runPaidParticipantSideEffects` when `paidCount === 1` and flag on. |
+| `PAYMENT_BOTH_PAID` | `runPaidParticipantSideEffects` when `paidCount >= 2` and flag on. |
+| `PAYMENT_EXPIRING` | `runMeetupConfirmReminders` ~6h before deadline for unpaid users when payments on. |
+| `PAYMENT_EXPIRED` | `runPaymentExpirySweep` after each expired match. |
+| `CREDIT_GRANTED` | Same sweep when one-paid credit is granted. |
+| `REFUND_COMPLETED` | `markPaymentRefundedFromWebhook` on first `refunded` transition. |
 
 ## Copy
 
@@ -59,23 +63,19 @@ All payment pushes carry `data: { type, route: "/(tabs)/dates", dateId }`.
 
 ## How to test
 
-1. **Partner-paid:** pay as A → assert user B receives `PAYMENT_PARTNER_PAID`
-   (check Expo push logs / device). Tapping it lands on the Dates tab.
+1. **Partner-paid:** pay as A → assert user B receives `PAYMENT_PARTNER_PAID`.
 2. **Both-paid:** pay as B → both users get `PAYMENT_BOTH_PAID`.
-3. **Expiring:** set `payment_due_by` ~5h out, run the reminder cron → the unpaid
-   user gets `PAYMENT_EXPIRING` exactly once (idempotent — re-run sends nothing).
-4. **Expired + credit:** force expiry (phase 8) → payer gets `PAYMENT_EXPIRED` +
-   `CREDIT_GRANTED`.
-5. **No token users:** users without a `pushToken` are skipped without error.
-6. **Mirror check:** the type strings match exactly between backend
-   `notification-types.ts` and mobile `notifications-service.ts`.
+3. **Expiring:** set `payment_due_by` ~5h out, run meetup-confirm-reminders cron → unpaid user gets `PAYMENT_EXPIRING` once.
+4. **Expired + credit:** run payment-expiry cron → payer gets `PAYMENT_EXPIRED` + `CREDIT_GRANTED`.
+5. **Refund:** trigger `refund.processed` webhook → `REFUND_COMPLETED`.
+6. **Mirror check:** `payment-push-notifications.test.ts` asserts backend/mobile type strings match.
 
 ## Done when
 
-- [ ] Each event fires at the right transition, once.
-- [ ] Taps deep-link to the Dates tab.
-- [ ] Reminder is idempotent (uses a "sent" marker like `slotConfirmReminderSentAt`).
-- [ ] Backend + mobile type constants match.
+- [x] Each event fires at the right transition, once.
+- [x] Taps deep-link to the Dates tab.
+- [x] Reminder is idempotent (`slotConfirmReminderSentAt`).
+- [x] Backend + mobile type constants match.
 
 ## Rollback
 

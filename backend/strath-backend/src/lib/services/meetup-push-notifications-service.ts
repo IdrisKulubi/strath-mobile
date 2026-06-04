@@ -4,6 +4,7 @@ import db from "@/db/drizzle";
 import { mutualMatches, profiles, user } from "@/db/schema";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
+import { sendPaymentRequiredPushes } from "@/lib/services/payment-push-notifications-service";
 import {
     bothUsersConfirmedSlot,
     formatMeetupSlotForDisplay,
@@ -26,7 +27,18 @@ export async function sendMeetupSlotAssignedPushes(input: {
     userBId: string;
     scheduledAt: Date;
     confirmBy: Date;
+    paymentsEnabled?: boolean;
+    dateMatchId?: string;
 }): Promise<void> {
+    if (input.paymentsEnabled && input.dateMatchId) {
+        await sendPaymentRequiredPushes({
+            userAId: input.userAId,
+            userBId: input.userBId,
+            dateMatchId: input.dateMatchId,
+        });
+        return;
+    }
+
     const [userA, userB] = await Promise.all([
         getUserPushAndName(input.userAId),
         getUserPushAndName(input.userBId),

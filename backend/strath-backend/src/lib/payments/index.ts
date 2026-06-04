@@ -53,6 +53,7 @@ export {
 
 export { markPaymentRefundedFromWebhook } from "@/lib/payments/payment-refund";
 export { initiatePaystackRefund } from "@/lib/payments/paystack-refund";
+export { adminRequestRefundForPayment } from "@/lib/payments/admin-refund";
 
 export {
     expirePaymentMatch,

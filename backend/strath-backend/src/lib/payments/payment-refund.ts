@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import { datePayments } from "@/db/schema";
+import { sendRefundCompletedPush } from "@/lib/services/payment-push-notifications-service";
 
 type PaystackRefundWebhookData = {
     transaction?: {
@@ -57,6 +58,16 @@ export async function markPaymentRefundedFromWebhook(
             updatedAt: now,
         })
         .where(eq(datePayments.id, payment.id));
+
+    await sendRefundCompletedPush({
+        userId: payment.userId,
+        dateMatchId: payment.dateMatchId,
+    }).catch((err) => {
+        console.warn("[payments] refund push failed", {
+            paymentId: payment.id,
+            err,
+        });
+    });
 
     return { updated: true, reference: payment.paystackReference };
 }

@@ -885,6 +885,7 @@ export const dateMatches = pgTable(
         paymentAmountCents: integer("payment_amount_cents").default(49900).notNull(),
         paymentCurrency: text("payment_currency").default("KES").notNull(),
         paidUserCount: integer("paid_user_count").default(0).notNull(),
+        paymentAdminNotes: text("payment_admin_notes"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
     },
     (table) => ({

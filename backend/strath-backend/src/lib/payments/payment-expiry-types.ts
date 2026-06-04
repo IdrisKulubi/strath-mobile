@@ -8,6 +8,9 @@ export type ExpirePaymentMatchResult =
           dateMatchId: string;
           credited: boolean;
           lowIntentIncremented: boolean;
+          userAId: string;
+          userBId: string;
+          payerUserId: string | null;
       }
     | { status: "skipped"; dateMatchId: string; reason: string };
 

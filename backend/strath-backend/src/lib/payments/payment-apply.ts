@@ -2,8 +2,13 @@ import { and, eq, sql } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import { dateMatches, datePayments, mutualMatches } from "@/db/schema";
+import { getPaymentsEnabled } from "@/lib/payments/payment-flags";
 import { tryFinalizeConfirmedMeetup } from "@/lib/services/meetup-confirmation-service";
 import { notifyPartnerAfterSlotConfirm } from "@/lib/services/meetup-push-notifications-service";
+import {
+    sendPaymentBothPaidPushes,
+    sendPaymentPartnerPaidPush,
+} from "@/lib/services/payment-push-notifications-service";
 
 export type PaymentApplyTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -70,13 +75,27 @@ export async function runPaidParticipantSideEffects(input: {
     paidCount: number;
     mutualMatchId: string | null;
 }): Promise<boolean> {
-    if (input.mutualMatchId && input.paidCount === 1) {
-        await notifyPartnerAfterSlotConfirm(input.mutualMatchId, input.userId);
+    const paymentsEnabled = await getPaymentsEnabled();
+
+    if (input.paidCount === 1) {
+        if (paymentsEnabled) {
+            await sendPaymentPartnerPaidPush({
+                dateMatchId: input.dateMatchId,
+                payingUserId: input.userId,
+            });
+        } else if (input.mutualMatchId) {
+            await notifyPartnerAfterSlotConfirm(input.mutualMatchId, input.userId);
+        }
     }
 
-    if (input.paidCount >= 2 && input.mutualMatchId) {
-        const finalize = await tryFinalizeConfirmedMeetup(input.mutualMatchId);
-        return finalize.finalized;
+    if (input.paidCount >= 2) {
+        if (paymentsEnabled) {
+            await sendPaymentBothPaidPushes({ dateMatchId: input.dateMatchId });
+        }
+        if (input.mutualMatchId) {
+            const finalize = await tryFinalizeConfirmedMeetup(input.mutualMatchId);
+            return finalize.finalized;
+        }
     }
 
     return false;

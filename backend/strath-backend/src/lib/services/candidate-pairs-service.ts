@@ -1550,11 +1550,14 @@ export async function respondToCandidatePair(
                 const { sendMeetupSlotAssignedPushes } = await import(
                     "@/lib/services/meetup-push-notifications-service"
                 );
+                const paymentsEnabled = await getPaymentsEnabled();
                 await sendMeetupSlotAssignedPushes({
                     userAId: result.mutual.userAId,
                     userBId: result.mutual.userBId,
                     scheduledAt: result.mutual.scheduledAt,
                     confirmBy: result.mutual.slotConfirmBy,
+                    paymentsEnabled,
+                    dateMatchId: result.mutual.legacyDateMatchId ?? undefined,
                 }).catch((err) => {
                     console.warn("[candidate-pairs] meetup slot push failed", err);
                 });
