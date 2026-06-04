@@ -28,6 +28,9 @@ import { isAdminMatchPreviewUser, resolveMatchExcludedUserIds } from "@/lib/serv
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
+/** Pairs created or restored by admins (curated + mistaken-pass restore). */
+export const ADMIN_MANAGED_PAIR_SOURCE_FILTER = sql`${candidatePairHistory.metadata}->>'source' in ('admin_curated', 'admin_restore')`;
+
 export const DAILY_CANDIDATE_PAIR_LIMIT = Number(process.env.DAILY_CANDIDATE_PAIR_LIMIT) || 5;
 export const DAILY_CANDIDATE_DECISION_LIMIT = Number(process.env.DAILY_CANDIDATE_DECISION_LIMIT) || 32;
 export const MANUAL_CURATED_PAIR_EXPIRES_AT = new Date("2099-12-31T23:59:59.000Z");
@@ -151,7 +154,7 @@ export async function expireCandidatePairs(now = new Date()) {
                         select 1 from ${candidatePairHistory}
                         where ${candidatePairHistory.pairId} = ${candidatePairs.id}
                         and ${candidatePairHistory.eventType} = 'generated'
-                        and ${candidatePairHistory.metadata}->>'source' = 'admin_curated'
+                        and ${candidatePairHistory.metadata}->>'source' in ('admin_curated', 'admin_restore')
                     )`,
                     or(
                         lt(candidatePairs.expiresAt, now),
@@ -1193,7 +1196,7 @@ export async function isAdminCuratedCandidatePair(pairId: string) {
             and(
                 eq(candidatePairHistory.pairId, pairId),
                 eq(candidatePairHistory.eventType, "generated"),
-                sql`${candidatePairHistory.metadata}->>'source' = 'admin_curated'`,
+                ADMIN_MANAGED_PAIR_SOURCE_FILTER,
             ),
         )
         .limit(1);
@@ -1215,7 +1218,7 @@ export async function getActiveAdminCuratedCandidatePairsForUser(userId: string)
         .where(
             and(
                 eq(candidatePairHistory.eventType, "generated"),
-                sql`${candidatePairHistory.metadata}->>'source' = 'admin_curated'`,
+                ADMIN_MANAGED_PAIR_SOURCE_FILTER,
             ),
         );
 
@@ -1371,7 +1374,7 @@ export async function respondToCandidatePair(
             where: and(
                 eq(candidatePairHistory.pairId, pairId),
                 eq(candidatePairHistory.eventType, "generated"),
-                sql`${candidatePairHistory.metadata}->>'source' = 'admin_curated'`,
+                ADMIN_MANAGED_PAIR_SOURCE_FILTER,
             ),
         });
 
