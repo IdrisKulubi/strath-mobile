@@ -125,7 +125,7 @@ async function getAdminCuratedPairIds() {
         .where(
             and(
                 eq(candidatePairHistory.eventType, "generated"),
-                sql`${candidatePairHistory.metadata}->>'source' = 'admin_curated'`,
+                sql`${candidatePairHistory.metadata}->>'source' in ('admin_curated', 'admin_restore')`,
             ),
         );
 

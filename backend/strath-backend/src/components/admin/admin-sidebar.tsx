@@ -9,6 +9,7 @@ import {
     CalendarCheck2,
     CalendarClock,
     Timer,
+    Wallet,
     Flag,
     Mail,
     ChevronDown,
@@ -20,6 +21,7 @@ import {
     ShieldCheck,
     Sparkles,
     Users,
+    RotateCcw,
 } from "lucide-react";
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -62,8 +64,10 @@ const groups: NavGroup[] = [
         items: [
             { href: "/admin/verification", label: "Verification", icon: ShieldCheck },
             { href: "/admin/matchmaking", label: "Matchmaking", icon: Sparkles },
+            { href: "/admin/restore-match", label: "Restore match", icon: RotateCcw },
             { href: "/admin/date-requests", label: "Match Activity", icon: ClipboardList },
             { href: "/admin/meetup-slots", label: "Slot confirmation", icon: Timer },
+            { href: "/admin/payments", label: "Payments", icon: Wallet },
             { href: "/admin/pending-dates", label: "Arranging", icon: CalendarClock },
             { href: "/admin/scheduled-dates", label: "Upcoming", icon: CalendarCheck2 },
             { href: "/admin/history", label: "History", icon: Clock3 },

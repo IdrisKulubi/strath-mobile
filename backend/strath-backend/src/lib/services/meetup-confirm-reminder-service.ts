@@ -1,14 +1,21 @@
 import { and, eq, gt, inArray, isNotNull, isNull, or } from "drizzle-orm";
 
 import db from "@/db/drizzle";
-import { mutualMatches } from "@/db/schema";
+import { dateMatches, mutualMatches } from "@/db/schema";
+import { getPaymentsEnabled } from "@/lib/payments/payment-flags";
 import { getMeetupSlotConfig } from "@/lib/services/meetup-slot-service";
 import {
     sendMeetupConfirmReminderPush,
     viewerStillNeedsConfirm,
 } from "@/lib/services/meetup-push-notifications-service";
+import {
+    sendPaymentExpiringPush,
+    viewerNeedsPayment,
+} from "@/lib/services/payment-push-notifications-service";
 
 const REMINDER_WINDOW_MS = 6 * 60 * 60 * 1000;
+
+const PAYMENT_REMINDER_STATES = ["awaiting_payment", "paid_waiting_for_other"] as const;
 
 export interface MeetupConfirmReminderResult {
     scanned: number;
@@ -17,12 +24,15 @@ export interface MeetupConfirmReminderResult {
 }
 
 /**
- * Sends one reminder push per mutual match when within ~6h of slotConfirmBy.
+ * Sends one reminder push per mutual match when within ~6h of slotConfirmBy
+ * (or paymentDueBy when payments are enabled).
  */
 export async function runMeetupConfirmReminders(
     now: Date = new Date(),
 ): Promise<MeetupConfirmReminderResult> {
     getMeetupSlotConfig();
+
+    const paymentsEnabled = await getPaymentsEnabled();
 
     const rows = await db.query.mutualMatches.findMany({
         where: and(
@@ -53,25 +63,57 @@ export async function runMeetupConfirmReminders(
             continue;
         }
 
+        const dateMatch = row.legacyDateMatchId
+            ? await db.query.dateMatches.findFirst({
+                  where: eq(dateMatches.id, row.legacyDateMatchId),
+              })
+            : null;
+
+        const usePaymentReminder =
+            paymentsEnabled
+            && dateMatch
+            && PAYMENT_REMINDER_STATES.includes(
+                dateMatch.paymentState as (typeof PAYMENT_REMINDER_STATES)[number],
+            );
+
         const reminders: Promise<void>[] = [];
 
-        if (viewerStillNeedsConfirm(row, row.userAId)) {
-            reminders.push(
-                sendMeetupConfirmReminderPush({
-                    userId: row.userAId,
-                    partnerUserId: row.userBId,
-                    confirmBy: row.slotConfirmBy,
-                }),
-            );
-        }
-        if (viewerStillNeedsConfirm(row, row.userBId)) {
-            reminders.push(
-                sendMeetupConfirmReminderPush({
-                    userId: row.userBId,
-                    partnerUserId: row.userAId,
-                    confirmBy: row.slotConfirmBy,
-                }),
-            );
+        if (usePaymentReminder && dateMatch) {
+            if (await viewerNeedsPayment(dateMatch.id, row.userAId)) {
+                reminders.push(
+                    sendPaymentExpiringPush({
+                        userId: row.userAId,
+                        dateMatchId: dateMatch.id,
+                    }),
+                );
+            }
+            if (await viewerNeedsPayment(dateMatch.id, row.userBId)) {
+                reminders.push(
+                    sendPaymentExpiringPush({
+                        userId: row.userBId,
+                        dateMatchId: dateMatch.id,
+                    }),
+                );
+            }
+        } else {
+            if (viewerStillNeedsConfirm(row, row.userAId)) {
+                reminders.push(
+                    sendMeetupConfirmReminderPush({
+                        userId: row.userAId,
+                        partnerUserId: row.userBId,
+                        confirmBy: row.slotConfirmBy,
+                    }),
+                );
+            }
+            if (viewerStillNeedsConfirm(row, row.userBId)) {
+                reminders.push(
+                    sendMeetupConfirmReminderPush({
+                        userId: row.userBId,
+                        partnerUserId: row.userAId,
+                        confirmBy: row.slotConfirmBy,
+                    }),
+                );
+            }
         }
 
         if (reminders.length === 0) {

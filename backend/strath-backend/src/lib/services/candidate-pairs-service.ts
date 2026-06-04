@@ -25,10 +25,15 @@ import {
     hasCompletedInitialFaceVerification,
 } from "@/lib/matchmaking-pool-eligibility";
 import { expireQueuedPairsForUser, isUserOnMatchHold } from "@/lib/services/match-hold-service";
+import { getPaymentsEnabled } from "@/lib/payments/payment-flags";
+import { buildDateMatchPaymentInsert } from "@/lib/payments/payment-init";
 import { assignMeetupSlot } from "@/lib/services/meetup-slot-service";
 import { isAdminMatchPreviewUser, resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
+
+/** Pairs created or restored by admins (curated + mistaken-pass restore). */
+export const ADMIN_MANAGED_PAIR_SOURCE_FILTER = sql`${candidatePairHistory.metadata}->>'source' in ('admin_curated', 'admin_restore')`;
 
 export const DAILY_CANDIDATE_PAIR_LIMIT = Number(process.env.DAILY_CANDIDATE_PAIR_LIMIT) || 5;
 export const DAILY_CANDIDATE_DECISION_LIMIT = Number(process.env.DAILY_CANDIDATE_DECISION_LIMIT) || 32;
@@ -153,7 +158,7 @@ export async function expireCandidatePairs(now = new Date()) {
                         select 1 from ${candidatePairHistory}
                         where ${candidatePairHistory.pairId} = ${candidatePairs.id}
                         and ${candidatePairHistory.eventType} = 'generated'
-                        and ${candidatePairHistory.metadata}->>'source' = 'admin_curated'
+                        and ${candidatePairHistory.metadata}->>'source' in ('admin_curated', 'admin_restore')
                     )`,
                     or(
                         lt(candidatePairs.expiresAt, now),
@@ -1197,7 +1202,7 @@ export async function isAdminCuratedCandidatePair(pairId: string) {
             and(
                 eq(candidatePairHistory.pairId, pairId),
                 eq(candidatePairHistory.eventType, "generated"),
-                sql`${candidatePairHistory.metadata}->>'source' = 'admin_curated'`,
+                ADMIN_MANAGED_PAIR_SOURCE_FILTER,
             ),
         )
         .limit(1);
@@ -1219,7 +1224,7 @@ export async function getActiveAdminCuratedCandidatePairsForUser(userId: string)
         .where(
             and(
                 eq(candidatePairHistory.eventType, "generated"),
-                sql`${candidatePairHistory.metadata}->>'source' = 'admin_curated'`,
+                ADMIN_MANAGED_PAIR_SOURCE_FILTER,
             ),
         );
 
@@ -1376,7 +1381,7 @@ export async function respondToCandidatePair(
             where: and(
                 eq(candidatePairHistory.pairId, pairId),
                 eq(candidatePairHistory.eventType, "generated"),
-                sql`${candidatePairHistory.metadata}->>'source' = 'admin_curated'`,
+                ADMIN_MANAGED_PAIR_SOURCE_FILTER,
             ),
         });
 
@@ -1484,6 +1489,11 @@ export async function respondToCandidatePair(
                 );
                 const mutualAt = new Date();
                 const assignment = assignMeetupSlot(mutualAt);
+                const paymentsEnabled = await getPaymentsEnabled();
+                const paymentFields = buildDateMatchPaymentInsert({
+                    confirmBy: assignment.confirmBy,
+                    enabled: paymentsEnabled,
+                });
                 const [createdMutual] = await tx
                     .insert(mutualMatches)
                     .values({
@@ -1510,6 +1520,7 @@ export async function respondToCandidatePair(
                         userAConfirmed: false,
                         userBConfirmed: false,
                         createdAt: mutualAt,
+                        ...paymentFields,
                     })
                     .returning({ id: dateMatches.id });
                 await tx
@@ -1549,11 +1560,14 @@ export async function respondToCandidatePair(
                 const { sendMeetupSlotAssignedPushes } = await import(
                     "@/lib/services/meetup-push-notifications-service"
                 );
+                const paymentsEnabled = await getPaymentsEnabled();
                 await sendMeetupSlotAssignedPushes({
                     userAId: result.mutual.userAId,
                     userBId: result.mutual.userBId,
                     scheduledAt: result.mutual.scheduledAt,
                     confirmBy: result.mutual.slotConfirmBy,
+                    paymentsEnabled,
+                    dateMatchId: result.mutual.legacyDateMatchId ?? undefined,
                 }).catch((err) => {
                     console.warn("[candidate-pairs] meetup slot push failed", err);
                 });

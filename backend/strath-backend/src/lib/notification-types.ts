@@ -26,6 +26,15 @@ export const NOTIFICATION_TYPES = {
     MEETUP_PARTNER_CONFIRMED: 'meetup_partner_confirmed',
     MEETUP_CONFIRM_REMINDER: 'meetup_confirm_reminder',
 
+    // Payments (pay-to-confirm)
+    PAYMENT_REQUIRED: 'payment_required',
+    PAYMENT_PARTNER_PAID: 'payment_partner_paid',
+    PAYMENT_BOTH_PAID: 'payment_both_paid',
+    PAYMENT_EXPIRING: 'payment_expiring',
+    PAYMENT_EXPIRED: 'payment_expired',
+    CREDIT_GRANTED: 'credit_granted',
+    REFUND_COMPLETED: 'refund_completed',
+
     // Soft-launch gating
     ADMITTED_FROM_WAITLIST: 'admitted_from_waitlist',
     ADMIN_ANNOUNCEMENT: 'admin_announcement',

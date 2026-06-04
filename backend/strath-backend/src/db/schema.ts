@@ -60,6 +60,7 @@ export const user = pgTable(
         deletedAt: timestamp("deleted_at"), // Soft delete - when set, account is marked as deleted
         deletedReason: text("deleted_reason").$type<"self_deleted" | "admin_suspended" | null>(),
         deletedByUserId: text("deleted_by_user_id"),
+        lowIntentScore: integer("low_intent_score").default(0).notNull(),
     },
     (table) => ({
         emailIdx: index("user_email_idx").on(table.email),
@@ -870,6 +871,21 @@ export const dateMatches = pgTable(
         venueName: text("venue_name"),
         venueAddress: text("venue_address"),
         scheduledAt: timestamp("scheduled_at"),
+        paymentState: text("payment_state")
+            .$type<
+                | "not_required"
+                | "awaiting_payment"
+                | "paid_waiting_for_other"
+                | "both_paid"
+                | "expired"
+            >()
+            .default("not_required")
+            .notNull(),
+        paymentDueBy: timestamp("payment_due_by"),
+        paymentAmountCents: integer("payment_amount_cents").default(49900).notNull(),
+        paymentCurrency: text("payment_currency").default("KES").notNull(),
+        paidUserCount: integer("paid_user_count").default(0).notNull(),
+        paymentAdminNotes: text("payment_admin_notes"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
     },
     (table) => ({
@@ -878,6 +894,80 @@ export const dateMatches = pgTable(
         usersIdx: index("date_match_users_idx").on(table.userAId, table.userBId),
         locationIdx: index("date_match_location_idx").on(table.locationId),
     })
+);
+
+export const datePayments = pgTable(
+    "date_payments",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        dateMatchId: uuid("date_match_id")
+            .notNull()
+            .references(() => dateMatches.id, { onDelete: "cascade" }),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        amountCents: integer("amount_cents").notNull(),
+        currency: text("currency").default("KES").notNull(),
+        provider: text("provider").default("paystack").notNull(),
+        paystackReference: text("paystack_reference").notNull().unique(),
+        paystackTransactionId: text("paystack_transaction_id"),
+        status: text("status")
+            .$type<
+                | "pending"
+                | "paid"
+                | "failed"
+                | "refund_requested"
+                | "refunded"
+                | "credited"
+                | "cancelled"
+            >()
+            .default("pending")
+            .notNull(),
+        paidAt: timestamp("paid_at"),
+        refundedAt: timestamp("refunded_at"),
+        creditedAt: timestamp("credited_at"),
+        refundReason: text("refund_reason"),
+        rawVerifyPayload: jsonb("raw_verify_payload"),
+        rawWebhookPayload: jsonb("raw_webhook_payload"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userMatchUnique: uniqueIndex("date_payments_user_match_unique").on(
+            table.dateMatchId,
+            table.userId,
+        ),
+        referenceIdx: index("date_payments_reference_idx").on(table.paystackReference),
+        statusIdx: index("date_payments_status_idx").on(table.status),
+    }),
+);
+
+export const userCredits = pgTable(
+    "user_credits",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        amountCents: integer("amount_cents").notNull(),
+        currency: text("currency").default("KES").notNull(),
+        reason: text("reason").notNull(),
+        dateMatchId: uuid("date_match_id").references(() => dateMatches.id, {
+            onDelete: "set null",
+        }),
+        paymentId: uuid("payment_id").references(() => datePayments.id, {
+            onDelete: "set null",
+        }),
+        status: text("status")
+            .$type<"active" | "spent" | "expired">()
+            .default("active")
+            .notNull(),
+        usedAt: timestamp("used_at"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdx: index("user_credits_user_idx").on(table.userId),
+    }),
 );
 
 // Date feedback — post-date rating and meet_again
@@ -2206,6 +2296,10 @@ export type BlindDate = typeof blindDates.$inferSelect;
 export type NewBlindDate = typeof blindDates.$inferInsert;
 export type AgentAnalyticsEvent = typeof agentAnalytics.$inferSelect;
 export type AppFeatureFlag = typeof appFeatureFlags.$inferSelect;
+export type DatePayment = typeof datePayments.$inferSelect;
+export type NewDatePayment = typeof datePayments.$inferInsert;
+export type UserCredit = typeof userCredits.$inferSelect;
+export type NewUserCredit = typeof userCredits.$inferInsert;
 
 // Analytics events — lightweight funnel tracking
 export const analyticsEvents = pgTable(

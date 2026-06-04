@@ -81,6 +81,7 @@ export function MeetupSlotConfirmModal({
                         <MeetupSlotConfirm
                             layout="modal"
                             mutualMatchId={hold.mutualMatchId}
+                            dateMatchId={hold.dateMatchId}
                             partnerFirstName={partnerName}
                             scheduledAt={slot.scheduledAt}
                             confirmBy={slot.confirmBy}

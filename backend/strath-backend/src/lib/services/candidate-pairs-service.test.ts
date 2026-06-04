@@ -76,6 +76,12 @@ test("mapLegacyDateStatus keeps legacy date matches compatible with new sections
         venueName: null,
         venueAddress: null,
         scheduledAt: null,
+        paymentState: "not_required" as const,
+        paymentDueBy: null,
+        paymentAmountCents: 49900,
+        paymentCurrency: "KES",
+        paidUserCount: 0,
+        paymentAdminNotes: null,
         createdAt: new Date(),
     };
 

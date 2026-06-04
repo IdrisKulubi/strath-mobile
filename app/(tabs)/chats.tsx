@@ -151,6 +151,7 @@ export default function ChatsScreen() {
                     <ActionRequiredBanner
                         partnerFirstName={activeHold.partner.firstName ?? 'your match'}
                         slot={activeHold.slotConfirmation}
+                        dateMatchId={activeHold.dateMatchId}
                         onPress={() => router.push('/(tabs)')}
                     />
                 ) : null}

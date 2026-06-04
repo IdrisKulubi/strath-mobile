@@ -20,6 +20,7 @@ import { SessionBootstrap } from '@/components/session-bootstrap';
 import { AppFeedbackNudge } from '@/components/feedback/app-feedback-nudge';
 import { useNetwork } from '@/hooks/use-network';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
+import { PaymentDeepLinkHandler } from '@/components/payment/payment-deep-link-handler';
 import {
   NotificationPermissionProvider,
   useNotificationPermissionPrompt,
@@ -71,6 +72,8 @@ function RootLayoutNav({ hasAuthToken }: { hasAuthToken: boolean }) {
         <Stack.Screen name="ui-preview" />
         <Stack.Screen name="profile/[userId]" />
         <Stack.Screen name="feedback/[dateId]" />
+        <Stack.Screen name="payments/success" options={{ animation: 'fade' }} />
+        <Stack.Screen name="payments/failed" options={{ animation: 'fade' }} />
         <Stack.Screen name="app-feedback" options={{ presentation: 'modal' }} />
       </Stack>
       <OfflineBanner />
@@ -84,7 +87,7 @@ function PushNotificationListeners() {
   const { setExpoPushToken } = useNotificationPermissionPrompt();
   usePushNotifications({ onTokenRegistered: setExpoPushToken });
   usePresenceHeartbeat();
-  return null;
+  return <PaymentDeepLinkHandler />;
 }
 
 function NotificationsBootstrap({ children }: { children: React.ReactNode }) {

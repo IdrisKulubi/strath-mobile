@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
+import { PaymentCreditActions } from '@/components/dates/payment-credit-actions';
 import { ScheduledDate } from '@/hooks/use-date-requests';
 
 interface HistoryCardProps {
@@ -94,6 +95,10 @@ export function HistoryCard({ date, index }: HistoryCardProps) {
                     </Text>
                 </View>
             </View>
+
+            {date.status === 'expired' ? (
+                <PaymentCreditActions dateMatchId={date.id} />
+            ) : null}
 
             {showFeedback && (
                 <Pressable

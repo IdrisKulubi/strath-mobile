@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     Pressable,
     StyleSheet,
@@ -13,13 +13,24 @@ import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '@/hooks/use-theme';
 import { useConfirmMeetupSlot } from '@/hooks/use-confirm-meetup-slot';
+import { usePayToConfirm } from '@/hooks/use-pay-to-confirm';
+import { usePaymentStatus } from '@/hooks/use-payment-status';
+import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
 import { useNotificationPermissionPrompt } from '@/context/notification-permission-context';
 import { useToast } from '@/components/ui/toast';
+import { PaymentCreditActions } from '@/components/dates/payment-credit-actions';
+import { PaymentStatusBanner } from '@/components/dates/payment-status-banner';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import {
+    formatPaymentAmount,
+    getPaymentUiCopy,
+    resolvePaymentUiPhase,
+} from '@/lib/payment-ui';
 import { formatConfirmBy, formatMeetupSlot, MEETUP_WINDOWS_COPY } from '@/lib/meetup-slot';
 
 export interface MeetupSlotConfirmProps {
     mutualMatchId: string;
+    dateMatchId?: string | null;
     partnerFirstName: string;
     scheduledAt: string | null;
     confirmBy: string | null;
@@ -32,6 +43,7 @@ export interface MeetupSlotConfirmProps {
 
 export function MeetupSlotConfirm({
     mutualMatchId,
+    dateMatchId,
     partnerFirstName,
     scheduledAt,
     confirmBy,
@@ -44,33 +56,119 @@ export function MeetupSlotConfirm({
     const { colors } = useTheme();
     const toast = useToast();
     const confirm = useConfirmMeetupSlot();
+    const payToConfirm = usePayToConfirm();
+    const { paymentsEnabled } = usePaymentsEnabled();
+    const { data: paymentStatus } = usePaymentStatus(dateMatchId ?? undefined);
     const { promptIfAppropriate } = useNotificationPermissionPrompt();
     const primaryFill = colors.primary;
     const isModal = layout === 'modal';
 
-    const canConfirm =
-        confirmWindowOpen && !viewerSlotConfirmed && !confirm.isPending;
+    const amountLabel = formatPaymentAmount(
+        paymentStatus?.amount ?? 499,
+        paymentStatus?.currency ?? 'KES',
+    );
 
-    const handleConfirm = () => {
-        if (!canConfirm) return;
+    const paymentPhase = resolvePaymentUiPhase({
+        paymentsEnabled,
+        paymentStatus,
+        viewerSlotConfirmed,
+        partnerSlotConfirmed,
+    });
+
+    const paymentCopy = getPaymentUiCopy(paymentPhase, partnerFirstName, amountLabel);
+
+    const isPending = paymentsEnabled ? payToConfirm.isPending : confirm.isPending;
+
+    const canAct =
+        confirmWindowOpen
+        && !viewerSlotConfirmed
+        && !isPending
+        && paymentPhase !== 'expired_unpaid'
+        && paymentPhase !== 'expired_refund_choice'
+        && paymentPhase !== 'both_paid'
+        && paymentPhase !== 'paid_waiting';
+
+    const partnerLine = useMemo(() => {
+        if (paymentsEnabled && paymentCopy.partnerLine) {
+            return paymentCopy.partnerLine;
+        }
+        if (viewerSlotConfirmed) {
+            return partnerSlotConfirmed
+                ? 'You both confirmed.'
+                : `Waiting for ${partnerFirstName} to confirm.`;
+        }
+        if (partnerSlotConfirmed) {
+            return `${partnerFirstName} confirmed. Tap below to lock in.`;
+        }
+        return `Confirm your assigned time with ${partnerFirstName}.`;
+    }, [
+        paymentsEnabled,
+        paymentCopy.partnerLine,
+        viewerSlotConfirmed,
+        partnerSlotConfirmed,
+        partnerFirstName,
+    ]);
+
+    const showToastForOutcome = async (outcome: string) => {
+        if (outcome === 'finalized') {
+            toast.show({
+                message: 'Date confirmed. See you on campus.',
+                variant: 'success',
+            });
+        } else if (outcome === 'paid_waiting') {
+            toast.show({
+                message: `You are confirmed. Waiting for ${partnerFirstName}.`,
+                variant: 'default',
+            });
+        } else if (outcome === 'confirmed') {
+            toast.show({
+                message: `Waiting for ${partnerFirstName} to confirm.`,
+                variant: 'default',
+            });
+        } else if (outcome === 'cancelled' || outcome === 'unpaid') {
+            toast.show({
+                message: 'Payment was not completed. Your date is still pending.',
+                variant: 'default',
+            });
+        }
+        await promptIfAppropriate({
+            context: 'after_confirm',
+            partnerName: partnerFirstName,
+        });
+    };
+
+    const handlePrimaryAction = () => {
+        if (!canAct) return;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+        if (paymentsEnabled && dateMatchId) {
+            payToConfirm.mutate(
+                { mutualMatchId, dateMatchId, partnerFirstName },
+                {
+                    onSuccess: (result) => {
+                        void showToastForOutcome(result.outcome);
+                    },
+                    onError: (error) => {
+                        toast.show({
+                            message:
+                                error instanceof Error
+                                    ? error.message
+                                    : 'Could not start payment. Try again.',
+                            variant: 'danger',
+                        });
+                    },
+                },
+            );
+            return;
+        }
+
         confirm.mutate(mutualMatchId, {
             onSuccess: async (data) => {
                 if (data?.status === 'finalized') {
-                    toast.show({
-                        message: 'Date confirmed. See you on campus.',
-                        variant: 'success',
-                    });
+                    await showToastForOutcome('finalized');
                 } else {
-                    toast.show({
-                        message: `Waiting for ${partnerFirstName} to confirm.`,
-                        variant: 'default',
-                    });
+                    await showToastForOutcome('confirmed');
                 }
-                await promptIfAppropriate({
-                    context: 'after_confirm',
-                    partnerName: partnerFirstName,
-                });
             },
             onError: () => {
                 toast.show({
@@ -81,17 +179,80 @@ export function MeetupSlotConfirm({
         });
     };
 
-    const partnerLine = viewerSlotConfirmed
-        ? partnerSlotConfirmed
-            ? 'You both confirmed.'
-            : `Waiting for ${partnerFirstName} to confirm.`
-        : partnerSlotConfirmed
-          ? `${partnerFirstName} confirmed. Tap below to lock in.`
-          : `Confirm your assigned time with ${partnerFirstName}.`;
+    const primaryCtaLabel = paymentsEnabled
+        ? isPending
+            ? 'Opening checkout…'
+            : paymentCopy.primaryCta ?? 'Confirm date'
+        : isPending
+          ? 'Confirming…'
+          : 'Confirm date';
+
+    const bodyCopy = paymentsEnabled && paymentCopy.body ? paymentCopy.body : null;
+
+    const confirmedBlock = (
+        <View
+            style={[
+                isModal ? styles.confirmedBadgeModal : styles.confirmedBadge,
+                { borderColor: colors.border },
+            ]}
+        >
+            <Ionicons name="checkmark-circle" size={isModal ? 20 : 18} color={primaryFill} />
+            <RNText style={[styles.confirmedLabel, { color: colors.foreground }]}>You confirmed</RNText>
+        </View>
+    );
+
+    const primaryButton = (
+        <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={primaryCtaLabel}
+            activeOpacity={0.88}
+            disabled={!canAct}
+            onPress={handlePrimaryAction}
+        >
+            <View
+                style={[
+                    isModal ? styles.modalConfirmButton : styles.inlinePrimaryButton,
+                    {
+                        backgroundColor: colors.primary,
+                        borderColor: colors.primary,
+                    },
+                    !canAct && styles.buttonDisabled,
+                ]}
+            >
+                <RNText style={styles.primaryButtonLabel}>{primaryCtaLabel}</RNText>
+            </View>
+        </TouchableOpacity>
+    );
+
+    const creditBlock =
+        dateMatchId && paymentsEnabled ? (
+            <PaymentCreditActions
+                dateMatchId={dateMatchId}
+                onCreditApplied={() => {
+                    void showToastForOutcome('paid_waiting');
+                }}
+            />
+        ) : null;
+
+    const statusBanner =
+        dateMatchId && paymentsEnabled ? (
+            <PaymentStatusBanner
+                dateMatchId={dateMatchId}
+                partnerFirstName={partnerFirstName}
+                viewerSlotConfirmed={viewerSlotConfirmed}
+                partnerSlotConfirmed={partnerSlotConfirmed}
+            />
+        ) : null;
 
     if (isModal) {
         return (
-            <View style={[styles.modalPanel, { backgroundColor: colors.card, borderColor: colors.border }, style]}>
+            <View
+                style={[
+                    styles.modalPanel,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                    style,
+                ]}
+            >
                 <View style={styles.modalBody}>
                     {scheduledAt ? (
                         <View style={[styles.modalSlotHero, { backgroundColor: colors.muted }]}>
@@ -112,54 +273,32 @@ export function MeetupSlotConfirm({
                         {MEETUP_WINDOWS_COPY}
                     </RNText>
 
+                    {bodyCopy ? (
+                        <RNText style={[styles.paymentBody, { color: colors.mutedForeground }]}>
+                            {bodyCopy}
+                        </RNText>
+                    ) : null}
+
                     <RNText style={[styles.modalPartnerLine, { color: colors.mutedForeground }]}>
                         {partnerLine}
                     </RNText>
 
+                    {statusBanner}
+
                     {!confirmWindowOpen && !viewerSlotConfirmed ? (
-                        <RNText style={[styles.closedCopy, styles.modalClosedCopy, { color: colors.destructive }]}>
+                        <RNText
+                            style={[styles.closedCopy, styles.modalClosedCopy, { color: colors.destructive }]}
+                        >
                             The confirmation window has closed.
                         </RNText>
                     ) : null}
                 </View>
 
-                {viewerSlotConfirmed ? (
-                    <View
-                        style={[
-                            styles.confirmedBadge,
-                            styles.modalConfirmedBadge,
-                            { borderColor: colors.border },
-                        ]}
-                    >
-                        <Ionicons name="checkmark-circle" size={20} color={primaryFill} />
-                        <RNText style={[styles.confirmedLabel, { color: colors.foreground }]}>
-                            You confirmed
-                        </RNText>
-                    </View>
-                ) : (
-                    <TouchableOpacity
-                        accessibilityRole="button"
-                        accessibilityLabel="Confirm date"
-                        activeOpacity={0.88}
-                        disabled={!canConfirm}
-                        onPress={handleConfirm}
-                    >
-                        <View
-                            style={[
-                                styles.modalConfirmButton,
-                                {
-                                    backgroundColor: colors.primary,
-                                    borderColor: colors.primary,
-                                },
-                                !canConfirm && styles.modalButtonDisabled,
-                            ]}
-                        >
-                            <RNText style={styles.modalConfirmLabel}>
-                                {confirm.isPending ? 'Confirming…' : 'Confirm date'}
-                            </RNText>
-                        </View>
-                    </TouchableOpacity>
-                )}
+                {viewerSlotConfirmed || paymentPhase === 'paid_waiting' || paymentPhase === 'both_paid'
+                    ? confirmedBlock
+                    : primaryButton}
+
+                {creditBlock}
             </View>
         );
     }
@@ -195,31 +334,40 @@ export function MeetupSlotConfirm({
                 </RNText>
             ) : null}
 
+            {bodyCopy ? (
+                <RNText style={[styles.paymentBody, { color: colors.mutedForeground }]}>{bodyCopy}</RNText>
+            ) : null}
+
             <RNText style={[styles.partnerLine, { color: colors.mutedForeground }]}>{partnerLine}</RNText>
 
-            {viewerSlotConfirmed ? (
-                <View style={[styles.confirmedBadge, { borderColor: colors.border }]}>
-                    <Ionicons name="checkmark-circle" size={18} color={primaryFill} />
-                    <RNText style={[styles.confirmedLabel, { color: colors.foreground }]}>
-                        You confirmed
-                    </RNText>
-                </View>
+            {statusBanner}
+
+            {viewerSlotConfirmed || paymentPhase === 'paid_waiting' || paymentPhase === 'both_paid' ? (
+                confirmedBlock
             ) : (
                 <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="Confirm date"
-                    disabled={!canConfirm}
-                    onPress={handleConfirm}
+                    accessibilityLabel={primaryCtaLabel}
+                    disabled={!canAct}
+                    onPress={handlePrimaryAction}
                     style={({ pressed }) => [
                         styles.confirmPill,
                         {
                             borderColor: primaryFill,
-                            opacity: !canConfirm ? 0.5 : pressed ? 0.85 : 1,
+                            backgroundColor: paymentsEnabled ? primaryFill : 'transparent',
+                            opacity: !canAct ? 0.5 : pressed ? 0.85 : 1,
                         },
                     ]}
                 >
-                    <RNText style={[styles.confirmLabel, { color: primaryFill }]}>
-                        {confirm.isPending ? 'Confirming…' : 'Confirm date'}
+                    <RNText
+                        style={[
+                            styles.confirmLabel,
+                            {
+                                color: paymentsEnabled ? '#FFFFFF' : primaryFill,
+                            },
+                        ]}
+                    >
+                        {primaryCtaLabel}
                     </RNText>
                 </Pressable>
             )}
@@ -229,6 +377,8 @@ export function MeetupSlotConfirm({
                     The confirmation window has closed.
                 </RNText>
             ) : null}
+
+            {creditBlock}
         </View>
     );
 }
@@ -275,6 +425,11 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         paddingHorizontal: SPACING.tight,
     },
+    paymentBody: {
+        ...TYPOGRAPHY.caption,
+        textAlign: 'center',
+        lineHeight: 18,
+    },
     modalPartnerLine: {
         ...TYPOGRAPHY.caption,
         textAlign: 'center',
@@ -291,13 +446,22 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         paddingHorizontal: SPACING.base,
     },
-    modalButtonDisabled: {
-        opacity: 0.45,
+    inlinePrimaryButton: {
+        alignSelf: 'stretch',
+        minHeight: 48,
+        borderRadius: RADIUS.md,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: SPACING.base,
     },
-    modalConfirmLabel: {
+    primaryButtonLabel: {
         fontSize: 16,
         fontWeight: '700',
         color: '#FFFFFF',
+    },
+    buttonDisabled: {
+        opacity: 0.45,
     },
     title: {
         fontSize: 17,
@@ -328,14 +492,13 @@ const styles = StyleSheet.create({
         lineHeight: 18,
     },
     confirmPill: {
-        alignSelf: 'flex-start',
+        alignSelf: 'stretch',
         minHeight: 44,
-        borderRadius: RADIUS.full,
+        borderRadius: RADIUS.md,
         borderWidth: 1.5,
-        paddingHorizontal: 20,
+        paddingHorizontal: SPACING.base,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'transparent',
     },
     confirmLabel: {
         fontSize: 15,
@@ -351,11 +514,15 @@ const styles = StyleSheet.create({
         borderRadius: RADIUS.full,
         borderWidth: StyleSheet.hairlineWidth,
     },
-    modalConfirmedBadge: {
+    confirmedBadgeModal: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
         alignSelf: 'stretch',
         justifyContent: 'center',
         minHeight: 52,
         borderRadius: RADIUS.md,
+        borderWidth: StyleSheet.hairlineWidth,
     },
     confirmedLabel: {
         fontSize: 14,
