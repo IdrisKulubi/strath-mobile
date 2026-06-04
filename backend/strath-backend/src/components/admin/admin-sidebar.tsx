@@ -64,7 +64,7 @@ const groups: NavGroup[] = [
         items: [
             { href: "/admin/verification", label: "Verification", icon: ShieldCheck },
             { href: "/admin/matchmaking", label: "Matchmaking", icon: Sparkles },
-            { href: "/admin/restore-match", label: "Restore match", icon: RotateCcw },
+            { href: "/admin/restore-match", label: "Restore & match", icon: RotateCcw },
             { href: "/admin/date-requests", label: "Match Activity", icon: ClipboardList },
             { href: "/admin/meetup-slots", label: "Slot confirmation", icon: Timer },
             { href: "/admin/payments", label: "Payments", icon: Wallet },
