@@ -163,7 +163,9 @@ export function PaymentAdminActions({
                                 Flag low intent
                             </button>
                             {p.paymentId &&
-                            (p.status === "paid" || p.status === "credited") &&
+                            (p.status === "paid" ||
+                                p.status === "credited" ||
+                                p.status === "refund_requested") &&
                             p.paystackTransactionId ? (
                                 <button
                                     type="button"
