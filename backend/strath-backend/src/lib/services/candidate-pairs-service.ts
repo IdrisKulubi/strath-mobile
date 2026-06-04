@@ -20,6 +20,10 @@ import {
 } from "@/lib/matching/candidate-pool-policy";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
+import {
+    faceVerifiedProfileWhereClause,
+    hasCompletedInitialFaceVerification,
+} from "@/lib/matchmaking-pool-eligibility";
 import { expireQueuedPairsForUser, isUserOnMatchHold } from "@/lib/services/match-hold-service";
 import { getPaymentsEnabled } from "@/lib/payments/payment-flags";
 import { buildDateMatchPaymentInsert } from "@/lib/payments/payment-init";
@@ -401,6 +405,7 @@ async function getOppositeGenderPoolCount(excludedIds: string[], targetGenders: 
                 eq(profiles.profileCompleted, true),
                 eq(profiles.discoveryPaused, false),
                 eq(profiles.incognitoMode, false),
+                faceVerifiedProfileWhereClause(),
                 inArray(profiles.gender, targetGenders),
             ),
         );
@@ -889,6 +894,7 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
             eq(profiles.profileCompleted, true),
             eq(profiles.discoveryPaused, false),
             eq(profiles.incognitoMode, false),
+            faceVerifiedProfileWhereClause(),
             targetGenders.length > 0 ? inArray(profiles.gender, targetGenders) : undefined,
         ),
         with: { user: true },
@@ -1264,6 +1270,7 @@ async function formatCandidatePairRowsForUser(
             });
 
             if (!profile) return null;
+            if (!hasCompletedInitialFaceVerification(profile)) return null;
 
             const interests = Array.isArray(profile.interests) ? profile.interests : [];
             const personalityAnswers = profile.personalityAnswers as Record<string, unknown> | null;
