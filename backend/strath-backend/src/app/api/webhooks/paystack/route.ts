@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { logRefundFailed, markPaymentRefundedFromWebhook } from "@/lib/payments/payment-refund";
 import { markPaymentPaid } from "@/lib/payments/payment-verification";
 import { verifyWebhookSignature } from "@/lib/payments/paystack-webhook";
 
@@ -9,6 +10,11 @@ type PaystackWebhookEvent = {
     event?: string;
     data?: {
         reference?: string;
+        transaction?: {
+            reference?: string;
+            id?: number;
+        };
+        status?: string;
     };
 };
 
@@ -35,8 +41,18 @@ export async function POST(req: NextRequest) {
 
     const event = payload.event;
 
-    if (event === "refund.processed" || event === "refund.failed") {
-        console.info("[payments/webhook] refund event stub", { event });
+    if (event === "refund.processed") {
+        const result = await markPaymentRefundedFromWebhook(payload.data ?? {});
+        if (!result.updated) {
+            console.warn("[payments/webhook] refund.processed: payment not found", {
+                reference: result.reference,
+            });
+        }
+        return NextResponse.json({ success: true, received: true });
+    }
+
+    if (event === "refund.failed") {
+        logRefundFailed(payload);
         return NextResponse.json({ success: true, received: true });
     }
 

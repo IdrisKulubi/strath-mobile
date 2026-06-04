@@ -1,17 +1,21 @@
-import { and, eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import type { DatePayment } from "@/db/schema";
-import { dateMatches, datePayments, mutualMatches } from "@/db/schema";
+import { datePayments } from "@/db/schema";
 import { getPaymentConfig } from "@/lib/payments/config";
+import {
+    applyPaidParticipantInTransaction,
+    buildPaymentSuccessSnapshot,
+    isMutualFinalized,
+    runPaidParticipantSideEffects,
+} from "@/lib/payments/payment-apply";
 import { verifyTransaction } from "@/lib/payments/paystack-client";
 import type { PaystackVerifyResult } from "@/lib/payments/types";
 import type {
     MarkPaymentPaidResult,
     PaymentVerificationSource,
 } from "@/lib/payments/payment-verification-types";
-import { tryFinalizeConfirmedMeetup } from "@/lib/services/meetup-confirmation-service";
-import { notifyPartnerAfterSlotConfirm } from "@/lib/services/meetup-push-notifications-service";
 
 export function validatePaystackVerification(
     payment: DatePayment,
@@ -46,66 +50,6 @@ export function validatePaystackVerification(
     return { ok: true };
 }
 
-async function buildSuccessSnapshot(input: {
-    dateMatchId: string;
-    userId: string;
-    alreadyProcessed: boolean;
-    finalized: boolean;
-}): Promise<Extract<MarkPaymentPaidResult, { status: "success" }>> {
-    const dateMatch = await db.query.dateMatches.findFirst({
-        where: eq(dateMatches.id, input.dateMatchId),
-    });
-
-    let otherUserPaid = false;
-    if (dateMatch) {
-        const otherUserId =
-            dateMatch.userAId === input.userId ? dateMatch.userBId : dateMatch.userAId;
-        const otherPayment = await db.query.datePayments.findFirst({
-            where: and(
-                eq(datePayments.dateMatchId, input.dateMatchId),
-                eq(datePayments.userId, otherUserId),
-            ),
-        });
-        otherUserPaid = otherPayment?.status === "paid";
-    }
-
-    return {
-        status: "success",
-        dateMatchId: input.dateMatchId,
-        userId: input.userId,
-        paymentState: dateMatch?.paymentState ?? "awaiting_payment",
-        currentUserPaid: true,
-        otherUserPaid,
-        finalized: input.finalized,
-        alreadyProcessed: input.alreadyProcessed,
-    };
-}
-
-async function isMutualFinalized(dateMatchId: string): Promise<boolean> {
-    const mutual = await db.query.mutualMatches.findFirst({
-        where: eq(mutualMatches.legacyDateMatchId, dateMatchId),
-    });
-    return mutual?.status === "upcoming";
-}
-
-async function applyPaidSideEffects(input: {
-    dateMatchId: string;
-    userId: string;
-    paidCount: number;
-    mutualMatchId: string | null;
-}): Promise<boolean> {
-    if (input.mutualMatchId && input.paidCount === 1) {
-        await notifyPartnerAfterSlotConfirm(input.mutualMatchId, input.userId);
-    }
-
-    if (input.paidCount >= 2 && input.mutualMatchId) {
-        const finalize = await tryFinalizeConfirmedMeetup(input.mutualMatchId);
-        return finalize.finalized;
-    }
-
-    return false;
-}
-
 export async function markPaymentPaid(
     reference: string,
     source: PaymentVerificationSource,
@@ -121,12 +65,13 @@ export async function markPaymentPaid(
     }
 
     if (payment.status === "paid") {
-        return buildSuccessSnapshot({
+        const snapshot = await buildPaymentSuccessSnapshot({
             dateMatchId: payment.dateMatchId,
             userId: payment.userId,
             alreadyProcessed: true,
             finalized: await isMutualFinalized(payment.dateMatchId),
         });
+        return { status: "success", ...snapshot };
     }
 
     let verified: PaystackVerifyResult;
@@ -153,8 +98,7 @@ export async function markPaymentPaid(
     };
 
     const now = new Date();
-    let mutualMatchId: string | null = null;
-    let paidCount = 0;
+    let applyResult: Awaited<ReturnType<typeof applyPaidParticipantInTransaction>> | null = null;
     let applied = false;
 
     await db.transaction(async (tx) => {
@@ -177,44 +121,11 @@ export async function markPaymentPaid(
             })
             .where(eq(datePayments.id, locked.id));
 
-        const [countRow] = await tx
-            .select({ count: sql<number>`count(*)::int` })
-            .from(datePayments)
-            .where(
-                and(
-                    eq(datePayments.dateMatchId, locked.dateMatchId),
-                    eq(datePayments.status, "paid"),
-                ),
-            );
-        paidCount = Number(countRow?.count ?? 0);
-
-        const paymentState = paidCount >= 2 ? "both_paid" : "paid_waiting_for_other";
-
-        await tx
-            .update(dateMatches)
-            .set({
-                paidUserCount: paidCount,
-                paymentState,
-            })
-            .where(eq(dateMatches.id, locked.dateMatchId));
-
-        const mutual = await tx.query.mutualMatches.findFirst({
-            where: eq(mutualMatches.legacyDateMatchId, locked.dateMatchId),
+        applyResult = await applyPaidParticipantInTransaction(tx, {
+            dateMatchId: locked.dateMatchId,
+            userId: locked.userId,
+            now,
         });
-
-        if (mutual) {
-            mutualMatchId = mutual.id;
-            const isUserA = mutual.userAId === locked.userId;
-            const slotPatch = isUserA
-                ? { userASlotConfirmedAt: now }
-                : { userBSlotConfirmedAt: now };
-
-            await tx
-                .update(mutualMatches)
-                .set({ ...slotPatch, updatedAt: now })
-                .where(eq(mutualMatches.id, mutual.id));
-        }
-
         applied = true;
     });
 
@@ -223,27 +134,30 @@ export async function markPaymentPaid(
             where: eq(datePayments.paystackReference, reference),
         });
         if (fresh?.status === "paid") {
-            return buildSuccessSnapshot({
+            const snapshot = await buildPaymentSuccessSnapshot({
                 dateMatchId: payment.dateMatchId,
                 userId: payment.userId,
                 alreadyProcessed: true,
                 finalized: await isMutualFinalized(payment.dateMatchId),
             });
+            return { status: "success", ...snapshot };
         }
         return { status: "verification_failed", reason: "persist_failed" };
     }
 
-    const finalized = await applyPaidSideEffects({
+    const finalized = await runPaidParticipantSideEffects({
         dateMatchId: payment.dateMatchId,
         userId: payment.userId,
-        paidCount,
-        mutualMatchId,
+        paidCount: applyResult!.paidCount,
+        mutualMatchId: applyResult!.mutualMatchId,
     });
 
-    return buildSuccessSnapshot({
+    const snapshot = await buildPaymentSuccessSnapshot({
         dateMatchId: payment.dateMatchId,
         userId: payment.userId,
         alreadyProcessed: false,
         finalized,
     });
+
+    return { status: "success", ...snapshot };
 }

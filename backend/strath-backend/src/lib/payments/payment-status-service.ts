@@ -1,6 +1,11 @@
 import type { DatePayment } from "@/db/schema";
 import { getPaymentConfig } from "@/lib/payments/config";
 import {
+    canChooseRefundForMatch,
+    canUseCreditForMatch,
+    getCreditBalanceCents,
+} from "@/lib/payments/payment-credit";
+import {
     findDateMatchById,
     findUserPaymentForMatch,
 } from "@/lib/payments/payment-repository";
@@ -44,22 +49,41 @@ export async function getPaymentStatusForUser(
         return { status: "forbidden" };
     }
 
-    const [currentPayment, otherPayment] = await Promise.all([
+    const [currentPayment, otherPayment, creditBalanceCents] = await Promise.all([
         findUserPaymentForMatch(dateMatchId, userId),
         findUserPaymentForMatch(dateMatchId, otherUserId),
+        getCreditBalanceCents(userId),
     ]);
 
     const { amountCents, currency: configCurrency } = getPaymentConfig();
     const amountCentsResolved = dateMatch.paymentAmountCents ?? amountCents;
+    const currentUserPaid = isPaymentRowPaid(currentPayment);
+
+    const canUseCredit = canUseCreditForMatch({
+        paymentState: dateMatch.paymentState,
+        paymentDueBy: dateMatch.paymentDueBy,
+        currentUserPaid,
+        creditBalanceCents,
+        amountCents: amountCentsResolved,
+    });
+
+    const canChooseRefund = canChooseRefundForMatch({
+        paymentState: dateMatch.paymentState,
+        userPaymentStatus: currentPayment?.status ?? null,
+    });
 
     return {
         status: "ok",
         dateMatchId,
         paymentState: dateMatch.paymentState,
-        currentUserPaid: isPaymentRowPaid(currentPayment),
+        currentUserPaid,
         otherUserPaid: isPaymentRowPaid(otherPayment),
         amount: amountCentsResolved / 100,
         currency: dateMatch.paymentCurrency ?? configCurrency,
         paymentDueBy: dateMatch.paymentDueBy?.toISOString() ?? null,
+        creditBalanceCents,
+        canUseCredit,
+        canChooseRefund,
+        userPaymentStatus: currentPayment?.status ?? null,
     };
 }

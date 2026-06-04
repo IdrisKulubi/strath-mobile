@@ -71,11 +71,13 @@ export async function getSignupCapFlag() {
 export async function getPublicFeatureFlags() {
     const demoLoginEnabled = await isFeatureEnabled(APP_FEATURE_KEYS.demoLoginEnabled, false);
     const signupCapEnabled = await isFeatureEnabled(APP_FEATURE_KEYS.signupCapEnabled, false);
+    const paymentsEnabled = await isFeatureEnabled(APP_FEATURE_KEYS.paymentsEnabled, false);
 
     return {
         demoLoginEnabled,
         // Mobile clients use this to decide whether to show "limited release"
         // messaging during onboarding. Numbers are intentionally not exposed.
         signupCapEnabled,
+        paymentsEnabled,
     };
 }

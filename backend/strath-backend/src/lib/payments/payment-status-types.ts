@@ -10,4 +10,8 @@ export type PaymentStatusResult =
           amount: number;
           currency: string;
           paymentDueBy: string | null;
+          creditBalanceCents: number;
+          canUseCredit: boolean;
+          canChooseRefund: boolean;
+          userPaymentStatus: string | null;
       };

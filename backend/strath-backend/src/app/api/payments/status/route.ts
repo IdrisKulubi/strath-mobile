@@ -44,6 +44,10 @@ export async function GET(req: NextRequest) {
             amount: result.amount,
             currency: result.currency,
             paymentDueBy: result.paymentDueBy,
+            creditBalanceCents: result.creditBalanceCents,
+            canUseCredit: result.canUseCredit,
+            canChooseRefund: result.canChooseRefund,
+            userPaymentStatus: result.userPaymentStatus,
         });
     } catch (error) {
         console.error("[payments/status] Error:", error);

@@ -1,6 +1,6 @@
 # Phase 9 — `refund-choice` + `use-credit` APIs
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 **Depends on:** Phases 5, 8
 **User-visible:** Yes (via app in phase 10)
 
@@ -16,8 +16,10 @@ instead of paying again. Also handle the refund webhook events.
 - `src/app/api/payments/use-credit/route.ts`
 - Extend `src/app/api/webhooks/paystack/route.ts` to handle
   `refund.processed` / `refund.failed`.
-- Helpers in `payment-service.ts`: `getCreditBalance(userId)`,
-  `spendCredit(...)`, `requestRefund(...)`.
+- Helpers in `payment-credit.ts`: `getCreditBalanceCents(userId)`,
+  `spendCreditOnDateMatch(...)`, `handleRefundChoice(...)`.
+- Shared apply path in `payment-apply.ts` (used by Paystack verify and use-credit).
+- Mobile: `components/dates/payment-credit-actions.tsx` + hooks (DESIGN.md tokens).
 
 ## `POST /api/payments/refund-choice`
 
@@ -80,10 +82,10 @@ Body: `{ dateMatchId }`. Used at the gate instead of paying.
 
 ## Done when
 
-- [ ] Refund choice flips credit → refund and initiates Paystack refund.
-- [ ] Refund webhook finalizes `refunded`.
-- [ ] Use-credit confirms a date without a new Paystack payment.
-- [ ] Credit balance never goes negative; no double-spend.
+- [x] Refund choice flips credit → refund and initiates Paystack refund.
+- [x] Refund webhook finalizes `refunded`.
+- [x] Use-credit confirms a date without a new Paystack payment.
+- [x] Credit balance never goes negative; no double-spend.
 
 ## Rollback
 

@@ -16,10 +16,12 @@ import { useConfirmMeetupSlot } from '@/hooks/use-confirm-meetup-slot';
 import { useNotificationPermissionPrompt } from '@/context/notification-permission-context';
 import { useToast } from '@/components/ui/toast';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { PaymentCreditActions } from '@/components/dates/payment-credit-actions';
 import { formatConfirmBy, formatMeetupSlot, MEETUP_WINDOWS_COPY } from '@/lib/meetup-slot';
 
 export interface MeetupSlotConfirmProps {
     mutualMatchId: string;
+    dateMatchId?: string | null;
     partnerFirstName: string;
     scheduledAt: string | null;
     confirmBy: string | null;
@@ -32,6 +34,7 @@ export interface MeetupSlotConfirmProps {
 
 export function MeetupSlotConfirm({
     mutualMatchId,
+    dateMatchId,
     partnerFirstName,
     scheduledAt,
     confirmBy,
@@ -160,6 +163,15 @@ export function MeetupSlotConfirm({
                         </View>
                     </TouchableOpacity>
                 )}
+
+                {dateMatchId ? (
+                    <PaymentCreditActions
+                        dateMatchId={dateMatchId}
+                        onCreditApplied={() => {
+                            void confirm.mutate(mutualMatchId);
+                        }}
+                    />
+                ) : null}
             </View>
         );
     }
@@ -228,6 +240,15 @@ export function MeetupSlotConfirm({
                 <RNText style={[styles.closedCopy, { color: colors.destructive }]}>
                     The confirmation window has closed.
                 </RNText>
+            ) : null}
+
+            {dateMatchId ? (
+                <PaymentCreditActions
+                    dateMatchId={dateMatchId}
+                    onCreditApplied={() => {
+                        void confirm.mutate(mutualMatchId);
+                    }}
+                />
             ) : null}
         </View>
     );

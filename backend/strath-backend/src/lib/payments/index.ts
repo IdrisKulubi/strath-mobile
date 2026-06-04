@@ -32,6 +32,29 @@ export type { CreatePaymentSessionInput } from "@/lib/payments/payment-session-s
 export { getPaymentsEnabled } from "@/lib/payments/payment-flags";
 export { buildDateMatchPaymentInsert } from "@/lib/payments/payment-init";
 export {
+    getCreditBalanceCents,
+    handleRefundChoice,
+    spendCreditOnDateMatch,
+    canChooseRefundForMatch,
+    canUseCreditForMatch,
+} from "@/lib/payments/payment-credit";
+export type {
+    PaymentCreditConflictCode,
+    RefundChoice,
+    RefundChoiceResult,
+    SpendCreditResult,
+} from "@/lib/payments/payment-credit-types";
+
+export {
+    applyPaidParticipantInTransaction,
+    buildPaymentSuccessSnapshot,
+    runPaidParticipantSideEffects,
+} from "@/lib/payments/payment-apply";
+
+export { markPaymentRefundedFromWebhook } from "@/lib/payments/payment-refund";
+export { initiatePaystackRefund } from "@/lib/payments/paystack-refund";
+
+export {
     expirePaymentMatch,
     runPaymentExpirySweep,
 } from "@/lib/payments/payment-expiry";
