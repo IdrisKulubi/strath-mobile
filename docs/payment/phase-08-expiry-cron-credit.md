@@ -1,6 +1,6 @@
 # Phase 8 — Payment-expiry cron + credit logic
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 **Depends on:** Phases 1, 5, 7
 **User-visible:** Indirect (prevents stuck users; grants credit)
 
@@ -16,7 +16,7 @@ low intent.
 
 - `src/app/api/cron/payment-expiry/route.ts` — new cron (mirrors existing crons:
   `GET`, `isAuthorizedCronRequest`, `force-dynamic`).
-- Logic can live in `payment-service.ts` → `expirePaymentMatch(dateMatchId)`.
+- Logic lives in `payment-expiry.ts` → `expirePaymentMatch(dateMatchId)`.
 - `vercel.json` — add the cron schedule (every 15 min).
 
 ## Cron logic
@@ -91,11 +91,11 @@ For each expired match:
 
 ## Done when
 
-- [ ] Expired one-paid matches grant exactly one KES 499 credit to the payer.
-- [ ] Non-payer's `low_intent_score` increments once.
-- [ ] Nobody-paid matches cancel with no credit.
-- [ ] Cron is idempotent and authorized via `CRON_SECRET`.
-- [ ] Both users are released back to matching.
+- [x] Expired one-paid matches grant exactly one KES 499 credit to the payer.
+- [x] Non-payer's `low_intent_score` increments once.
+- [x] Nobody-paid matches cancel with no credit.
+- [x] Cron is idempotent and authorized via `CRON_SECRET`.
+- [x] Both users are released back to matching.
 
 ## Rollback
 

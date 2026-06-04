@@ -1,20 +1,18 @@
 {
   "crons": [
-    {
-      "path": "/api/cron/weekly-drop",
-      "schedule": "0 16 * * 0"
-    },
+   
     {
       "path": "/api/cron/pulse-cleanup",
       "schedule": "0 */6 * * *"
     },
-    {
-      "path": "/api/cron/study-cleanup",
-      "schedule": "0 * * * *"
-    },
+  
     {
       "path": "/api/cron/candidate-pairs",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/payment-expiry",
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/worker/face-verification",

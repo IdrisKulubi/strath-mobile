@@ -128,7 +128,7 @@ Tick these off as phases land.
 - [x] Phase 5 — verify + webhook
 - [x] Phase 6 — status API
 - [x] Phase 7 — confirm gate
-- [ ] Phase 8 — expiry cron + credit
+- [x] Phase 8 — expiry cron + credit
 - [ ] Phase 9 — refund + credit APIs
 - [ ] Phase 10 — mobile UI
 - [ ] Phase 11 — notifications

@@ -31,6 +31,14 @@ export type { CreatePaymentSessionInput } from "@/lib/payments/payment-session-s
 
 export { getPaymentsEnabled } from "@/lib/payments/payment-flags";
 export { buildDateMatchPaymentInsert } from "@/lib/payments/payment-init";
+export {
+    expirePaymentMatch,
+    runPaymentExpirySweep,
+} from "@/lib/payments/payment-expiry";
+export type {
+    ExpirePaymentMatchResult,
+    PaymentExpirySweepResult,
+} from "@/lib/payments/payment-expiry-types";
 export { getPaymentStatusForUser } from "@/lib/payments/payment-status-service";
 export type { PaymentStatusResult } from "@/lib/payments/payment-status-types";
 
