@@ -9,6 +9,7 @@ import {
     buildPaymentSuccessSnapshot,
     isMutualFinalized,
     runPaidParticipantSideEffects,
+    type ApplyPaidParticipantResult,
 } from "@/lib/payments/payment-apply";
 import { getPaymentConfig } from "@/lib/payments/config";
 import type {
@@ -124,15 +125,14 @@ export async function spendCreditOnDateMatch(
 
     const now = new Date();
     const reference = `credit_${randomUUID()}`;
-    let applyResult: Awaited<ReturnType<typeof applyPaidParticipantInTransaction>> | null = null;
 
-    await db.transaction(async (tx) => {
+    const applyResult = await db.transaction(async (tx) => {
         const lockedPayment = await tx.query.datePayments.findFirst({
             where: and(eq(datePayments.dateMatchId, dateMatchId), eq(datePayments.userId, userId)),
         });
 
         if (lockedPayment?.status === "paid") {
-            return;
+            return null;
         }
 
         await tx.insert(userCredits).values({
@@ -173,7 +173,7 @@ export async function spendCreditOnDateMatch(
             });
         }
 
-        applyResult = await applyPaidParticipantInTransaction(tx, {
+        return applyPaidParticipantInTransaction(tx, {
             dateMatchId,
             userId,
             now,

@@ -117,7 +117,7 @@ export async function buildPaymentSuccessSnapshot(input: {
     dateMatchId: string;
     userId: string;
     paymentState: string;
-    currentUserPaid: boolean;
+    currentUserPaid: true;
     otherUserPaid: boolean;
     finalized: boolean;
     alreadyProcessed: boolean;
@@ -143,7 +143,7 @@ export async function buildPaymentSuccessSnapshot(input: {
         dateMatchId: input.dateMatchId,
         userId: input.userId,
         paymentState: dateMatch?.paymentState ?? "awaiting_payment",
-        currentUserPaid: true,
+        currentUserPaid: true as const,
         otherUserPaid,
         finalized: input.finalized,
         alreadyProcessed: input.alreadyProcessed,
