@@ -23,9 +23,20 @@ export { signPaymentToken, verifyPaymentToken } from "@/lib/payments/payment-tok
 
 export { buildPaymentReference } from "@/lib/payments/references";
 
+export { resolvePaymentActor } from "@/lib/payments/payment-auth";
+export { getPaymentCheckoutContext } from "@/lib/payments/payment-checkout-service";
 export { assessPaymentSessionPayability } from "@/lib/payments/payment-payability";
 export { createPaymentSession } from "@/lib/payments/payment-session-service";
 export type { CreatePaymentSessionInput } from "@/lib/payments/payment-session-service";
+
+export {
+    markPaymentPaid,
+    validatePaystackVerification,
+} from "@/lib/payments/payment-verification";
+export type {
+    MarkPaymentPaidResult,
+    PaymentVerificationSource,
+} from "@/lib/payments/payment-verification-types";
 
 export type {
     CreatePaymentSessionResult,

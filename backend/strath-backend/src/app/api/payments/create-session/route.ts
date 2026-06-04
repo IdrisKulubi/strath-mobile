@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
     dateMatchId: z.string().uuid(),
+    paymentToken: z.string().min(10).optional(),
 });
 
 const CONFLICT_STATUS: Record<PaymentSessionConflictCode, number> = {
@@ -30,18 +31,20 @@ const CONFLICT_STATUS: Record<PaymentSessionConflictCode, number> = {
 export async function POST(req: NextRequest) {
     try {
         const session = await getSessionWithFallback(req);
-        if (!session?.user?.id) {
+        const body = bodySchema.parse(await req.json());
+
+        if (!session?.user?.id && !body.paymentToken) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
 
-        const body = bodySchema.parse(await req.json());
         const devForcePayability =
             process.env.NODE_ENV === "development"
             && req.nextUrl.searchParams.get("force") === "1";
 
         const result = await createPaymentSession({
             dateMatchId: body.dateMatchId,
-            userId: session.user.id,
+            userId: session?.user?.id,
+            paymentToken: body.paymentToken,
             devForcePayability,
         });
 

@@ -1,6 +1,6 @@
 # Phase 5 — `verify` API + Paystack webhook
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 **Depends on:** Phases 1, 2, 3
 **User-visible:** No (server trust layer)
 
@@ -20,7 +20,7 @@ Both must be **idempotent** and must update `date_matches.payment_state` and
 
 - `src/app/api/payments/verify/route.ts`
 - `src/app/api/webhooks/paystack/route.ts`
-- Shared: `src/lib/payments/payment-service.ts` →
+- Shared: `src/lib/payments/payment-verification.ts` →
   `markPaymentPaid(reference, source, rawPayload)` used by both.
 
 ## Shared core: `markPaymentPaid`
@@ -77,7 +77,7 @@ transaction:
 
 ## Steps
 
-1. Write `markPaymentPaid` in `payment-service.ts` with a DB transaction +
+1. Write `markPaymentPaid` in `payment-verification.ts` with a DB transaction +
    the "already paid" early return.
 2. Write the verify route.
 3. Write the webhook route (raw body + signature).
@@ -120,11 +120,11 @@ transaction:
 
 ## Done when
 
-- [ ] Webhook signature verified; bad signatures rejected.
-- [ ] `markPaymentPaid` is idempotent (run 3× = same state).
-- [ ] Amount/currency/metadata mismatches never mark paid.
-- [ ] One payment → `paid_waiting_for_other`; two → `both_paid`.
-- [ ] Payer's slot confirmation timestamp gets set.
+- [x] Webhook signature verified; bad signatures rejected.
+- [x] `markPaymentPaid` is idempotent (run 3× = same state).
+- [x] Amount/currency/metadata mismatches never mark paid.
+- [x] One payment → `paid_waiting_for_other`; two → `both_paid`.
+- [x] Payer's slot confirmation timestamp gets set.
 
 ## Rollback
 

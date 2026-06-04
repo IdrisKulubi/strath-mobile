@@ -1,4 +1,5 @@
 import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
+import { resolvePaymentActor } from "@/lib/payments/payment-auth";
 import { assertPaymentEnv, getPaymentConfig } from "@/lib/payments/config";
 import { initializeTransaction } from "@/lib/payments/paystack-client";
 import { assessPaymentSessionPayability } from "@/lib/payments/payment-payability";
@@ -12,7 +13,8 @@ import type { CreatePaymentSessionResult } from "@/lib/payments/payment-session-
 
 export interface CreatePaymentSessionInput {
     dateMatchId: string;
-    userId: string;
+    userId?: string;
+    paymentToken?: string;
     /** Dev-only: allow paying when payment_state is still not_required */
     devForcePayability?: boolean;
 }
@@ -25,6 +27,17 @@ function buildCallbackUrl(): string {
 export async function createPaymentSession(
     input: CreatePaymentSessionInput,
 ): Promise<CreatePaymentSessionResult> {
+    const actor = resolvePaymentActor({
+        sessionUserId: input.userId,
+        paymentToken: input.paymentToken,
+        dateMatchId: input.dateMatchId,
+    });
+
+    if (!actor) {
+        return { status: "forbidden" };
+    }
+
+    const userId = actor.userId;
     const paymentsEnabled = await isFeatureEnabled(APP_FEATURE_KEYS.paymentsEnabled, false);
 
     const dateMatch = await findDateMatchById(input.dateMatchId);
@@ -32,17 +45,11 @@ export async function createPaymentSession(
         return { status: "not_found" };
     }
 
-    const isParticipant =
-        dateMatch.userAId === input.userId || dateMatch.userBId === input.userId;
-    if (!isParticipant) {
-        return { status: "forbidden" };
-    }
-
-    const userPayment = await findUserPaymentForMatch(input.dateMatchId, input.userId);
+    const userPayment = await findUserPaymentForMatch(input.dateMatchId, userId);
 
     const payability = assessPaymentSessionPayability({
         dateMatch,
-        userId: input.userId,
+        userId,
         paymentsEnabled,
         userPayment,
         devForcePayability: input.devForcePayability,
@@ -58,7 +65,7 @@ export async function createPaymentSession(
 
     assertPaymentEnv();
 
-    const email = await findUserEmail(input.userId);
+    const email = await findUserEmail(userId);
     if (!email) {
         return {
             status: "conflict",
@@ -69,7 +76,7 @@ export async function createPaymentSession(
 
     const { reference } = await ensurePendingPaystackPayment({
         dateMatchId: input.dateMatchId,
-        userId: input.userId,
+        userId,
     });
 
     const paystack = await initializeTransaction({
@@ -77,7 +84,7 @@ export async function createPaymentSession(
         reference,
         callbackUrl: buildCallbackUrl(),
         dateMatchId: input.dateMatchId,
-        userId: input.userId,
+        userId,
     });
 
     return {

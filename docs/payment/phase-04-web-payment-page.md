@@ -1,6 +1,6 @@
 # Phase 4 — Hosted `/payments` web page + callback
 
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 **Depends on:** Phases 2, 3
 **User-visible:** Yes (a web page; not wired into the app until phase 10)
 
@@ -93,11 +93,13 @@ it for state.** Steps:
 
 ## Done when
 
-- [ ] `/payments` renders correct summary from a signed token only.
-- [ ] "Pay" reaches Paystack checkout via create-session.
-- [ ] Callback reads the reference and shows success/failure + deep-link button.
-- [ ] No raw `userId`/`dateMatchId` in any URL.
-- [ ] Copy uses "Date Setup Fee", avoids subscription/unlock language.
+- [x] `/payments` renders correct summary from a signed token only.
+- [x] "Pay" reaches Paystack checkout via create-session (with `paymentToken` body).
+- [x] Callback reads the reference and shows success/failure + deep-link button.
+- [x] No raw `userId`/`dateMatchId` in any URL.
+- [x] Copy uses "Date Setup Fee", avoids subscription/unlock language.
+
+**Also shipped:** `GET /api/payments/checkout?token=...`, token auth on `create-session`, `print-payment-page-url.ts` helper.
 
 ## Rollback
 

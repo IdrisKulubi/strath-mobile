@@ -124,8 +124,8 @@ Tick these off as phases land.
 - [ ] Phase 1 — DB schema + flag
 - [x] Phase 2 — Paystack client + token
 - [x] Phase 3 — create-session API
-- [ ] Phase 4 — web payment page
-- [ ] Phase 5 — verify + webhook
+- [x] Phase 4 — web payment page
+- [x] Phase 5 — verify + webhook
 - [ ] Phase 6 — status API
 - [ ] Phase 7 — confirm gate
 - [ ] Phase 8 — expiry cron + credit
