@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNotNull, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, notInArray, or, sql } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import { db as readDb } from "@/lib/db";
@@ -15,6 +15,7 @@ import {
     userMatchSignals,
 } from "@/db/schema";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
+import { faceVerifiedProfileWhereClause } from "@/lib/matchmaking-pool-eligibility";
 import { collectUsersIPassedIds } from "@/lib/matching/candidate-pool-policy";
 import {
     canonicalizePairUsers,
@@ -579,13 +580,7 @@ async function getEligibleCandidateProfiles(viewerUserId: string, filters: Brows
             filters.course ? eq(profiles.course, filters.course) : undefined,
             filters.ageMin ? gte(profiles.age, filters.ageMin) : undefined,
             filters.ageMax ? sql`${profiles.age} <= ${filters.ageMax}` : undefined,
-            filters.verifiedOnly
-                ? or(eq(profiles.faceVerificationStatus, FACE_VERIFICATION_STATUSES.VERIFIED), isNotNull(profiles.faceVerifiedAt))
-                : or(
-                    eq(profiles.faceVerificationStatus, FACE_VERIFICATION_STATUSES.VERIFIED),
-                    isNotNull(profiles.faceVerifiedAt),
-                    eq(profiles.waitlistStatus, "admitted"),
-                ),
+            faceVerifiedProfileWhereClause(),
             targetGenders.length > 0 ? inArray(profiles.gender, targetGenders) : undefined,
         ),
         with: { user: true },
