@@ -204,6 +204,7 @@ export default function DatesScreen() {
                 <ActionRequiredBanner
                     partnerFirstName={activeHold.partner.firstName ?? 'your match'}
                     slot={activeHold.slotConfirmation}
+                    dateMatchId={activeHold.dateMatchId}
                     onPress={() => setConfirmModalVisible(true)}
                 />
             ) : null}

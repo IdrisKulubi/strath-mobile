@@ -17,6 +17,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { MutualDate, ARRANGEMENT_STATUS_LABELS, isChatUnlocked } from '@/hooks/use-date-requests';
 import { MeetupSlotConfirm } from '@/components/dates/meetup-slot-confirm';
 import { PaymentCreditActions } from '@/components/dates/payment-credit-actions';
+import { PaymentStatusBanner } from '@/components/dates/payment-status-banner';
 import { RADIUS, SPACING } from '@/lib/design-tokens';
 
 interface ConfirmedMatchCardProps {
@@ -152,6 +153,15 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
 
             {match.arrangementStatus === 'expired' && match.legacyDateMatchId ? (
                 <PaymentCreditActions dateMatchId={match.legacyDateMatchId} />
+            ) : null}
+
+            {match.legacyDateMatchId ? (
+                <PaymentStatusBanner
+                    dateMatchId={match.legacyDateMatchId}
+                    partnerFirstName={match.withUser.firstName}
+                    viewerSlotConfirmed={Boolean(match.viewerSlotConfirmed)}
+                    partnerSlotConfirmed={Boolean(match.partnerSlotConfirmed)}
+                />
             ) : null}
 
             {match.needsSlotConfirmation && match.confirmBy ? (

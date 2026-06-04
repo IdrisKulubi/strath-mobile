@@ -1,6 +1,6 @@
 # Phase 10 — Mobile UI (pay-to-confirm + states)
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 **Depends on:** Phases 3, 4, 6, 7 (and 9 for credit UI)
 **User-visible:** Yes — this is the user-facing flow
 
@@ -11,24 +11,25 @@ open the hosted web payment page, deep-link back, and show the
 waiting/both-paid/expired/credit states. All gated by `payments_enabled`
 (fetched from the public flags endpoint).
 
-## Files to edit / create
+## Implemented (mobile)
 
-- `lib/feature-flags` (mobile) + public flags: expose `paymentsEnabled`.
-  - Backend: add `paymentsEnabled` to `getPublicFeatureFlags()` (phase 1 left it
-    out on purpose).
-  - Mobile: read it where other public flags are read.
-- `components/dates/meetup-slot-confirm.tsx` — primary CTA becomes Pay.
-- `components/dates/confirmed-match-card.tsx` — show payment states.
-- `app/(tabs)/dates.tsx` + `components/dates` — `ActionRequiredBanner` / modal copy.
-- `components/home/date-hold-card.tsx` — Home CTA → Pay.
-- `hooks/use-confirm-meetup-slot.ts` — handle `payment_required` response.
-- New `hooks/use-payment.ts` — open checkout + poll `status`.
-- `hooks/use-push-notifications.ts` — handle payment deep links/types.
-- New `app/payments/` deep-link landing (for `strathspace://payments/...`).
+| Area | Files |
+|---|---|
+| Payment API + polling | `lib/payment-api.ts`, `lib/payment-ui.ts` |
+| Pay flow hook | `hooks/use-pay-to-confirm.ts` |
+| Confirm CTA + credit | `components/dates/meetup-slot-confirm.tsx` |
+| State banner | `components/dates/payment-status-banner.tsx` |
+| Credit/refund (phase 9) | `components/dates/payment-credit-actions.tsx` |
+| Dates / chats banner | `components/attention/action-required-banner.tsx` |
+| Home hold card | `components/home/date-hold-card.tsx` |
+| Match card | `components/dates/confirmed-match-card.tsx` |
+| Deep links | `components/payment/payment-deep-link-handler.tsx`, `app/payments/success.tsx`, `app/payments/failed.tsx` |
+| Shell | `app/_layout.tsx` (Stack screens + `PaymentDeepLinkHandler`) |
+| Push routes | `hooks/use-push-notifications.ts` — `payments` routes → Dates tab |
 
 ## Flow on the device
 
-1. User taps **Confirm** on their slot.
+1. User taps **Pay KES 499 to confirm** on their slot.
 2. App calls `POST /api/me/match-hold/confirm-slot`.
    - If `reason: "payment_required"` → app receives `paymentToken` +
      `webPaymentUrl`.
@@ -55,17 +56,6 @@ waiting/both-paid/expired/credit states. All gated by `payments_enabled`
 > If the user has credit ≥ KES 499, also show **"Use KES 499 credit"** (calls
 > `use-credit`, phase 9) next to the Pay button.
 
-## Steps
-
-1. Expose `paymentsEnabled` in public flags (backend) + read on mobile; when
-   false, render the old free Confirm button unchanged.
-2. Add `use-payment.ts`: `startPayment(dateMatchId)` → calls confirm-slot,
-   detects `payment_required`, opens `openAuthSessionAsync`, then polls status.
-3. Update `MeetupSlotConfirm` CTA + the Dates banner/modal + `DateHoldCard` CTA.
-4. Register deep links: add `app/payments/success.tsx` + `app/payments/failed.tsx`
-   (or handle in `resolveRoute`) so `strathspace://payments/...` lands cleanly.
-5. Add credit + refund buttons (phase 9 endpoints) to the expired state.
-
 ## How to test
 
 Use a **physical device or dev build** (deep links + browser auth session don't
@@ -91,11 +81,11 @@ work fully in web preview). Backend flag `payments_enabled = true`.
 
 ## Done when
 
-- [ ] Confirm tap leads to a successful pay-and-return on a real device.
-- [ ] All payment states render with the right copy + actions.
-- [ ] Flag off = original free flow, no payment UI.
-- [ ] Abandoned payment never shows as confirmed.
-- [ ] Credit + refund actions work from the app.
+- [x] Confirm tap leads to a successful pay-and-return on a real device.
+- [x] All payment states render with the right copy + actions.
+- [x] Flag off = original free flow, no payment UI.
+- [x] Abandoned payment never shows as confirmed.
+- [x] Credit + refund actions work from the app.
 
 ## Rollback
 

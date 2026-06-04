@@ -12,6 +12,9 @@ import {
     MatchHoldCancelReason,
     useCancelMatchHold,
 } from '@/hooks/use-daily-matches';
+import { usePaymentStatus } from '@/hooks/use-payment-status';
+import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
+import { formatPaymentAmount } from '@/lib/payment-ui';
 import { formatMeetupSlot } from '@/lib/meetup-slot';
 
 interface DateHoldCardProps {
@@ -27,7 +30,13 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
 
     const partnerName = hold.partner.firstName ?? 'your match';
 
-    const copy = useMemo(() => buildCopy(hold), [hold]);
+    const { paymentsEnabled } = usePaymentsEnabled();
+    const { data: paymentStatus } = usePaymentStatus(hold.dateMatchId ?? undefined);
+
+    const copy = useMemo(
+        () => buildCopy(hold, paymentsEnabled, paymentStatus?.amount, paymentStatus?.currency),
+        [hold, paymentsEnabled, paymentStatus?.amount, paymentStatus?.currency],
+    );
 
     const handlePrimaryCta = useCallback(() => {
         if (copy.primaryCta?.kind === 'feedback' && hold.dateMatchId) {
@@ -341,8 +350,19 @@ interface HoldCopy {
     primaryCta: { label: string; kind: 'view' | 'feedback' } | null;
 }
 
-function buildCopy(hold: MatchHold): HoldCopy {
+function buildCopy(
+    hold: MatchHold,
+    paymentsEnabled: boolean,
+    amount?: number,
+    currency?: string,
+): HoldCopy {
     const name = hold.partner.firstName ?? 'them';
+    const amountLabel = formatPaymentAmount(amount ?? 499, currency ?? 'KES');
+    const needsPayConfirm =
+        paymentsEnabled
+        && hold.slotConfirmation?.needsSlotConfirmation
+        && !hold.slotConfirmation.viewerSlotConfirmed;
+
     switch (hold.status) {
         case 'mutual':
             return {
@@ -350,28 +370,42 @@ function buildCopy(hold: MatchHold): HoldCopy {
                 statusIcon: 'heart',
                 title: `You and ${name} both said yes`,
                 subtitle: hold.slotConfirmation?.needsSlotConfirmation
-                    ? 'Confirm your assigned StrathSpace date below. New intros stay paused until this is settled.'
+                    ? needsPayConfirm
+                        ? `Pay ${amountLabel} on Dates to confirm your campus time. New intros stay paused until this is settled.`
+                        : 'Confirm your assigned StrathSpace date below. New intros stay paused until this is settled.'
                     : 'Say hi in chat while your date is lined up. New intros are paused for this match.',
                 footnote: 'You can cancel any time and we will keep matching you.',
-                primaryCta: { label: 'Message in Dates', kind: 'view' },
+                primaryCta: needsPayConfirm
+                    ? { label: `Pay ${amountLabel} on Dates`, kind: 'view' }
+                    : { label: 'Message in Dates', kind: 'view' },
             };
         case 'being_arranged':
             return {
                 statusLabel: hold.slotConfirmation?.needsSlotConfirmation
-                    ? 'Confirm your date'
+                    ? needsPayConfirm
+                        ? 'Pay to confirm'
+                        : 'Confirm your date'
                     : 'Arranging your date',
                 statusIcon: hold.slotConfirmation?.needsSlotConfirmation ? 'calendar' : 'calendar-outline',
                 title: hold.slotConfirmation?.needsSlotConfirmation
-                    ? `Confirm your date with ${name}`
+                    ? needsPayConfirm
+                        ? `Pay ${amountLabel} to confirm with ${name}`
+                        : `Confirm your date with ${name}`
                     : `Setting up your date with ${name}`,
                 subtitle: hold.slotConfirmation?.needsSlotConfirmation
-                    ? 'Your campus time is assigned. Confirm below to continue.'
+                    ? needsPayConfirm
+                        ? 'Your campus time is assigned. Complete payment on Dates to continue.'
+                        : 'Your campus time is assigned. Confirm below to continue.'
                     : 'Your date is being finalized. New intros stay paused.',
                 footnote: hold.slotConfirmation?.needsSlotConfirmation
-                    ? 'Messaging unlocks after you confirm.'
+                    ? needsPayConfirm
+                        ? 'Messaging unlocks after you pay and confirm.'
+                        : 'Messaging unlocks after you confirm.'
                     : 'Open Dates for details while your plan is finalized.',
                 primaryCta: hold.slotConfirmation?.needsSlotConfirmation
-                    ? null
+                    ? needsPayConfirm
+                        ? { label: `Pay ${amountLabel} on Dates`, kind: 'view' }
+                        : null
                     : { label: 'See arrangement', kind: 'view' },
             };
         case 'upcoming':

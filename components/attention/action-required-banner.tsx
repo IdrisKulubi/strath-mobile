@@ -3,21 +3,28 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
+import { usePaymentStatus } from '@/hooks/use-payment-status';
+import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
+import { formatPaymentAmount } from '@/lib/payment-ui';
 import { formatConfirmBy, formatMeetupSlot } from '@/lib/meetup-slot';
 import type { SlotConfirmationState } from '@/hooks/use-daily-matches';
 
 interface ActionRequiredBannerProps {
     partnerFirstName: string;
     slot: SlotConfirmationState;
+    dateMatchId?: string | null;
     onPress: () => void;
 }
 
 export function ActionRequiredBanner({
     partnerFirstName,
     slot,
+    dateMatchId,
     onPress,
 }: ActionRequiredBannerProps) {
     const { colors } = useTheme();
+    const { paymentsEnabled } = usePaymentsEnabled();
+    const { data: paymentStatus } = usePaymentStatus(dateMatchId ?? undefined);
 
     if (!slot.needsSlotConfirmation || slot.viewerSlotConfirmed || !slot.confirmWindowOpen) {
         return null;
@@ -25,14 +32,26 @@ export function ActionRequiredBanner({
 
     const slotLabel = slot.scheduledAt ? formatMeetupSlot(slot.scheduledAt) : 'your campus date';
     const confirmByLabel = slot.confirmBy ? formatConfirmBy(slot.confirmBy) : null;
+    const amountLabel = formatPaymentAmount(
+        paymentStatus?.amount ?? 499,
+        paymentStatus?.currency ?? 'KES',
+    );
+
+    const usePaymentCopy = paymentsEnabled && Boolean(dateMatchId);
 
     const title = slot.partnerSlotConfirmed
         ? `${partnerFirstName} confirmed — your turn`
-        : `Confirm your date with ${partnerFirstName}`;
+        : usePaymentCopy
+          ? `Pay ${amountLabel} to confirm`
+          : `Confirm your date with ${partnerFirstName}`;
 
     const subtitle = slot.partnerSlotConfirmed
-        ? `Lock in ${slotLabel}${confirmByLabel ? ` by ${confirmByLabel}` : ''}.`
-        : `${slotLabel}${confirmByLabel ? ` · Confirm by ${confirmByLabel}` : ''}`;
+        ? usePaymentCopy
+            ? `Pay ${amountLabel} to lock in ${slotLabel}${confirmByLabel ? ` by ${confirmByLabel}` : ''}.`
+            : `Lock in ${slotLabel}${confirmByLabel ? ` by ${confirmByLabel}` : ''}.`
+        : usePaymentCopy
+          ? `Both said yes. Confirm with a one-time ${amountLabel} setup fee.`
+          : `${slotLabel}${confirmByLabel ? ` · Confirm by ${confirmByLabel}` : ''}`;
 
     return (
         <Pressable
@@ -49,7 +68,7 @@ export function ActionRequiredBanner({
             ]}
         >
             <View style={[styles.iconWrap, { backgroundColor: `${colors.primary}22` }]}>
-                <Ionicons name="calendar" size={18} color={colors.primary} />
+                <Ionicons name={usePaymentCopy ? 'card-outline' : 'calendar'} size={18} color={colors.primary} />
             </View>
             <View style={styles.textWrap}>
                 <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>

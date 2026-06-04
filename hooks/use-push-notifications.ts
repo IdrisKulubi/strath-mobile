@@ -40,7 +40,12 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
 }
 
 function resolveRoute(data: NotificationPayload): string | null {
-    if (data.route) return data.route;
+    if (data.route) {
+        if (data.route.includes('payments')) {
+            return '/(tabs)/dates';
+        }
+        return data.route;
+    }
 
     switch (data.type) {
         case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
