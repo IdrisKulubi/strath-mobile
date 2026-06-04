@@ -22,6 +22,7 @@ import {
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
+import { createAdminMutualMatchBetweenUsers } from "@/lib/services/admin-mutual-match-service";
 
 const BUSY_PAIR_STATUSES = ["active", "queued", "mutual"] as const;
 const HOLD_MUTUAL_STATUSES = ["mutual", "being_arranged", "upcoming"] as const;
@@ -242,7 +243,7 @@ export async function getRestoreMatchHistoryForUser(
 }
 
 export type AdminRestoreMatchResult =
-    | { ok: true; pairId: string }
+    | { ok: true; pairId: string; mutualMatchId?: string; dateMatchId?: string }
     | { ok: false; error: string; hint?: string };
 
 const RELEASE_HOLD_HINT =
@@ -445,21 +446,44 @@ export async function adminRestoreMatchBetweenUsers(input: {
     });
 }
 
-/** Create a brand-new intro between any two users (no past connection required). */
+/** Create a mutual match between any two users (both interested, meetup flow starts). */
 export async function adminCreateMatchBetweenUsers(input: {
     userAId: string;
     userBId: string;
     note?: string;
     forceReleaseHolds?: boolean;
 }): Promise<AdminRestoreMatchResult> {
-    return adminMatchBetweenUsers({
-        userAId: input.userAId,
-        userBId: input.userBId,
+    const session = await requireAdmin();
+
+    const { userAId, userBId } = input;
+    if (!userAId || !userBId || userAId === userBId) {
+        return { ok: false, error: "Choose two different users" };
+    }
+
+    const [summaryA, summaryB] = await Promise.all([
+        loadUserSummary(userAId),
+        loadUserSummary(userBId),
+    ]);
+    if (!summaryA || !summaryB) {
+        return { ok: false, error: "One or both users were not found" };
+    }
+
+    const blockReason = await getBlockingReasonBetweenUsers(userAId, userBId);
+    const result = await createAdminMutualMatchBetweenUsers({
+        userAId,
+        userBId,
+        adminUserId: session.user.id,
         note: input.note,
         forceReleaseHolds: input.forceReleaseHolds,
-        source: "admin_curated",
-        defaultNote: "Admin curated intro",
-        pushTitle: "We found someone for you",
-        pushBody: "Open StrathSpace to see the match we curated for you.",
+        blockReason,
     });
+
+    if (result.ok) {
+        revalidatePath("/admin/restore-match");
+        revalidatePath("/admin/matchmaking");
+        revalidatePath("/admin/pending-dates");
+        revalidatePath("/admin/date-requests");
+    }
+
+    return result;
 }

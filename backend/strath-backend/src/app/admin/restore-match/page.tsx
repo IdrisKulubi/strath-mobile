@@ -14,8 +14,8 @@ export default function AdminRestoreMatchPage() {
                         Restore & create match
                     </h1>
                     <p className="mt-1 max-w-2xl text-sm leading-relaxed text-white/50">
-                        Create a new intro between any two users, or restore one after a mistaken pass
-                        or cancel. Both people get a candidate card in the app and a push notification.
+                        Create a mutual match between any two users, or restore a pending intro after a
+                        mistaken pass or cancel.
                     </p>
                 </div>
             </div>

@@ -172,7 +172,10 @@ export function RestoreMatchPanel() {
     };
 
     const runMatchAction = (
-        action: () => Promise<{ ok: true; pairId: string } | { ok: false; error: string; hint?: string }>,
+        action: () => Promise<
+            | { ok: true; pairId: string; mutualMatchId?: string; dateMatchId?: string }
+            | { ok: false; error: string; hint?: string }
+        >,
         successTitle: string,
         onSuccess?: () => void,
     ) => {
@@ -183,10 +186,10 @@ export function RestoreMatchPanel() {
                     notifyMatchBlocked(result.error, result.hint);
                     return;
                 }
-                toast.success(
-                    successTitle,
-                    `New pair ${result.pairId.slice(0, 8)}… — both users were notified.`,
-                );
+                const successDetail = result.mutualMatchId
+                    ? `Mutual match ${result.mutualMatchId.slice(0, 8)}… — both users were notified and can confirm their meetup slot in the app.`
+                    : `New intro ${result.pairId.slice(0, 8)}… — both users were notified.`;
+                toast.success(successTitle, successDetail);
                 onSuccess?.();
                 router.refresh();
             } catch (err) {
@@ -216,7 +219,7 @@ export function RestoreMatchPanel() {
                     note: note.trim() || undefined,
                     forceReleaseHolds: forceRelease,
                 }),
-            "Match created",
+            "Mutual match created",
         );
     };
 
@@ -255,10 +258,10 @@ export function RestoreMatchPanel() {
                         <Heart className="size-4" strokeWidth={2} />
                     </div>
                     <div>
-                        <h2 className="text-sm font-semibold text-white">Create match between two users</h2>
+                        <h2 className="text-sm font-semibold text-white">Create mutual match</h2>
                         <p className="mt-1 text-[12px] leading-relaxed text-white/45">
-                            No past connection needed — pick any two people (including admin accounts).
-                            They will both see a new intro in the app.
+                            Pick any two people (including admin accounts). They are matched immediately
+                            as mutual — not a pending intro — and can confirm their meetup slot in the app.
                         </p>
                     </div>
                 </div>
@@ -315,7 +318,7 @@ export function RestoreMatchPanel() {
                     className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#B8327A] px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 sm:w-auto"
                 >
                     {pending ? <Loader2 className="size-4 animate-spin" /> : <Heart className="size-4" />}
-                    Create intro
+                    Create mutual match
                     {createUserA && createUserB
                         ? ` for ${createUserA.name} & ${createUserB.name}`
                         : ""}
