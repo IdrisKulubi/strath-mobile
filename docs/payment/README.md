@@ -126,8 +126,8 @@ Tick these off as phases land.
 - [x] Phase 3 — create-session API
 - [x] Phase 4 — web payment page
 - [x] Phase 5 — verify + webhook
-- [ ] Phase 6 — status API
-- [ ] Phase 7 — confirm gate
+- [x] Phase 6 — status API
+- [x] Phase 7 — confirm gate
 - [ ] Phase 8 — expiry cron + credit
 - [ ] Phase 9 — refund + credit APIs
 - [ ] Phase 10 — mobile UI

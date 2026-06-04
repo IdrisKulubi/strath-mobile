@@ -29,6 +29,11 @@ export { assessPaymentSessionPayability } from "@/lib/payments/payment-payabilit
 export { createPaymentSession } from "@/lib/payments/payment-session-service";
 export type { CreatePaymentSessionInput } from "@/lib/payments/payment-session-service";
 
+export { getPaymentsEnabled } from "@/lib/payments/payment-flags";
+export { buildDateMatchPaymentInsert } from "@/lib/payments/payment-init";
+export { getPaymentStatusForUser } from "@/lib/payments/payment-status-service";
+export type { PaymentStatusResult } from "@/lib/payments/payment-status-types";
+
 export {
     markPaymentPaid,
     validatePaystackVerification,

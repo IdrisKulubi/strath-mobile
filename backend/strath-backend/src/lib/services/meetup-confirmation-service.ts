@@ -20,6 +20,15 @@ import { syncMutualMatchFromDateMatch } from "@/lib/services/mutual-match-servic
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
+import { getPaymentConfig } from "@/lib/payments/config";
+import { getPaymentsEnabled } from "@/lib/payments/payment-flags";
+import { buildDateMatchPaymentInsert } from "@/lib/payments/payment-init";
+import { findUserPaymentForMatch } from "@/lib/payments/payment-repository";
+import { signPaymentToken } from "@/lib/payments/payment-token";
+import {
+    shouldBlockFinalizeForPayment,
+    shouldRequirePaymentToConfirm,
+} from "@/lib/services/meetup-confirmation-payment";
 import { notifyPartnerAfterSlotConfirm } from "@/lib/services/meetup-push-notifications-service";
 
 export interface SlotConfirmationView {
@@ -145,6 +154,21 @@ export async function tryFinalizeConfirmedMeetup(
     const dateMatchId = row.legacyDateMatchId;
     if (!dateMatchId) return { finalized: false, reason: "no_date_match" };
 
+    const paymentsEnabled = await getPaymentsEnabled();
+    if (paymentsEnabled) {
+        const dateMatch = await db.query.dateMatches.findFirst({
+            where: eq(dateMatches.id, dateMatchId),
+        });
+        if (
+            shouldBlockFinalizeForPayment({
+                paymentsEnabled: true,
+                paymentState: dateMatch?.paymentState,
+            })
+        ) {
+            return { finalized: false, reason: "payment_incomplete" };
+        }
+    }
+
     const location = await getDefaultDateLocation();
     if (!location) {
         console.error(
@@ -202,7 +226,12 @@ export type ConfirmMeetupSlotResult =
     | { status: "expired" }
     | { status: "not_found" }
     | { status: "forbidden" }
-    | { status: "confirm_window_closed" };
+    | { status: "confirm_window_closed" }
+    | {
+          status: "payment_required";
+          paymentToken: string;
+          webPaymentUrl: string;
+      };
 
 export async function confirmMeetupSlot(
     mutualMatchId: string,
@@ -223,6 +252,29 @@ export async function confirmMeetupSlot(
 
     if (!row.slotConfirmBy || !isConfirmWindowOpen(row.slotConfirmBy)) {
         return { status: "confirm_window_closed" };
+    }
+
+    const paymentsEnabled = await getPaymentsEnabled();
+    if (paymentsEnabled) {
+        const dateMatchId = row.legacyDateMatchId;
+        if (!dateMatchId) {
+            return { status: "not_found" };
+        }
+
+        const userPayment = await findUserPaymentForMatch(dateMatchId, userId);
+        if (
+            shouldRequirePaymentToConfirm({
+                paymentsEnabled: true,
+                userPaymentStatus: userPayment?.status,
+            })
+        ) {
+            const { webPaymentUrl } = getPaymentConfig();
+            return {
+                status: "payment_required",
+                paymentToken: signPaymentToken({ dateMatchId, userId }),
+                webPaymentUrl,
+            };
+        }
     }
 
     const now = new Date();
@@ -327,6 +379,11 @@ export async function initializeMeetupSlotForMutual(
 ): Promise<{ dateMatchId: string; scheduledAt: Date; confirmBy: Date; slot: MeetupSlotKind }> {
     const mutualAt = input.mutualAt ?? new Date();
     const assignment = assignMeetupSlot(mutualAt);
+    const paymentsEnabled = await getPaymentsEnabled();
+    const paymentFields = buildDateMatchPaymentInsert({
+        confirmBy: assignment.confirmBy,
+        enabled: paymentsEnabled,
+    });
 
     const [dateRow] = await tx
         .insert(dateMatches)
@@ -341,6 +398,7 @@ export async function initializeMeetupSlotForMutual(
             userAConfirmed: false,
             userBConfirmed: false,
             createdAt: mutualAt,
+            ...paymentFields,
         })
         .returning({ id: dateMatches.id });
 

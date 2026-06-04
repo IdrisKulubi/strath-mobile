@@ -1,6 +1,6 @@
 # Phase 7 — Pay-to-confirm backend gate
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 **Depends on:** Phases 1, 5, 6
 **User-visible:** Behavior change **only when `payments_enabled` is ON**
 
@@ -60,9 +60,10 @@ Key files (already exist):
 
 ## Steps
 
-1. Add a small helper `getPaymentEnabled()` (cached read of the flag) to avoid
-   hammering the DB in hot paths.
-2. Edit `initializeMeetupSlotForMutual` to set payment fields when enabled.
+1. Add a small helper `getPaymentsEnabled()` (cached read of the flag) in
+   `payment-flags.ts` to avoid hammering the DB in hot paths.
+2. Edit `initializeMeetupSlotForMutual` **and** `candidate-pairs-service.ts`
+   (primary mutual-creation path) to set payment fields when enabled.
 3. Edit `confirmMeetupSlot` to add the payment guard.
 4. Edit `tryFinalizeConfirmedMeetup` to require `both_paid` when enabled.
 5. Edit the confirm-slot route to surface `payment_required` + a fresh token.
@@ -104,10 +105,10 @@ Run two scenarios: **flag OFF** (regression) and **flag ON** (new gate).
 
 ## Done when
 
-- [ ] Flag OFF → identical to today (regression passes).
-- [ ] Flag ON → confirming without paying returns `payment_required` + token.
-- [ ] Paying sets the slot confirmation (via phase 5) and re-confirm succeeds.
-- [ ] Date only finalizes when `both_paid`.
+- [x] Flag OFF → identical to today (regression passes).
+- [x] Flag ON → confirming without paying returns `payment_required` + token.
+- [x] Paying sets the slot confirmation (via phase 5) and re-confirm succeeds.
+- [x] Date only finalizes when `both_paid`.
 
 ## Rollback
 

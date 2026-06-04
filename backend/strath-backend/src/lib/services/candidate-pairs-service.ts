@@ -21,6 +21,8 @@ import {
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
 import { expireQueuedPairsForUser, isUserOnMatchHold } from "@/lib/services/match-hold-service";
+import { getPaymentsEnabled } from "@/lib/payments/payment-flags";
+import { buildDateMatchPaymentInsert } from "@/lib/payments/payment-init";
 import { assignMeetupSlot } from "@/lib/services/meetup-slot-service";
 import { isAdminMatchPreviewUser, resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
 import { sendPushNotification } from "@/lib/notifications";
@@ -1477,6 +1479,11 @@ export async function respondToCandidatePair(
                 );
                 const mutualAt = new Date();
                 const assignment = assignMeetupSlot(mutualAt);
+                const paymentsEnabled = await getPaymentsEnabled();
+                const paymentFields = buildDateMatchPaymentInsert({
+                    confirmBy: assignment.confirmBy,
+                    enabled: paymentsEnabled,
+                });
                 const [createdMutual] = await tx
                     .insert(mutualMatches)
                     .values({
@@ -1503,6 +1510,7 @@ export async function respondToCandidatePair(
                         userAConfirmed: false,
                         userBConfirmed: false,
                         createdAt: mutualAt,
+                        ...paymentFields,
                     })
                     .returning({ id: dateMatches.id });
                 await tx

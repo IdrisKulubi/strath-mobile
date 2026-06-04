@@ -1,6 +1,6 @@
 # Phase 6 — Payment `status` API
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 **Depends on:** Phases 1, 5
 **User-visible:** No (consumed by the app in phase 10)
 
@@ -69,10 +69,10 @@ GET /api/payments/status?dateMatchId=<id>
 
 ## Done when
 
-- [ ] Returns accurate per-viewer payment state.
-- [ ] Correct from both users' perspectives.
-- [ ] 401/403 enforced.
-- [ ] Cheap enough to poll every few seconds.
+- [x] Returns accurate per-viewer payment state.
+- [x] Correct from both users' perspectives.
+- [x] 401/403 enforced.
+- [x] Cheap enough to poll every few seconds.
 
 ## Rollback
 
