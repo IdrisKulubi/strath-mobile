@@ -1212,10 +1212,6 @@ export async function isAdminCuratedCandidatePair(pairId: string) {
 
 export async function getActiveAdminCuratedCandidatePairsForUser(userId: string) {
     const matchExcludedUserIds = await resolveMatchExcludedUserIds();
-    if (matchExcludedUserIds.has(userId) && !(await isAdminMatchPreviewUser(userId))) {
-        return [];
-    }
-
     const now = new Date();
 
     const curatedRows = await readDb

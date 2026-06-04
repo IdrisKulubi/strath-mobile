@@ -133,8 +133,6 @@ async function getAdminCuratedPairIds() {
 }
 
 async function getPoolData() {
-    const matchExcludedUserIds = await resolveMatchExcludedUserIds();
-
     const rows = await readDb
         .select({
             userId: user.id,
@@ -180,11 +178,7 @@ async function getPoolData() {
         .where(isNull(user.deletedAt))
         .orderBy(desc(user.lastActive), desc(user.createdAt));
 
-    const eligibleRows = rows.filter(
-        (row) =>
-            !matchExcludedUserIds.has(row.userId) &&
-            hasCompletedInitialFaceVerification(row),
-    );
+    const eligibleRows = rows.filter((row) => hasCompletedInitialFaceVerification(row));
 
     const userIds = eligibleRows.map((row) => row.userId);
     const now = new Date();
@@ -589,11 +583,6 @@ export async function createManualCandidatePair(userAId: string, userBId: string
     const session = await requireAdmin();
     if (!userAId || !userBId || userAId === userBId) {
         throw new Error("Choose two different users");
-    }
-
-    const excludedFromPool = await resolveMatchExcludedUserIds();
-    if (excludedFromPool.has(userAId) || excludedFromPool.has(userBId)) {
-        throw new Error("Staff or admin accounts cannot be added to the matchmaking pool.");
     }
 
     const pool = await getPoolData();
