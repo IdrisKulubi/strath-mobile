@@ -26,6 +26,7 @@ import {
     getPaymentUiCopy,
     resolvePaymentUiPhase,
 } from '@/lib/payment-ui';
+import { MeetupRescheduleAfterConfirmHint } from '@/components/dates/meetup-reschedule-after-confirm-hint';
 import { MeetupRescheduleSection } from '@/components/dates/meetup-reschedule-section';
 import { formatConfirmBy, formatMeetupSlot, MEETUP_WINDOWS_COPY } from '@/lib/meetup-slot';
 import type { RescheduleViewerState } from '@/lib/reschedule-types';
@@ -287,6 +288,13 @@ export function MeetupSlotConfirm({
                         {partnerLine}
                     </RNText>
 
+                    <MeetupRescheduleAfterConfirmHint
+                        layout="modal"
+                        reschedule={reschedule}
+                        viewerSlotConfirmed={viewerSlotConfirmed}
+                        confirmWindowOpen={confirmWindowOpen}
+                    />
+
                     {statusBanner}
 
                     {!confirmWindowOpen && !viewerSlotConfirmed ? (
@@ -353,6 +361,13 @@ export function MeetupSlotConfirm({
 
             <RNText style={[styles.partnerLine, { color: colors.mutedForeground }]}>{partnerLine}</RNText>
 
+            <MeetupRescheduleAfterConfirmHint
+                layout="inline"
+                reschedule={reschedule}
+                viewerSlotConfirmed={viewerSlotConfirmed}
+                confirmWindowOpen={confirmWindowOpen}
+            />
+
             {statusBanner}
 
             {viewerSlotConfirmed || paymentPhase === 'paid_waiting' || paymentPhase === 'both_paid' ? (
@@ -416,20 +431,20 @@ const styles = StyleSheet.create({
         width: '100%',
         borderRadius: RADIUS.lg,
         borderWidth: StyleSheet.hairlineWidth,
-        padding: SPACING.comfortable,
-        gap: SPACING.section,
+        padding: SPACING.base,
+        gap: SPACING.compact,
         alignItems: 'center',
     },
     modalBody: {
         width: '100%',
         alignItems: 'center',
-        gap: SPACING.compact,
+        gap: SPACING.tight,
     },
     modalSlotHero: {
         width: '100%',
         alignItems: 'center',
         gap: SPACING.tight,
-        paddingVertical: SPACING.section,
+        paddingVertical: SPACING.base,
         paddingHorizontal: SPACING.base,
         borderRadius: RADIUS.md,
     },

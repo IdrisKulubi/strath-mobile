@@ -84,11 +84,6 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                 borderColor: colors.border,
             }]}
         >
-            <View style={[styles.matchBadge, { backgroundColor: `${colors.primary}18` }]}>
-                <Ionicons name="heart" size={12} color={colors.primary} />
-                <Text style={[styles.matchBadgeText, { color: colors.primary }]}>Mutual</Text>
-            </View>
-
             <Pressable onPress={handleViewProfile} style={styles.headerRow}>
                 <View style={[styles.avatarWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}>
                     {match.withUser.profilePhoto ? (
@@ -106,23 +101,14 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                 <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
             </Pressable>
 
-            {match.withUser.compatibilityReasons && match.withUser.compatibilityReasons.length > 0 && (
-                <View style={[styles.reasonsBlock, {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-                    borderColor: colors.border,
-                }]}>
-                    {match.withUser.compatibilityReasons.slice(0, 2).map((r, i) => (
-                        <Text key={i} style={[styles.reason, { color: colors.mutedForeground }]}>• {r}</Text>
-                    ))}
+            {!match.needsSlotConfirmation ? (
+                <View style={[styles.statusRow, { backgroundColor: `${statusColor}12`, borderColor: `${statusColor}30` }]}>
+                    <PulseDot color={statusColor} />
+                    <Text style={[styles.statusText, { color: statusColor }]}>
+                        {ARRANGEMENT_STATUS_LABELS[match.arrangementStatus]}
+                    </Text>
                 </View>
-            )}
-
-            <View style={[styles.statusRow, { backgroundColor: `${statusColor}12`, borderColor: `${statusColor}30` }]}>
-                <PulseDot color={statusColor} />
-                <Text style={[styles.statusText, { color: statusColor }]}>
-                    {ARRANGEMENT_STATUS_LABELS[match.arrangementStatus]}
-                </Text>
-            </View>
+            ) : null}
 
             {match.arrangementStatus === 'upcoming' && (match.venueName || match.scheduledAt) && (
                 <View style={[styles.scheduledBlock, { backgroundColor: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)', borderColor: 'rgba(16,185,129,0.25)' }]}>
@@ -140,23 +126,11 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                 </View>
             )}
 
-            {match.needsSlotConfirmation && !match.viewerSlotConfirmed && match.partnerSlotConfirmed ? (
-                <Text style={[styles.partnerTurnHint, { color: colors.primary }]}>
-                    {match.withUser.firstName} confirmed — your turn to lock in the date.
-                </Text>
-            ) : null}
-
-            {match.needsSlotConfirmation && match.viewerSlotConfirmed && !match.partnerSlotConfirmed ? (
-                <Text style={[styles.partnerTurnHint, { color: colors.mutedForeground }]}>
-                    You confirmed · Waiting for {match.withUser.firstName} to confirm.
-                </Text>
-            ) : null}
-
             {match.arrangementStatus === 'expired' && match.legacyDateMatchId ? (
                 <PaymentCreditActions dateMatchId={match.legacyDateMatchId} />
             ) : null}
 
-            {match.legacyDateMatchId ? (
+            {!match.needsSlotConfirmation && match.legacyDateMatchId ? (
                 <PaymentStatusBanner
                     dateMatchId={match.legacyDateMatchId}
                     partnerFirstName={match.withUser.firstName}
@@ -176,6 +150,7 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                     partnerSlotConfirmed={Boolean(match.partnerSlotConfirmed)}
                     confirmWindowOpen={Boolean(match.confirmWindowOpen)}
                     reschedule={match.reschedule}
+                    style={styles.flushConfirm}
                 />
             ) : match.reschedule?.canRequest || match.reschedule?.pending ? (
                 <MeetupRescheduleSection
@@ -244,7 +219,6 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
 const styles = StyleSheet.create({
     card: {
         borderRadius: 20,
-        borderWidth: 1,
         padding: 16,
         gap: 12,
         marginHorizontal: 16,
@@ -317,6 +291,13 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         paddingHorizontal: 12,
         paddingVertical: 10,
+    },
+    flushConfirm: {
+        borderWidth: 0,
+        backgroundColor: 'transparent',
+        paddingHorizontal: 0,
+        paddingTop: 0,
+        paddingBottom: 0,
     },
     mutualHintBlock: {
         borderRadius: 12,

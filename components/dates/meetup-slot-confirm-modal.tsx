@@ -130,20 +130,21 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         flexGrow: 1,
-        justifyContent: 'center',
+        justifyContent: 'flex-start',
         paddingHorizontal: SPACING.screenX,
-        paddingVertical: SPACING.section,
+        paddingTop: SPACING.large,
+        paddingBottom: SPACING.base,
     },
     content: {
         alignItems: 'center',
-        gap: SPACING.section,
+        gap: SPACING.base,
         width: '100%',
         maxWidth: 400,
         alignSelf: 'center',
     },
     header: {
         alignItems: 'center',
-        gap: SPACING.tight,
+        gap: SPACING.micro,
         paddingHorizontal: SPACING.compact,
     },
     headerTitle: {
@@ -158,13 +159,13 @@ const styles = StyleSheet.create({
     },
     partnerHero: {
         alignItems: 'center',
-        gap: SPACING.compact,
+        gap: SPACING.tight,
         paddingHorizontal: SPACING.compact,
     },
     avatarWrap: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
+        width: 64,
+        height: 64,
+        borderRadius: 32,
         borderWidth: StyleSheet.hairlineWidth,
         overflow: 'hidden',
     },
