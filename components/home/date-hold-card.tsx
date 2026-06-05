@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown, FadeIn, SlideInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { CancelHoldSheet } from '@/components/home/cancel-hold-sheet';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
@@ -16,7 +17,6 @@ import { usePaymentStatus } from '@/hooks/use-payment-status';
 import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
 import { formatPaymentAmount } from '@/lib/payment-ui';
 import { formatMeetupSlot } from '@/lib/meetup-slot';
-
 interface DateHoldCardProps {
     hold: MatchHold;
 }
@@ -52,9 +52,9 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
         router.push('/(tabs)/dates');
     }, [copy.primaryCta, hold.dateMatchId, partnerName, router]);
 
-    const handleCancel = (reason: MatchHoldCancelReason, notes?: string) => {
+    const handleCancel = (reason: MatchHoldCancelReason) => {
         cancel.mutate(
-            { mutualMatchId: hold.mutualMatchId, reason, notes: notes ?? null },
+            { mutualMatchId: hold.mutualMatchId, reason, notes: null },
             {
                 onSuccess: () => {
                     toast.show({
@@ -216,128 +216,6 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                 onConfirm={handleCancel}
             />
         </Animated.View>
-    );
-}
-
-interface CancelHoldSheetProps {
-    visible: boolean;
-    partnerName: string;
-    isSubmitting: boolean;
-    onClose: () => void;
-    onConfirm: (reason: MatchHoldCancelReason, notes?: string) => void;
-}
-
-const REASONS: { id: MatchHoldCancelReason; label: string }[] = [
-    { id: 'no_longer_interested', label: 'No longer interested' },
-    { id: 'scheduling_conflict', label: 'Scheduling conflict' },
-    { id: 'safety_concern', label: 'Safety concern' },
-    { id: 'other', label: 'Other' },
-];
-
-function CancelHoldSheet({
-    visible,
-    partnerName,
-    isSubmitting,
-    onClose,
-    onConfirm,
-}: CancelHoldSheetProps) {
-    const { colors, isDark } = useTheme();
-    const [selected, setSelected] = useState<MatchHoldCancelReason | null>(null);
-
-    const sheetBg = colors.card;
-    const handleColor = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.15)';
-
-    return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-            <Animated.View entering={FadeIn.duration(180)} style={styles.modalBackdrop}>
-                <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-                <Animated.View
-                    entering={SlideInUp.duration(260)}
-                    style={[styles.sheet, { backgroundColor: sheetBg }]}
-                >
-                    <View style={[styles.sheetHandle, { backgroundColor: handleColor }]} />
-                    <ScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
-                        <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
-                            Cancel match with {partnerName}?
-                        </Text>
-                        <Text style={[styles.sheetSubtitle, { color: colors.mutedForeground }]}>
-                            We’ll release you back into matching right away. Help us by telling us why.
-                        </Text>
-
-                        <View style={styles.reasonStack}>
-                            {REASONS.map((r) => {
-                                const isSelected = selected === r.id;
-                                return (
-                                    <Pressable
-                                        key={r.id}
-                                        accessibilityRole="radio"
-                                        accessibilityState={{ selected: isSelected }}
-                                        onPress={() => setSelected(r.id)}
-                                        style={({ pressed }) => [
-                                            styles.reasonRow,
-                                            {
-                                                borderColor: isSelected ? colors.primary : colors.border,
-                                                backgroundColor: isSelected
-                                                    ? isDark
-                                                        ? 'rgba(233,30,140,0.18)'
-                                                        : 'rgba(233,30,140,0.08)'
-                                                    : 'transparent',
-                                                opacity: pressed ? 0.85 : 1,
-                                            },
-                                        ]}
-                                    >
-                                        <View
-                                            style={[
-                                                styles.radioOuter,
-                                                { borderColor: isSelected ? colors.primary : colors.border },
-                                            ]}
-                                        >
-                                            {isSelected ? (
-                                                <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
-                                            ) : null}
-                                        </View>
-                                        <Text style={[styles.reasonLabel, { color: colors.foreground }]}>
-                                            {r.label}
-                                        </Text>
-                                    </Pressable>
-                                );
-                            })}
-                        </View>
-
-                        <View style={styles.sheetActions}>
-                            <Pressable
-                                accessibilityRole="button"
-                                onPress={onClose}
-                                style={({ pressed }) => [
-                                    styles.sheetSecondary,
-                                    { borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
-                                ]}
-                            >
-                                <Text style={[styles.sheetSecondaryLabel, { color: colors.foreground }]}>
-                                    Keep my match
-                                </Text>
-                            </Pressable>
-                            <Pressable
-                                accessibilityRole="button"
-                                disabled={!selected || isSubmitting}
-                                onPress={() => selected && onConfirm(selected)}
-                                style={({ pressed }) => [
-                                    styles.sheetPrimary,
-                                    {
-                                        backgroundColor: colors.primary,
-                                        opacity: !selected || isSubmitting ? 0.55 : pressed ? 0.9 : 1,
-                                    },
-                                ]}
-                            >
-                                <Text style={[styles.sheetPrimaryLabel, { color: colors.primaryForeground }]}>
-                                    {isSubmitting ? 'Cancelling…' : 'Confirm cancel'}
-                                </Text>
-                            </Pressable>
-                        </View>
-                    </ScrollView>
-                </Animated.View>
-            </Animated.View>
-        </Modal>
     );
 }
 
@@ -604,94 +482,5 @@ const styles = StyleSheet.create({
         lineHeight: 17,
         textAlign: 'center',
         marginTop: 2,
-    },
-    modalBackdrop: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.55)',
-        justifyContent: 'flex-end',
-    },
-    sheet: {
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
-        maxHeight: '80%',
-    },
-    sheetHandle: {
-        width: 44,
-        height: 4,
-        borderRadius: 2,
-        alignSelf: 'center',
-        marginTop: 10,
-    },
-    sheetContent: {
-        paddingHorizontal: 22,
-        paddingTop: 18,
-        paddingBottom: 32,
-        gap: 14,
-    },
-    sheetTitle: {
-        fontSize: 22,
-        fontWeight: '800',
-        letterSpacing: -0.3,
-    },
-    sheetSubtitle: {
-        fontSize: 14,
-        lineHeight: 20,
-    },
-    reasonStack: {
-        marginTop: 6,
-        gap: 10,
-    },
-    reasonRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 14,
-        borderRadius: 14,
-        borderWidth: 1,
-    },
-    radioOuter: {
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        borderWidth: 2,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    radioInner: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-    },
-    reasonLabel: {
-        flex: 1,
-        fontSize: 15,
-        fontWeight: '600',
-    },
-    sheetActions: {
-        flexDirection: 'row',
-        gap: 10,
-        marginTop: 12,
-    },
-    sheetSecondary: {
-        flex: 1,
-        paddingVertical: 14,
-        borderRadius: 14,
-        borderWidth: 1,
-        alignItems: 'center',
-    },
-    sheetSecondaryLabel: {
-        fontSize: 15,
-        fontWeight: '700',
-    },
-    sheetPrimary: {
-        flex: 1,
-        paddingVertical: 14,
-        borderRadius: 14,
-        alignItems: 'center',
-    },
-    sheetPrimaryLabel: {
-        fontSize: 15,
-        fontWeight: '700',
     },
 });
