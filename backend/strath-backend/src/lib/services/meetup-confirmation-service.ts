@@ -171,10 +171,7 @@ export async function applyMeetupSlotToMatch(
     if (existing.legacyDateMatchId) {
         await db
             .update(dateMatches)
-            .set({
-                scheduledAt: input.scheduledAt,
-                updatedAt: now,
-            })
+            .set({ scheduledAt: input.scheduledAt })
             .where(eq(dateMatches.id, existing.legacyDateMatchId));
     }
 }
