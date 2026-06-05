@@ -241,3 +241,29 @@ export async function notifyPaymentMatchExpired(input: {
         });
     }
 }
+
+function formatKesFromCents(cents: number): string {
+    return `KES ${(cents / 100).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
+}
+
+export async function notifyDateCancelledCredit(input: {
+    dateMatchId: string;
+    creditedUserIds: string[];
+    amountByUser: Record<string, number>;
+}): Promise<void> {
+    const sends = input.creditedUserIds.map(async (userId) => {
+        const recipient = await getUserPushAndName(userId);
+        if (!recipient.pushToken) return;
+
+        const amountCents = input.amountByUser[userId] ?? 49900;
+        const amountLabel = formatKesFromCents(amountCents);
+
+        await sendPushNotification(recipient.pushToken, {
+            title: "Date cancelled",
+            body: `${amountLabel} saved as StrathSpace credit for your next date.`,
+            data: paymentPushData(input.dateMatchId, NOTIFICATION_TYPES.CREDIT_GRANTED),
+        });
+    });
+
+    await Promise.all(sends);
+}

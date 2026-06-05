@@ -878,6 +878,7 @@ export const dateMatches = pgTable(
                 | "paid_waiting_for_other"
                 | "both_paid"
                 | "expired"
+                | "cancelled"
             >()
             .default("not_required")
             .notNull(),

@@ -149,6 +149,13 @@ export function useDailyMatches() {
     };
 }
 
+export type CancelMatchHoldResponse = {
+    status: string;
+    credited?: boolean;
+    creditAmountCents?: number | null;
+    dateMatchId?: string | null;
+};
+
 export function useCancelMatchHold() {
     const queryClient = useQueryClient();
     return useMutation({
@@ -170,12 +177,16 @@ export function useCancelMatchHold() {
             if (!res.ok) {
                 throw await parseApiError(res, `Failed to cancel match hold (${res.status})`);
             }
-            return payload;
+            const json = await res.json();
+            const data = (json?.data ?? json) as CancelMatchHoldResponse;
+            return { ...payload, ...data };
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['candidatePairs', 'daily'] });
             queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
             queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+            queryClient.invalidateQueries({ queryKey: ['paymentStatus'] });
+            queryClient.invalidateQueries({ queryKey: ['dates', 'history'] });
         },
     });
 }

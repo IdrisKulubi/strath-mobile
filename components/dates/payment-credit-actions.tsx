@@ -45,6 +45,7 @@ export function PaymentCreditActions({ dateMatchId, onCreditApplied }: PaymentCr
 
     const showRefund = status.canChooseRefund;
     const showUseCredit = status.canUseCredit;
+    const isCancelled = status.paymentState === 'cancelled';
 
     if (!showRefund && !showUseCredit) {
         return null;
@@ -111,8 +112,9 @@ export function PaymentCreditActions({ dateMatchId, onCreditApplied }: PaymentCr
             {showRefund ? (
                 <>
                     <RNText style={[styles.body, { color: colors.mutedForeground }]}>
-                        They did not confirm in time. Your {amountLabel} is saved as StrathSpace credit,
-                        or you can request a refund.
+                        {isCancelled
+                            ? `This date was cancelled. Your ${amountLabel} is saved as StrathSpace credit, or you can request a refund.`
+                            : `They did not confirm in time. Your ${amountLabel} is saved as StrathSpace credit, or you can request a refund.`}
                     </RNText>
                     <TouchableOpacity
                         accessibilityRole="button"

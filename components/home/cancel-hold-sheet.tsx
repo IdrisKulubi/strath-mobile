@@ -30,6 +30,8 @@ export interface CancelHoldSheetProps {
     visible: boolean;
     partnerName: string;
     isSubmitting: boolean;
+    /** Shown when the user already paid the date setup fee */
+    paidCreditNote?: string | null;
     onClose: () => void;
     onConfirm: (reason: MatchHoldCancelReason) => void;
 }
@@ -38,6 +40,7 @@ export function CancelHoldSheet({
     visible,
     partnerName,
     isSubmitting,
+    paidCreditNote,
     onClose,
     onConfirm,
 }: CancelHoldSheetProps) {
@@ -110,6 +113,26 @@ export function CancelHoldSheet({
                             <Text style={[styles.subtitle, { color: c.muted }]}>
                                 You will go back into matching right away. Pick a reason below.
                             </Text>
+                            {paidCreditNote ? (
+                                <View
+                                    style={[
+                                        styles.creditNote,
+                                        {
+                                            backgroundColor: isDark
+                                                ? 'rgba(217, 74, 143, 0.12)'
+                                                : 'rgba(184, 50, 122, 0.08)',
+                                            borderColor: isDark
+                                                ? 'rgba(217, 74, 143, 0.25)'
+                                                : 'rgba(184, 50, 122, 0.2)',
+                                        },
+                                    ]}
+                                >
+                                    <Ionicons name="wallet-outline" size={18} color={c.primary} />
+                                    <Text style={[styles.creditNoteText, { color: c.foreground }]}>
+                                        {paidCreditNote}
+                                    </Text>
+                                </View>
+                            ) : null}
                         </Animated.View>
 
                         <Text style={[styles.sectionLabel, { color: c.muted }]}>
@@ -268,6 +291,22 @@ const styles = StyleSheet.create({
         fontSize: 15,
         lineHeight: 21,
         textAlign: 'center',
+    },
+    creditNote: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: SPACING.tight,
+        marginTop: SPACING.compact,
+        paddingHorizontal: SPACING.compact,
+        paddingVertical: SPACING.tight,
+        borderRadius: RADIUS.md,
+        borderWidth: StyleSheet.hairlineWidth,
+        width: '100%',
+    },
+    creditNoteText: {
+        flex: 1,
+        fontSize: 14,
+        lineHeight: 20,
     },
     sectionLabel: {
         fontSize: 12,

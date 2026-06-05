@@ -52,15 +52,37 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
         router.push('/(tabs)/dates');
     }, [copy.primaryCta, hold.dateMatchId, partnerName, router]);
 
+    const paidCreditNote = useMemo(() => {
+        if (!paymentsEnabled || !paymentStatus?.currentUserPaid) {
+            return null;
+        }
+        const amountLabel = formatPaymentAmount(
+            paymentStatus.amount ?? 499,
+            paymentStatus.currency ?? 'KES',
+        );
+        return `If you cancel, your ${amountLabel} stays as StrathSpace credit for your next date.`;
+    }, [paymentsEnabled, paymentStatus]);
+
     const handleCancel = (reason: MatchHoldCancelReason) => {
         cancel.mutate(
             { mutualMatchId: hold.mutualMatchId, reason, notes: null },
             {
-                onSuccess: () => {
-                    toast.show({
-                        message: 'Cancelled — Home will reopen for new intros.',
-                        variant: 'success',
-                    });
+                onSuccess: (data) => {
+                    if (data.credited && data.creditAmountCents != null) {
+                        const amountLabel = formatPaymentAmount(
+                            data.creditAmountCents / 100,
+                            paymentStatus?.currency ?? 'KES',
+                        );
+                        toast.show({
+                            message: `Cancelled. ${amountLabel} saved as your StrathSpace credit.`,
+                            variant: 'success',
+                        });
+                    } else {
+                        toast.show({
+                            message: 'Cancelled — Home will reopen for new intros.',
+                            variant: 'success',
+                        });
+                    }
                     setShowCancel(false);
                 },
                 onError: () => {
@@ -212,6 +234,7 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                 visible={showCancel}
                 partnerName={partnerName}
                 isSubmitting={cancel.isPending}
+                paidCreditNote={paidCreditNote}
                 onClose={() => setShowCancel(false)}
                 onConfirm={handleCancel}
             />

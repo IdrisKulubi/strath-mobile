@@ -96,7 +96,7 @@ export function HistoryCard({ date, index }: HistoryCardProps) {
                 </View>
             </View>
 
-            {date.status === 'expired' ? (
+            {date.status === 'expired' || date.status === 'cancelled' ? (
                 <PaymentCreditActions dateMatchId={date.id} />
             ) : null}
 

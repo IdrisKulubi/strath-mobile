@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import { dateMatches, datePayments, userCredits } from "@/db/schema";
@@ -29,8 +29,10 @@ import {
 } from "@/lib/payments/payment-status-service";
 import { PAYABLE_PAYMENT_STATES } from "@/lib/payments/payment-session-types";
 import { isPaymentDueExpired } from "@/lib/payments/payment-expiry";
+import { CREDIT_CANCEL_REASON } from "@/lib/payments/payment-cancel";
 
 const CREDIT_GRANT_REASON = "partner_did_not_pay";
+const REFUND_ELIGIBLE_CREDIT_REASONS = [CREDIT_GRANT_REASON, CREDIT_CANCEL_REASON] as const;
 const CREDIT_SPEND_REASON = "spent_on_date";
 
 export function canUseCreditForMatch(input: {
@@ -52,7 +54,9 @@ export function canChooseRefundForMatch(input: {
     paymentState: string;
     userPaymentStatus: string | null | undefined;
 }): boolean {
-    if (input.paymentState !== "expired") return false;
+    if (input.paymentState !== "expired" && input.paymentState !== "cancelled") {
+        return false;
+    }
     if (input.userPaymentStatus === "refunded") return false;
     if (input.userPaymentStatus === "refund_requested") return false;
     return input.userPaymentStatus === "credited";
@@ -239,11 +243,11 @@ export async function handleRefundChoice(
         };
     }
 
-    if (dateMatch.paymentState !== "expired") {
+    if (dateMatch.paymentState !== "expired" && dateMatch.paymentState !== "cancelled") {
         return {
             status: "conflict",
             code: "not_eligible",
-            reason: "Refund choice is only available for expired dates",
+            reason: "Refund choice is only available for expired or cancelled dates",
         };
     }
 
@@ -313,7 +317,7 @@ export async function handleRefundChoice(
                 and(
                     eq(userCredits.userId, userId),
                     eq(userCredits.dateMatchId, dateMatchId),
-                    eq(userCredits.reason, CREDIT_GRANT_REASON),
+                    inArray(userCredits.reason, [...REFUND_ELIGIBLE_CREDIT_REASONS]),
                     eq(userCredits.status, "active"),
                 ),
             );

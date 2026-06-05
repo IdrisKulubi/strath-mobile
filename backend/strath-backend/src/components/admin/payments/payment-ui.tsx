@@ -23,6 +23,7 @@ export const PAYMENT_STATE_STYLES: Record<string, string> = {
     paid_waiting_for_other: "bg-sky-500/15 text-sky-200 ring-sky-500/25",
     both_paid: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/25",
     expired: "bg-white/10 text-gray-300 ring-white/15",
+    cancelled: "bg-white/10 text-gray-400 ring-white/15",
     not_required: "bg-white/8 text-gray-400 ring-white/10",
 };
 
@@ -58,6 +59,11 @@ export const QUEUE_FILTERS: { value: AdminPaymentQueueKey; label: string; descri
         value: "expired_with_credit",
         label: "Expired + credit",
         description: "One-sided pay converted to credit",
+    },
+    {
+        value: "cancelled",
+        label: "Cancelled",
+        description: "Match cancelled; payers credited where applicable",
     },
     {
         value: "refund_requested",
