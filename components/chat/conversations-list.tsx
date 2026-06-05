@@ -97,7 +97,10 @@ export function ConversationsList({
         </Animated.View>
     ), [onConversationPress, onArchive, onDelete, onMute, mutedIds]);
 
-    const keyExtractor = useCallback((item: Conversation) => item.id, []);
+    const keyExtractor = useCallback(
+        (item: Conversation) => `${item.id}:${item.mutualMatchId}`,
+        [],
+    );
 
     const renderHeader = useCallback(() => {
         if (conversations.length === 0) return null;

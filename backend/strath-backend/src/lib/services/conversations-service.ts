@@ -68,7 +68,9 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
         return results;
     });
 
-    const legacyIds = hydrated.map((item) => item.legacyMatchId);
+    const uniqueHydrated = dedupeHydratedByPartner(hydrated, userId);
+
+    const legacyIds = uniqueHydrated.map((item) => item.legacyMatchId);
 
     const [matchRows, unreadRows] = await Promise.all([
         legacyIds.length > 0
@@ -105,7 +107,7 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
 
     const items: ConversationItem[] = [];
 
-    for (const { row, legacyMatchId } of hydrated) {
+    for (const { row, legacyMatchId } of uniqueHydrated) {
         const otherUserId = row.userAId === userId ? row.userBId : row.userAId;
         const [profile, partnerUser] = await Promise.all([
             db.query.profiles.findFirst({
@@ -160,4 +162,22 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
     });
 
     return items;
+}
+
+/** One inbox row per partner when multiple mutual_matches share the same legacy chat thread. */
+function dedupeHydratedByPartner<T extends { row: { userAId: string; userBId: string; updatedAt: Date }; legacyMatchId: string }>(
+    hydrated: T[],
+    userId: string,
+): T[] {
+    const byPartner = new Map<string, T>();
+
+    for (const item of hydrated) {
+        const partnerId = item.row.userAId === userId ? item.row.userBId : item.row.userAId;
+        const existing = byPartner.get(partnerId);
+        if (!existing || item.row.updatedAt > existing.row.updatedAt) {
+            byPartner.set(partnerId, item);
+        }
+    }
+
+    return [...byPartner.values()];
 }

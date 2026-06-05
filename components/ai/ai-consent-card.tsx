@@ -25,7 +25,7 @@ export function AiConsentCard({
     const { colors } = useTheme();
 
     return (
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.content}>
             <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
             <Text style={[styles.description, { color: colors.mutedForeground }]}>{description}</Text>
 
@@ -61,10 +61,7 @@ export function AiConsentCard({
 }
 
 const styles = StyleSheet.create({
-    card: {
-        borderWidth: 1,
-        borderRadius: 20,
-        padding: 18,
+    content: {
         gap: 14,
     },
     title: {

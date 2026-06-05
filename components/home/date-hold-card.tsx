@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable, TouchableOpacity, Text as RNText } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { CancelHoldSheet } from '@/components/home/cancel-hold-sheet';
@@ -17,6 +17,7 @@ import { usePaymentStatus } from '@/hooks/use-payment-status';
 import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
 import { formatPaymentAmount } from '@/lib/payment-ui';
 import { formatMeetupSlot } from '@/lib/meetup-slot';
+import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 interface DateHoldCardProps {
     hold: MatchHold;
 }
@@ -109,14 +110,12 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
         );
     };
 
-    const primaryCtaFill = isDark ? 'rgba(217,74,143,0.12)' : 'rgba(184,50,122,0.08)';
-    const primaryCtaFillPressed = isDark ? 'rgba(217,74,143,0.2)' : 'rgba(184,50,122,0.12)';
-    const secondaryCtaFill = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
-    const secondaryCtaFillPressed = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)';
+    const rescheduleCtaFill = isDark ? 'rgba(217,74,143,0.12)' : 'rgba(184,50,122,0.08)';
+    const rescheduleCtaFillPressed = isDark ? 'rgba(217,74,143,0.2)' : 'rgba(184,50,122,0.12)';
 
     return (
         <Animated.View entering={FadeInDown.duration(400)} style={styles.outer}>
-            <View style={[styles.card, { backgroundColor: colors.card }]}>
+            <View style={styles.card}>
                 <View style={styles.content}>
                     <View style={styles.statusPillRow}>
                         <View style={[styles.statusPill, { backgroundColor: colors.primary }]}>
@@ -208,8 +207,8 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                                 {
                                     borderColor: colors.primary,
                                     backgroundColor: pressed
-                                        ? primaryCtaFillPressed
-                                        : primaryCtaFill,
+                                        ? rescheduleCtaFillPressed
+                                        : rescheduleCtaFill,
                                 },
                             ]}
                         >
@@ -222,42 +221,54 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
 
                     <View style={styles.ctaStack}>
                         {copy.primaryCta ? (
-                            <Pressable
+                            <TouchableOpacity
                                 accessibilityRole="button"
+                                accessibilityLabel={copy.primaryCta.label}
+                                activeOpacity={0.88}
                                 onPress={handlePrimaryCta}
-                                style={({ pressed }) => [
-                                    styles.primaryCta,
+                            >
+                                <View
+                                    style={[
+                                        styles.primaryButton,
+                                        {
+                                            backgroundColor: colors.primary,
+                                            borderColor: colors.primary,
+                                        },
+                                    ]}
+                                >
+                                    <RNText style={styles.primaryButtonLabel}>
+                                        {copy.primaryCta.label}
+                                    </RNText>
+                                </View>
+                            </TouchableOpacity>
+                        ) : null}
+
+                        <TouchableOpacity
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                                hold.status === 'completed_pending_feedback'
+                                    ? 'Mark as not interested'
+                                    : 'Cancel, keep matching me'
+                            }
+                            activeOpacity={0.88}
+                            onPress={() => setShowCancel(true)}
+                        >
+                            <View
+                                style={[
+                                    styles.outlineButton,
                                     {
                                         borderColor: colors.primary,
-                                        backgroundColor: pressed ? primaryCtaFillPressed : primaryCtaFill,
-                                        opacity: pressed ? 0.92 : 1,
+                                        backgroundColor: colors.background,
                                     },
                                 ]}
                             >
-                                <Text style={[styles.primaryCtaLabel, { color: colors.primary }]}>
-                                    {copy.primaryCta.label}
-                                </Text>
-                            </Pressable>
-                        ) : null}
-
-                        <Pressable
-                            accessibilityRole="button"
-                            onPress={() => setShowCancel(true)}
-                            style={({ pressed }) => [
-                                styles.secondaryCta,
-                                {
-                                    borderColor: colors.border,
-                                    backgroundColor: pressed ? secondaryCtaFillPressed : secondaryCtaFill,
-                                    opacity: pressed ? 0.88 : 1,
-                                },
-                            ]}
-                        >
-                            <Text style={[styles.secondaryCtaLabel, { color: colors.mutedForeground }]}>
-                                {hold.status === 'completed_pending_feedback'
-                                    ? 'Mark as not interested'
-                                    : 'Cancel — keep matching me'}
-                            </Text>
-                        </Pressable>
+                                <RNText style={[styles.outlineButtonLabel, { color: colors.primary }]}>
+                                    {hold.status === 'completed_pending_feedback'
+                                        ? 'Mark as not interested'
+                                        : 'Cancel, keep matching me'}
+                                </RNText>
+                            </View>
+                        </TouchableOpacity>
                     </View>
 
                     <Text style={[styles.footnote, { color: colors.mutedForeground }]}>
@@ -314,7 +325,7 @@ function buildCopy(
                 footnote: 'You can cancel any time and we will keep matching you.',
                 primaryCta: needsPayConfirm
                     ? { label: `Pay ${amountLabel} on Dates`, kind: 'view' }
-                    : { label: 'Message in Dates', kind: 'view' },
+                    : { label: 'Message', kind: 'view' },
             };
         case 'being_arranged':
             return {
@@ -405,12 +416,11 @@ const styles = StyleSheet.create({
         paddingBottom: 8,
     },
     card: {
-        borderRadius: 28,
-        overflow: 'hidden',
+        backgroundColor: 'transparent',
     },
     content: {
-        paddingHorizontal: 22,
-        paddingVertical: 24,
+        paddingHorizontal: 4,
+        paddingVertical: 8,
         gap: 14,
     },
     statusPillRow: {
@@ -520,35 +530,37 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
     ctaStack: {
-        marginTop: 4,
-        gap: 10,
+        marginTop: SPACING.tight,
+        gap: SPACING.compact,
+        width: '100%',
     },
-    primaryCta: {
-        flexDirection: 'row',
+    primaryButton: {
+        width: '100%',
+        minHeight: 52,
+        borderRadius: RADIUS.lg,
+        borderWidth: 2,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
-        minHeight: 48,
-        paddingHorizontal: 16,
-        borderRadius: 14,
-        borderWidth: 1,
-        backgroundColor: 'transparent',
+        paddingHorizontal: SPACING.base,
+        paddingVertical: SPACING.compact,
     },
-    primaryCtaLabel: {
-        fontSize: 15,
-        fontWeight: '800',
-        letterSpacing: -0.2,
+    primaryButtonLabel: {
+        ...TYPOGRAPHY.headline,
+        fontWeight: '700',
+        color: '#FFFFFF',
     },
-    secondaryCta: {
-        minHeight: 46,
-        paddingHorizontal: 16,
-        borderRadius: 14,
-        borderWidth: 1,
+    outlineButton: {
+        width: '100%',
+        minHeight: 52,
+        borderRadius: RADIUS.lg,
+        borderWidth: 2,
         alignItems: 'center',
         justifyContent: 'center',
+        paddingHorizontal: SPACING.base,
+        paddingVertical: SPACING.compact,
     },
-    secondaryCtaLabel: {
-        fontSize: 14,
+    outlineButtonLabel: {
+        ...TYPOGRAPHY.headline,
         fontWeight: '600',
     },
     footnote: {
