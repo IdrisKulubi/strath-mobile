@@ -88,6 +88,7 @@ export function MeetupSlotConfirmModal({
                             viewerSlotConfirmed={slot.viewerSlotConfirmed}
                             partnerSlotConfirmed={slot.partnerSlotConfirmed}
                             confirmWindowOpen={slot.confirmWindowOpen}
+                            reschedule={slot.reschedule}
                         />
                     </View>
                 </ScrollView>

@@ -26,7 +26,9 @@ import {
     getPaymentUiCopy,
     resolvePaymentUiPhase,
 } from '@/lib/payment-ui';
+import { MeetupRescheduleSection } from '@/components/dates/meetup-reschedule-section';
 import { formatConfirmBy, formatMeetupSlot, MEETUP_WINDOWS_COPY } from '@/lib/meetup-slot';
+import type { RescheduleViewerState } from '@/lib/reschedule-types';
 
 export interface MeetupSlotConfirmProps {
     mutualMatchId: string;
@@ -37,6 +39,7 @@ export interface MeetupSlotConfirmProps {
     viewerSlotConfirmed: boolean;
     partnerSlotConfirmed: boolean;
     confirmWindowOpen: boolean;
+    reschedule?: RescheduleViewerState;
     layout?: 'inline' | 'modal';
     style?: StyleProp<ViewStyle>;
 }
@@ -50,6 +53,7 @@ export function MeetupSlotConfirm({
     viewerSlotConfirmed,
     partnerSlotConfirmed,
     confirmWindowOpen,
+    reschedule,
     layout = 'inline',
     style,
 }: MeetupSlotConfirmProps) {
@@ -299,6 +303,15 @@ export function MeetupSlotConfirm({
                     : primaryButton}
 
                 {creditBlock}
+
+                <MeetupRescheduleSection
+                    layout="modal"
+                    mutualMatchId={mutualMatchId}
+                    dateMatchId={dateMatchId}
+                    partnerFirstName={partnerFirstName}
+                    viewerSlotConfirmed={viewerSlotConfirmed}
+                    reschedule={reschedule}
+                />
             </View>
         );
     }
@@ -379,6 +392,15 @@ export function MeetupSlotConfirm({
             ) : null}
 
             {creditBlock}
+
+            <MeetupRescheduleSection
+                layout="inline"
+                mutualMatchId={mutualMatchId}
+                dateMatchId={dateMatchId}
+                partnerFirstName={partnerFirstName}
+                viewerSlotConfirmed={viewerSlotConfirmed}
+                reschedule={reschedule}
+            />
         </View>
     );
 }

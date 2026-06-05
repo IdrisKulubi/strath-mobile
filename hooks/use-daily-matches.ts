@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-helpers';
 import { isVerificationRequiredError, parseApiError } from '@/lib/api-errors';
+import type { RescheduleViewerState } from '@/lib/reschedule-types';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -37,6 +38,7 @@ export interface SlotConfirmationState {
     viewerSlotConfirmed: boolean;
     partnerSlotConfirmed: boolean;
     needsSlotConfirmation: boolean;
+    reschedule?: RescheduleViewerState;
 }
 
 export interface MatchHold {
@@ -93,6 +95,7 @@ function normalizeMatchHold(hold: MatchHold & { slotConfirmation?: SlotConfirmat
             viewerSlotConfirmed: slot?.viewerSlotConfirmed ?? false,
             partnerSlotConfirmed: slot?.partnerSlotConfirmed ?? false,
             needsSlotConfirmation: slot?.needsSlotConfirmation ?? false,
+            reschedule: slot?.reschedule,
         },
     };
 }

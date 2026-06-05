@@ -89,6 +89,7 @@ export function ChatAccessGate({ match, partnerName, partnerImage }: ChatAccessG
                     viewerSlotConfirmed={Boolean(match.viewerSlotConfirmed)}
                     partnerSlotConfirmed={Boolean(match.partnerSlotConfirmed)}
                     confirmWindowOpen={Boolean(match.confirmWindowOpen)}
+                    reschedule={match.reschedule}
                     style={styles.confirmBlock}
                 />
             ) : null}

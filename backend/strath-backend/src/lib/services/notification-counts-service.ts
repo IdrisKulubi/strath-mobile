@@ -2,6 +2,7 @@ import { and, eq, gt, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import { matches, messages, mutualMatches } from "@/db/schema";
+import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
 import { buildSlotConfirmationView } from "@/lib/services/meetup-confirmation-service";
 
 export interface NotificationCountsResult {
@@ -10,6 +11,7 @@ export interface NotificationCountsResult {
     datesAttention: number;
     slotConfirmPending: number;
     partnerWaitingOnYou: number;
+    rescheduleNeedsResponse: number;
     homeAttention: number;
     datesActionable: number;
     total: number;
@@ -80,6 +82,34 @@ async function countSlotAttention(userId: string): Promise<{
     return { slotConfirmPending, partnerWaitingOnYou };
 }
 
+async function countRescheduleNeedsResponse(userId: string): Promise<number> {
+    const rescheduleEnabled = await isFeatureEnabled(
+        APP_FEATURE_KEYS.rescheduleEnabled,
+        false,
+    );
+    if (!rescheduleEnabled) return 0;
+
+    const rows = await db.query.mutualMatches.findMany({
+        where: and(
+            or(eq(mutualMatches.userAId, userId), eq(mutualMatches.userBId, userId)),
+            inArray(mutualMatches.status, ["mutual", "being_arranged", "upcoming"]),
+            isNotNull(mutualMatches.pendingRescheduleRequestId),
+        ),
+        with: {
+            pendingRescheduleRequest: true,
+        },
+    });
+
+    let count = 0;
+    for (const row of rows) {
+        const pending = row.pendingRescheduleRequest;
+        if (pending?.status === "pending" && pending.requestedByUserId !== userId) {
+            count += 1;
+        }
+    }
+    return count;
+}
+
 async function countUnreadMessages(userId: string): Promise<number> {
     const userMatches = await db
         .select({ id: matches.id })
@@ -111,16 +141,20 @@ async function countUnreadMessages(userId: string): Promise<number> {
 export async function getNotificationCountsForUser(
     userId: string,
 ): Promise<NotificationCountsResult> {
-    const [unopenedMatches, datesAttention, slotAttention, unreadMessages] = await Promise.all([
-        countUnopenedMatches(userId),
-        countDatesAttention(userId),
-        countSlotAttention(userId),
-        countUnreadMessages(userId),
-    ]);
+    const [unopenedMatches, datesAttention, slotAttention, rescheduleNeedsResponse, unreadMessages] =
+        await Promise.all([
+            countUnopenedMatches(userId),
+            countDatesAttention(userId),
+            countSlotAttention(userId),
+            countRescheduleNeedsResponse(userId),
+            countUnreadMessages(userId),
+        ]);
 
     const { slotConfirmPending, partnerWaitingOnYou } = slotAttention;
-    const homeAttention = unopenedMatches + (slotConfirmPending > 0 ? 1 : 0);
-    const datesActionable = slotConfirmPending + partnerWaitingOnYou;
+    const homeAttention =
+        unopenedMatches + (slotConfirmPending > 0 ? 1 : 0) + (rescheduleNeedsResponse > 0 ? 1 : 0);
+    const datesActionable =
+        slotConfirmPending + partnerWaitingOnYou + rescheduleNeedsResponse;
     const totalActionable =
         unopenedMatches + unreadMessages + datesActionable;
 
@@ -130,6 +164,7 @@ export async function getNotificationCountsForUser(
         datesAttention,
         slotConfirmPending,
         partnerWaitingOnYou,
+        rescheduleNeedsResponse,
         homeAttention,
         datesActionable,
         total: totalActionable,

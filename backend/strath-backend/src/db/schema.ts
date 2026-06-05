@@ -1,3 +1,4 @@
+import type { MeetupRescheduleStatus, MeetupSlotKind } from "@/lib/meetup-reschedule/types";
 import { relations, sql } from "drizzle-orm";
 import {
     timestamp,
@@ -1051,6 +1052,8 @@ export const mutualMatches = pgTable(
         slotConfirmBy: timestamp("slot_confirm_by"),
         slotConfirmReminderSentAt: timestamp("slot_confirm_reminder_sent_at"),
         assignedSlot: text("assigned_slot").$type<"wednesday" | "saturday">(),
+        pendingRescheduleRequestId: uuid("pending_reschedule_request_id"),
+        reschedulePausedExpiryAt: timestamp("reschedule_paused_expiry_at"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
     },
@@ -1061,7 +1064,45 @@ export const mutualMatches = pgTable(
         statusIdx: index("mutual_matches_status_idx").on(table.status),
         legacyMatchIdx: index("mutual_matches_legacy_match_idx").on(table.legacyMatchId),
         legacyDateMatchIdx: index("mutual_matches_legacy_date_match_idx").on(table.legacyDateMatchId),
+        pendingRescheduleRequestIdx: index("mutual_matches_pending_reschedule_request_idx").on(
+            table.pendingRescheduleRequestId,
+        ),
     })
+);
+
+export const meetupRescheduleRequests = pgTable(
+    "meetup_reschedule_requests",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        mutualMatchId: uuid("mutual_match_id")
+            .notNull()
+            .references(() => mutualMatches.id, { onDelete: "cascade" }),
+        requestedByUserId: text("requested_by_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        proposedSlot: text("proposed_slot").$type<MeetupSlotKind>().notNull(),
+        proposedScheduledAt: timestamp("proposed_scheduled_at").notNull(),
+        proposedConfirmBy: timestamp("proposed_confirm_by").notNull(),
+        status: text("status").$type<MeetupRescheduleStatus>().default("pending").notNull(),
+        declineReason: text("decline_reason"),
+        // Self-FK enforced in drizzle/0026_meetup_reschedule.sql (omit .references here to avoid TS circular init).
+        counterOfRequestId: uuid("counter_of_request_id"),
+        chainRootId: uuid("chain_root_id"),
+        respondedAt: timestamp("responded_at"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        mutualStatusIdx: index("meetup_reschedule_mutual_status_idx").on(
+            table.mutualMatchId,
+            table.status,
+        ),
+        mutualCreatedIdx: index("meetup_reschedule_mutual_created_idx").on(
+            table.mutualMatchId,
+            table.createdAt,
+        ),
+        requestedByIdx: index("meetup_reschedule_requested_by_idx").on(table.requestedByUserId),
+        counterOfIdx: index("meetup_reschedule_counter_of_idx").on(table.counterOfRequestId),
+    }),
 );
 
 export const feedbacks = pgTable(
@@ -2173,7 +2214,27 @@ export const candidatePairHistoryRelations = relations(candidatePairHistory, ({ 
     }),
 }));
 
-export const mutualMatchesRelations = relations(mutualMatches, ({ one }) => ({
+export const meetupRescheduleRequestsRelations = relations(
+    meetupRescheduleRequests,
+    ({ one }) => ({
+        mutualMatch: one(mutualMatches, {
+            fields: [meetupRescheduleRequests.mutualMatchId],
+            references: [mutualMatches.id],
+        }),
+        requestedBy: one(user, {
+            fields: [meetupRescheduleRequests.requestedByUserId],
+            references: [user.id],
+            relationName: "rescheduleRequestedBy",
+        }),
+        counterOf: one(meetupRescheduleRequests, {
+            fields: [meetupRescheduleRequests.counterOfRequestId],
+            references: [meetupRescheduleRequests.id],
+            relationName: "rescheduleCounter",
+        }),
+    }),
+);
+
+export const mutualMatchesRelations = relations(mutualMatches, ({ one, many }) => ({
     candidatePair: one(candidatePairs, {
         fields: [mutualMatches.candidatePairId],
         references: [candidatePairs.id],
@@ -2192,6 +2253,12 @@ export const mutualMatchesRelations = relations(mutualMatches, ({ one }) => ({
         fields: [mutualMatches.legacyDateMatchId],
         references: [dateMatches.id],
     }),
+    pendingRescheduleRequest: one(meetupRescheduleRequests, {
+        fields: [mutualMatches.pendingRescheduleRequestId],
+        references: [meetupRescheduleRequests.id],
+        relationName: "mutualPendingReschedule",
+    }),
+    rescheduleRequests: many(meetupRescheduleRequests),
 }));
 
 export const userMatchInterestsRelations = relations(userMatchInterests, ({ one }) => ({
@@ -2259,6 +2326,14 @@ export type UserMatchInterest = typeof userMatchInterests.$inferSelect;
 export type NewUserMatchInterest = typeof userMatchInterests.$inferInsert;
 export type MutualMatch = typeof mutualMatches.$inferSelect;
 export type NewMutualMatch = typeof mutualMatches.$inferInsert;
+export type MeetupRescheduleRequest = typeof meetupRescheduleRequests.$inferSelect;
+export type NewMeetupRescheduleRequest = typeof meetupRescheduleRequests.$inferInsert;
+
+export type {
+    MeetupRescheduleStatus,
+    MeetupSlotKind,
+} from "@/lib/meetup-reschedule/types";
+export { MEETUP_RESCHEDULE_STATUSES } from "@/lib/meetup-reschedule/types";
 export type WeeklyDrop = typeof weeklyDrops.$inferSelect;
 export type NewWeeklyDrop = typeof weeklyDrops.$inferInsert;
 export type MatchMission = typeof matchMissions.$inferSelect;

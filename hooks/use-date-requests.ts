@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-helpers';
+import type { RescheduleViewerState } from '@/lib/reschedule-types';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -32,6 +33,7 @@ export interface MutualDate {
     confirmWindowOpen?: boolean;
     /** Unread messages the viewer has not yet read in the linked chat thread. */
     unreadMessageCount?: number;
+    reschedule?: RescheduleViewerState;
 }
 
 export interface ScheduledDate {

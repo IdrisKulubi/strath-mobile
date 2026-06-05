@@ -94,11 +94,21 @@ export default async function AdminPaymentDetailPage({
                                         <dt className="text-[11px] font-medium text-white/40">
                                             Mutual match
                                         </dt>
-                                        <dd className="mt-0.5 font-mono text-[11px] text-white/50">
-                                            {detail.mutualMatchId}
-                                            {detail.mutualStatus
-                                                ? ` · ${detail.mutualStatus.replace(/_/g, " ")}`
-                                                : ""}
+                                        <dd className="mt-0.5 space-y-1">
+                                            <span className="font-mono text-[11px] text-white/50">
+                                                {detail.mutualMatchId}
+                                                {detail.mutualStatus
+                                                    ? ` · ${detail.mutualStatus.replace(/_/g, " ")}`
+                                                    : ""}
+                                            </span>
+                                            <div>
+                                                <Link
+                                                    href={`/admin/meetup-slots/${detail.mutualMatchId}`}
+                                                    className="text-xs font-medium text-pink-300 hover:text-pink-200"
+                                                >
+                                                    Reschedule history
+                                                </Link>
+                                            </div>
                                         </dd>
                                     </div>
                                 </>

@@ -16,6 +16,7 @@ import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { MutualDate, ARRANGEMENT_STATUS_LABELS, isChatUnlocked } from '@/hooks/use-date-requests';
 import { MeetupSlotConfirm } from '@/components/dates/meetup-slot-confirm';
+import { MeetupRescheduleSection } from '@/components/dates/meetup-reschedule-section';
 import { PaymentCreditActions } from '@/components/dates/payment-credit-actions';
 import { PaymentStatusBanner } from '@/components/dates/payment-status-banner';
 import { RADIUS, SPACING } from '@/lib/design-tokens';
@@ -174,6 +175,15 @@ export function ConfirmedMatchCard({ match, index }: ConfirmedMatchCardProps) {
                     viewerSlotConfirmed={Boolean(match.viewerSlotConfirmed)}
                     partnerSlotConfirmed={Boolean(match.partnerSlotConfirmed)}
                     confirmWindowOpen={Boolean(match.confirmWindowOpen)}
+                    reschedule={match.reschedule}
+                />
+            ) : match.reschedule?.canRequest || match.reschedule?.pending ? (
+                <MeetupRescheduleSection
+                    mutualMatchId={match.id}
+                    dateMatchId={match.legacyDateMatchId}
+                    partnerFirstName={match.withUser.firstName}
+                    viewerSlotConfirmed={Boolean(match.viewerSlotConfirmed)}
+                    reschedule={match.reschedule}
                 />
             ) : match.arrangementStatus === 'mutual' ? (
                 <View style={[styles.mutualHintBlock, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', borderColor: colors.border }]}>

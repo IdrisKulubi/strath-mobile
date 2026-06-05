@@ -29,6 +29,7 @@ import {
     shouldBlockFinalizeForPayment,
     shouldRequirePaymentToConfirm,
 } from "@/lib/services/meetup-confirmation-payment";
+import type { RescheduleViewerState } from "@/lib/meetup-reschedule/result-types";
 import { notifyPartnerAfterSlotConfirm } from "@/lib/services/meetup-push-notifications-service";
 
 export interface SlotConfirmationView {
@@ -39,6 +40,7 @@ export interface SlotConfirmationView {
     viewerSlotConfirmed: boolean;
     partnerSlotConfirmed: boolean;
     needsSlotConfirmation: boolean;
+    reschedule?: RescheduleViewerState;
 }
 
 export function buildSlotConfirmationView(
@@ -125,6 +127,56 @@ export async function sendDateScheduledPushNotifications(input: {
             })
             : Promise.resolve(),
     ]);
+}
+
+/** Apply a Wed/Sat window to mutual + linked date_match (reschedule accept, admin). */
+export async function applyMeetupSlotToMatch(
+    mutualMatchId: string,
+    input: {
+        slot: MeetupSlotKind;
+        scheduledAt: Date;
+        confirmBy: Date;
+        markBothConfirmed?: boolean;
+    },
+): Promise<void> {
+    const now = new Date();
+    const markBothConfirmed = input.markBothConfirmed ?? true;
+
+    const existing = await db.query.mutualMatches.findFirst({
+        where: eq(mutualMatches.id, mutualMatchId),
+        columns: {
+            userASlotConfirmedAt: true,
+            userBSlotConfirmedAt: true,
+            legacyDateMatchId: true,
+        },
+    });
+    if (!existing) return;
+
+    await db
+        .update(mutualMatches)
+        .set({
+            assignedSlot: input.slot,
+            scheduledAt: input.scheduledAt,
+            slotConfirmBy: input.confirmBy,
+            ...(markBothConfirmed
+                ? {
+                      userASlotConfirmedAt: existing.userASlotConfirmedAt ?? now,
+                      userBSlotConfirmedAt: existing.userBSlotConfirmedAt ?? now,
+                  }
+                : {}),
+            updatedAt: now,
+        })
+        .where(eq(mutualMatches.id, mutualMatchId));
+
+    if (existing.legacyDateMatchId) {
+        await db
+            .update(dateMatches)
+            .set({
+                scheduledAt: input.scheduledAt,
+                updatedAt: now,
+            })
+            .where(eq(dateMatches.id, existing.legacyDateMatchId));
+    }
 }
 
 export async function tryFinalizeConfirmedMeetup(
@@ -328,6 +380,7 @@ export async function expireUnconfirmedMeetups(mutualMatchId?: string): Promise<
         inArray(mutualMatches.status, ["mutual", "being_arranged"]),
         isNotNull(mutualMatches.slotConfirmBy),
         lte(mutualMatches.slotConfirmBy, now),
+        isNull(mutualMatches.pendingRescheduleRequestId),
         or(
             isNull(mutualMatches.userASlotConfirmedAt),
             isNull(mutualMatches.userBSlotConfirmedAt),

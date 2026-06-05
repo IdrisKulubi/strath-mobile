@@ -26,6 +26,12 @@ export const NOTIFICATION_TYPES = {
     MEETUP_PARTNER_CONFIRMED: 'meetup_partner_confirmed',
     MEETUP_CONFIRM_REMINDER: 'meetup_confirm_reminder',
 
+    // Meetup reschedule
+    MEETUP_RESCHEDULE_REQUESTED: 'meetup_reschedule_requested',
+    MEETUP_RESCHEDULE_COUNTERED: 'meetup_reschedule_countered',
+    MEETUP_RESCHEDULE_ACCEPTED: 'meetup_reschedule_accepted',
+    MEETUP_RESCHEDULE_CANCELLED: 'meetup_reschedule_cancelled',
+
     // Payments (pay-to-confirm)
     PAYMENT_REQUIRED: 'payment_required',
     PAYMENT_PARTNER_PAID: 'payment_partner_paid',

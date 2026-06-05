@@ -7,6 +7,7 @@ import {
     getNairobiParts,
     getThisWeekWednesdayOccurrence,
     isConfirmWindowOpen,
+    listUpcomingMeetupSlotOptions,
     pickSlotKindForMatchDay,
     nairobiLocalToUtc,
 } from "@/lib/services/meetup-slot-service";
@@ -109,4 +110,66 @@ test("getMeetupSlotConfig returns defaults when env unset", () => {
     assert.equal(cfg.wednesdayHour, 17);
     assert.equal(cfg.saturdayHour, 15);
     assert.equal(cfg.confirmLeadHours, 6);
+});
+
+test("listUpcomingMeetupSlotOptions returns next four Wed/Sat slots in chronological order", () => {
+    const now = mutualAtNairobi(2026, 6, 5, 10, 0);
+    const options = listUpcomingMeetupSlotOptions(now, { count: 4, config: CONFIG });
+
+    assert.equal(options.length, 4);
+
+    const expected = [
+        { slot: "saturday" as const, day: 6, hour: 15, minute: 0 },
+        { slot: "wednesday" as const, day: 10, hour: 17, minute: 30 },
+        { slot: "saturday" as const, day: 13, hour: 15, minute: 0 },
+        { slot: "wednesday" as const, day: 17, hour: 17, minute: 30 },
+    ];
+
+    for (let i = 0; i < expected.length; i++) {
+        const opt = options[i];
+        const exp = expected[i];
+        assert.equal(opt.slot, exp.slot);
+        const parts = getNairobiParts(opt.scheduledAt);
+        assert.equal(parts.month, 6);
+        assert.equal(parts.day, exp.day);
+        assert.equal(parts.hour, exp.hour);
+        assert.equal(parts.minute, exp.minute);
+        assert.equal(
+            opt.scheduledAt.getTime() - opt.confirmBy.getTime(),
+            6 * 60 * 60 * 1000,
+        );
+        assert.ok(opt.confirmBy.getTime() > now.getTime());
+    }
+});
+
+test("listUpcomingMeetupSlotOptions excludes current assignment instant", () => {
+    const now = mutualAtNairobi(2026, 6, 5, 10, 0);
+    const currentSaturday = mutualAtNairobi(2026, 6, 6, 15, 0);
+
+    const options = listUpcomingMeetupSlotOptions(now, {
+        count: 4,
+        excludeScheduledAt: currentSaturday,
+        config: CONFIG,
+    });
+
+    assert.equal(options.length, 4);
+    assert.ok(
+        options.every((o) => o.scheduledAt.getTime() !== currentSaturday.getTime()),
+    );
+    assert.equal(options[0].slot, "wednesday");
+    assert.equal(getNairobiParts(options[0].scheduledAt).day, 10);
+});
+
+test("listUpcomingMeetupSlotOptions skips slots whose confirm window has closed", () => {
+    const saturdaySlot = mutualAtNairobi(2026, 6, 6, 15, 0);
+    const now = mutualAtNairobi(2026, 6, 6, 14, 0);
+
+    const options = listUpcomingMeetupSlotOptions(now, { count: 2, config: CONFIG });
+
+    assert.equal(options.length, 2);
+    assert.ok(
+        options.every((o) => o.scheduledAt.getTime() !== saturdaySlot.getTime()),
+    );
+    assert.equal(options[0].slot, "wednesday");
+    assert.equal(getNairobiParts(options[0].scheduledAt).day, 10);
 });

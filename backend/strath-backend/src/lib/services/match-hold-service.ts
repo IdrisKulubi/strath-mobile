@@ -10,11 +10,15 @@ import {
 } from "@/db/schema";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 import {
-    buildSlotConfirmationView,
     expireUnconfirmedMeetups,
     type SlotConfirmationView,
 } from "@/lib/services/meetup-confirmation-service";
-import { creditPaidUsersOnCancellation } from "@/lib/payments/payment-cancel";
+import { buildSlotConfirmationViewWithReschedule } from "@/lib/services/meetup-reschedule-service";
+import {
+    creditPaidUsersOnCancellation,
+    type CreditPaidUsersOnCancellationResult,
+} from "@/lib/payments/payment-cancel";
+import { cancelPendingReschedulesForMatch } from "@/lib/services/meetup-reschedule-service";
 import { notifyDateCancelledCredit } from "@/lib/services/payment-push-notifications-service";
 
 /**
@@ -153,14 +157,14 @@ function pickPrimaryPhoto(
  * Note: the primary source of truth is `mutualMatches`. Legacy `dateMatches` rows that were never
  * bridged into `mutualMatches` are intentionally ignored — admins reconcile those.
  */
-function holdWithSlotConfirmation(
+async function holdWithSlotConfirmation(
     base: Omit<MatchHold, "slotConfirmation">,
     row: typeof mutualMatches.$inferSelect,
     viewerUserId: string,
-): MatchHold {
+): Promise<MatchHold> {
     return {
         ...base,
-        slotConfirmation: buildSlotConfirmationView(row, viewerUserId),
+        slotConfirmation: await buildSlotConfirmationViewWithReschedule(row, viewerUserId),
     };
 }
 
@@ -212,7 +216,7 @@ export async function getActiveMatchHoldForUser(userId: string): Promise<MatchHo
                 where: eq(profiles.userId, partnerUserId),
             });
 
-            return holdWithSlotConfirmation(
+            return await holdWithSlotConfirmation(
                 {
                     mutualMatchId: row.id,
                     candidatePairId: row.candidatePairId,
@@ -243,7 +247,7 @@ export async function getActiveMatchHoldForUser(userId: string): Promise<MatchHo
             where: eq(profiles.userId, partnerUserId),
         });
 
-        return holdWithSlotConfirmation(
+        return await holdWithSlotConfirmation(
             {
                 mutualMatchId: row.id,
                 candidatePairId: row.candidatePairId,
@@ -375,9 +379,11 @@ export async function cancelMatchHold(
     const now = new Date();
     const dateMatchId = row.legacyDateMatchId ?? null;
 
-    let creditResult: Awaited<ReturnType<typeof creditPaidUsersOnCancellation>> | null = null;
+    let creditResult: CreditPaidUsersOnCancellationResult | null = null;
 
     await db.transaction(async (tx) => {
+        await cancelPendingReschedulesForMatch(mutualMatchId, tx);
+
         await tx
             .update(mutualMatches)
             .set({ status: "cancelled", updatedAt: now })
@@ -400,7 +406,7 @@ export async function cancelMatchHold(
     if (dateMatchId && creditedUserIds.length > 0) {
         void notifyDateCancelledCredit({
             dateMatchId,
-            amountByUser: creditResult!.amountByUser,
+            amountByUser: creditResult.amountByUser,
             creditedUserIds,
         }).catch((err) => {
             console.warn("[match-hold] cancel credit push failed", { dateMatchId, err });

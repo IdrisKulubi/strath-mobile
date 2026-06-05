@@ -109,6 +109,28 @@ export const matchHoldCancelSchema = z.object({
     notes: z.string().max(500).optional().nullable(),
 });
 
+export const meetupRescheduleRequestSchema = z.object({
+    mutualMatchId: z.string().uuid(),
+    proposedScheduledAt: z.string().datetime(),
+});
+
+export const meetupRescheduleRespondSchema = z.discriminatedUnion("action", [
+    z.object({
+        requestId: z.string().uuid(),
+        action: z.literal("accept"),
+    }),
+    z.object({
+        requestId: z.string().uuid(),
+        action: z.literal("decline"),
+        declineReason: z.string().trim().min(3).max(500),
+        counterScheduledAt: z.string().datetime(),
+    }),
+]);
+
+export const meetupRescheduleCancelSchema = z.object({
+    mutualMatchId: z.string().uuid(),
+});
+
 export const APP_FEEDBACK_CATEGORIES = [
     "feature_request",
     "bug",

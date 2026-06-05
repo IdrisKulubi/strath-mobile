@@ -26,6 +26,10 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
         case NOTIFICATION_TYPES.MEETUP_SLOT_ASSIGNED:
         case NOTIFICATION_TYPES.MEETUP_PARTNER_CONFIRMED:
         case NOTIFICATION_TYPES.MEETUP_CONFIRM_REMINDER:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_REQUESTED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_COUNTERED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_ACCEPTED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_CANCELLED:
         case NOTIFICATION_TYPES.PAYMENT_REQUIRED:
         case NOTIFICATION_TYPES.PAYMENT_PARTNER_PAID:
         case NOTIFICATION_TYPES.PAYMENT_BOTH_PAID:
@@ -63,6 +67,8 @@ function resolveRoute(data: NotificationPayload): string | null {
         case NOTIFICATION_TYPES.DATE_SCHEDULED:
         case NOTIFICATION_TYPES.DATE_CANCELLED:
         case NOTIFICATION_TYPES.MEETUP_PARTNER_CONFIRMED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_ACCEPTED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_CANCELLED:
         case NOTIFICATION_TYPES.PAYMENT_REQUIRED:
         case NOTIFICATION_TYPES.PAYMENT_PARTNER_PAID:
         case NOTIFICATION_TYPES.PAYMENT_BOTH_PAID:
@@ -70,6 +76,13 @@ function resolveRoute(data: NotificationPayload): string | null {
         case NOTIFICATION_TYPES.PAYMENT_EXPIRED:
         case NOTIFICATION_TYPES.CREDIT_GRANTED:
         case NOTIFICATION_TYPES.REFUND_COMPLETED:
+            return '/(tabs)/dates';
+
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_REQUESTED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_COUNTERED:
+            if (data.requestId) {
+                return `/(tabs)/dates?rescheduleRequestId=${encodeURIComponent(data.requestId)}`;
+            }
             return '/(tabs)/dates';
 
         case NOTIFICATION_TYPES.FEEDBACK_PROMPT:

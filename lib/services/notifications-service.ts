@@ -27,6 +27,11 @@ export const NOTIFICATION_TYPES = {
     MEETUP_PARTNER_CONFIRMED: 'meetup_partner_confirmed',
     MEETUP_CONFIRM_REMINDER: 'meetup_confirm_reminder',
 
+    MEETUP_RESCHEDULE_REQUESTED: 'meetup_reschedule_requested',
+    MEETUP_RESCHEDULE_COUNTERED: 'meetup_reschedule_countered',
+    MEETUP_RESCHEDULE_ACCEPTED: 'meetup_reschedule_accepted',
+    MEETUP_RESCHEDULE_CANCELLED: 'meetup_reschedule_cancelled',
+
     PAYMENT_REQUIRED: 'payment_required',
     PAYMENT_PARTNER_PAID: 'payment_partner_paid',
     PAYMENT_BOTH_PAID: 'payment_both_paid',
@@ -52,6 +57,8 @@ export interface NotificationPayload {
     userId?: string;        // sender profile
     dateId?: string;        // used for feedback_prompt
     name?: string;          // first name of the other person (for feedback screen)
+    mutualMatchId?: string;
+    requestId?: string;     // pending meetup reschedule request
 
     // Legacy explicit route override (still supported)
     route?: string;

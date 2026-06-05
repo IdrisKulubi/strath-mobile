@@ -38,6 +38,20 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
         [hold, paymentsEnabled, paymentStatus?.amount, paymentStatus?.currency],
     );
 
+    const reschedulePending = hold.slotConfirmation?.reschedule?.pending;
+    const needsRescheduleResponse = Boolean(reschedulePending?.isYourTurnToRespond);
+
+    const handleRescheduleResponse = useCallback(() => {
+        if (!reschedulePending?.requestId) {
+            router.push('/(tabs)/dates');
+            return;
+        }
+        router.push({
+            pathname: '/(tabs)/dates',
+            params: { rescheduleRequestId: reschedulePending.requestId },
+        } as any);
+    }, [reschedulePending?.requestId, router]);
+
     const handlePrimaryCta = useCallback(() => {
         if (copy.primaryCta?.kind === 'feedback' && hold.dateMatchId) {
             router.push({
@@ -182,6 +196,28 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                                 </View>
                             ) : null}
                         </View>
+                    ) : null}
+
+                    {needsRescheduleResponse && reschedulePending ? (
+                        <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Respond to date change request"
+                            onPress={handleRescheduleResponse}
+                            style={({ pressed }) => [
+                                styles.rescheduleCta,
+                                {
+                                    borderColor: colors.primary,
+                                    backgroundColor: pressed
+                                        ? primaryCtaFillPressed
+                                        : primaryCtaFill,
+                                },
+                            ]}
+                        >
+                            <Ionicons name="swap-horizontal" size={18} color={colors.primary} />
+                            <Text style={[styles.rescheduleCtaText, { color: colors.primary }]}>
+                                Respond to date change request
+                            </Text>
+                        </Pressable>
                     ) : null}
 
                     <View style={styles.ctaStack}>
@@ -467,6 +503,21 @@ const styles = StyleSheet.create({
         fontSize: 13,
         lineHeight: 18,
         marginTop: 4,
+    },
+    rescheduleCta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        minHeight: 48,
+        paddingHorizontal: 16,
+        borderRadius: 14,
+        borderWidth: 1,
+        marginTop: 4,
+    },
+    rescheduleCtaText: {
+        fontSize: 15,
+        fontWeight: '700',
     },
     ctaStack: {
         marginTop: 4,

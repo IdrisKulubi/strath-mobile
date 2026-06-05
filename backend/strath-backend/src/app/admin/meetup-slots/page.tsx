@@ -231,6 +231,7 @@ export default async function MeetupSlotsAdminPage({
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">B confirmed</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Phase</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Date status</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Reschedule</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -277,6 +278,14 @@ export default async function MeetupSlotsAdminPage({
                                         </td>
                                         <td className="px-4 py-3 text-xs capitalize text-gray-400">
                                             {row.dateMatchStatus?.replace(/_/g, " ") ?? "—"}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <a
+                                                href={`/admin/meetup-slots/${row.mutualMatchId}`}
+                                                className="text-xs font-medium text-pink-300 hover:text-pink-200"
+                                            >
+                                                History
+                                            </a>
                                         </td>
                                     </tr>
                                 ))}

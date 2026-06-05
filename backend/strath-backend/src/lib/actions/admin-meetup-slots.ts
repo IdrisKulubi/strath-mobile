@@ -88,7 +88,7 @@ export interface AdminMeetupSlotTrackingResult {
     };
 }
 
-async function getAdminMeetupSlotUser(userId: string): Promise<AdminMeetupSlotUser> {
+export async function getAdminMeetupSlotUser(userId: string): Promise<AdminMeetupSlotUser> {
     const profile = await db.query.profiles.findFirst({
         where: eq(profiles.userId, userId),
         with: { user: true },
