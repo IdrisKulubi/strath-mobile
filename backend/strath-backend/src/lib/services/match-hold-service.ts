@@ -14,10 +14,7 @@ import {
     type SlotConfirmationView,
 } from "@/lib/services/meetup-confirmation-service";
 import { buildSlotConfirmationViewWithReschedule } from "@/lib/services/meetup-reschedule-service";
-import {
-    creditPaidUsersOnCancellation,
-    type CreditPaidUsersOnCancellationResult,
-} from "@/lib/payments/payment-cancel";
+import { creditPaidUsersOnCancellation } from "@/lib/payments/payment-cancel";
 import { cancelPendingReschedulesForMatch } from "@/lib/services/meetup-reschedule-service";
 import { notifyDateCancelledCredit } from "@/lib/services/payment-push-notifications-service";
 
@@ -379,9 +376,7 @@ export async function cancelMatchHold(
     const now = new Date();
     const dateMatchId = row.legacyDateMatchId ?? null;
 
-    let creditResult: CreditPaidUsersOnCancellationResult | null = null;
-
-    await db.transaction(async (tx) => {
+    const creditResult = await db.transaction(async (tx) => {
         await cancelPendingReschedulesForMatch(mutualMatchId, tx);
 
         await tx
@@ -389,21 +384,20 @@ export async function cancelMatchHold(
             .set({ status: "cancelled", updatedAt: now })
             .where(eq(mutualMatches.id, mutualMatchId));
 
-        if (dateMatchId) {
-            await tx
-                .update(dateMatches)
-                .set({ status: "cancelled" })
-                .where(eq(dateMatches.id, dateMatchId));
+        if (!dateMatchId) return null;
 
-            creditResult = await creditPaidUsersOnCancellation(tx, dateMatchId, now);
-        }
+        await tx
+            .update(dateMatches)
+            .set({ status: "cancelled" })
+            .where(eq(dateMatches.id, dateMatchId));
+
+        return creditPaidUsersOnCancellation(tx, dateMatchId, now);
     });
 
     const creditedUserIds = creditResult?.creditedUserIds ?? [];
-    const creditAmountCents =
-        creditResult?.amountByUser[userId] ?? null;
+    const creditAmountCents = creditResult?.amountByUser[userId] ?? null;
 
-    if (dateMatchId && creditedUserIds.length > 0) {
+    if (dateMatchId && creditResult && creditedUserIds.length > 0) {
         void notifyDateCancelledCredit({
             dateMatchId,
             amountByUser: creditResult.amountByUser,
