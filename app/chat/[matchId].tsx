@@ -8,6 +8,7 @@ import {
     Platform,
     Dimensions,
     Alert,
+    Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,7 +19,7 @@ import { useChat, Message } from '@/hooks/use-chat';
 import { useConversations, findConversation } from '@/hooks/use-conversations';
 import { useUnmatch } from '@/hooks/use-unmatch';
 import { MessageBubble, ChatInput, ChatHeader, ChatAccessGate } from '@/components/chat';
-import { useMutualMatches, isChatThreadUnlocked } from '@/hooks/use-date-requests';
+import { useMutualMatches, isChatThreadUnlocked, isChatThreadReadable } from '@/hooks/use-date-requests';
 import { SafetyToolkitModal } from '@/components/chat/safety-toolkit-modal';
 import { BlockReportModal } from '@/components/discover/block-report-modal';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -58,9 +59,10 @@ export default function ChatScreen() {
         [mutualDates, matchId],
     );
 
-    const chatBlockedFromMutual = Boolean(
-        mutualMatch && !isChatThreadUnlocked(mutualMatch),
-    );
+    const chatReadable = !mutualMatch || isChatThreadReadable(mutualMatch);
+    const chatSendable = mutualMatch
+        ? isChatThreadUnlocked(mutualMatch)
+        : true;
 
     const {
         messages,
@@ -69,9 +71,14 @@ export default function ChatScreen() {
         isSending,
         currentUserId,
         isAccessDenied,
-    } = useChat(matchId || '', { enabled: !chatBlockedFromMutual });
+        isError,
+        error,
+        refetch,
+        canSend,
+    } = useChat(matchId || '', { enabled: chatReadable });
 
-    const showAccessGate = chatBlockedFromMutual || isAccessDenied;
+    const showFullAccessGate = !chatReadable || (isAccessDenied && !mutualMatch);
+    const showSendGate = chatReadable && mutualMatch && !chatSendable;
 
     const { data: conversations } = useConversations();
     const thread = findConversation(conversations, matchId || '');
@@ -236,16 +243,41 @@ export default function ChatScreen() {
         return (
             <View style={styles.listHeader}>
                 <View style={styles.matchedTextContainer}>
-                    <Text style={styles.matchedText}>
+                    <Text style={[styles.matchedText, { color: colors.mutedForeground }]}>
                         YOU CONNECTED WITH {(partner?.name ?? 'them').toUpperCase()} ON {dateString}
                     </Text>
                 </View>
             </View>
         );
-    }, [thread, partner?.name]);
+    }, [thread, partner?.name, colors.mutedForeground]);
+
+    const renderErrorState = () => (
+        <View style={styles.emptyContainer}>
+            <Text style={{ color: colors.foreground, fontSize: 17, fontWeight: '600', textAlign: 'center', marginBottom: 8 }}>
+                Couldn&apos;t load messages
+            </Text>
+            <Text style={{ color: colors.mutedForeground, fontSize: 15, textAlign: 'center', marginBottom: 16 }}>
+                {error instanceof Error ? error.message : 'Check your connection and try again.'}
+            </Text>
+            <Pressable
+                onPress={() => refetch()}
+                style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            >
+                <Text style={{ color: colors.primaryForeground, fontWeight: '600' }}>Retry</Text>
+            </Pressable>
+        </View>
+    );
+
+    const renderEmptyState = () => (
+        <View style={styles.emptyContainer}>
+            <Text style={{ color: colors.mutedForeground, textAlign: 'center', fontSize: 16, marginTop: 32 }}>
+                No messages yet.{'\n'}Say hi to {partner?.name || 'your connection'}! 👋
+            </Text>
+        </View>
+    );
 
     const renderChatBody = () => {
-        if (showAccessGate && mutualMatch) {
+        if (showFullAccessGate && mutualMatch) {
             return (
                 <ChatAccessGate
                     match={mutualMatch}
@@ -255,7 +287,7 @@ export default function ChatScreen() {
             );
         }
 
-        if (showAccessGate && mutualDatesLoading) {
+        if (showFullAccessGate && mutualDatesLoading) {
             return (
                 <View style={styles.loadingContainer}>
                     {[1, 2, 3].map((i) => (
@@ -267,18 +299,22 @@ export default function ChatScreen() {
             );
         }
 
-        if (showAccessGate) {
+        if (showFullAccessGate) {
             return (
                 <View style={styles.emptyContainer}>
-                    <Text className="text-foreground text-center text-lg font-semibold mb-2">
+                    <Text style={{ color: colors.foreground, textAlign: 'center', fontSize: 18, fontWeight: '600', marginBottom: 8 }}>
                         Confirm your date to message
                     </Text>
-                    <Text className="text-muted-foreground text-center text-base">
+                    <Text style={{ color: colors.mutedForeground, textAlign: 'center', fontSize: 16 }}>
                         Open the Dates tab to confirm your meetup before chatting with{' '}
                         {partner?.name || 'your match'}.
                     </Text>
                 </View>
             );
+        }
+
+        if (isError && messages.length === 0) {
+            return renderErrorState();
         }
 
         return (
@@ -287,17 +323,40 @@ export default function ChatScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 keyboardVerticalOffset={0}
             >
+                {isError ? (
+                    <Pressable
+                        onPress={() => refetch()}
+                        style={[styles.errorBanner, { backgroundColor: colors.destructive }]}
+                    >
+                        <Text style={{ color: colors.primaryForeground, fontSize: 13, flex: 1 }}>
+                            Couldn&apos;t refresh messages. Tap to retry.
+                        </Text>
+                    </Pressable>
+                ) : null}
+
+                {showSendGate && mutualMatch ? (
+                    <View style={[styles.sendGateBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Text style={{ color: colors.foreground, fontSize: 14, fontWeight: '600' }}>
+                            Confirm your date to send messages
+                        </Text>
+                        <Text style={{ color: colors.mutedForeground, fontSize: 13, marginTop: 4 }}>
+                            You can read messages below. Confirm on Dates to reply.
+                        </Text>
+                    </View>
+                ) : null}
+
                 <FlatList
                     ref={flatListRef}
+                    style={styles.messageFlatList}
                     data={messages}
                     renderItem={renderMessage}
                     keyExtractor={keyExtractor}
                     contentContainerStyle={[
                         styles.messageList,
-                        messages.length === 0 && styles.emptyList,
+                        messages.length === 0 && !isError && styles.emptyList,
                     ]}
                     ListHeaderComponent={renderListHeader}
-                    ListEmptyComponent={renderEmptyState}
+                    ListEmptyComponent={isError ? null : renderEmptyState}
                     showsVerticalScrollIndicator={false}
                     onContentSizeChange={() => {
                         if (messages.length > 0) {
@@ -309,6 +368,12 @@ export default function ChatScreen() {
                 <ChatInput
                     onSend={handleSend}
                     isSending={isSending}
+                    disabled={!chatSendable || !canSend}
+                    placeholder={
+                        !chatSendable
+                            ? 'Confirm your date to message'
+                            : 'Type a message'
+                    }
                     onMediaPress={() => undefined}
                     onGifPress={() => undefined}
                     onMusicPress={() => undefined}
@@ -318,7 +383,7 @@ export default function ChatScreen() {
     };
 
     // Loading state - only show skeletons on the VERY FIRST load when no messages exist
-    if (!showAccessGate && isInitialLoading && messages.length === 0) {
+    if (!showFullAccessGate && isInitialLoading && messages.length === 0) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
                 <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
@@ -340,15 +405,6 @@ export default function ChatScreen() {
             </SafeAreaView>
         );
     }
-
-    // Empty state
-    const renderEmptyState = () => (
-        <View style={styles.emptyContainer}>
-            <Text className="text-muted-foreground text-center text-base mt-8">
-                No messages yet.{'\n'}Say hi to {partner?.name || 'your connection'}! 👋
-            </Text>
-        </View>
-    );
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
@@ -411,6 +467,9 @@ const styles = StyleSheet.create({
     keyboardView: {
         flex: 1,
     },
+    messageFlatList: {
+        flex: 1,
+    },
     messageList: {
         paddingVertical: 16,
         flexGrow: 1,
@@ -451,10 +510,28 @@ const styles = StyleSheet.create({
         paddingBottom: 4,
     },
     matchedText: {
-        color: '#636366',
         fontSize: 11,
         fontWeight: '600',
         textAlign: 'center',
         letterSpacing: 0.5,
+    },
+    retryButton: {
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 24,
+    },
+    errorBanner: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        marginHorizontal: 16,
+        marginTop: 8,
+        borderRadius: 8,
+    },
+    sendGateBanner: {
+        marginHorizontal: 16,
+        marginTop: 8,
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
     },
 });

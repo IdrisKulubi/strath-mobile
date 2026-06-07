@@ -37,14 +37,36 @@ export function shouldBlockChatForSlotConfirmation(
 }
 
 /**
- * Returns `null` when access is allowed, or an error Response when blocked.
+ * Read access: listable mutual match exists. Slot confirmation does not block history.
+ * Returns `null` when allowed, or an error Response when blocked.
  */
-export async function assertChatUnlocked(matchId: string, userId: string) {
+export async function assertChatReadable(matchId: string, userId: string) {
     const mm = await db.query.mutualMatches.findFirst({
         where: eq(mutualMatches.legacyMatchId, matchId),
     });
 
     if (!mm || !isChatUnlockedStatus(mm.status)) {
+        return errorResponse(
+            new Error("Messaging is available once you have a mutual match."),
+            403,
+        );
+    }
+
+    return null;
+}
+
+/**
+ * Send access: same as read, plus slot confirmation when required.
+ * Returns `null` when access is allowed, or an error Response when blocked.
+ */
+export async function assertChatUnlocked(matchId: string, userId: string) {
+    const readGate = await assertChatReadable(matchId, userId);
+    if (readGate) return readGate;
+
+    const mm = await db.query.mutualMatches.findFirst({
+        where: eq(mutualMatches.legacyMatchId, matchId),
+    });
+    if (!mm) {
         return errorResponse(
             new Error("Messaging is available once you have a mutual match."),
             403,

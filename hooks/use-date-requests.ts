@@ -119,6 +119,14 @@ export function isChatUnlocked(match: MutualDate): boolean {
 }
 
 /**
+ * Read history in thread when mutual match is listable (slot confirm does not block read).
+ */
+export function isChatThreadReadable(match: MutualDate): boolean {
+    if (!match.legacyMatchId) return false;
+    return CHAT_UNLOCKED_STATUSES.includes(match.arrangementStatus);
+}
+
+/**
  * Chat thread APIs: mirrors backend assertChatUnlocked — arranging pairs may message
  * while confirm UI stays on Dates; mutual matches still require slot confirm.
  */

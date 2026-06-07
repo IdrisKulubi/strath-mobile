@@ -65,7 +65,7 @@ export function ChatAccessGate({ match, partnerName, partnerImage }: ChatAccessG
             </Text>
 
             <Text style={[styles.body, { color: colors.mutedForeground }]}>
-                Confirm your assigned meetup with {partnerName} before you can read or send messages here.
+                Confirm your assigned meetup with {partnerName} before you can message here.
             </Text>
 
             {partnerWaiting ? (

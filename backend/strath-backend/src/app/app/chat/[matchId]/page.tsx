@@ -83,6 +83,8 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isMessagesError, setIsMessagesError] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
@@ -101,6 +103,11 @@ export default function ChatPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<Message[]>([]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -134,15 +141,52 @@ export default function ChatPage() {
     }
   }, [matchId]);
 
+  const parseMessagesResponse = (raw: unknown): Message[] => {
+    if (Array.isArray(raw)) return raw as Message[];
+    if (raw && typeof raw === "object" && "messages" in raw) {
+      const payload = raw as { messages?: Message[] };
+      return payload.messages ?? [];
+    }
+    return [];
+  };
+
   const fetchMessages = useCallback(async () => {
     try {
-      const response = await fetch(`/api/messages/${matchId}`);
+      const current = messagesRef.current;
+      const since =
+        current.length > 0
+          ? current[current.length - 1]?.createdAt
+          : undefined;
+      const url = since
+        ? `/api/messages/${matchId}?since=${encodeURIComponent(since)}`
+        : `/api/messages/${matchId}`;
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error("Failed to fetch messages");
+      }
       const data = await response.json();
       if (data.success) {
-        setMessages(data.data || []);
+        const incoming = parseMessagesResponse(data.data);
+        if (since && incoming.length > 0) {
+          const byId = new Map(current.map((m) => [m.id, m]));
+          for (const msg of incoming) {
+            byId.set(msg.id, msg);
+          }
+          setMessages(
+            [...byId.values()].sort(
+              (a, b) =>
+                new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+            ),
+          );
+        } else if (!since) {
+          setMessages(incoming);
+        }
+        setIsMessagesError(false);
       }
     } catch (error) {
       console.error("Failed to fetch messages:", error);
+      setIsMessagesError(true);
     }
   }, [matchId]);
 
@@ -189,6 +233,7 @@ export default function ChatPage() {
     if (!newMessage.trim() || isSending) return;
 
     setIsSending(true);
+    setSendError(null);
     try {
       const response = await fetch(`/api/messages/${matchId}`, {
         method: "POST",
@@ -199,9 +244,12 @@ export default function ChatPage() {
       if (data.success) {
         setMessages((prev) => [...prev, data.data]);
         setNewMessage("");
+      } else {
+        setSendError(data.error || "Failed to send message");
       }
     } catch (error) {
       console.error("Failed to send message:", error);
+      setSendError("Failed to send message. Please try again.");
     } finally {
       setIsSending(false);
     }
@@ -491,6 +539,30 @@ export default function ChatPage() {
             <p className="text-sm text-gray-400">{matchDate || "Start the conversation 💬"}</p>
           </div>
 
+          {isMessagesError && messages.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-white font-medium mb-2">Couldn&apos;t load messages</p>
+              <p className="text-gray-400 text-sm mb-4">Check your connection and try again.</p>
+              <Button
+                type="button"
+                onClick={() => fetchMessages()}
+                className="bg-pink-500 hover:bg-pink-600 text-white rounded-full"
+              >
+                Retry
+              </Button>
+            </div>
+          ) : null}
+
+          {isMessagesError && messages.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => fetchMessages()}
+              className="w-full text-center text-sm text-pink-300 bg-white/5 rounded-lg py-2 mb-4"
+            >
+              Couldn&apos;t refresh messages — tap to retry
+            </button>
+          ) : null}
+
           {/* Message Bubbles */}
           {messages.map((message, idx) => {
             const isOwn = message.senderId === currentUserId;
@@ -503,7 +575,7 @@ export default function ChatPage() {
               <div key={message.id}>
                 {showDate && (
                   <div className="text-center my-4">
-                    <span className="text-xs text-gray-500 bg-white/5 px-3 py-1 rounded-full">
+                    <span className="text-xs text-gray-300 bg-white/10 px-3 py-1 rounded-full">
                       {formatDate(message.createdAt)}
                     </span>
                   </div>
@@ -534,7 +606,7 @@ export default function ChatPage() {
                     }`}
                   >
                     <p className="text-sm leading-relaxed">{message.content}</p>
-                    <p className={`text-[10px] mt-1 ${isOwn ? "text-pink-100 text-right" : "text-gray-500"}`}>
+                    <p className={`text-[10px] mt-1 ${isOwn ? "text-pink-100 text-right" : "text-gray-300"}`}>
                       {formatTime(message.createdAt)}
                     </p>
                   </div>
@@ -547,6 +619,9 @@ export default function ChatPage() {
 
         {/* Message Input - Fixed at bottom */}
         <div className="shrink-0 p-3 md:p-4 border-t border-white/10 bg-[#1a1a2e]/80 backdrop-blur-lg">
+          {sendError ? (
+            <p className="text-sm text-red-400 mb-2 text-center">{sendError}</p>
+          ) : null}
           <form onSubmit={sendMessage} className="flex items-center gap-3">
             <Input
               value={newMessage}

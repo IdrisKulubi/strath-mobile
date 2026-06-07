@@ -16,7 +16,13 @@ export default function ChatsScreen() {
     const { colors, colorScheme } = useTheme();
     const router = useRouter();
 
-    const { data: conversations = [], isLoading, refetch } = useConversations();
+    const {
+        data: conversations = [],
+        isLoading,
+        isError,
+        error,
+        refetch,
+    } = useConversations();
     const dailyMatches = useDailyMatches();
     const activeHold = dailyMatches.data?.hold ?? null;
     const showConfirmBanner = Boolean(
@@ -161,7 +167,10 @@ export default function ChatsScreen() {
                         conversations={visibleConversations}
                         isLoading={isLoading}
                         isRefreshing={isRefreshing}
+                        isError={isError}
+                        errorMessage={error instanceof Error ? error.message : undefined}
                         onRefresh={handleRefresh}
+                        onRetry={() => refetch()}
                         onConversationPress={handleConversationPress}
                         onArchive={handleArchive}
                         onDelete={handleDelete}

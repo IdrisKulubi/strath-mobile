@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
 
 import {
@@ -115,11 +116,25 @@ function resolveRoute(data: NotificationPayload): string | null {
     }
 }
 
+function invalidateMessagingCaches(
+    queryClient: ReturnType<typeof useQueryClient>,
+    matchId?: string,
+) {
+    if (matchId) {
+        queryClient.invalidateQueries({ queryKey: ['chat', matchId] });
+    }
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    queryClient.invalidateQueries({ queryKey: ['matches'] });
+    queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
+    queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+}
+
 export function usePushNotifications(options?: {
     onTokenRegistered?: (token: string | null) => void;
 }) {
     const toast = useToast();
     const router = useRouter();
+    const queryClient = useQueryClient();
     const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
 
     const notificationReceivedListener = useRef<Notifications.EventSubscription | null>(null);
@@ -154,6 +169,10 @@ export function usePushNotifications(options?: {
                 const data = (content.data || {}) as NotificationPayload;
                 const message = content.body || content.title || 'New notification';
 
+                if (data.type === NOTIFICATION_TYPES.MESSAGE) {
+                    invalidateMessagingCaches(queryClient, data.matchId);
+                }
+
                 toast.show({
                     message,
                     variant: toastVariantFor(data.type),
@@ -167,6 +186,10 @@ export function usePushNotifications(options?: {
             Notifications.addNotificationResponseReceivedListener((response) => {
                 const content = response.notification.request.content;
                 const data = (content.data || {}) as NotificationPayload;
+
+                if (data.type === NOTIFICATION_TYPES.MESSAGE) {
+                    invalidateMessagingCaches(queryClient, data.matchId);
+                }
 
                 const route = resolveRoute(data);
                 if (route) {

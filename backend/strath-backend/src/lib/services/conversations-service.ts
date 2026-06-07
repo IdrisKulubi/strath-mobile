@@ -105,18 +105,30 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
     const matchById = new Map(matchRows.map((m) => [m.id, m]));
     const unreadByMatch = new Map(unreadRows.map((r) => [r.matchId, Number(r.count) || 0]));
 
+    const partnerIds = uniqueHydrated.map(({ row }) =>
+        row.userAId === userId ? row.userBId : row.userAId,
+    );
+
+    const [profileRows, partnerUserRows] = partnerIds.length > 0
+        ? await Promise.all([
+              db.query.profiles.findMany({
+                  where: inArray(profiles.userId, partnerIds),
+              }),
+              db.query.user.findMany({
+                  where: inArray(user.id, partnerIds),
+              }),
+          ])
+        : [[], []];
+
+    const profileByUserId = new Map(profileRows.map((p) => [p.userId, p]));
+    const userById = new Map(partnerUserRows.map((u) => [u.id, u]));
+
     const items: ConversationItem[] = [];
 
     for (const { row, legacyMatchId } of uniqueHydrated) {
         const otherUserId = row.userAId === userId ? row.userBId : row.userAId;
-        const [profile, partnerUser] = await Promise.all([
-            db.query.profiles.findFirst({
-                where: eq(profiles.userId, otherUserId),
-            }),
-            db.query.user.findFirst({
-                where: eq(user.id, otherUserId),
-            }),
-        ]);
+        const profile = profileByUserId.get(otherUserId);
+        const partnerUser = userById.get(otherUserId);
 
         const primaryPhoto =
             (Array.isArray(profile?.photos) ? profile.photos[0] : null)

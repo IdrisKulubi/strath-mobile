@@ -4,9 +4,25 @@ import { db } from "@/lib/db";
 import { messages, matches, mutualMatches, user } from "@/db/schema";
 import { messageSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/api-response";
-import { eq, and, or, asc } from "drizzle-orm";
+import { eq, and, or, asc, desc, lt, gt } from "drizzle-orm";
 import { sendPushNotification } from "@/lib/notifications";
-import { assertChatUnlocked } from "@/lib/chat-access";
+import { assertChatReadable, assertChatUnlocked } from "@/lib/chat-access";
+
+const DEFAULT_MESSAGE_LIMIT = 50;
+const MAX_MESSAGE_LIMIT = 100;
+
+function parseMessageLimit(raw: string | null): number {
+    if (!raw) return DEFAULT_MESSAGE_LIMIT;
+    const n = Number.parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < 1) return DEFAULT_MESSAGE_LIMIT;
+    return Math.min(n, MAX_MESSAGE_LIMIT);
+}
+
+function parseIsoDate(raw: string | null): Date | null {
+    if (!raw) return null;
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
 
 export async function GET(
     req: NextRequest,
@@ -56,16 +72,46 @@ export async function GET(
             return errorResponse(new Error("Match not found or unauthorized"), 404);
         }
 
-        const gate = await assertChatUnlocked(matchId, session.user.id);
+        const gate = await assertChatReadable(matchId, session.user.id);
         if (gate) return gate;
 
-        const chatHistory = await db.query.messages.findMany({
-            where: eq(messages.matchId, matchId),
-            orderBy: [asc(messages.createdAt)],
-            limit: 50, // Pagination can be added later
+        const { searchParams } = new URL(req.url);
+        const since = parseIsoDate(searchParams.get("since"));
+        const before = parseIsoDate(searchParams.get("before"));
+        const limit = parseMessageLimit(searchParams.get("limit"));
+
+        if (since) {
+            const delta = await db.query.messages.findMany({
+                where: and(
+                    eq(messages.matchId, matchId),
+                    gt(messages.createdAt, since),
+                ),
+                orderBy: [asc(messages.createdAt)],
+            });
+            return successResponse({
+                messages: delta,
+                hasMore: false,
+            });
+        }
+
+        const whereClause = before
+            ? and(eq(messages.matchId, matchId), lt(messages.createdAt, before))
+            : eq(messages.matchId, matchId);
+
+        const latestBatch = await db.query.messages.findMany({
+            where: whereClause,
+            orderBy: [desc(messages.createdAt)],
+            limit: limit + 1,
         });
 
-        return successResponse(chatHistory);
+        const hasMore = latestBatch.length > limit;
+        const page = hasMore ? latestBatch.slice(0, limit) : latestBatch;
+        const chatHistory = [...page].reverse();
+
+        return successResponse({
+            messages: chatHistory,
+            hasMore,
+        });
     } catch (error) {
         return errorResponse(error);
     }

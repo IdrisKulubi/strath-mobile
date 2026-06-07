@@ -1,12 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { z } from 'zod';
 import { getAuthToken } from '@/lib/auth-helpers';
+import { getCurrentUserId } from '@/lib/auth-helpers';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-// Message schema
 const MessageSchema = z.object({
     id: z.string(),
     content: z.string(),
@@ -31,13 +31,75 @@ interface UseChatOptions {
     enabled?: boolean;
 }
 
-// Fetch messages for a match
-async function fetchMessages(matchId: string): Promise<Message[]> {
-    const token = await getAuthToken();
+interface FetchMessagesOptions {
+    since?: string;
+    before?: string;
+    limit?: number;
+}
 
-    const response = await fetch(`${API_URL}/api/messages/${matchId}`, {
+interface FetchMessagesResult {
+    messages: Message[];
+    hasMore: boolean;
+}
+
+function parseMessagesPayload(raw: unknown): FetchMessagesResult {
+    if (Array.isArray(raw)) {
+        return { messages: parseMessageArray(raw), hasMore: false };
+    }
+    if (raw && typeof raw === 'object' && 'messages' in raw) {
+        const payload = raw as { messages?: unknown; hasMore?: boolean };
+        return {
+            messages: parseMessageArray(payload.messages ?? []),
+            hasMore: Boolean(payload.hasMore),
+        };
+    }
+    return { messages: parseMessageArray(raw), hasMore: false };
+}
+
+function parseMessageArray(items: unknown): Message[] {
+    if (!Array.isArray(items)) return [];
+
+    const valid: Message[] = [];
+    for (const item of items) {
+        const parsed = MessageSchema.safeParse(item);
+        if (parsed.success) {
+            valid.push(parsed.data);
+        } else if (__DEV__) {
+            console.warn('[useChat] Skipping invalid message:', parsed.error.flatten());
+        }
+    }
+    return valid;
+}
+
+function mergeMessages(existing: Message[], incoming: Message[]): Message[] {
+    const byId = new Map<string, Message>();
+    for (const msg of existing) {
+        byId.set(msg.id, msg);
+    }
+    for (const msg of incoming) {
+        byId.set(msg.id, msg);
+    }
+    return [...byId.values()].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+}
+
+async function fetchMessages(
+    matchId: string,
+    options?: FetchMessagesOptions,
+): Promise<FetchMessagesResult> {
+    const token = await getAuthToken();
+    const params = new URLSearchParams();
+    if (options?.since) params.set('since', options.since);
+    if (options?.before) params.set('before', options.before);
+    if (options?.limit) params.set('limit', String(options.limit));
+
+    const qs = params.toString();
+    const url = `${API_URL}/api/messages/${matchId}${qs ? `?${qs}` : ''}`;
+
+    const response = await fetch(url, {
         headers: {
-            'Authorization': token ? `Bearer ${token}` : '',
+            Authorization: token ? `Bearer ${token}` : '',
             'Content-Type': 'application/json',
         },
     });
@@ -51,71 +113,65 @@ async function fetchMessages(matchId: string): Promise<Message[]> {
     }
 
     const result = await response.json();
-    const messages = result.data || result;
-
-    // Validate messages
-    return z.array(MessageSchema).parse(messages);
+    const raw = result.data ?? result;
+    return parseMessagesPayload(raw);
 }
 
-// Send a message
 async function sendMessage(matchId: string, content: string): Promise<Message> {
     const token = await getAuthToken();
 
     const response = await fetch(`${API_URL}/api/messages/${matchId}`, {
         method: 'POST',
         headers: {
-            'Authorization': token ? `Bearer ${token}` : '',
+            Authorization: token ? `Bearer ${token}` : '',
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({ content }),
     });
+
+    if (response.status === 403) {
+        throw new ChatAccessDeniedError();
+    }
 
     if (!response.ok) {
         throw new Error('Failed to send message');
     }
 
     const result = await response.json();
-    return MessageSchema.parse(result.data || result);
+    const parsed = MessageSchema.safeParse(result.data || result);
+    if (!parsed.success) {
+        throw new Error('Invalid message response from server');
+    }
+    return parsed.data;
 }
 
-// Mark messages as read
 async function markMessagesAsRead(matchId: string): Promise<void> {
-    console.log('[markAsRead] Starting for matchId:', matchId);
     const token = await getAuthToken();
-    console.log('[markAsRead] Token:', token ? 'Present' : 'Missing');
 
     try {
         const url = `${API_URL}/api/messages/${matchId}/read`;
-        console.log('[markAsRead] Calling:', url);
-
         const response = await fetch(url, {
             method: 'PATCH',
             headers: {
-                'Authorization': token ? `Bearer ${token}` : '',
+                Authorization: token ? `Bearer ${token}` : '',
                 'Content-Type': 'application/json',
             },
         });
 
-        console.log('[markAsRead] Response status:', response.status);
-        const data = await response.json();
-        console.log('[markAsRead] Response data:', data);
-
-        if (!response.ok) {
+        if (!response.ok && __DEV__) {
+            const data = await response.json().catch(() => ({}));
             console.warn('[markAsRead] Failed:', response.status, data);
-        } else {
-            console.log('[markAsRead] Success!');
         }
     } catch (error) {
-        console.error('[markAsRead] Error:', error);
+        if (__DEV__) {
+            console.error('[markAsRead] Error:', error);
+        }
     }
 }
 
-// Get current user ID helper - uses the shared auth helper
-import { getCurrentUserId } from '@/lib/auth-helpers';
-
 /**
  * Smart polling hook for chat messages
- * - Polls every 3 seconds when chat is open
+ * - Polls every 3 seconds when chat is open (delta via ?since=)
  * - Pauses when app is backgrounded
  * - Supports optimistic updates
  */
@@ -124,13 +180,12 @@ export function useChat(matchId: string, options?: UseChatOptions) {
     const enabled = options?.enabled !== false && !!matchId;
     const [isAppActive, setIsAppActive] = useState(true);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const hasMoreRef = useRef(false);
 
-    // Get current user ID on mount
     useEffect(() => {
         getCurrentUserId().then(setCurrentUserId);
     }, []);
 
-    // Track app state for smart polling
     useEffect(() => {
         const handleAppStateChange = (nextAppState: AppStateStatus) => {
             setIsAppActive(nextAppState === 'active');
@@ -140,23 +195,17 @@ export function useChat(matchId: string, options?: UseChatOptions) {
         return () => subscription?.remove();
     }, []);
 
-    // Mark messages as read when chat opens
     useEffect(() => {
         if (matchId && enabled) {
             markMessagesAsRead(matchId).then(() => {
-                // Invalidate matches cache to update unread counts in the list
                 queryClient.invalidateQueries({ queryKey: ['matches'] });
                 queryClient.invalidateQueries({ queryKey: ['conversations'] });
                 queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
-                // Also invalidate notification counts to clear the badge
                 queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
             });
         }
     }, [matchId, queryClient, enabled]);
 
-    // Fetch messages with smart polling
-    // isPending is only true on initial load (no cached data), not during refetches
-    // placeholderData keeps previous data visible during refetch
     const {
         data: messages = [],
         isPending,
@@ -166,31 +215,64 @@ export function useChat(matchId: string, options?: UseChatOptions) {
         refetch,
     } = useQuery({
         queryKey: ['chat', matchId],
-        queryFn: () => fetchMessages(matchId),
-        refetchInterval: isAppActive ? 3000 : false, // Poll every 3s when active
+        queryFn: async () => {
+            const existing = queryClient.getQueryData<Message[]>(['chat', matchId]) ?? [];
+
+            if (existing.length > 0) {
+                const lastCreatedAt = existing[existing.length - 1]?.createdAt;
+                if (lastCreatedAt) {
+                    const { messages: delta } = await fetchMessages(matchId, {
+                        since: lastCreatedAt,
+                    });
+                    if (delta.length === 0) {
+                        return existing;
+                    }
+                    return mergeMessages(existing, delta);
+                }
+            }
+
+            const { messages: loaded, hasMore } = await fetchMessages(matchId);
+            hasMoreRef.current = hasMore;
+            return loaded;
+        },
+        refetchInterval: isAppActive ? 3000 : false,
         refetchIntervalInBackground: false,
         enabled,
-        retry: (failureCount, error) => {
-            if (error instanceof ChatAccessDeniedError) return false;
+        retry: (failureCount, err) => {
+            if (err instanceof ChatAccessDeniedError) return false;
             return failureCount < 2;
         },
-        staleTime: 2000, // Consider data stale after 2s
-        gcTime: 5 * 60 * 1000, // Keep in cache for 5 min
-        placeholderData: (previousData) => previousData, // Keep previous data during refetch
-        structuralSharing: true, // Prevent re-renders if data is deeply equal
+        staleTime: 2000,
+        gcTime: 5 * 60 * 1000,
+        placeholderData: (previousData) => previousData,
+        structuralSharing: true,
     });
 
-    // Send message mutation with optimistic update
+    const loadOlderMessages = async (): Promise<void> => {
+        if (!hasMoreRef.current || messages.length === 0) return;
+
+        const oldest = messages[0]?.createdAt;
+        if (!oldest) return;
+
+        const { messages: older, hasMore } = await fetchMessages(matchId, {
+            before: oldest,
+        });
+        hasMoreRef.current = hasMore;
+
+        if (older.length === 0) return;
+
+        queryClient.setQueryData<Message[]>(['chat', matchId], (old = []) =>
+            mergeMessages(older, old),
+        );
+    };
+
     const sendMessageMutation = useMutation({
         mutationFn: (content: string) => sendMessage(matchId, content),
         onMutate: async (content) => {
-            // Cancel outgoing refetches
             await queryClient.cancelQueries({ queryKey: ['chat', matchId] });
 
-            // Snapshot previous messages
             const previousMessages = queryClient.getQueryData<Message[]>(['chat', matchId]);
 
-            // Optimistically add new message
             const optimisticMessage: Message = {
                 id: `temp-${Date.now()}`,
                 content,
@@ -208,15 +290,12 @@ export function useChat(matchId: string, options?: UseChatOptions) {
             return { previousMessages };
         },
         onError: (_err, _content, context) => {
-            // Rollback on error
             if (context?.previousMessages) {
                 queryClient.setQueryData(['chat', matchId], context.previousMessages);
             }
         },
         onSettled: () => {
-            // Refetch to get the real message with server ID
             queryClient.invalidateQueries({ queryKey: ['chat', matchId] });
-            // Also invalidate matches to update last message
             queryClient.invalidateQueries({ queryKey: ['matches'] });
             queryClient.invalidateQueries({ queryKey: ['conversations'] });
             queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
@@ -234,16 +313,16 @@ export function useChat(matchId: string, options?: UseChatOptions) {
         isAccessDenied,
         error,
         refetch,
+        loadOlderMessages,
+        hasMoreMessages: hasMoreRef.current,
         sendMessage: sendMessageMutation.mutate,
         isSending: sendMessageMutation.isPending,
         currentUserId,
         isAppActive,
+        canSend: Boolean(currentUserId),
     };
 }
 
-/**
- * Format message timestamp for display
- */
 export function formatMessageTime(dateString: string): string {
     const date = new Date(dateString);
     const now = new Date();
@@ -253,7 +332,7 @@ export function formatMessageTime(dateString: string): string {
         return date.toLocaleTimeString('en-US', {
             hour: 'numeric',
             minute: '2-digit',
-            hour12: true
+            hour12: true,
         });
     }
 
@@ -265,6 +344,6 @@ export function formatMessageTime(dateString: string): string {
 
     return date.toLocaleDateString('en-US', {
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
     });
 }

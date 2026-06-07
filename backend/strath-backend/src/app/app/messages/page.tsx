@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 interface Match {
   id: string;
@@ -44,15 +45,16 @@ const SearchIcon = () => (
 export default function MessagesPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  useEffect(() => {
-    fetchMatches();
-  }, []);
-
   const fetchMatches = async () => {
+    setIsError(false);
     try {
       const response = await fetch("/api/matches");
+      if (!response.ok) {
+        throw new Error("Failed to load conversations");
+      }
       const data = await response.json();
       if (data.success && data.data?.matches) {
         setMatches(data.data.matches || []);
@@ -63,18 +65,21 @@ export default function MessagesPage() {
       }
     } catch (error) {
       console.error("Failed to fetch matches:", error);
-      setMatches([]);
+      setIsError(true);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Filter to only show conversations (matches with messages)
-  const conversations = matches.filter((m) => m.lastMessage);
+  useEffect(() => {
+    fetchMatches();
+  }, []);
 
-  const filteredConversations = conversations.filter((match) => {
+  const filteredConversations = matches.filter((match) => {
     const name = match.partner.profile?.firstName || match.partner.name || '';
-    return name.toLowerCase().includes(searchQuery.toLowerCase());
+    const preview = match.lastMessage?.content || '';
+    const q = searchQuery.toLowerCase();
+    return name.toLowerCase().includes(q) || preview.toLowerCase().includes(q);
   });
 
   if (isLoading) {
@@ -91,11 +96,24 @@ export default function MessagesPage() {
     );
   }
 
+  if (isError) {
+    return (
+      <div className="p-4 md:p-6 max-w-4xl mx-auto text-center py-16">
+        <h2 className="text-lg md:text-xl font-semibold text-white mb-2">Couldn&apos;t load conversations</h2>
+        <p className="text-gray-400 max-w-sm mx-auto text-sm md:text-base mb-6">
+          Check your connection and try again.
+        </p>
+        <Button onClick={fetchMatches} className="bg-pink-500 hover:bg-pink-600 text-white rounded-full">
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl md:text-3xl font-bold text-white mb-4 md:mb-6">Messages</h1>
 
-      {/* Search */}
       <div className="relative mb-4 md:mb-6">
         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
           <SearchIcon />
@@ -162,11 +180,11 @@ export default function MessagesPage() {
                   <h3 className="font-semibold text-white text-sm md:text-base">
                     {match.partner.profile?.firstName || match.partner.name?.split(' ')[0] || 'Match'}
                   </h3>
-                  <span className="text-xs text-gray-500">
-                    {formatTime(match.lastMessage?.createdAt)}
+                  <span className="text-xs text-gray-400">
+                    {formatTime(match.lastMessage?.createdAt || match.createdAt)}
                   </span>
                 </div>
-                <p className={`text-sm truncate ${match.unreadCount > 0 ? "text-white font-medium" : "text-gray-400"}`}>
+                <p className={`text-sm truncate ${match.unreadCount > 0 ? "text-white font-medium" : "text-gray-300"}`}>
                   {match.lastMessage?.content || "Say hello! 👋"}
                 </p>
               </div>

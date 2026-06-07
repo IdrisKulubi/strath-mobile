@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 interface ChatInputProps {
     onSend: (message: string) => void;
     isSending?: boolean;
+    disabled?: boolean;
     placeholder?: string;
     onMediaPress?: () => void;
     onGifPress?: () => void;
@@ -25,6 +26,7 @@ interface ChatInputProps {
 export function ChatInput({
     onSend,
     isSending = false,
+    disabled = false,
     placeholder = "Type a message",
     onMediaPress,
     onGifPress,
@@ -35,14 +37,14 @@ export function ChatInput({
 
     const handleSend = () => {
         const trimmed = message.trim();
-        if (!trimmed || isSending) return;
+        if (!trimmed || isSending || disabled) return;
 
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onSend(trimmed);
         setMessage('');
     };
 
-    const canSend = message.trim().length > 0 && !isSending;
+    const canSend = message.trim().length > 0 && !isSending && !disabled;
 
     return (
         <KeyboardAvoidingView
@@ -61,7 +63,7 @@ export function ChatInput({
                             onChangeText={setMessage}
                             multiline
                             maxLength={1000}
-                            editable={!isSending}
+                            editable={!isSending && !disabled}
                             returnKeyType="default"
                         />
                     </View>
