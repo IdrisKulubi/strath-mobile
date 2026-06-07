@@ -379,6 +379,14 @@ export async function getAdminDailyDiscoveryHealth() {
     };
 }
 
+export async function getAdminPhotoIntelligenceOverview() {
+    await requireAdmin();
+    const { getPhotoIntelligenceAdminOverview } = await import(
+        "@/lib/services/photo-intelligence-admin"
+    );
+    return getPhotoIntelligenceAdminOverview();
+}
+
 export async function moveMutualMatchToArranging(mutualMatchId: string) {
     const session = await requireAdmin();
     if (!mutualMatchId) throw new Error("Missing mutual match id");
