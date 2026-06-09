@@ -4,13 +4,10 @@ import {
     TextInput,
     Pressable,
     StyleSheet,
-    KeyboardAvoidingView,
-    Platform,
     ActivityIndicator,
     Text,
 } from 'react-native';
 import { useTheme } from '@/hooks/use-theme';
-import { PaperPlaneTilt, Image, MusicNote, Sticker } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 
 interface ChatInputProps {
@@ -18,6 +15,12 @@ interface ChatInputProps {
     isSending?: boolean;
     disabled?: boolean;
     placeholder?: string;
+    value?: string;
+    onChangeText?: (text: string) => void;
+    onFocus?: () => void;
+    onBlur?: () => void;
+    /** Home-indicator padding when keyboard is closed. Omit while typing. */
+    bottomInset?: number;
     onMediaPress?: () => void;
     onGifPress?: () => void;
     onMusicPress?: () => void;
@@ -27,13 +30,19 @@ export function ChatInput({
     onSend,
     isSending = false,
     disabled = false,
-    placeholder = "Type a message",
-    onMediaPress,
-    onGifPress,
-    onMusicPress
+    placeholder = 'Type a message',
+    value: controlledValue,
+    onChangeText: controlledOnChangeText,
+    onFocus,
+    onBlur,
+    bottomInset = 0,
 }: ChatInputProps) {
     const { colors } = useTheme();
-    const [message, setMessage] = useState('');
+    const [internalMessage, setInternalMessage] = useState('');
+
+    const isControlled = controlledValue !== undefined;
+    const message = isControlled ? controlledValue : internalMessage;
+    const setMessage = isControlled ? controlledOnChangeText! : setInternalMessage;
 
     const handleSend = () => {
         const trimmed = message.trim();
@@ -47,90 +56,60 @@ export function ChatInput({
     const canSend = message.trim().length > 0 && !isSending && !disabled;
 
     return (
-        <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        <View
+            style={[
+                styles.container,
+                {
+                    backgroundColor: colors.background,
+                    borderTopColor: colors.border,
+                    paddingBottom: Math.max(bottomInset, 8),
+                },
+            ]}
         >
-            <View style={[styles.container, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
-                {/* Input Row */}
-                <View style={styles.inputRow}>
-                    <View style={[styles.inputContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <TextInput
-                            style={[styles.input, { color: colors.foreground }]}
-                            placeholder={placeholder}
-                            placeholderTextColor={colors.mutedForeground}
-                            value={message}
-                            onChangeText={setMessage}
-                            multiline
-                            maxLength={1000}
-                            editable={!isSending && !disabled}
-                            returnKeyType="default"
-                        />
-                    </View>
-
-                    <Pressable
-                        style={[
-                            styles.sendButton,
-                            // Send button only shows background when active
-                            canSend && { backgroundColor: colors.primary }
-                        ]}
-                        onPress={handleSend}
-                        disabled={!canSend}
-                    >
-                        {isSending ? (
-                            <ActivityIndicator size="small" color={canSend ? colors.primaryForeground : colors.mutedForeground} />
-                        ) : (
-                            <Text style={{
-                                color: canSend ? colors.primaryForeground : colors.mutedForeground,
-                                fontWeight: '600',
-                                fontSize: 16
-                            }}>
-                                Send
-                            </Text>
-                        )}
-                    </Pressable>
+            <View style={styles.inputRow}>
+                <View style={[styles.inputContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <TextInput
+                        style={[styles.input, { color: colors.foreground }]}
+                        placeholder={placeholder}
+                        placeholderTextColor={colors.mutedForeground}
+                        value={message}
+                        onChangeText={setMessage}
+                        onFocus={onFocus}
+                        onBlur={onBlur}
+                        multiline
+                        maxLength={1000}
+                        editable={!isSending && !disabled}
+                        returnKeyType="default"
+                    />
                 </View>
 
-                {/* Accessory Buttons Row */}
-                {/* <View style={styles.accessoryRow}>
-                    <AccessoryButton
-                        icon={<ImageIcon size={20} color="#FFFFFF" />}
-                        bgColor="#007AFF" // Blue
-                        onPress={onMediaPress}
-                    />
-                    <AccessoryButton
-                        icon={<Text style={{ fontSize: 11, fontWeight: '900', color: '#000000' }}>GIF</Text>}
-                        bgColor="#FFFFFF" // White
-                        onPress={onGifPress}
-                    />
-                    <AccessoryButton
-                        icon={<Music size={20} color="#FFFFFF" />}
-                        bgColor="#34C759" // Green
-                        onPress={onMusicPress}
-                    />
-                </View> */}
+                <Pressable
+                    style={[
+                        styles.sendButton,
+                        canSend && { backgroundColor: colors.primary },
+                    ]}
+                    onPress={handleSend}
+                    disabled={!canSend}
+                >
+                    {isSending ? (
+                        <ActivityIndicator
+                            size="small"
+                            color={canSend ? colors.primaryForeground : colors.mutedForeground}
+                        />
+                    ) : (
+                        <Text
+                            style={{
+                                color: canSend ? colors.primaryForeground : colors.mutedForeground,
+                                fontWeight: '600',
+                                fontSize: 16,
+                            }}
+                        >
+                            Send
+                        </Text>
+                    )}
+                </Pressable>
             </View>
-        </KeyboardAvoidingView>
-    );
-}
-
-function AccessoryButton({ icon, bgColor, onPress }: { icon: React.ReactNode, bgColor: string, onPress?: () => void }) {
-    return (
-        <Pressable
-            style={({ pressed }) => [
-                styles.accessoryButton,
-                { backgroundColor: bgColor },
-                pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] }
-            ]}
-            onPress={() => {
-                if (onPress) {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    onPress();
-                }
-            }}
-        >
-            {icon}
-        </Pressable>
+        </View>
     );
 }
 
@@ -138,7 +117,6 @@ const styles = StyleSheet.create({
     container: {
         paddingHorizontal: 16,
         paddingTop: 12,
-        paddingBottom: 8, // Safe area handled by parent or defaults
         borderTopWidth: StyleSheet.hairlineWidth,
         gap: 12,
     },
@@ -160,7 +138,7 @@ const styles = StyleSheet.create({
     input: {
         fontSize: 16,
         lineHeight: 22,
-        padding: 0, // Reset default padding
+        padding: 0,
     },
     sendButton: {
         height: 44,
@@ -168,17 +146,5 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 12,
         borderRadius: 22,
-    },
-    accessoryRow: {
-        flexDirection: 'row',
-        gap: 12,
-        paddingBottom: 4,
-    },
-    accessoryButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
     },
 });

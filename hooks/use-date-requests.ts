@@ -68,6 +68,7 @@ export function useMutualMatches() {
         refetchOnMount: 'always',
         refetchOnWindowFocus: 'always',
         refetchInterval: 10_000,
+        placeholderData: (previousData) => previousData,
     });
 }
 

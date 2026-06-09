@@ -10,7 +10,7 @@ import {
     Alert,
     Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -35,22 +35,21 @@ import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 100;
-
 export default function ChatScreen() {
     const { matchId } = useLocalSearchParams<{ matchId: string }>();
     const { colors, colorScheme } = useTheme();
+    const insets = useSafeAreaInsets();
     const router = useRouter();
     const flatListRef = useRef<FlatList>(null);
 
-    // Modal states
     const [isSafetyModalVisible, setIsSafetyModalVisible] = useState(false);
     const [blockReportModalVisible, setBlockReportModalVisible] = useState(false);
     const [blockReportMode, setBlockReportMode] = useState<'block' | 'report'>('block');
+    const [draftMessage, setDraftMessage] = useState('');
+    const [isComposerFocused, setIsComposerFocused] = useState(false);
 
-    // Swipe to go back
     const translateX = useSharedValue(0);
 
-    // Hooks
     const { mutate: unmatch } = useUnmatch();
     const { data: mutualDates = [], isLoading: mutualDatesLoading } = useMutualMatches();
 
@@ -75,10 +74,18 @@ export default function ChatScreen() {
         error,
         refetch,
         canSend,
-    } = useChat(matchId || '', { enabled: chatReadable });
+    } = useChat(matchId || '', {
+        enabled: chatReadable,
+        pausePolling: isComposerFocused,
+    });
 
     const showFullAccessGate = !chatReadable || (isAccessDenied && !mutualMatch);
     const showSendGate = chatReadable && mutualMatch && !chatSendable;
+    const composerDisabled = showFullAccessGate || !chatSendable || !canSend;
+
+    useEffect(() => {
+        setDraftMessage('');
+    }, [matchId]);
 
     const { data: conversations } = useConversations();
     const thread = findConversation(conversations, matchId || '');
@@ -90,12 +97,18 @@ export default function ChatScreen() {
           }
         : undefined;
 
-    // Track previous message count to know when new messages arrive
     const prevMessageCountRef = useRef(messages.length);
-
-    // Scroll to bottom only when NEW messages arrive (not on every poll)
+    const isComposerFocusedRef = useRef(isComposerFocused);
     useEffect(() => {
-        if (messages.length > prevMessageCountRef.current && flatListRef.current) {
+        isComposerFocusedRef.current = isComposerFocused;
+    }, [isComposerFocused]);
+
+    useEffect(() => {
+        if (
+            messages.length > prevMessageCountRef.current
+            && flatListRef.current
+            && !isComposerFocusedRef.current
+        ) {
             setTimeout(() => {
                 flatListRef.current?.scrollToEnd({ animated: true });
             }, 100);
@@ -105,13 +118,13 @@ export default function ChatScreen() {
 
     const handleSend = useCallback((content: string) => {
         sendMessage(content);
+        setDraftMessage('');
     }, [sendMessage]);
 
     const goBack = useCallback(() => {
         router.back();
     }, [router]);
 
-    // Safety Actions
     const handleUnmatch = useCallback(() => {
         setIsSafetyModalVisible(false);
 
@@ -134,9 +147,9 @@ export default function ChatScreen() {
                                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                                     router.back();
                                 },
-                                onError: (error) => {
+                                onError: (err) => {
                                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                                    Alert.alert('Error', error.message || 'Failed to unmatch. Please try again.');
+                                    Alert.alert('Error', err.message || 'Failed to unmatch. Please try again.');
                                 },
                             }
                         );
@@ -164,16 +177,13 @@ export default function ChatScreen() {
 
     const handleSafetyCenter = useCallback(() => {
         setIsSafetyModalVisible(false);
-        // TODO: Navigate to safety center
         Alert.alert('Safety Center', 'Safety Center coming soon! For now, you can block or report users if needed.');
     }, []);
 
     const handleBlockReportSuccess = useCallback(() => {
-        // Navigate back after successful block/report
         router.back();
     }, [router]);
 
-    // Swipe right to go back gesture
     const swipeGesture = Gesture.Pan()
         .activeOffsetX([20, SCREEN_WIDTH])
         .onUpdate((event) => {
@@ -205,7 +215,6 @@ export default function ChatScreen() {
         ),
     }));
 
-    // Memoize messages for stable reference in renderItem
     const messagesRef = useRef(messages);
     useEffect(() => {
         messagesRef.current = messages;
@@ -213,7 +222,6 @@ export default function ChatScreen() {
 
     const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
         const isOwn = item.senderId === currentUserId;
-        // Access messages via ref to avoid dependency causing re-renders
         const prevMessages = messagesRef.current;
         const showTimestamp = index === 0 ||
             (index > 0 && prevMessages[index - 1] &&
@@ -226,11 +234,10 @@ export default function ChatScreen() {
                 showTimestamp={showTimestamp}
             />
         );
-    }, [currentUserId]); // Only depend on currentUserId, not messages
+    }, [currentUserId]);
 
     const keyExtractor = useCallback((item: Message) => item.id, []);
 
-    // Header component for the list (Matched date)
     const renderListHeader = useCallback(() => {
         if (!thread) return null;
         const date = new Date(thread.createdAt);
@@ -276,7 +283,21 @@ export default function ChatScreen() {
         </View>
     );
 
-    const renderChatBody = () => {
+    const renderLoadingSkeleton = () => (
+        <View style={styles.loadingContainer}>
+            {[1, 2, 3, 4, 5].map((i) => (
+                <View key={i} style={[styles.skeletonRow, i % 2 === 0 ? styles.skeletonRight : styles.skeletonLeft]}>
+                    <Skeleton
+                        width={i % 2 === 0 ? 200 : 150}
+                        height={50}
+                        borderRadius={18}
+                    />
+                </View>
+            ))}
+        </View>
+    );
+
+    const renderMessageArea = () => {
         if (showFullAccessGate && mutualMatch) {
             return (
                 <ChatAccessGate
@@ -288,15 +309,7 @@ export default function ChatScreen() {
         }
 
         if (showFullAccessGate && mutualDatesLoading) {
-            return (
-                <View style={styles.loadingContainer}>
-                    {[1, 2, 3].map((i) => (
-                        <View key={i} style={[styles.skeletonRow, i % 2 === 0 ? styles.skeletonRight : styles.skeletonLeft]}>
-                            <Skeleton width={i % 2 === 0 ? 200 : 150} height={50} borderRadius={18} />
-                        </View>
-                    ))}
-                </View>
-            );
+            return renderLoadingSkeleton();
         }
 
         if (showFullAccessGate) {
@@ -313,16 +326,16 @@ export default function ChatScreen() {
             );
         }
 
+        if (isInitialLoading && messages.length === 0) {
+            return renderLoadingSkeleton();
+        }
+
         if (isError && messages.length === 0) {
             return renderErrorState();
         }
 
         return (
-            <KeyboardAvoidingView
-                style={styles.keyboardView}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={0}
-            >
+            <>
                 {isError ? (
                     <Pressable
                         onPress={() => refetch()}
@@ -358,62 +371,23 @@ export default function ChatScreen() {
                     ListHeaderComponent={renderListHeader}
                     ListEmptyComponent={isError ? null : renderEmptyState}
                     showsVerticalScrollIndicator={false}
-                    onContentSizeChange={() => {
-                        if (messages.length > 0) {
-                            flatListRef.current?.scrollToEnd({ animated: false });
-                        }
-                    }}
+                    keyboardShouldPersistTaps="handled"
                 />
-
-                <ChatInput
-                    onSend={handleSend}
-                    isSending={isSending}
-                    disabled={!chatSendable || !canSend}
-                    placeholder={
-                        !chatSendable
-                            ? 'Confirm your date to message'
-                            : 'Type a message'
-                    }
-                    onMediaPress={() => undefined}
-                    onGifPress={() => undefined}
-                    onMusicPress={() => undefined}
-                />
-            </KeyboardAvoidingView>
+            </>
         );
     };
 
-    // Loading state - only show skeletons on the VERY FIRST load when no messages exist
-    if (!showFullAccessGate && isInitialLoading && messages.length === 0) {
-        return (
-            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-                <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
-                <ChatHeader
-                    partnerName={partner?.name || 'Loading...'}
-                    partnerImage={partner?.image}
-                />
-                <View style={styles.loadingContainer}>
-                    {[1, 2, 3, 4, 5].map((i) => (
-                        <View key={i} style={[styles.skeletonRow, i % 2 === 0 ? styles.skeletonRight : styles.skeletonLeft]}>
-                            <Skeleton
-                                width={i % 2 === 0 ? 200 : 150}
-                                height={50}
-                                borderRadius={18}
-                            />
-                        </View>
-                    ))}
-                </View>
-            </SafeAreaView>
-        );
-    }
+    const composerPlaceholder = showFullAccessGate || !chatSendable
+        ? 'Confirm your date to message'
+        : 'Type a message';
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
-            {/* Backdrop that shows when swiping */}
             <Animated.View
                 style={[
                     StyleSheet.absoluteFill,
                     { backgroundColor: '#000' },
-                    backdropStyle
+                    backdropStyle,
                 ]}
                 pointerEvents="none"
             />
@@ -424,12 +398,32 @@ export default function ChatScreen() {
                         <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
 
                         <ChatHeader
-                            partnerName={partner?.name || 'Chat'}
+                            partnerName={partner?.name || (isInitialLoading ? 'Loading...' : 'Chat')}
                             partnerImage={partner?.image}
                             onMorePress={() => setIsSafetyModalVisible(true)}
                         />
 
-                        {renderChatBody()}
+                        <KeyboardAvoidingView
+                            style={styles.keyboardView}
+                            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                            keyboardVerticalOffset={0}
+                        >
+                            <View style={styles.messageArea}>
+                                {renderMessageArea()}
+                            </View>
+
+                            <ChatInput
+                                value={draftMessage}
+                                onChangeText={setDraftMessage}
+                                onSend={handleSend}
+                                isSending={isSending}
+                                disabled={composerDisabled}
+                                placeholder={composerPlaceholder}
+                                bottomInset={isComposerFocused ? 0 : insets.bottom}
+                                onFocus={() => setIsComposerFocused(true)}
+                                onBlur={() => setIsComposerFocused(false)}
+                            />
+                        </KeyboardAvoidingView>
 
                         <SafetyToolkitModal
                             visible={isSafetyModalVisible}
@@ -444,7 +438,6 @@ export default function ChatScreen() {
                 </Animated.View>
             </GestureDetector>
 
-            {/* Block/Report Modal */}
             {partner && (
                 <BlockReportModal
                     visible={blockReportModalVisible}
@@ -465,6 +458,9 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     keyboardView: {
+        flex: 1,
+    },
+    messageArea: {
         flex: 1,
     },
     messageFlatList: {

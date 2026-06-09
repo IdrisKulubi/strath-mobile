@@ -29,6 +29,8 @@ export class ChatAccessDeniedError extends Error {
 interface UseChatOptions {
     /** When false, skips fetch, read receipts, and polling. */
     enabled?: boolean;
+    /** When true, pauses 3s message polling (e.g. while user is typing). */
+    pausePolling?: boolean;
 }
 
 interface FetchMessagesOptions {
@@ -178,6 +180,7 @@ async function markMessagesAsRead(matchId: string): Promise<void> {
 export function useChat(matchId: string, options?: UseChatOptions) {
     const queryClient = useQueryClient();
     const enabled = options?.enabled !== false && !!matchId;
+    const pausePolling = options?.pausePolling === true;
     const [isAppActive, setIsAppActive] = useState(true);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const hasMoreRef = useRef(false);
@@ -198,9 +201,7 @@ export function useChat(matchId: string, options?: UseChatOptions) {
     useEffect(() => {
         if (matchId && enabled) {
             markMessagesAsRead(matchId).then(() => {
-                queryClient.invalidateQueries({ queryKey: ['matches'] });
                 queryClient.invalidateQueries({ queryKey: ['conversations'] });
-                queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
                 queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
             });
         }
@@ -235,7 +236,7 @@ export function useChat(matchId: string, options?: UseChatOptions) {
             hasMoreRef.current = hasMore;
             return loaded;
         },
-        refetchInterval: isAppActive ? 3000 : false,
+        refetchInterval: isAppActive && !pausePolling ? 3000 : false,
         refetchIntervalInBackground: false,
         enabled,
         retry: (failureCount, err) => {
