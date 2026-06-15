@@ -1,4 +1,6 @@
 const DEFAULT_AMOUNT_CENTS = 49_900;
+const DEFAULT_PACK_SIZE = 2;
+const DEFAULT_UNIT_CENTS = 24_950;
 const DEFAULT_WINDOW_HOURS = 24;
 const DEFAULT_TOKEN_TTL_MS = 3_600_000;
 const DEFAULT_WEB_PAYMENT_URL = "https://strathspace.com/payments";
@@ -12,11 +14,24 @@ export function parsePositiveInt(value: string | undefined, fallback: number): n
 }
 
 function readPaymentConfig() {
+    const packAmountCents = parsePositiveInt(
+        process.env.DATE_CONFIRMATION_PACK_AMOUNT_CENTS,
+        parsePositiveInt(process.env.DATE_CONFIRMATION_AMOUNT_CENTS, DEFAULT_AMOUNT_CENTS),
+    );
+    const packSize = parsePositiveInt(
+        process.env.DATE_CONFIRMATION_PACK_SIZE,
+        DEFAULT_PACK_SIZE,
+    );
+    const unitCents = parsePositiveInt(
+        process.env.DATE_CONFIRMATION_UNIT_CENTS,
+        DEFAULT_UNIT_CENTS,
+    );
+
     return {
-        amountCents: parsePositiveInt(
-            process.env.DATE_CONFIRMATION_AMOUNT_CENTS,
-            DEFAULT_AMOUNT_CENTS,
-        ),
+        amountCents: packAmountCents,
+        packAmountCents,
+        packSize,
+        unitCents,
         currency: "KES" as const,
         windowHours: parsePositiveInt(
             process.env.DATE_PAYMENT_WINDOW_HOURS,

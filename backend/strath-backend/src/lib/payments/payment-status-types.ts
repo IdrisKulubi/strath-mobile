@@ -14,4 +14,6 @@ export type PaymentStatusResult =
           canUseCredit: boolean;
           canChooseRefund: boolean;
           userPaymentStatus: string | null;
+          confirmationBalance: ConfirmationBalance;
+          canConfirmWithBalance: boolean;
       };

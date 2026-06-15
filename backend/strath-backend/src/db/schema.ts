@@ -961,7 +961,7 @@ export const userCredits = pgTable(
             onDelete: "set null",
         }),
         status: text("status")
-            .$type<"active" | "spent" | "expired">()
+            .$type<"active" | "reserved" | "spent" | "expired">()
             .default("active")
             .notNull(),
         usedAt: timestamp("used_at"),

@@ -1,19 +1,25 @@
-import type { PaymentStatusData } from '@/hooks/use-payment-status';
+import type { ConfirmationBalance, PaymentStatusData } from '@/hooks/use-payment-status';
+import {
+    formatPackAmount,
+    getPackPaymentBody,
+    PACK_FAIR_USE_LINE,
+    PACK_INTRO_BODY,
+} from '@/lib/confirmation-copy';
 
 export type PaymentUiPhase =
+    | 'has_balance_confirm'
+    | 'awaiting_pack_payment'
     | 'awaiting_payment'
     | 'paid_waiting'
     | 'partner_paid_you_havent'
     | 'both_paid'
     | 'expired_unpaid'
     | 'expired_refund_choice'
+    | 'expired_restored'
     | 'free_confirm';
 
 export function formatPaymentAmount(amount: number, currency: string): string {
-    if (currency.toUpperCase() === 'KES') {
-        return `KES ${amount}`;
-    }
-    return `${currency} ${amount}`;
+    return formatPackAmount(amount, currency);
 }
 
 export function resolvePaymentUiPhase(input: {
@@ -27,60 +33,113 @@ export function resolvePaymentUiPhase(input: {
     }
 
     const status = input.paymentStatus;
+    const balance: ConfirmationBalance = status?.confirmationBalance ?? {
+        available: 0,
+        reserved: 0,
+        total: 0,
+    };
+
     if (!status) {
-        return input.viewerSlotConfirmed ? 'paid_waiting' : 'awaiting_payment';
+        if (input.viewerSlotConfirmed) {
+            return 'paid_waiting';
+        }
+        return balance.available >= 1 ? 'has_balance_confirm' : 'awaiting_pack_payment';
     }
 
-    if (status.paymentState === 'expired') {
-        return status.canChooseRefund ? 'expired_refund_choice' : 'expired_unpaid';
+    if (status.paymentState === 'expired' || status.paymentState === 'cancelled') {
+        if (status.canChooseRefund) {
+            return 'expired_refund_choice';
+        }
+        if (
+            input.viewerSlotConfirmed
+            || status.currentUserPaid
+            || balance.total > 0
+        ) {
+            return 'expired_restored';
+        }
+        return 'expired_unpaid';
     }
 
     if (status.paymentState === 'both_paid' || (status.currentUserPaid && status.otherUserPaid)) {
         return 'both_paid';
     }
 
-    if (status.currentUserPaid) {
+    if (input.viewerSlotConfirmed || status.currentUserPaid) {
         return 'paid_waiting';
     }
 
     if (status.otherUserPaid && !status.currentUserPaid) {
-        return 'partner_paid_you_havent';
+        return status.canConfirmWithBalance ? 'has_balance_confirm' : 'partner_paid_you_havent';
     }
 
-    return 'awaiting_payment';
+    if (status.canConfirmWithBalance) {
+        return 'has_balance_confirm';
+    }
+
+    return 'awaiting_pack_payment';
 }
 
 export function getPaymentUiCopy(
     phase: PaymentUiPhase,
     partnerFirstName: string,
     amountLabel: string,
+    balance?: ConfirmationBalance,
 ): {
     body: string;
     partnerLine: string;
     primaryCta: string | null;
     showPrimaryCta: boolean;
+    fairUseLine: string | null;
 } {
+    const fairUseLine = PACK_FAIR_USE_LINE;
+
     switch (phase) {
+        case 'has_balance_confirm':
+            return {
+                body:
+                    balance && balance.available >= 1
+                        ? `You have ${balance.available === 1 ? '1 date confirmation' : `${balance.available} date confirmations`}. Tap below to confirm this match.`
+                        : PACK_INTRO_BODY,
+                partnerLine: partnerFirstName
+                    ? `Confirm your assigned time with ${partnerFirstName}.`
+                    : 'Confirm your assigned campus date.',
+                primaryCta: 'Confirm match',
+                showPrimaryCta: true,
+                fairUseLine,
+            };
+        case 'awaiting_pack_payment':
+            return {
+                body: getPackPaymentBody(amountLabel),
+                partnerLine: partnerFirstName
+                    ? `Confirm your assigned time with ${partnerFirstName}.`
+                    : 'Confirm your assigned campus date.',
+                primaryCta: `Pay ${amountLabel} · get 2 confirmations`,
+                showPrimaryCta: true,
+                fairUseLine,
+            };
         case 'both_paid':
             return {
-                body: 'You are both confirmed. We are arranging this one for you.',
+                body: "You're both confirmed. We're arranging this one for you.",
                 partnerLine: 'You both confirmed.',
                 primaryCta: null,
                 showPrimaryCta: false,
+                fairUseLine: null,
             };
         case 'paid_waiting':
             return {
-                body: 'You are confirmed. Waiting for the other person to confirm.',
+                body: `You confirmed. Waiting for ${partnerFirstName} to confirm.`,
                 partnerLine: `Waiting for ${partnerFirstName} to confirm.`,
                 primaryCta: null,
                 showPrimaryCta: false,
+                fairUseLine: null,
             };
         case 'partner_paid_you_havent':
             return {
-                body: `They have confirmed. Pay ${amountLabel} to move forward.`,
+                body: `${partnerFirstName} confirmed. Pay ${amountLabel} once for 2 date confirmations.`,
                 partnerLine: `${partnerFirstName} confirmed. Your turn to lock in.`,
-                primaryCta: `Pay ${amountLabel}`,
+                primaryCta: `Pay ${amountLabel} · get 2 confirmations`,
                 showPrimaryCta: true,
+                fairUseLine,
             };
         case 'expired_unpaid':
             return {
@@ -88,13 +147,29 @@ export function getPaymentUiCopy(
                 partnerLine: 'The confirmation window has closed.',
                 primaryCta: null,
                 showPrimaryCta: false,
+                fairUseLine: null,
             };
-        case 'expired_refund_choice':
+        case 'expired_restored': {
+            const left = balance?.available ?? 0;
+            const leftLine =
+                left > 0
+                    ? `You still have ${left === 1 ? '1 confirmation' : `${left} confirmations`} left.`
+                    : 'Your confirmation was not used.';
             return {
-                body: 'This match expired. Choose what to do with your setup fee below.',
+                body: `They did not confirm in time. ${leftLine}`,
                 partnerLine: 'The confirmation window has closed.',
                 primaryCta: null,
                 showPrimaryCta: false,
+                fairUseLine: null,
+            };
+        }
+        case 'expired_refund_choice':
+            return {
+                body: 'This match expired. Choose what to do with your payment below.',
+                partnerLine: 'The confirmation window has closed.',
+                primaryCta: null,
+                showPrimaryCta: false,
+                fairUseLine: null,
             };
         case 'free_confirm':
             return {
@@ -102,16 +177,18 @@ export function getPaymentUiCopy(
                 partnerLine: '',
                 primaryCta: 'Confirm date',
                 showPrimaryCta: true,
+                fairUseLine: null,
             };
         case 'awaiting_payment':
         default:
             return {
-                body: `Both of you said yes. Confirm your date with a one-time ${amountLabel} setup fee.`,
+                body: getPackPaymentBody(amountLabel),
                 partnerLine: partnerFirstName
                     ? `Confirm your assigned time with ${partnerFirstName}.`
                     : 'Confirm your assigned campus date.',
-                primaryCta: `Pay ${amountLabel} to confirm`,
+                primaryCta: `Pay ${amountLabel} · get 2 confirmations`,
                 showPrimaryCta: true,
+                fairUseLine,
             };
     }
 }

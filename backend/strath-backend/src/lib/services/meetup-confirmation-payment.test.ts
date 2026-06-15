@@ -7,14 +7,26 @@ import {
 } from "@/lib/services/meetup-confirmation-payment";
 
 describe("meetup-confirmation-payment", () => {
-    it("shouldBlockFinalizeForPayment only when flag on and not both_paid", () => {
+    it("shouldBlockFinalizeForPayment only when flag on and not both ready", () => {
         assert.equal(
             shouldBlockFinalizeForPayment({ paymentsEnabled: false, paymentState: "awaiting_payment" }),
             false,
         );
         assert.equal(
-            shouldBlockFinalizeForPayment({ paymentsEnabled: true, paymentState: "paid_waiting_for_other" }),
+            shouldBlockFinalizeForPayment({
+                paymentsEnabled: true,
+                paymentState: "paid_waiting_for_other",
+                readyParticipantCount: 1,
+            }),
             true,
+        );
+        assert.equal(
+            shouldBlockFinalizeForPayment({
+                paymentsEnabled: true,
+                paymentState: "both_paid",
+                readyParticipantCount: 2,
+            }),
+            false,
         );
         assert.equal(
             shouldBlockFinalizeForPayment({ paymentsEnabled: true, paymentState: "both_paid" }),
@@ -22,7 +34,7 @@ describe("meetup-confirmation-payment", () => {
         );
     });
 
-    it("shouldRequirePaymentToConfirm when flag on and user not paid", () => {
+    it("shouldRequirePaymentToConfirm when flag on and no paid, reserved, or balance", () => {
         assert.equal(
             shouldRequirePaymentToConfirm({ paymentsEnabled: false, userPaymentStatus: "pending" }),
             false,
@@ -33,6 +45,22 @@ describe("meetup-confirmation-payment", () => {
         );
         assert.equal(
             shouldRequirePaymentToConfirm({ paymentsEnabled: true, userPaymentStatus: "paid" }),
+            false,
+        );
+        assert.equal(
+            shouldRequirePaymentToConfirm({
+                paymentsEnabled: true,
+                userPaymentStatus: "pending",
+                hasReserved: true,
+            }),
+            false,
+        );
+        assert.equal(
+            shouldRequirePaymentToConfirm({
+                paymentsEnabled: true,
+                userPaymentStatus: "pending",
+                canUseBalance: true,
+            }),
             false,
         );
     });

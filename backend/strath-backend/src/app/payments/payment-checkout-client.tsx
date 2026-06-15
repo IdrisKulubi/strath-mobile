@@ -23,10 +23,10 @@ export interface PaymentCheckoutClientProps {
 }
 
 const INCLUDES = [
+    "2 date confirmations (1 used when you both confirm this match)",
+    "1 confirmation saved for your next match",
     "Date coordination by StrathSpace",
-    "Confirmation with both people",
     "Venue and time scheduling",
-    "Pre-date support",
 ] as const;
 
 export function PaymentCheckoutClient(props: PaymentCheckoutClientProps) {
@@ -84,11 +84,11 @@ export function PaymentCheckoutClient(props: PaymentCheckoutClientProps) {
     return (
         <div className="space-y-6">
             <header className="space-y-2 text-center">
-                <p className={paymentBrand.label}>Date setup fee</p>
-                <h1 className={paymentBrand.display}>Confirm your date</h1>
+                <p className={paymentBrand.label}>Date confirmation pack</p>
+                <h1 className={paymentBrand.display}>Confirm your match</h1>
                 <p className={paymentBrand.body}>
-                    A one-time fee helps us coordinate your date with {props.partnerFirstName} and
-                    keep StrathSpace intentional. This is not a subscription.
+                    Pay once and get 2 date confirmations. One is used when you and{" "}
+                    {props.partnerFirstName} both confirm. This is not a subscription.
                 </p>
             </header>
 

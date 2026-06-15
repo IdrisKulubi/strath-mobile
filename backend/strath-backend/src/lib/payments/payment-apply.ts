@@ -2,6 +2,11 @@ import { and, eq, sql } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import { dateMatches, datePayments, mutualMatches } from "@/db/schema";
+import {
+    countParticipantsWithReservedOrPaid,
+    grantConfirmationPack,
+    reserveConfirmationForMatch,
+} from "@/lib/payments/confirmation-balance";
 import { getPaymentsEnabled } from "@/lib/payments/payment-flags";
 import { tryFinalizeConfirmedMeetup } from "@/lib/services/meetup-confirmation-service";
 import { notifyPartnerAfterSlotConfirm } from "@/lib/services/meetup-push-notifications-service";
@@ -18,26 +23,57 @@ export type ApplyPaidParticipantResult = {
     paymentState: string;
 };
 
-/** Assumes the payment row is already `paid` within the transaction. */
+/** Assumes the payment row is already `paid` within the transaction when paymentId is set. */
 export async function applyPaidParticipantInTransaction(
     tx: PaymentApplyTx,
     input: {
         dateMatchId: string;
         userId: string;
         now: Date;
+        paymentId?: string;
     },
 ): Promise<ApplyPaidParticipantResult> {
-    const [countRow] = await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(datePayments)
-        .where(
-            and(
-                eq(datePayments.dateMatchId, input.dateMatchId),
-                eq(datePayments.status, "paid"),
-            ),
+    const mutual = await tx.query.mutualMatches.findFirst({
+        where: eq(mutualMatches.legacyDateMatchId, input.dateMatchId),
+    });
+
+    if (input.paymentId) {
+        await grantConfirmationPack(tx, {
+            userId: input.userId,
+            paymentId: input.paymentId,
+            now: input.now,
+        });
+    }
+
+    const reserved = await reserveConfirmationForMatch(tx, input.userId, input.dateMatchId, input.now);
+    if (!reserved.reserved && !input.paymentId) {
+        throw new Error("insufficient_confirmation_balance");
+    }
+
+    let paidCount = 0;
+    let paymentState = "awaiting_payment";
+
+    if (mutual) {
+        paidCount = await countParticipantsWithReservedOrPaid(
+            input.dateMatchId,
+            mutual.userAId,
+            mutual.userBId,
+            tx,
         );
-    const paidCount = Number(countRow?.count ?? 0);
-    const paymentState = paidCount >= 2 ? "both_paid" : "paid_waiting_for_other";
+        paymentState = paidCount >= 2 ? "both_paid" : paidCount >= 1 ? "paid_waiting_for_other" : "awaiting_payment";
+    } else {
+        const [countRow] = await tx
+            .select({ count: sql<number>`count(*)::int` })
+            .from(datePayments)
+            .where(
+                and(
+                    eq(datePayments.dateMatchId, input.dateMatchId),
+                    eq(datePayments.status, "paid"),
+                ),
+            );
+        paidCount = Number(countRow?.count ?? 0);
+        paymentState = paidCount >= 2 ? "both_paid" : "paid_waiting_for_other";
+    }
 
     await tx
         .update(dateMatches)
@@ -48,10 +84,6 @@ export async function applyPaidParticipantInTransaction(
         .where(eq(dateMatches.id, input.dateMatchId));
 
     let mutualMatchId: string | null = null;
-
-    const mutual = await tx.query.mutualMatches.findFirst({
-        where: eq(mutualMatches.legacyDateMatchId, input.dateMatchId),
-    });
 
     if (mutual) {
         mutualMatchId = mutual.id;
@@ -67,6 +99,22 @@ export async function applyPaidParticipantInTransaction(
     }
 
     return { paidCount, mutualMatchId, paymentState };
+}
+
+/** Reserve a confirmation and confirm slot without Paystack (existing pack balance). */
+export async function applyBalanceConfirmedParticipantInTransaction(
+    tx: PaymentApplyTx,
+    input: {
+        dateMatchId: string;
+        userId: string;
+        now: Date;
+    },
+): Promise<ApplyPaidParticipantResult> {
+    return applyPaidParticipantInTransaction(tx, {
+        dateMatchId: input.dateMatchId,
+        userId: input.userId,
+        now: input.now,
+    });
 }
 
 export async function runPaidParticipantSideEffects(input: {

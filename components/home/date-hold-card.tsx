@@ -35,8 +35,21 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
     const { data: paymentStatus } = usePaymentStatus(hold.dateMatchId ?? undefined);
 
     const copy = useMemo(
-        () => buildCopy(hold, paymentsEnabled, paymentStatus?.amount, paymentStatus?.currency),
-        [hold, paymentsEnabled, paymentStatus?.amount, paymentStatus?.currency],
+        () =>
+            buildCopy(
+                hold,
+                paymentsEnabled,
+                paymentStatus?.amount,
+                paymentStatus?.currency,
+                paymentStatus?.canConfirmWithBalance,
+            ),
+        [
+            hold,
+            paymentsEnabled,
+            paymentStatus?.amount,
+            paymentStatus?.currency,
+            paymentStatus?.canConfirmWithBalance,
+        ],
     );
 
     const reschedulePending = hold.slotConfirmation?.reschedule?.pending;
@@ -68,14 +81,20 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
     }, [copy.primaryCta, hold.dateMatchId, partnerName, router]);
 
     const paidCreditNote = useMemo(() => {
-        if (!paymentsEnabled || !paymentStatus?.currentUserPaid) {
+        if (!paymentsEnabled) {
             return null;
         }
-        const amountLabel = formatPaymentAmount(
-            paymentStatus.amount ?? 499,
-            paymentStatus.currency ?? 'KES',
-        );
-        return `If you cancel, your ${amountLabel} stays as StrathSpace credit for your next date.`;
+        if (paymentStatus?.confirmationBalance && paymentStatus.confirmationBalance.reserved > 0) {
+            return 'If they do not confirm in time, your confirmation stays unused.';
+        }
+        if (paymentStatus?.currentUserPaid) {
+            const amountLabel = formatPaymentAmount(
+                paymentStatus.amount ?? 499,
+                paymentStatus.currency ?? 'KES',
+            );
+            return `If you cancel, your ${amountLabel} pack balance stays on your account.`;
+        }
+        return null;
     }, [paymentsEnabled, paymentStatus]);
 
     const handleCancel = (reason: MatchHoldCancelReason) => {
@@ -303,13 +322,20 @@ function buildCopy(
     paymentsEnabled: boolean,
     amount?: number,
     currency?: string,
+    canConfirmWithBalance?: boolean,
 ): HoldCopy {
     const name = hold.partner.firstName ?? 'them';
     const amountLabel = formatPaymentAmount(amount ?? 499, currency ?? 'KES');
     const needsPayConfirm =
         paymentsEnabled
         && hold.slotConfirmation?.needsSlotConfirmation
-        && !hold.slotConfirmation.viewerSlotConfirmed;
+        && !hold.slotConfirmation.viewerSlotConfirmed
+        && !canConfirmWithBalance;
+    const needsBalanceConfirm =
+        paymentsEnabled
+        && hold.slotConfirmation?.needsSlotConfirmation
+        && !hold.slotConfirmation.viewerSlotConfirmed
+        && Boolean(canConfirmWithBalance);
 
     switch (hold.status) {
         case 'mutual':
@@ -319,31 +345,41 @@ function buildCopy(
                 title: `You and ${name} both said yes`,
                 subtitle: hold.slotConfirmation?.needsSlotConfirmation
                     ? needsPayConfirm
-                        ? `Pay ${amountLabel} on Dates to confirm your campus time. New intros stay paused until this is settled.`
-                        : 'Confirm your assigned StrathSpace date below. New intros stay paused until this is settled.'
+                        ? `Pay ${amountLabel} on Dates for 2 date confirmations. New intros stay paused until this is settled.`
+                        : needsBalanceConfirm
+                          ? 'You have a confirmation ready. Confirm your campus time on Dates.'
+                          : 'Confirm your assigned StrathSpace date below. New intros stay paused until this is settled.'
                     : 'Say hi in chat while your date is lined up. New intros are paused for this match.',
                 footnote: 'You can cancel any time and we will keep matching you.',
                 primaryCta: needsPayConfirm
                     ? { label: `Pay ${amountLabel} on Dates`, kind: 'view' }
-                    : { label: 'Message', kind: 'view' },
+                    : needsBalanceConfirm
+                      ? { label: 'Confirm on Dates', kind: 'view' }
+                      : { label: 'Message', kind: 'view' },
             };
         case 'being_arranged':
             return {
                 statusLabel: hold.slotConfirmation?.needsSlotConfirmation
                     ? needsPayConfirm
                         ? 'Pay to confirm'
-                        : 'Confirm your date'
+                        : needsBalanceConfirm
+                          ? 'Confirm your match'
+                          : 'Confirm your date'
                     : 'Arranging your date',
                 statusIcon: hold.slotConfirmation?.needsSlotConfirmation ? 'calendar' : 'calendar-outline',
                 title: hold.slotConfirmation?.needsSlotConfirmation
                     ? needsPayConfirm
-                        ? `Pay ${amountLabel} to confirm with ${name}`
-                        : `Confirm your date with ${name}`
+                        ? `Pay ${amountLabel} for 2 confirmations`
+                        : needsBalanceConfirm
+                          ? `Confirm your match with ${name}`
+                          : `Confirm your date with ${name}`
                     : `Setting up your date with ${name}`,
                 subtitle: hold.slotConfirmation?.needsSlotConfirmation
                     ? needsPayConfirm
-                        ? 'Your campus time is assigned. Complete payment on Dates to continue.'
-                        : 'Your campus time is assigned. Confirm below to continue.'
+                        ? 'Your campus time is assigned. Pay on Dates to confirm and continue.'
+                        : needsBalanceConfirm
+                          ? 'Your campus time is assigned. Use 1 confirmation on Dates to continue.'
+                          : 'Your campus time is assigned. Confirm below to continue.'
                     : 'Your date is being finalized. New intros stay paused.',
                 footnote: hold.slotConfirmation?.needsSlotConfirmation
                     ? needsPayConfirm
@@ -353,7 +389,9 @@ function buildCopy(
                 primaryCta: hold.slotConfirmation?.needsSlotConfirmation
                     ? needsPayConfirm
                         ? { label: `Pay ${amountLabel} on Dates`, kind: 'view' }
-                        : null
+                        : needsBalanceConfirm
+                          ? { label: 'Confirm on Dates', kind: 'view' }
+                          : null
                     : { label: 'See arrangement', kind: 'view' },
             };
         case 'upcoming':

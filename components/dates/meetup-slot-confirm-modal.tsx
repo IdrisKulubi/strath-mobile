@@ -45,10 +45,11 @@ export function MeetupSlotConfirmModal({
                     <View style={styles.content}>
                         <View style={styles.header}>
                             <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-                                Confirm your date
+                                Confirm your match
                             </Text>
                             <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
-                                Confirm before you browse matches or message {partnerName}.
+                                Pay KSh 499 once for 2 date confirmations. Confirm before you browse
+                                matches or message {partnerName}.
                             </Text>
                         </View>
 

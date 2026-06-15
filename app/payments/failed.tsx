@@ -25,7 +25,7 @@ export default function PaymentFailedScreen() {
                 <ActivityIndicator color={colors.primary} />
                 <RNText style={[styles.title, { color: colors.foreground }]}>Payment not completed</RNText>
                 <RNText style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                    You can try again from your date card.
+                    You can try again from your match card on Dates.
                 </RNText>
             </View>
         </Screen>

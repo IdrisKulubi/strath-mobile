@@ -19,8 +19,13 @@ import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
 import { useNotificationPermissionPrompt } from '@/context/notification-permission-context';
 import { useToast } from '@/components/ui/toast';
 import { PaymentCreditActions } from '@/components/dates/payment-credit-actions';
+import { ConfirmationBalancePill } from '@/components/dates/confirmation-balance-pill';
 import { PaymentStatusBanner } from '@/components/dates/payment-status-banner';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import {
+    getConfirmToastMessage,
+    type ConfirmToastOutcome,
+} from '@/lib/confirmation-copy';
 import {
     formatPaymentAmount,
     getPaymentUiCopy,
@@ -73,6 +78,13 @@ export function MeetupSlotConfirm({
         paymentStatus?.currency ?? 'KES',
     );
 
+    const confirmationBalance = paymentStatus?.confirmationBalance ?? {
+        available: 0,
+        reserved: 0,
+        total: 0,
+    };
+    const canConfirmWithBalance = paymentStatus?.canConfirmWithBalance ?? false;
+
     const paymentPhase = resolvePaymentUiPhase({
         paymentsEnabled,
         paymentStatus,
@@ -80,9 +92,21 @@ export function MeetupSlotConfirm({
         partnerSlotConfirmed,
     });
 
-    const paymentCopy = getPaymentUiCopy(paymentPhase, partnerFirstName, amountLabel);
+    const paymentCopy = getPaymentUiCopy(
+        paymentPhase,
+        partnerFirstName,
+        amountLabel,
+        confirmationBalance,
+    );
 
-    const isPending = paymentsEnabled ? payToConfirm.isPending : confirm.isPending;
+    const useBalanceConfirm =
+        paymentsEnabled && canConfirmWithBalance && !viewerSlotConfirmed;
+
+    const isPending = useBalanceConfirm
+        ? confirm.isPending
+        : paymentsEnabled
+          ? payToConfirm.isPending
+          : confirm.isPending;
 
     const canAct =
         confirmWindowOpen
@@ -114,28 +138,12 @@ export function MeetupSlotConfirm({
         partnerFirstName,
     ]);
 
-    const showToastForOutcome = async (outcome: string) => {
-        if (outcome === 'finalized') {
-            toast.show({
-                message: 'Date confirmed. See you on campus.',
-                variant: 'success',
-            });
-        } else if (outcome === 'paid_waiting') {
-            toast.show({
-                message: `You are confirmed. Waiting for ${partnerFirstName}.`,
-                variant: 'default',
-            });
-        } else if (outcome === 'confirmed') {
-            toast.show({
-                message: `Waiting for ${partnerFirstName} to confirm.`,
-                variant: 'default',
-            });
-        } else if (outcome === 'cancelled' || outcome === 'unpaid') {
-            toast.show({
-                message: 'Payment was not completed. Your date is still pending.',
-                variant: 'default',
-            });
-        }
+    const showToastForOutcome = async (outcome: ConfirmToastOutcome) => {
+        const message = getConfirmToastMessage(outcome, partnerFirstName, confirmationBalance);
+        toast.show({
+            message,
+            variant: outcome === 'finalized' || outcome === 'pack_purchased' ? 'success' : 'default',
+        });
         await promptIfAppropriate({
             context: 'after_confirm',
             partnerName: partnerFirstName,
@@ -146,12 +154,35 @@ export function MeetupSlotConfirm({
         if (!canAct) return;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+        if (useBalanceConfirm) {
+            confirm.mutate(mutualMatchId, {
+                onSuccess: async (data) => {
+                    if (data?.status === 'finalized') {
+                        await showToastForOutcome('finalized');
+                    } else {
+                        await showToastForOutcome('balance_confirmed');
+                    }
+                },
+                onError: () => {
+                    toast.show({
+                        message: 'Could not confirm right now. Try again.',
+                        variant: 'danger',
+                    });
+                },
+            });
+            return;
+        }
+
         if (paymentsEnabled && dateMatchId) {
             payToConfirm.mutate(
                 { mutualMatchId, dateMatchId, partnerFirstName },
                 {
                     onSuccess: (result) => {
-                        void showToastForOutcome(result.outcome);
+                        const outcome: ConfirmToastOutcome =
+                            result.outcome === 'paid_waiting' && !viewerSlotConfirmed
+                                ? 'pack_purchased'
+                                : result.outcome;
+                        void showToastForOutcome(outcome);
                     },
                     onError: (error) => {
                         toast.show({
@@ -186,13 +217,21 @@ export function MeetupSlotConfirm({
 
     const primaryCtaLabel = paymentsEnabled
         ? isPending
-            ? 'Opening checkout…'
-            : paymentCopy.primaryCta ?? 'Confirm date'
+            ? useBalanceConfirm
+                ? 'Confirming…'
+                : 'Opening checkout…'
+            : paymentCopy.primaryCta ?? 'Confirm match'
         : isPending
           ? 'Confirming…'
           : 'Confirm date';
 
     const bodyCopy = paymentsEnabled && paymentCopy.body ? paymentCopy.body : null;
+    const fairUseLine = paymentsEnabled ? paymentCopy.fairUseLine : null;
+
+    const balancePill =
+        paymentsEnabled && confirmationBalance.total > 0 ? (
+            <ConfirmationBalancePill balance={confirmationBalance} />
+        ) : null;
 
     const confirmedBlock = (
         <View
@@ -230,7 +269,7 @@ export function MeetupSlotConfirm({
     );
 
     const creditBlock =
-        dateMatchId && paymentsEnabled ? (
+        dateMatchId && paymentsEnabled && !canConfirmWithBalance ? (
             <PaymentCreditActions
                 dateMatchId={dateMatchId}
                 onCreditApplied={() => {
@@ -259,6 +298,8 @@ export function MeetupSlotConfirm({
                 ]}
             >
                 <View style={styles.modalBody}>
+                    {balancePill}
+
                     {scheduledAt ? (
                         <View style={[styles.modalSlotHero, { backgroundColor: colors.muted }]}>
                             <Ionicons name="calendar-outline" size={22} color={primaryFill} />
@@ -287,6 +328,12 @@ export function MeetupSlotConfirm({
                     <RNText style={[styles.modalPartnerLine, { color: colors.mutedForeground }]}>
                         {partnerLine}
                     </RNText>
+
+                    {fairUseLine ? (
+                        <RNText style={[styles.fairUseLine, { color: colors.mutedForeground }]}>
+                            {fairUseLine}
+                        </RNText>
+                    ) : null}
 
                     <MeetupRescheduleAfterConfirmHint
                         layout="modal"
@@ -335,10 +382,12 @@ export function MeetupSlotConfirm({
                 style,
             ]}
         >
-            <RNText style={[styles.title, { color: colors.foreground }]}>Your StrathSpace date</RNText>
+            <RNText style={[styles.title, { color: colors.foreground }]}>Confirm your match</RNText>
             <RNText style={[styles.windowsCopy, { color: colors.mutedForeground }]}>
                 {MEETUP_WINDOWS_COPY}
             </RNText>
+
+            {balancePill}
 
             {scheduledAt ? (
                 <View style={styles.slotRow}>
@@ -360,6 +409,12 @@ export function MeetupSlotConfirm({
             ) : null}
 
             <RNText style={[styles.partnerLine, { color: colors.mutedForeground }]}>{partnerLine}</RNText>
+
+            {fairUseLine ? (
+                <RNText style={[styles.fairUseLine, { color: colors.mutedForeground }]}>
+                    {fairUseLine}
+                </RNText>
+            ) : null}
 
             <MeetupRescheduleAfterConfirmHint
                 layout="inline"
@@ -526,6 +581,11 @@ const styles = StyleSheet.create({
     },
     partnerLine: {
         fontSize: 13,
+        lineHeight: 18,
+    },
+    fairUseLine: {
+        ...TYPOGRAPHY.caption,
+        textAlign: 'center',
         lineHeight: 18,
     },
     confirmPill: {

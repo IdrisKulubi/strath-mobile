@@ -1,8 +1,12 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import { dateMatches, datePayments, userCredits } from "@/db/schema";
 import { getPaymentConfig } from "@/lib/payments/config";
+import {
+    CONFIRMATION_PACK_PURCHASE_REASON,
+    restoreAllReservedForMatch,
+} from "@/lib/payments/confirmation-balance";
 
 export const CREDIT_CANCEL_REASON = "date_cancelled";
 
@@ -44,6 +48,8 @@ export async function creditPaidUsersOnCancellation(
         where: eq(datePayments.dateMatchId, dateMatchId),
     });
 
+    await restoreAllReservedForMatch(tx, dateMatchId);
+
     const creditedUserIds: string[] = [];
     const amountByUser: Record<string, number> = {};
     const { amountCents: defaultAmountCents, currency: defaultCurrency } = getPaymentConfig();
@@ -55,6 +61,14 @@ export async function creditPaidUsersOnCancellation(
             where: eq(userCredits.paymentId, payment.id),
         });
         if (existingCredit) continue;
+
+        const packCredit = await tx.query.userCredits.findFirst({
+            where: and(
+                eq(userCredits.paymentId, payment.id),
+                eq(userCredits.reason, CONFIRMATION_PACK_PURCHASE_REASON),
+            ),
+        });
+        if (packCredit) continue;
 
         const amount = payment.amountCents ?? defaultAmountCents;
         const currency = payment.currency ?? defaultCurrency;

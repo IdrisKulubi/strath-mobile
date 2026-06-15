@@ -6,6 +6,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { usePaymentStatus } from '@/hooks/use-payment-status';
 import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
 import { formatPaymentAmount } from '@/lib/payment-ui';
+import { getPackPaymentBody } from '@/lib/confirmation-copy';
 import { formatConfirmBy, formatMeetupSlot } from '@/lib/meetup-slot';
 import type { SlotConfirmationState } from '@/hooks/use-daily-matches';
 
@@ -38,19 +39,26 @@ export function ActionRequiredBanner({
     );
 
     const usePaymentCopy = paymentsEnabled && Boolean(dateMatchId);
+    const canConfirmWithBalance = paymentStatus?.canConfirmWithBalance ?? false;
 
     const title = slot.partnerSlotConfirmed
-        ? `${partnerFirstName} confirmed — your turn`
+        ? `${partnerFirstName} confirmed. Your turn`
         : usePaymentCopy
-          ? `Pay ${amountLabel} to confirm`
-          : `Confirm your date with ${partnerFirstName}`;
+          ? canConfirmWithBalance
+              ? 'Confirm your match'
+              : `Pay ${amountLabel} · 2 confirmations`
+          : `Confirm your match with ${partnerFirstName}`;
 
     const subtitle = slot.partnerSlotConfirmed
         ? usePaymentCopy
-            ? `Pay ${amountLabel} to lock in ${slotLabel}${confirmByLabel ? ` by ${confirmByLabel}` : ''}.`
+            ? canConfirmWithBalance
+                ? `Use 1 confirmation to lock in ${slotLabel}${confirmByLabel ? ` by ${confirmByLabel}` : ''}.`
+                : `Pay ${amountLabel} to lock in ${slotLabel}${confirmByLabel ? ` by ${confirmByLabel}` : ''}.`
             : `Lock in ${slotLabel}${confirmByLabel ? ` by ${confirmByLabel}` : ''}.`
         : usePaymentCopy
-          ? `Both said yes. Confirm with a one-time ${amountLabel} setup fee.`
+          ? canConfirmWithBalance
+              ? `You have a confirmation ready. Confirm ${slotLabel}${confirmByLabel ? ` by ${confirmByLabel}` : ''}.`
+              : getPackPaymentBody(amountLabel)
           : `${slotLabel}${confirmByLabel ? ` · Confirm by ${confirmByLabel}` : ''}`;
 
     return (
@@ -68,7 +76,11 @@ export function ActionRequiredBanner({
             ]}
         >
             <View style={[styles.iconWrap, { backgroundColor: `${colors.primary}22` }]}>
-                <Ionicons name={usePaymentCopy ? 'card-outline' : 'calendar'} size={18} color={colors.primary} />
+                <Ionicons
+                    name={usePaymentCopy && !canConfirmWithBalance ? 'card-outline' : 'ticket-outline'}
+                    size={18}
+                    color={colors.primary}
+                />
             </View>
             <View style={styles.textWrap}>
                 <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>

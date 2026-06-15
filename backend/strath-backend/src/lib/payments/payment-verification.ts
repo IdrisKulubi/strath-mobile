@@ -125,6 +125,7 @@ export async function markPaymentPaid(
             dateMatchId: locked.dateMatchId,
             userId: locked.userId,
             now,
+            paymentId: locked.id,
         });
         applied = true;
     });

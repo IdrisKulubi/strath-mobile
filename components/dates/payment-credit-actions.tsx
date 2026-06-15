@@ -13,6 +13,8 @@ import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
 import { useRefundChoice, useUsePaymentCredit } from '@/hooks/use-payment-credit';
 import { useToast } from '@/components/ui/toast';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { formatPaymentAmount } from '@/lib/payment-ui';
+import { formatPackAmount } from '@/lib/confirmation-copy';
 
 interface PaymentCreditActionsProps {
     dateMatchId: string;
@@ -44,14 +46,15 @@ export function PaymentCreditActions({ dateMatchId, onCreditApplied }: PaymentCr
     }
 
     const showRefund = status.canChooseRefund;
-    const showUseCredit = status.canUseCredit;
+    const showUseCredit = status.canUseCredit && !status.canConfirmWithBalance;
     const isCancelled = status.paymentState === 'cancelled';
 
     if (!showRefund && !showUseCredit) {
         return null;
     }
 
-    const amountLabel = `KES ${status.amount}`;
+    const amountLabel = formatPaymentAmount(status.amount, status.currency);
+    const legacyAmountLabel = formatPackAmount(status.amount, status.currency);
 
     const handleUseCredit = () => {
         useCredit.mutate(dateMatchId, {
@@ -113,8 +116,8 @@ export function PaymentCreditActions({ dateMatchId, onCreditApplied }: PaymentCr
                 <>
                     <RNText style={[styles.body, { color: colors.mutedForeground }]}>
                         {isCancelled
-                            ? `This date was cancelled. Your ${amountLabel} is saved as StrathSpace credit, or you can request a refund.`
-                            : `They did not confirm in time. Your ${amountLabel} is saved as StrathSpace credit, or you can request a refund.`}
+                            ? `This date was cancelled. Your ${legacyAmountLabel} is saved as StrathSpace credit, or you can request a refund.`
+                            : `They did not confirm in time. Your ${legacyAmountLabel} is saved as StrathSpace credit, or you can request a refund.`}
                     </RNText>
                     <TouchableOpacity
                         accessibilityRole="button"
@@ -154,7 +157,7 @@ export function PaymentCreditActions({ dateMatchId, onCreditApplied }: PaymentCr
             {showUseCredit ? (
                 <TouchableOpacity
                     accessibilityRole="button"
-                    accessibilityLabel={`Use ${amountLabel} credit`}
+                    accessibilityLabel="Use 1 confirmation"
                     activeOpacity={0.88}
                     disabled={busy}
                     onPress={handleUseCredit}
@@ -166,7 +169,7 @@ export function PaymentCreditActions({ dateMatchId, onCreditApplied }: PaymentCr
                     ]}
                 >
                     <RNText style={[styles.outlineLabel, { color: colors.foreground }]}>
-                        {useCredit.isPending ? 'Applying credit…' : `Use ${amountLabel} credit`}
+                        {useCredit.isPending ? 'Applying…' : 'Use 1 confirmation'}
                     </RNText>
                 </TouchableOpacity>
             ) : null}

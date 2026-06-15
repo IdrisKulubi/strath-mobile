@@ -5,6 +5,12 @@ import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
+export type ConfirmationBalance = {
+    available: number;
+    reserved: number;
+    total: number;
+};
+
 export type PaymentStatusData = {
     dateMatchId: string;
     paymentState: string;
@@ -17,6 +23,8 @@ export type PaymentStatusData = {
     canUseCredit: boolean;
     canChooseRefund: boolean;
     userPaymentStatus: string | null;
+    confirmationBalance: ConfirmationBalance;
+    canConfirmWithBalance: boolean;
 };
 
 async function fetchPaymentStatus(dateMatchId: string): Promise<PaymentStatusData> {
@@ -38,7 +46,16 @@ async function fetchPaymentStatus(dateMatchId: string): Promise<PaymentStatusDat
     }
 
     const json = await res.json();
-    return json?.data as PaymentStatusData;
+    const data = json?.data as PaymentStatusData;
+    return {
+        ...data,
+        confirmationBalance: data.confirmationBalance ?? {
+            available: 0,
+            reserved: 0,
+            total: 0,
+        },
+        canConfirmWithBalance: data.canConfirmWithBalance ?? false,
+    };
 }
 
 export function usePaymentStatus(dateMatchId: string | null | undefined) {

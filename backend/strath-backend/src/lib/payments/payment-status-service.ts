@@ -1,5 +1,7 @@
 import type { DatePayment } from "@/db/schema";
 import { getPaymentConfig } from "@/lib/payments/config";
+import type { ConfirmationBalance } from "@/lib/payments/confirmation-balance";
+import { getConfirmationBalance } from "@/lib/payments/confirmation-balance";
 import {
     canChooseRefundForMatch,
     canUseCreditForMatch,
@@ -49,23 +51,29 @@ export async function getPaymentStatusForUser(
         return { status: "forbidden" };
     }
 
-    const [currentPayment, otherPayment, creditBalanceCents] = await Promise.all([
+    const [currentPayment, otherPayment, creditBalanceCents, confirmationBalance] =
+        await Promise.all([
         findUserPaymentForMatch(dateMatchId, userId),
         findUserPaymentForMatch(dateMatchId, otherUserId),
         getCreditBalanceCents(userId),
+        getConfirmationBalance(userId),
     ]);
 
     const { amountCents, currency: configCurrency } = getPaymentConfig();
     const amountCentsResolved = dateMatch.paymentAmountCents ?? amountCents;
     const currentUserPaid = isPaymentRowPaid(currentPayment);
 
-    const canUseCredit = canUseCreditForMatch({
-        paymentState: dateMatch.paymentState,
-        paymentDueBy: dateMatch.paymentDueBy,
-        currentUserPaid,
-        creditBalanceCents,
-        amountCents: amountCentsResolved,
-    });
+    const canConfirmWithBalanceFlag = confirmationBalance.available >= 1;
+
+    const canUseCredit =
+        canConfirmWithBalanceFlag ||
+        canUseCreditForMatch({
+            paymentState: dateMatch.paymentState,
+            paymentDueBy: dateMatch.paymentDueBy,
+            currentUserPaid,
+            creditBalanceCents,
+            amountCents: amountCentsResolved,
+        });
 
     const canChooseRefund = canChooseRefundForMatch({
         paymentState: dateMatch.paymentState,
@@ -85,5 +93,7 @@ export async function getPaymentStatusForUser(
         canUseCredit,
         canChooseRefund,
         userPaymentStatus: currentPayment?.status ?? null,
+        confirmationBalance,
+        canConfirmWithBalance: canConfirmWithBalanceFlag,
     };
 }

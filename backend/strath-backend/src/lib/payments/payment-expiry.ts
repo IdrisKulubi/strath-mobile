@@ -4,6 +4,10 @@ import db from "@/db/drizzle";
 import { dateMatches, datePayments, mutualMatches, user, userCredits } from "@/db/schema";
 import { getPaymentConfig } from "@/lib/payments/config";
 import {
+    CONFIRMATION_PACK_PURCHASE_REASON,
+    restoreAllReservedForMatch,
+} from "@/lib/payments/confirmation-balance";
+import {
     PAYMENT_EXPIRABLE_STATES,
     type ExpirePaymentMatchResult,
     type PaymentExpirySweepResult,
@@ -67,6 +71,8 @@ export async function expirePaymentMatch(dateMatchId: string): Promise<ExpirePay
             where: eq(datePayments.dateMatchId, dateMatchId),
         });
 
+        await restoreAllReservedForMatch(tx, dateMatchId);
+
         let credited = false;
         let lowIntentIncremented = false;
         let payerUserId: string | null = null;
@@ -78,11 +84,18 @@ export async function expirePaymentMatch(dateMatchId: string): Promise<ExpirePay
             );
 
             if (payerPayment) {
+                const packCredit = await tx.query.userCredits.findFirst({
+                    where: and(
+                        eq(userCredits.paymentId, payerPayment.id),
+                        eq(userCredits.reason, CONFIRMATION_PACK_PURCHASE_REASON),
+                    ),
+                });
+
                 const existingCredit = await tx.query.userCredits.findFirst({
                     where: eq(userCredits.paymentId, payerPayment.id),
                 });
 
-                if (!existingCredit) {
+                if (!packCredit && !existingCredit) {
                     const { amountCents, currency } = getPaymentConfig();
                     const amount = payerPayment.amountCents ?? amountCents;
 

@@ -5,12 +5,14 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import db from "@/db/drizzle";
 import { dateMatches, datePayments, userCredits } from "@/db/schema";
 import {
+    applyBalanceConfirmedParticipantInTransaction,
     applyPaidParticipantInTransaction,
     buildPaymentSuccessSnapshot,
     isMutualFinalized,
     runPaidParticipantSideEffects,
     type ApplyPaidParticipantResult,
 } from "@/lib/payments/payment-apply";
+import { canConfirmWithBalance } from "@/lib/payments/confirmation-balance";
 import { getPaymentConfig } from "@/lib/payments/config";
 import type {
     RefundChoice,
@@ -98,6 +100,33 @@ export async function spendCreditOnDateMatch(
             status: "success",
             ...snapshot,
         };
+    }
+
+    if (await canConfirmWithBalance(userId)) {
+        const now = new Date();
+        const applyResult = await db.transaction(async (tx) => {
+            return applyBalanceConfirmedParticipantInTransaction(tx, {
+                dateMatchId,
+                userId,
+                now,
+            });
+        });
+
+        const finalized = await runPaidParticipantSideEffects({
+            dateMatchId,
+            userId,
+            paidCount: applyResult.paidCount,
+            mutualMatchId: applyResult.mutualMatchId,
+        });
+
+        const snapshot = await buildPaymentSuccessSnapshot({
+            dateMatchId,
+            userId,
+            alreadyProcessed: false,
+            finalized,
+        });
+
+        return { status: "success", ...snapshot };
     }
 
     const { amountCents, currency } = getPaymentConfig();
