@@ -13,6 +13,9 @@ export async function middleware(request: NextRequest) {
         "/api/wingman/submit", // public token-gated endpoint (no user auth needed)
         "/api/test-db",
         "/api/cron", // cron jobs use CRON_SECRET / x-vercel-cron; route handlers validate
+        "/api/webhooks/paystack", // Paystack HMAC; route validates signature
+        "/api/payments/create-session", // signed paymentToken in body; route validates
+        "/api/payments/verify", // Paystack reference; callback page (no session cookie)
         "/_next",
         "/favicon.ico",
         "/public",
