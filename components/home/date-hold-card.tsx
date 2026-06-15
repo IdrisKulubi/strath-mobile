@@ -16,6 +16,7 @@ import {
 import { usePaymentStatus } from '@/hooks/use-payment-status';
 import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
 import { formatPaymentAmount } from '@/lib/payment-ui';
+import { CONFIRM_MATCH_WHY_TEASER } from '@/lib/confirmation-copy';
 import { formatMeetupSlot } from '@/lib/meetup-slot';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 interface DateHoldCardProps {
@@ -345,7 +346,7 @@ function buildCopy(
                 title: `You and ${name} both said yes`,
                 subtitle: hold.slotConfirmation?.needsSlotConfirmation
                     ? needsPayConfirm
-                        ? `Pay ${amountLabel} on Dates for 2 date confirmations. New intros stay paused until this is settled.`
+                        ? `Pay ${amountLabel} on Dates for 2 date confirmations. ${CONFIRM_MATCH_WHY_TEASER}`
                         : needsBalanceConfirm
                           ? 'You have a confirmation ready. Confirm your campus time on Dates.'
                           : 'Confirm your assigned StrathSpace date below. New intros stay paused until this is settled.'
@@ -376,7 +377,7 @@ function buildCopy(
                     : `Setting up your date with ${name}`,
                 subtitle: hold.slotConfirmation?.needsSlotConfirmation
                     ? needsPayConfirm
-                        ? 'Your campus time is assigned. Pay on Dates to confirm and continue.'
+                        ? `Your campus time is assigned. ${CONFIRM_MATCH_WHY_TEASER} Pay on Dates to confirm.`
                         : needsBalanceConfirm
                           ? 'Your campus time is assigned. Use 1 confirmation on Dates to continue.'
                           : 'Your campus time is assigned. Confirm below to continue.'

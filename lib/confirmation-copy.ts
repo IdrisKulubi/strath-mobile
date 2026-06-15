@@ -49,10 +49,103 @@ export const PACK_FAIR_USE_LINE =
     'A confirmation is only used when you both confirm.';
 
 export const PACK_INTRO_BODY =
-    'You both showed interest. Confirm before we set up your date.';
+    'You both showed interest. To keep StrathSpace serious and reduce ghosting, confirm before we set up your date.';
+
+export const CONFIRM_MATCH_WHY_TEASER =
+    'Verified students only. A small commitment fee cuts ghosting and fake profiles.';
+
+export type ConfirmMatchWhyBulletIcon = 'shield-checkmark' | 'heart' | 'refresh';
+
+export interface ConfirmMatchWhyBullet {
+    icon: ConfirmMatchWhyBulletIcon;
+    title: string;
+    body: string;
+}
+
+export function getConfirmMatchWhyBullets(partnerFirstName: string): ConfirmMatchWhyBullet[] {
+    const partner = partnerFirstName || 'your match';
+    return [
+        {
+            icon: 'shield-checkmark',
+            title: 'Verified students',
+            body: 'Everyone on StrathSpace passes face verification. No fake profiles.',
+        },
+        {
+            icon: 'heart',
+            title: 'Real intent',
+            body: 'A small commitment fee keeps matches serious and reduces ghosting.',
+        },
+        {
+            icon: 'refresh',
+            title: 'Fair if they flake',
+            body: `A confirmation is only used when you both confirm. If ${partner} doesn't confirm in time, yours stays unused.`,
+        },
+    ];
+}
+
+export type ConfirmMatchHeaderPhase =
+    | 'awaiting_payment'
+    | 'has_balance'
+    | 'waiting_partner'
+    | 'both_confirmed'
+    | 'expired'
+    | 'free';
+
+export function getConfirmMatchHeaderSubtitle(
+    partnerFirstName: string,
+    amountLabel: string,
+    phase: ConfirmMatchHeaderPhase,
+): string {
+    const partner = partnerFirstName || 'your match';
+
+    switch (phase) {
+        case 'has_balance':
+            return `You and ${partner} both said yes. Use 1 confirmation to lock in your campus date. Messaging unlocks after you both confirm.`;
+        case 'waiting_partner':
+            return `You confirmed with ${partner}. We'll notify you when they confirm too.`;
+        case 'both_confirmed':
+            return `You and ${partner} are both confirmed. We're arranging your date now.`;
+        case 'expired':
+            return 'This match expired. New intros refresh soon.';
+        case 'free':
+            return `You and ${partner} both said yes. Confirm your assigned time to continue.`;
+        case 'awaiting_payment':
+        default:
+            return `You and ${partner} both said yes. StrathSpace is verified students only. A one-time ${amountLabel} commitment helps us cut ghosting and time-wasters before we set up your date.`;
+    }
+}
+
+export function getGhostSafetyLine(partnerFirstName: string): string {
+    const partner = partnerFirstName || 'they';
+    return `If ${partner} doesn't confirm in time, your confirmation is not used.`;
+}
 
 export function getPackPaymentBody(amountLabel: string): string {
-    return `${PACK_INTRO_BODY} Pay ${amountLabel} once and get 2 date confirmations.`;
+    return `Pay ${amountLabel} once and get 2 date confirmations. One is used when you both confirm this match.`;
+}
+
+export function mapPaymentPhaseToHeaderPhase(
+    paymentPhase: string,
+    paymentsEnabled: boolean,
+): ConfirmMatchHeaderPhase {
+    if (!paymentsEnabled) {
+        return 'free';
+    }
+
+    switch (paymentPhase) {
+        case 'has_balance_confirm':
+            return 'has_balance';
+        case 'paid_waiting':
+            return 'waiting_partner';
+        case 'both_paid':
+            return 'both_confirmed';
+        case 'expired_unpaid':
+        case 'expired_refund_choice':
+        case 'expired_restored':
+            return 'expired';
+        default:
+            return 'awaiting_payment';
+    }
 }
 
 export type ConfirmToastOutcome =

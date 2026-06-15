@@ -5,7 +5,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
-import { MeetupSlotConfirm } from '@/components/dates/meetup-slot-confirm';
+import { useMeetupSlotConfirmController } from '@/hooks/use-meetup-slot-confirm-controller';
+import { MeetupSlotConfirmContent } from '@/components/dates/meetup-slot-confirm';
+import { ConfirmMatchWhySection } from '@/components/dates/confirm-match-why-section';
+import {
+    getConfirmMatchHeaderSubtitle,
+    getGhostSafetyLine,
+    mapPaymentPhaseToHeaderPhase,
+} from '@/lib/confirmation-copy';
 import { SPACING, RADIUS, TYPOGRAPHY } from '@/lib/design-tokens';
 import type { MatchHold } from '@/hooks/use-daily-matches';
 
@@ -20,10 +27,39 @@ export function MeetupSlotConfirmModal({
     hold,
     onCancelHold,
 }: MeetupSlotConfirmModalProps) {
-    const { colors, isDark } = useTheme();
-    const cancelTint = isDark ? 'rgba(217, 74, 143, 0.14)' : 'rgba(184, 50, 122, 0.12)';
+    const { colors } = useTheme();
     const partnerName = hold.partner.firstName ?? 'your match';
     const slot = hold.slotConfirmation;
+
+    const controller = useMeetupSlotConfirmController({
+        mutualMatchId: hold.mutualMatchId,
+        dateMatchId: hold.dateMatchId,
+        partnerFirstName: partnerName,
+        viewerSlotConfirmed: slot.viewerSlotConfirmed,
+        partnerSlotConfirmed: slot.partnerSlotConfirmed,
+        confirmWindowOpen: slot.confirmWindowOpen,
+    });
+
+    const {
+        paymentsEnabled,
+        paymentPhase,
+        amountLabel,
+        canAct,
+        showConfirmedState,
+        showWhySection,
+        primaryCtaLabel,
+        handlePrimaryAction,
+    } = controller;
+
+    const headerSubtitle = getConfirmMatchHeaderSubtitle(
+        partnerName,
+        amountLabel,
+        mapPaymentPhaseToHeaderPhase(paymentPhase, paymentsEnabled),
+    );
+
+    const showFooterPrimary = !showConfirmedState && canAct;
+    const ghostSafetyLine =
+        paymentsEnabled && showFooterPrimary ? getGhostSafetyLine(partnerName) : null;
 
     return (
         <Modal
@@ -48,8 +84,7 @@ export function MeetupSlotConfirmModal({
                                 Confirm your match
                             </Text>
                             <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
-                                Pay KSh 499 once for 2 date confirmations. Confirm before you browse
-                                matches or message {partnerName}.
+                                {headerSubtitle}
                             </Text>
                         </View>
 
@@ -79,8 +114,14 @@ export function MeetupSlotConfirmModal({
                             ) : null}
                         </View>
 
-                        <MeetupSlotConfirm
+                        {showWhySection ? (
+                            <ConfirmMatchWhySection partnerFirstName={partnerName} layout="modal" />
+                        ) : null}
+
+                        <MeetupSlotConfirmContent
                             layout="modal"
+                            hidePrimaryCta
+                            controller={controller}
                             mutualMatchId={hold.mutualMatchId}
                             dateMatchId={hold.dateMatchId}
                             partnerFirstName={partnerName}
@@ -94,29 +135,62 @@ export function MeetupSlotConfirmModal({
                     </View>
                 </ScrollView>
 
-                {onCancelHold ? (
-                    <View style={styles.footer}>
+                <View style={[styles.footer, { borderTopColor: colors.border }]}>
+                    {showConfirmedState ? (
+                        <View
+                            style={[
+                                styles.confirmedFooter,
+                                { borderColor: colors.border, backgroundColor: colors.card },
+                            ]}
+                        >
+                            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                            <RNText style={[styles.confirmedFooterLabel, { color: colors.foreground }]}>
+                                You confirmed
+                            </RNText>
+                        </View>
+                    ) : showFooterPrimary ? (
                         <TouchableOpacity
-                            onPress={onCancelHold}
                             accessibilityRole="button"
-                            activeOpacity={0.85}
+                            accessibilityLabel={primaryCtaLabel}
+                            activeOpacity={0.88}
+                            disabled={!canAct}
+                            onPress={handlePrimaryAction}
                         >
                             <View
                                 style={[
-                                    styles.cancelButton,
+                                    styles.primaryButton,
                                     {
+                                        backgroundColor: colors.primary,
                                         borderColor: colors.primary,
-                                        backgroundColor: cancelTint,
                                     },
+                                    !canAct && styles.buttonDisabled,
                                 ]}
                             >
-                                <RNText style={[styles.cancelLabel, { color: colors.primary }]}>
-                                    Cancel this match
-                                </RNText>
+                                <RNText style={styles.primaryButtonLabel}>{primaryCtaLabel}</RNText>
                             </View>
                         </TouchableOpacity>
-                    </View>
-                ) : null}
+                    ) : null}
+
+                    {ghostSafetyLine ? (
+                        <RNText style={[styles.ghostSafetyLine, { color: colors.mutedForeground }]}>
+                            {ghostSafetyLine}
+                        </RNText>
+                    ) : null}
+
+                    {onCancelHold ? (
+                        <TouchableOpacity
+                            onPress={onCancelHold}
+                            accessibilityRole="button"
+                            accessibilityLabel="Cancel this match"
+                            activeOpacity={0.7}
+                            style={styles.cancelLinkWrap}
+                        >
+                            <RNText style={[styles.cancelLink, { color: colors.mutedForeground }]}>
+                                Cancel this match
+                            </RNText>
+                        </TouchableOpacity>
+                    ) : null}
+                </View>
             </SafeAreaView>
         </Modal>
     );
@@ -156,7 +230,8 @@ const styles = StyleSheet.create({
     headerSubtitle: {
         ...TYPOGRAPHY.caption,
         textAlign: 'center',
-        maxWidth: 300,
+        lineHeight: 20,
+        maxWidth: 320,
     },
     partnerHero: {
         alignItems: 'center',
@@ -194,8 +269,10 @@ const styles = StyleSheet.create({
         width: '100%',
         maxWidth: 400,
         alignSelf: 'center',
+        gap: SPACING.tight,
+        borderTopWidth: StyleSheet.hairlineWidth,
     },
-    cancelButton: {
+    primaryButton: {
         width: '100%',
         minHeight: 52,
         borderRadius: RADIUS.lg,
@@ -204,9 +281,46 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         paddingHorizontal: SPACING.base,
     },
-    cancelLabel: {
+    primaryButtonLabel: {
         fontSize: 16,
         fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    buttonDisabled: {
+        opacity: 0.45,
+    },
+    ghostSafetyLine: {
+        ...TYPOGRAPHY.caption,
         textAlign: 'center',
+        fontWeight: '600',
+        lineHeight: 18,
+        paddingHorizontal: SPACING.tight,
+    },
+    confirmedFooter: {
+        width: '100%',
+        minHeight: 52,
+        borderRadius: RADIUS.lg,
+        borderWidth: StyleSheet.hairlineWidth,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    confirmedFooterLabel: {
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    cancelLinkWrap: {
+        alignSelf: 'center',
+        paddingVertical: SPACING.micro,
+        paddingHorizontal: SPACING.compact,
+        minHeight: 44,
+        justifyContent: 'center',
+    },
+    cancelLink: {
+        ...TYPOGRAPHY.caption,
+        fontWeight: '600',
+        textAlign: 'center',
+        textDecorationLine: 'underline',
     },
 });
