@@ -23,24 +23,20 @@ export interface PaymentCheckoutClientProps {
 }
 
 const INCLUDES = [
-    "2 date confirmations (1 used when you both confirm this match)",
-    "1 confirmation saved for your next match",
+    "Date Setup Fee covers 2 dates",
+    "1 date used when you both confirm this match",
+    "1 date saved for your next match",
     "Date coordination by StrathSpace",
-    "Venue and time scheduling",
 ] as const;
 
 const WHY_BULLETS = [
     {
-        title: "Verified students",
+        title: "Verified profiles",
         body: "Everyone on StrathSpace passes face verification. No fake profiles.",
     },
     {
         title: "Real intent",
-        body: "A small commitment fee keeps matches serious and reduces ghosting.",
-    },
-    {
-        title: "Fair if they flake",
-        body: "A confirmation is only used when you both confirm. If your match doesn't confirm in time, yours stays unused.",
+        body: "The Date Setup Fee shows you are serious. It cuts ghosting and time-wasters,If they do not confirm your money will remain for the next date ",
     },
 ] as const;
 
@@ -102,26 +98,12 @@ export function PaymentCheckoutClient(props: PaymentCheckoutClientProps) {
                 <p className={paymentBrand.label}>Date confirmation pack</p>
                 <h1 className={paymentBrand.display}>Confirm your match</h1>
                 <p className={paymentBrand.body}>
-                    You and {props.partnerFirstName} both said yes. StrathSpace is verified students
-                    only. Pay once for 2 date confirmations. This is not a subscription.
+                    You and {props.partnerFirstName} both said yes. One {amountLabel} Date Setup
+                    Fee covers 2 dates. This is not a subscription.
                 </p>
             </header>
 
-            <PaymentWebCard className="space-y-5">
-                <div className="space-y-3 text-left">
-                    <p className={paymentBrand.label}>Why this step?</p>
-                    <ul className="space-y-3">
-                        {WHY_BULLETS.map((item) => (
-                            <li key={item.title} className="space-y-1">
-                                <p className={cn(paymentBrand.listItem, "font-semibold text-[#F4F0F8]")}>
-                                    {item.title}
-                                </p>
-                                <p className={paymentBrand.caption}>{item.body}</p>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            </PaymentWebCard>
+           
 
             <PaymentWebCard className="space-y-6">
                 <p className={paymentBrand.amount}>{amountLabel}</p>
@@ -169,7 +151,7 @@ export function PaymentCheckoutClient(props: PaymentCheckoutClientProps) {
                         Starting checkout…
                     </>
                 ) : (
-                    `Pay ${amountLabel} to confirm`
+                    `Pay ${amountLabel} · 2 dates`
                 )}
             </Button>
 

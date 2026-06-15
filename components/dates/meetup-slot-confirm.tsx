@@ -85,7 +85,7 @@ export function MeetupSlotConfirmContent({
             : null;
 
     const balancePill =
-        paymentsEnabled && confirmationBalance.total > 0 ? (
+        paymentsEnabled && confirmationBalance.total > 0 && !(isModal && hidePrimaryCta) ? (
             <ConfirmationBalancePill balance={confirmationBalance} />
         ) : null;
 
@@ -125,7 +125,7 @@ export function MeetupSlotConfirmContent({
     );
 
     const creditBlock =
-        dateMatchId && paymentsEnabled && !canConfirmWithBalance ? (
+        dateMatchId && paymentsEnabled && !canConfirmWithBalance && !(isModal && hidePrimaryCta) ? (
             <PaymentCreditActions
                 dateMatchId={dateMatchId}
                 onCreditApplied={handleCreditApplied}
@@ -149,8 +149,8 @@ export function MeetupSlotConfirmContent({
                     {balancePill}
 
                     {scheduledAt ? (
-                        <View style={[styles.modalSlotHero, { backgroundColor: colors.muted }]}>
-                            <Ionicons name="calendar-outline" size={22} color={primaryFill} />
+                        <View style={styles.modalSlotRow}>
+                            <Ionicons name="calendar-outline" size={20} color={primaryFill} />
                             <RNText style={[styles.modalSlotText, { color: colors.foreground }]}>
                                 {formatMeetupSlot(scheduledAt)}
                             </RNText>
@@ -366,30 +366,33 @@ const styles = StyleSheet.create({
     },
     modalPanel: {
         width: '100%',
-        gap: SPACING.compact,
+        gap: SPACING.tight,
         alignItems: 'center',
     },
     modalBody: {
         width: '100%',
         alignItems: 'center',
-        gap: SPACING.tight,
+        gap: SPACING.micro,
     },
-    modalSlotHero: {
+    modalSlotRow: {
         width: '100%',
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: SPACING.tight,
-        paddingVertical: SPACING.base,
-        paddingHorizontal: SPACING.base,
-        borderRadius: RADIUS.md,
+        paddingVertical: SPACING.micro,
     },
     modalSlotText: {
         ...TYPOGRAPHY.title,
+        fontWeight: '700',
         textAlign: 'center',
+        letterSpacing: -0.3,
     },
     modalDeadline: {
         ...TYPOGRAPHY.caption,
+        fontSize: 12,
         textAlign: 'center',
-        fontWeight: '600',
+        fontWeight: '500',
     },
     modalVenueCopy: {
         ...TYPOGRAPHY.caption,

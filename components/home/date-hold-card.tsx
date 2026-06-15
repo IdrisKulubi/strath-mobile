@@ -346,14 +346,14 @@ function buildCopy(
                 title: `You and ${name} both said yes`,
                 subtitle: hold.slotConfirmation?.needsSlotConfirmation
                     ? needsPayConfirm
-                        ? `Pay ${amountLabel} on Dates for 2 date confirmations. ${CONFIRM_MATCH_WHY_TEASER}`
+                        ? `Pay ${amountLabel} on Dates for 2 dates. ${CONFIRM_MATCH_WHY_TEASER}`
                         : needsBalanceConfirm
                           ? 'You have a confirmation ready. Confirm your campus time on Dates.'
                           : 'Confirm your assigned StrathSpace date below. New intros stay paused until this is settled.'
                     : 'Say hi in chat while your date is lined up. New intros are paused for this match.',
                 footnote: 'You can cancel any time and we will keep matching you.',
                 primaryCta: needsPayConfirm
-                    ? { label: `Pay ${amountLabel} on Dates`, kind: 'view' }
+                    ? { label: `Pay ${amountLabel} · 2 dates`, kind: 'view' }
                     : needsBalanceConfirm
                       ? { label: 'Confirm on Dates', kind: 'view' }
                       : { label: 'Message', kind: 'view' },
@@ -370,7 +370,7 @@ function buildCopy(
                 statusIcon: hold.slotConfirmation?.needsSlotConfirmation ? 'calendar' : 'calendar-outline',
                 title: hold.slotConfirmation?.needsSlotConfirmation
                     ? needsPayConfirm
-                        ? `Pay ${amountLabel} for 2 confirmations`
+                        ? `Pay ${amountLabel} · 2 dates`
                         : needsBalanceConfirm
                           ? `Confirm your match with ${name}`
                           : `Confirm your date with ${name}`
@@ -389,7 +389,7 @@ function buildCopy(
                     : 'Open Dates for details while your plan is finalized.',
                 primaryCta: hold.slotConfirmation?.needsSlotConfirmation
                     ? needsPayConfirm
-                        ? { label: `Pay ${amountLabel} on Dates`, kind: 'view' }
+                        ? { label: `Pay ${amountLabel} · 2 dates`, kind: 'view' }
                         : needsBalanceConfirm
                           ? { label: 'Confirm on Dates', kind: 'view' }
                           : null

@@ -2,6 +2,7 @@ import type { ConfirmationBalance, PaymentStatusData } from '@/hooks/use-payment
 import {
     formatPackAmount,
     getPackPaymentBody,
+    getPayCtaLabel,
     PACK_FAIR_USE_LINE,
     PACK_INTRO_BODY,
 } from '@/lib/confirmation-copy';
@@ -79,6 +80,16 @@ export function resolvePaymentUiPhase(input: {
     return 'awaiting_pack_payment';
 }
 
+export function phaseRequiresPayment(phase: PaymentUiPhase): boolean {
+    return phase === 'awaiting_pack_payment'
+        || phase === 'awaiting_payment'
+        || phase === 'partner_paid_you_havent';
+}
+
+export function phaseUsesBalanceConfirm(phase: PaymentUiPhase): boolean {
+    return phase === 'has_balance_confirm';
+}
+
 export function getPaymentUiCopy(
     phase: PaymentUiPhase,
     partnerFirstName: string,
@@ -98,7 +109,7 @@ export function getPaymentUiCopy(
             return {
                 body:
                     balance && balance.available >= 1
-                        ? `You have ${balance.available === 1 ? '1 date confirmation' : `${balance.available} date confirmations`}. Tap below to confirm this match.`
+                        ? 'Your Date Setup Fee is already covered. Tap below to confirm this match.'
                         : PACK_INTRO_BODY,
                 partnerLine: partnerFirstName
                     ? `Confirm your assigned time with ${partnerFirstName}.`
@@ -113,7 +124,7 @@ export function getPaymentUiCopy(
                 partnerLine: partnerFirstName
                     ? `Confirm your assigned time with ${partnerFirstName}.`
                     : 'Confirm your assigned campus date.',
-                primaryCta: `Pay ${amountLabel} · get 2 confirmations`,
+                primaryCta: getPayCtaLabel(amountLabel),
                 showPrimaryCta: true,
                 fairUseLine,
             };
@@ -135,9 +146,9 @@ export function getPaymentUiCopy(
             };
         case 'partner_paid_you_havent':
             return {
-                body: `${partnerFirstName} confirmed. Pay ${amountLabel} once for 2 date confirmations.`,
+                body: `${partnerFirstName} confirmed. Pay ${amountLabel} once as your Date Setup Fee.`,
                 partnerLine: `${partnerFirstName} confirmed. Your turn to lock in.`,
-                primaryCta: `Pay ${amountLabel} · get 2 confirmations`,
+                primaryCta: getPayCtaLabel(amountLabel),
                 showPrimaryCta: true,
                 fairUseLine,
             };
@@ -153,8 +164,8 @@ export function getPaymentUiCopy(
             const left = balance?.available ?? 0;
             const leftLine =
                 left > 0
-                    ? `You still have ${left === 1 ? '1 confirmation' : `${left} confirmations`} left.`
-                    : 'Your confirmation was not used.';
+                    ? `You still have ${left === 1 ? '1 date setup' : `${left} date setups`} left.`
+                    : 'Your Date Setup Fee was not used.';
             return {
                 body: `They did not confirm in time. ${leftLine}`,
                 partnerLine: 'The confirmation window has closed.',
@@ -186,7 +197,7 @@ export function getPaymentUiCopy(
                 partnerLine: partnerFirstName
                     ? `Confirm your assigned time with ${partnerFirstName}.`
                     : 'Confirm your assigned campus date.',
-                primaryCta: `Pay ${amountLabel} · get 2 confirmations`,
+                primaryCta: getPayCtaLabel(amountLabel),
                 showPrimaryCta: true,
                 fairUseLine,
             };

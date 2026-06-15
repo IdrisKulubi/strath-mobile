@@ -18,14 +18,17 @@ const ICON_MAP: Record<ConfirmMatchWhyBulletIcon, keyof typeof Ionicons.glyphMap
 export interface ConfirmMatchWhySectionProps {
     partnerFirstName: string;
     layout?: 'inline' | 'modal';
+    variant?: 'card' | 'flat';
 }
 
 export function ConfirmMatchWhySection({
     partnerFirstName,
     layout = 'modal',
+    variant = 'card',
 }: ConfirmMatchWhySectionProps) {
     const { colors, isDark } = useTheme();
     const isModal = layout === 'modal';
+    const isFlat = variant === 'flat';
     const bullets = getConfirmMatchWhyBullets(partnerFirstName);
     const tint = isDark ? 'rgba(217, 74, 143, 0.08)' : 'rgba(184, 50, 122, 0.05)';
     const borderTint = isDark ? 'rgba(217, 74, 143, 0.2)' : 'rgba(184, 50, 122, 0.14)';
@@ -36,10 +39,7 @@ export function ConfirmMatchWhySection({
             accessibilityLabel="Why StrathSpace asks you to confirm"
             style={[
                 styles.wrap,
-                {
-                    backgroundColor: tint,
-                    borderColor: borderTint,
-                },
+                isFlat ? styles.wrapFlat : { backgroundColor: tint, borderColor: borderTint },
             ]}
         >
             <RNText style={[styles.heading, { color: colors.foreground }]}>
@@ -51,7 +51,12 @@ export function ConfirmMatchWhySection({
                         key={bullet.title}
                         style={[styles.row, isModal ? styles.rowModal : styles.rowInline]}
                     >
-                        <View style={[styles.iconWrap, { backgroundColor: colors.muted }]}>
+                        <View
+                            style={[
+                                styles.iconWrap,
+                                isFlat ? styles.iconWrapFlat : { backgroundColor: colors.muted },
+                            ]}
+                        >
                             <Ionicons
                                 name={ICON_MAP[bullet.icon]}
                                 size={18}
@@ -82,13 +87,20 @@ const styles = StyleSheet.create({
         paddingVertical: SPACING.compact + 2,
         gap: SPACING.compact,
     },
+    wrapFlat: {
+        backgroundColor: 'transparent',
+        borderWidth: 0,
+        paddingHorizontal: SPACING.tight,
+        paddingVertical: 0,
+        gap: SPACING.micro,
+    },
     heading: {
         ...TYPOGRAPHY.callout,
         fontWeight: '700',
         textAlign: 'left',
     },
     list: {
-        gap: SPACING.compact,
+        gap: SPACING.tight,
     },
     row: {
         flexDirection: 'row',
@@ -108,6 +120,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginTop: 1,
+    },
+    iconWrapFlat: {
+        width: 28,
+        height: 28,
+        backgroundColor: 'transparent',
+        marginTop: 0,
     },
     textCol: {
         flex: 1,

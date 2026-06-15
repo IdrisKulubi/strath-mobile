@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, ScrollView, StyleSheet, Text as RNText, TouchableOpacity, View } from 'react-native';
+import { Modal, StyleSheet, Text as RNText, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
@@ -47,6 +47,7 @@ export function MeetupSlotConfirmModal({
         canAct,
         showConfirmedState,
         showWhySection,
+        showGhostSafetyLine: shouldShowGhostSafetyLine,
         primaryCtaLabel,
         handlePrimaryAction,
     } = controller;
@@ -58,8 +59,7 @@ export function MeetupSlotConfirmModal({
     );
 
     const showFooterPrimary = !showConfirmedState && canAct;
-    const ghostSafetyLine =
-        paymentsEnabled && showFooterPrimary ? getGhostSafetyLine(partnerName) : null;
+    const ghostSafetyLine = shouldShowGhostSafetyLine ? getGhostSafetyLine(partnerName) : null;
 
     return (
         <Modal
@@ -72,29 +72,15 @@ export function MeetupSlotConfirmModal({
                 edges={['top', 'bottom', 'left', 'right']}
                 style={[styles.screen, { backgroundColor: colors.background }]}
             >
-                <ScrollView
-                    style={styles.scroll}
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                    bounces={false}
-                >
+                <View style={styles.main}>
                     <View style={styles.content}>
-                        <View style={styles.header}>
-                            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-                                Confirm your match
-                            </Text>
-                            <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
-                                {headerSubtitle}
-                            </Text>
-                        </View>
-
                         <View style={styles.partnerHero}>
                             <View style={[styles.avatarWrap, { borderColor: colors.border }]}>
                                 {hold.partner.profilePhoto ? (
                                     <CachedImage uri={hold.partner.profilePhoto} style={styles.avatar} />
                                 ) : (
                                     <View style={[styles.avatarFallback, { backgroundColor: colors.muted }]}>
-                                        <Ionicons name="person" size={36} color={colors.mutedForeground} />
+                                        <Ionicons name="person" size={32} color={colors.mutedForeground} />
                                     </View>
                                 )}
                             </View>
@@ -102,20 +88,19 @@ export function MeetupSlotConfirmModal({
                                 {partnerName}
                                 {hold.partner.age ? `, ${hold.partner.age}` : ''}
                             </Text>
-                            {hold.partner.course || hold.partner.university ? (
-                                <Text
-                                    style={[styles.partnerMeta, { color: colors.mutedForeground }]}
-                                    numberOfLines={2}
-                                >
-                                    {[hold.partner.course, hold.partner.university]
-                                        .filter(Boolean)
-                                        .join(' · ')}
-                                </Text>
-                            ) : null}
+                        </View>
+
+                        <View style={styles.header}>
+                            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+                                Confirm your date with {partnerName}
+                            </Text>
+                            <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
+                                {headerSubtitle}
+                            </Text>
                         </View>
 
                         {showWhySection ? (
-                            <ConfirmMatchWhySection partnerFirstName={partnerName} layout="modal" />
+                            <ConfirmMatchWhySection partnerFirstName={partnerName} layout="modal" variant="flat" />
                         ) : null}
 
                         <MeetupSlotConfirmContent
@@ -131,11 +116,12 @@ export function MeetupSlotConfirmModal({
                             partnerSlotConfirmed={slot.partnerSlotConfirmed}
                             confirmWindowOpen={slot.confirmWindowOpen}
                             reschedule={slot.reschedule}
+                            style={styles.slotBlock}
                         />
                     </View>
-                </ScrollView>
+                </View>
 
-                <View style={[styles.footer, { borderTopColor: colors.border }]}>
+                <View style={styles.footer}>
                     {showConfirmedState ? (
                         <View
                             style={[
@@ -200,22 +186,22 @@ const styles = StyleSheet.create({
     screen: {
         flex: 1,
     },
-    scroll: {
+    main: {
         flex: 1,
-    },
-    scrollContent: {
-        flexGrow: 1,
-        justifyContent: 'flex-start',
         paddingHorizontal: SPACING.screenX,
-        paddingTop: SPACING.large,
-        paddingBottom: SPACING.base,
+        paddingTop: SPACING.compact,
     },
     content: {
+        flex: 1,
         alignItems: 'center',
-        gap: SPACING.base,
+        justifyContent: 'space-evenly',
         width: '100%',
         maxWidth: 400,
         alignSelf: 'center',
+        paddingVertical: SPACING.tight,
+    },
+    slotBlock: {
+        marginTop: 0,
     },
     header: {
         alignItems: 'center',
@@ -223,9 +209,10 @@ const styles = StyleSheet.create({
         paddingHorizontal: SPACING.compact,
     },
     headerTitle: {
-        ...TYPOGRAPHY.display,
+        ...TYPOGRAPHY.title,
         textAlign: 'center',
-        letterSpacing: -0.4,
+        letterSpacing: -0.3,
+        fontWeight: '700',
     },
     headerSubtitle: {
         ...TYPOGRAPHY.caption,
@@ -235,8 +222,9 @@ const styles = StyleSheet.create({
     },
     partnerHero: {
         alignItems: 'center',
-        gap: SPACING.tight,
+        gap: SPACING.micro,
         paddingHorizontal: SPACING.compact,
+        width: '100%',
     },
     avatarWrap: {
         width: 64,
@@ -255,11 +243,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     partnerName: {
-        ...TYPOGRAPHY.title,
-        textAlign: 'center',
-    },
-    partnerMeta: {
-        ...TYPOGRAPHY.caption,
+        ...TYPOGRAPHY.callout,
+        fontWeight: '600',
         textAlign: 'center',
     },
     footer: {
@@ -270,7 +255,6 @@ const styles = StyleSheet.create({
         maxWidth: 400,
         alignSelf: 'center',
         gap: SPACING.tight,
-        borderTopWidth: StyleSheet.hairlineWidth,
     },
     primaryButton: {
         width: '100%',

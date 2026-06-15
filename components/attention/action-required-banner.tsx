@@ -46,7 +46,7 @@ export function ActionRequiredBanner({
         : usePaymentCopy
           ? canConfirmWithBalance
               ? 'Confirm your match'
-              : `Pay ${amountLabel} · 2 confirmations`
+              : `Pay ${amountLabel} · 2 dates`
           : `Confirm your match with ${partnerFirstName}`;
 
     const subtitle = slot.partnerSlotConfirmed

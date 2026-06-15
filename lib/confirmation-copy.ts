@@ -46,13 +46,17 @@ export function getBalancePillText(balance: ConfirmationBalance): {
 }
 
 export const PACK_FAIR_USE_LINE =
-    'A confirmation is only used when you both confirm.';
+    'Your Date Setup Fee is only used when you both confirm.';
 
 export const PACK_INTRO_BODY =
-    'You both showed interest. To keep StrathSpace serious and reduce ghosting, confirm before we set up your date.';
+    'You both showed interest. Confirm before we set up your date.';
 
 export const CONFIRM_MATCH_WHY_TEASER =
-    'Verified students only. A small commitment fee cuts ghosting and fake profiles.';
+    'Verified students only. The Date Setup Fee keeps matches serious.';
+
+export const PACK_DATE_COUNT = 2;
+
+export const DATE_SETUP_FEE_LABEL = 'Date Setup Fee';
 
 export type ConfirmMatchWhyBulletIcon = 'shield-checkmark' | 'heart' | 'refresh';
 
@@ -62,23 +66,21 @@ export interface ConfirmMatchWhyBullet {
     body: string;
 }
 
-export function getConfirmMatchWhyBullets(partnerFirstName: string): ConfirmMatchWhyBullet[] {
-    const partner = partnerFirstName || 'your match';
+export function getPayCtaLabel(amountLabel: string): string {
+    return `Pay ${amountLabel} · ${PACK_DATE_COUNT} dates`;
+}
+
+export function getConfirmMatchWhyBullets(_partnerFirstName: string): ConfirmMatchWhyBullet[] {
     return [
         {
             icon: 'shield-checkmark',
-            title: 'Verified students',
+            title: 'Verified profiles',
             body: 'Everyone on StrathSpace passes face verification. No fake profiles.',
         },
         {
             icon: 'heart',
             title: 'Real intent',
-            body: 'A small commitment fee keeps matches serious and reduces ghosting.',
-        },
-        {
-            icon: 'refresh',
-            title: 'Fair if they flake',
-            body: `A confirmation is only used when you both confirm. If ${partner} doesn't confirm in time, yours stays unused.`,
+            body: 'The Date Setup Fee shows you are serious. It cuts ghosting and time-wasters,If they do not confirm your money will remain for the next date ',
         },
     ];
 }
@@ -100,7 +102,7 @@ export function getConfirmMatchHeaderSubtitle(
 
     switch (phase) {
         case 'has_balance':
-            return `You and ${partner} both said yes. Use 1 confirmation to lock in your campus date. Messaging unlocks after you both confirm.`;
+            return `You and ${partner} both said yes. Your Date Setup Fee is already paid. Confirm below to lock in your date.`;
         case 'waiting_partner':
             return `You confirmed with ${partner}. We'll notify you when they confirm too.`;
         case 'both_confirmed':
@@ -111,17 +113,17 @@ export function getConfirmMatchHeaderSubtitle(
             return `You and ${partner} both said yes. Confirm your assigned time to continue.`;
         case 'awaiting_payment':
         default:
-            return `You and ${partner} both said yes. StrathSpace is verified students only. A one-time ${amountLabel} commitment helps us cut ghosting and time-wasters before we set up your date.`;
+            return `You and ${partner} both said yes. One ${amountLabel} Date Setup Fee covers ${PACK_DATE_COUNT} dates.`;
     }
 }
 
 export function getGhostSafetyLine(partnerFirstName: string): string {
     const partner = partnerFirstName || 'they';
-    return `If ${partner} doesn't confirm in time, your confirmation is not used.`;
+    return `If ${partner} does not confirm in time, your Date Setup Fee is not used.`;
 }
 
 export function getPackPaymentBody(amountLabel: string): string {
-    return `Pay ${amountLabel} once and get 2 date confirmations. One is used when you both confirm this match.`;
+    return `One ${amountLabel} Date Setup Fee covers ${PACK_DATE_COUNT} dates.`;
 }
 
 export function mapPaymentPhaseToHeaderPhase(
@@ -167,14 +169,14 @@ export function getConfirmToastMessage(
         case 'finalized':
             return 'Date confirmed. See you on campus.';
         case 'pack_purchased':
-            return 'You have 2 date confirmations. 1 is reserved for this match.';
+            return `Date Setup Fee paid. Covers ${PACK_DATE_COUNT} dates. 1 is reserved for this match.`;
         case 'balance_confirmed': {
             const left = balance?.available ?? 0;
             if (left === 1) {
-                return 'Match confirmed. 1 confirmation left for next time.';
+                return 'Match confirmed. 1 date left on your pack.';
             }
             if (left > 1) {
-                return `Match confirmed. ${left} confirmations left.`;
+                return `Match confirmed. ${left} dates left on your pack.`;
             }
             return `You confirmed. Waiting for ${partnerFirstName}.`;
         }
@@ -183,7 +185,7 @@ export function getConfirmToastMessage(
         case 'confirmed':
             return `Waiting for ${partnerFirstName} to confirm.`;
         case 'expired_restored':
-            return 'Match expired. Your confirmation was not used.';
+            return 'Match expired. Your Date Setup Fee was not used.';
         case 'cancelled':
         case 'unpaid':
             return 'Payment was not completed. Your date is still pending.';

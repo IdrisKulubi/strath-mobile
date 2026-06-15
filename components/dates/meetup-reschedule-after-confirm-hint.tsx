@@ -6,6 +6,9 @@ import { useTheme } from '@/hooks/use-theme';
 import type { RescheduleViewerState } from '@/lib/reschedule-types';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 
+const MODAL_RESCHEDULE_COPY =
+    'You can request another Wed or Sat slot after you confirm.';
+
 export function shouldShowRescheduleAfterConfirmHint(
     reschedule: RescheduleViewerState | undefined,
     viewerSlotConfirmed: boolean,
@@ -40,13 +43,28 @@ export function MeetupRescheduleAfterConfirmHint({
     const tint = isDark ? 'rgba(217, 74, 143, 0.12)' : 'rgba(184, 50, 122, 0.08)';
     const borderTint = isDark ? 'rgba(217, 74, 143, 0.28)' : 'rgba(184, 50, 122, 0.2)';
 
+    if (isModal) {
+        return (
+            <View
+                accessibilityRole="text"
+                accessibilityLabel={MODAL_RESCHEDULE_COPY}
+                style={styles.wrapModalRow}
+            >
+                <Ionicons name="swap-horizontal-outline" size={18} color={colors.primary} />
+                <RNText style={[styles.modalRowText, { color: colors.mutedForeground }]}>
+                    {MODAL_RESCHEDULE_COPY}
+                </RNText>
+            </View>
+        );
+    }
+
     return (
         <View
             accessibilityRole="text"
             accessibilityLabel="After you confirm, you can request a different Wednesday or Saturday time if your plans change."
             style={[
                 styles.wrap,
-                isModal ? styles.wrapModal : styles.wrapInline,
+                styles.wrapInline,
                 {
                     backgroundColor: tint,
                     borderColor: borderTint,
@@ -55,27 +73,15 @@ export function MeetupRescheduleAfterConfirmHint({
         >
             <Ionicons
                 name="swap-horizontal-outline"
-                size={isModal ? 20 : 18}
+                size={18}
                 color={colors.primary}
-                style={isModal ? styles.iconModal : styles.icon}
+                style={styles.icon}
             />
-            <View style={[styles.textCol, isModal && styles.textColModal]}>
-                <RNText
-                    style={[
-                        styles.title,
-                        isModal && styles.titleModal,
-                        { color: colors.foreground },
-                    ]}
-                >
+            <View style={styles.textCol}>
+                <RNText style={[styles.title, { color: colors.foreground }]}>
                     Need a different time later?
                 </RNText>
-                <RNText
-                    style={[
-                        styles.body,
-                        isModal && styles.bodyModal,
-                        { color: colors.mutedForeground },
-                    ]}
-                >
+                <RNText style={[styles.body, { color: colors.mutedForeground }]}>
                     After you confirm, you can request another Wednesday or Saturday slot if plans
                     change.
                 </RNText>
@@ -97,45 +103,34 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
         gap: SPACING.compact,
     },
-    wrapModal: {
-        alignSelf: 'stretch',
-        alignItems: 'center',
+    wrapModalRow: {
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'flex-start',
         gap: SPACING.tight,
-        paddingVertical: SPACING.compact + 2,
+        paddingHorizontal: SPACING.tight,
+        paddingVertical: SPACING.micro,
+    },
+    modalRowText: {
+        ...TYPOGRAPHY.caption,
+        flex: 1,
+        lineHeight: 18,
     },
     icon: {
         marginTop: 2,
     },
-    iconModal: {
-        marginTop: 0,
-    },
     textCol: {
         flex: 1,
         gap: SPACING.micro,
-    },
-    textColModal: {
-        flex: 0,
-        alignItems: 'center',
-        gap: SPACING.tight,
-        paddingHorizontal: SPACING.tight,
     },
     title: {
         ...TYPOGRAPHY.caption,
         fontWeight: '600',
         textAlign: 'left',
     },
-    titleModal: {
-        ...TYPOGRAPHY.callout,
-        fontWeight: '600',
-        textAlign: 'center',
-    },
     body: {
         ...TYPOGRAPHY.caption,
         lineHeight: 18,
         textAlign: 'left',
-    },
-    bodyModal: {
-        textAlign: 'center',
-        maxWidth: 300,
     },
 });

@@ -14,6 +14,7 @@ import {
 import {
     formatPaymentAmount,
     getPaymentUiCopy,
+    phaseRequiresPayment,
     resolvePaymentUiPhase,
     type PaymentUiPhase,
 } from '@/lib/payment-ui';
@@ -91,12 +92,18 @@ export function useMeetupSlotConfirmController({
         || paymentPhase === 'paid_waiting'
         || paymentPhase === 'both_paid';
 
+    const requiresPayment = phaseRequiresPayment(paymentPhase);
+
     const showWhySection =
         paymentsEnabled
-        && !showConfirmedState
-        && paymentPhase !== 'expired_unpaid'
-        && paymentPhase !== 'expired_refund_choice'
-        && paymentPhase !== 'expired_restored';
+        && requiresPayment
+        && !showConfirmedState;
+
+    const showGhostSafetyLine =
+        paymentsEnabled
+        && requiresPayment
+        && canAct
+        && !showConfirmedState;
 
     const partnerLine = useMemo(() => {
         if (paymentsEnabled && paymentCopy.partnerLine) {
@@ -218,6 +225,8 @@ export function useMeetupSlotConfirmController({
         isPending,
         showConfirmedState,
         showWhySection,
+        requiresPayment,
+        showGhostSafetyLine,
         partnerLine,
         primaryCtaLabel,
         handlePrimaryAction,
