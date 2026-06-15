@@ -8,6 +8,7 @@ import {
     reserveConfirmationForMatch,
 } from "@/lib/payments/confirmation-balance";
 import { getPaymentsEnabled } from "@/lib/payments/payment-flags";
+import type { DateMatchPaymentState } from "@/lib/payments/payment-session-types";
 import { tryFinalizeConfirmedMeetup } from "@/lib/services/meetup-confirmation-service";
 import { notifyPartnerAfterSlotConfirm } from "@/lib/services/meetup-push-notifications-service";
 import {
@@ -20,7 +21,7 @@ export type PaymentApplyTx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 export type ApplyPaidParticipantResult = {
     paidCount: number;
     mutualMatchId: string | null;
-    paymentState: string;
+    paymentState: DateMatchPaymentState;
 };
 
 /** Assumes the payment row is already `paid` within the transaction when paymentId is set. */
@@ -51,7 +52,7 @@ export async function applyPaidParticipantInTransaction(
     }
 
     let paidCount = 0;
-    let paymentState = "awaiting_payment";
+    let paymentState: DateMatchPaymentState = "awaiting_payment";
 
     if (mutual) {
         paidCount = await countParticipantsWithReservedOrPaid(
