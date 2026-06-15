@@ -51,7 +51,8 @@ export async function sendPaymentRequiredPushes(input: {
     ]);
 
     const body =
-        "You both said yes 🎉  Confirm your date with a KES 499 setup fee.";
+        "It’s a match 🤗🎉 Secure your date  and seal the vibe. 💖";
+   
     const data = paymentPushData(input.dateMatchId, NOTIFICATION_TYPES.PAYMENT_REQUIRED);
     const sends: Promise<unknown>[] = [];
 
