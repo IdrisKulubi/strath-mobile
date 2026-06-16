@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Modal, StyleSheet, Text as RNText, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
+import { CancelHoldSheet } from '@/components/home/cancel-hold-sheet';
 import { useTheme } from '@/hooks/use-theme';
 import { useMeetupSlotConfirmController } from '@/hooks/use-meetup-slot-confirm-controller';
 import { MeetupSlotConfirmContent } from '@/components/dates/meetup-slot-confirm';
@@ -14,11 +15,20 @@ import {
     mapPaymentPhaseToHeaderPhase,
 } from '@/lib/confirmation-copy';
 import { SPACING, RADIUS, TYPOGRAPHY } from '@/lib/design-tokens';
-import type { MatchHold } from '@/hooks/use-daily-matches';
+import {
+    type MatchHold,
+    type MatchHoldCancelReason,
+    useCancelMatchHold,
+} from '@/hooks/use-daily-matches';
+import { usePaymentStatus } from '@/hooks/use-payment-status';
+import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
+import { useToast } from '@/components/ui/toast';
+import { formatPaymentAmount } from '@/lib/payment-ui';
 
 interface MeetupSlotConfirmModalProps {
     visible: boolean;
     hold: MatchHold;
+    /** Called after the user confirms cancellation with a reason */
     onCancelHold?: () => void;
 }
 
@@ -28,8 +38,64 @@ export function MeetupSlotConfirmModal({
     onCancelHold,
 }: MeetupSlotConfirmModalProps) {
     const { colors } = useTheme();
+    const toast = useToast();
+    const cancelHold = useCancelMatchHold();
+    const [showCancelSheet, setShowCancelSheet] = useState(false);
     const partnerName = hold.partner.firstName ?? 'your match';
     const slot = hold.slotConfirmation;
+
+    const { paymentsEnabled } = usePaymentsEnabled();
+    const { data: paymentStatus } = usePaymentStatus(hold.dateMatchId ?? null);
+
+    const paidCreditNote = useMemo(() => {
+        if (!paymentsEnabled) {
+            return null;
+        }
+        if (paymentStatus?.confirmationBalance && paymentStatus.confirmationBalance.reserved > 0) {
+            return 'If they do not confirm in time, your confirmation stays unused.';
+        }
+        if (paymentStatus?.currentUserPaid) {
+            const amountLabel = formatPaymentAmount(
+                paymentStatus.amount ?? 499,
+                paymentStatus.currency ?? 'KES',
+            );
+            return `If you cancel, your ${amountLabel} pack balance stays on your account.`;
+        }
+        return null;
+    }, [paymentsEnabled, paymentStatus]);
+
+    const handleCancelConfirm = (reason: MatchHoldCancelReason) => {
+        cancelHold.mutate(
+            { mutualMatchId: hold.mutualMatchId, reason, notes: null },
+            {
+                onSuccess: (data) => {
+                    setShowCancelSheet(false);
+                    if (data.credited && data.creditAmountCents != null) {
+                        const amountLabel = formatPaymentAmount(
+                            data.creditAmountCents / 100,
+                            paymentStatus?.currency ?? 'KES',
+                        );
+                        toast.show({
+                            message: `Cancelled. ${amountLabel} saved as your StrathSpace credit.`,
+                            variant: 'success',
+                        });
+                    } else {
+                        toast.show({
+                            message: 'Cancelled — we will keep matching you.',
+                            variant: 'success',
+                        });
+                    }
+                    onCancelHold?.();
+                },
+                onError: () => {
+                    toast.show({
+                        message: 'Could not cancel right now. Please try again.',
+                        variant: 'danger',
+                    });
+                },
+            },
+        );
+    };
 
     const controller = useMeetupSlotConfirmController({
         mutualMatchId: hold.mutualMatchId,
@@ -41,7 +107,6 @@ export function MeetupSlotConfirmModal({
     });
 
     const {
-        paymentsEnabled,
         paymentPhase,
         amountLabel,
         canAct,
@@ -68,12 +133,13 @@ export function MeetupSlotConfirmModal({
             presentationStyle="fullScreen"
             onRequestClose={() => {}}
         >
-            <SafeAreaView
-                edges={['top', 'bottom', 'left', 'right']}
-                style={[styles.screen, { backgroundColor: colors.background }]}
-            >
-                <View style={styles.main}>
-                    <View style={styles.content}>
+            <View style={[styles.modalRoot, { backgroundColor: colors.background }]}>
+                <SafeAreaView
+                    edges={['top', 'bottom', 'left', 'right']}
+                    style={[styles.screen, { backgroundColor: colors.background }]}
+                >
+                    <View style={styles.main}>
+                        <View style={styles.content}>
                         <View style={styles.partnerHero}>
                             <View style={[styles.avatarWrap, { borderColor: colors.border }]}>
                                 {hold.partner.profilePhoto ? (
@@ -121,7 +187,7 @@ export function MeetupSlotConfirmModal({
                     </View>
                 </View>
 
-                <View style={styles.footer}>
+                <View style={[styles.footer, { backgroundColor: colors.background }]}>
                     {showConfirmedState ? (
                         <View
                             style={[
@@ -163,36 +229,51 @@ export function MeetupSlotConfirmModal({
                         </RNText>
                     ) : null}
 
-                    {onCancelHold ? (
-                        <TouchableOpacity
-                            onPress={onCancelHold}
-                            accessibilityRole="button"
-                            accessibilityLabel="Cancel this match"
-                            activeOpacity={0.7}
-                            style={styles.cancelLinkWrap}
-                        >
-                            <RNText style={[styles.cancelLink, { color: colors.mutedForeground }]}>
-                                Cancel this match
-                            </RNText>
-                        </TouchableOpacity>
-                    ) : null}
+                    <TouchableOpacity
+                        onPress={() => setShowCancelSheet(true)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel this match"
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 12, bottom: 12, left: 24, right: 24 }}
+                        style={styles.cancelLinkWrap}
+                    >
+                        <RNText style={[styles.cancelLink, { color: colors.mutedForeground }]}>
+                            Cancel this match
+                        </RNText>
+                    </TouchableOpacity>
                 </View>
-            </SafeAreaView>
+                </SafeAreaView>
+
+                <CancelHoldSheet
+                    visible={showCancelSheet}
+                    partnerName={partnerName}
+                    isSubmitting={cancelHold.isPending}
+                    paidCreditNote={paidCreditNote}
+                    onClose={() => setShowCancelSheet(false)}
+                    onConfirm={handleCancelConfirm}
+                />
+            </View>
         </Modal>
     );
 }
 
 const styles = StyleSheet.create({
+    modalRoot: {
+        flex: 1,
+    },
     screen: {
         flex: 1,
     },
     main: {
         flex: 1,
+        minHeight: 0,
+        overflow: 'hidden',
         paddingHorizontal: SPACING.screenX,
         paddingTop: SPACING.compact,
     },
     content: {
         flex: 1,
+        minHeight: 0,
         alignItems: 'center',
         justifyContent: 'space-evenly',
         width: '100%',
@@ -248,6 +329,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     footer: {
+        flexShrink: 0,
         paddingHorizontal: SPACING.screenX,
         paddingTop: SPACING.compact,
         paddingBottom: SPACING.base,
@@ -255,6 +337,8 @@ const styles = StyleSheet.create({
         maxWidth: 400,
         alignSelf: 'center',
         gap: SPACING.tight,
+        zIndex: 10,
+        elevation: 10,
     },
     primaryButton: {
         width: '100%',
@@ -295,10 +379,11 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     cancelLinkWrap: {
-        alignSelf: 'center',
-        paddingVertical: SPACING.micro,
-        paddingHorizontal: SPACING.compact,
-        minHeight: 44,
+        alignSelf: 'stretch',
+        alignItems: 'center',
+        paddingVertical: SPACING.compact,
+        paddingHorizontal: SPACING.base,
+        minHeight: 48,
         justifyContent: 'center',
     },
     cancelLink: {
