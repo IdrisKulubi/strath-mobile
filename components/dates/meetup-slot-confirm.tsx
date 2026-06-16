@@ -12,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/hooks/use-theme';
 import { useMeetupSlotConfirmController } from '@/hooks/use-meetup-slot-confirm-controller';
-import { PaymentCreditActions } from '@/components/dates/payment-credit-actions';
 import { ConfirmationBalancePill } from '@/components/dates/confirmation-balance-pill';
 import { PaymentStatusBanner } from '@/components/dates/payment-status-banner';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
@@ -65,7 +64,6 @@ export function MeetupSlotConfirmContent({
 
     const {
         paymentsEnabled,
-        canConfirmWithBalance,
         confirmationBalance,
         paymentCopy,
         canAct,
@@ -73,7 +71,6 @@ export function MeetupSlotConfirmContent({
         partnerLine,
         primaryCtaLabel,
         handlePrimaryAction,
-        handleCreditApplied,
     } = controller;
 
     const bodyCopy = paymentsEnabled && paymentCopy.body ? paymentCopy.body : null;
@@ -123,14 +120,6 @@ export function MeetupSlotConfirmContent({
             </View>
         </TouchableOpacity>
     );
-
-    const creditBlock =
-        dateMatchId && paymentsEnabled && !canConfirmWithBalance && !(isModal && hidePrimaryCta) ? (
-            <PaymentCreditActions
-                dateMatchId={dateMatchId}
-                onCreditApplied={handleCreditApplied}
-            />
-        ) : null;
 
     const statusBanner =
         dateMatchId && paymentsEnabled ? (
@@ -212,8 +201,6 @@ export function MeetupSlotConfirmContent({
                     : showConfirmedState
                       ? confirmedBlock
                       : null}
-
-                {creditBlock}
 
                 <MeetupRescheduleSection
                     layout="modal"
@@ -319,8 +306,6 @@ export function MeetupSlotConfirmContent({
                     The confirmation window has closed.
                 </RNText>
             ) : null}
-
-            {creditBlock}
 
             <MeetupRescheduleSection
                 layout="inline"

@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui/text';
 import type { OnboardingData } from '@/components/digital-dna/types';
+import { LIFESTYLE_QUESTIONS } from '@/constants/lifestyle-options';
 
 type LifestyleAnswers = OnboardingData['lifestyleAnswers'];
 
@@ -34,30 +35,21 @@ interface Question {
     options: { value: string; label: string; emoji: string }[];
 }
 
-const QUESTIONS: Question[] = [
-    {
-        id: 'relationshipGoal',
-        title: 'What are you looking for?',
-        subtitle: 'Be honest - it helps us match better',
-        icon: HeartStraight,
-        options: [
-            { value: 'serious', label: 'Something serious', emoji: '💍' },
-            { value: 'casual', label: 'Casual and see where it goes', emoji: '🌊' },
-            { value: 'open', label: 'Open to anything', emoji: '✨' },
-        ],
-    },
-    {
-        id: 'outingFrequency',
-        title: 'How often do you go out?',
-        subtitle: 'Your average week',
-        icon: CalendarBlank,
-        options: [
-            { value: 'rarely', label: 'Rarely - homebody', emoji: '🏠' },
-            { value: '1_2_week', label: '1-2 times a week', emoji: '🚶' },
-            { value: '3_plus_week', label: '3+ times a week', emoji: '🎉' },
-        ],
-    },
-];
+const LIFESTYLE_ICONS: Record<
+    string,
+    React.ComponentType<{ size: number; color: string; weight?: 'fill' }>
+> = {
+    relationshipGoal: HeartStraight,
+    outingFrequency: CalendarBlank,
+};
+
+const QUESTIONS: Question[] = LIFESTYLE_QUESTIONS.map((question) => ({
+    id: question.id as keyof LifestyleAnswers,
+    title: question.title,
+    subtitle: question.subtitle,
+    icon: LIFESTYLE_ICONS[question.id],
+    options: question.options,
+}));
 
 const TOTAL = QUESTIONS.length;
 
