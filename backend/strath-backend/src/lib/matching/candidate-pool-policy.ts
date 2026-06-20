@@ -3,7 +3,7 @@
  *
  * Invariants (home / candidate_pairs flow):
  * 1. **Dyad dead:** If we already have `closed` or `mutual` (or `active`/`queued`) with user X,
- *    we do not create another candidate row for that unordered pair (`getExistingPairMap` in the service).
+ *    we do not create another candidate row for that unordered pair (`getExistingPairMap` in dyad-history).
  * 2. **Directional pass:** Only exclude user Y from *my* feed when **I** recorded `passed` on a `closed`
  *    row with Y — not when only the other person passed (`collectUsersIPassedIds`).
  * 3. **Blocks & matches:** Block list and existing date/mutual matches exclude those users entirely
@@ -140,4 +140,89 @@ export function compareScoredCandidatesForFairness(a: ScoredCandidateForFairness
         return a.activeExposureCount - b.activeExposureCount;
     }
     return a.candidateUserId.localeCompare(b.candidateUserId);
+}
+
+/** Default days to hide a profile after it appeared in daily recommendations. */
+export const DEFAULT_RECOMMENDATION_REPEAT_COOLDOWN_DAYS = 7;
+
+/** Max score reduction from prior recommendation exposure (tie-breaker only). */
+export const MAX_RECOMMENDATION_EXPOSURE_PENALTY = 40;
+
+export function computeRecommendationExposurePenalty(showCount: number): number {
+    return Math.min(MAX_RECOMMENDATION_EXPOSURE_PENALTY, Math.max(0, showCount) * 5);
+}
+
+/** Cooldown tiers tried when the eligible pool is too small after hard exclusion. */
+export const RECOMMENDATION_COOLDOWN_FALLBACK_TIERS = [7, 3, 1] as const;
+
+export function utcDayKey(date = new Date()): string {
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString().slice(0, 10);
+}
+
+/** UTC day keys for today and the prior `cooldownDays - 1` days (inclusive). */
+export function shortlistDayKeysWithinCooldown(cooldownDays: number, now = new Date()): string[] {
+    const safeDays = Math.max(1, cooldownDays);
+    const keys: string[] = [];
+    for (let offset = 0; offset < safeDays; offset++) {
+        const day = new Date(now);
+        day.setUTCDate(day.getUTCDate() - offset);
+        keys.push(utcDayKey(day));
+    }
+    return keys;
+}
+
+/** Union candidate ids from one or more iterables. */
+export function collectRecentlyShownIds(...groups: Iterable<string>[]): Set<string> {
+    const out = new Set<string>();
+    for (const group of groups) {
+        for (const id of group) {
+            out.add(id);
+        }
+    }
+    return out;
+}
+
+/** Users blocked by dyad history (active, closed/mutual, or expired within cooldown). */
+export function collectDyadExcludedIds(
+    pairMap: Map<string, PairAggregateSnapshot>,
+    cooldownCutoff: Date,
+): Set<string> {
+    const out = new Set<string>();
+    for (const [otherUserId, aggregate] of pairMap) {
+        if (shouldSkipCandidateForExistingDyad(aggregate, cooldownCutoff)) {
+            out.add(otherUserId);
+        }
+    }
+    return out;
+}
+
+export function buildRecommendationCooldownTiers(defaultDays: number): number[] {
+    const tiers = [defaultDays, ...RECOMMENDATION_COOLDOWN_FALLBACK_TIERS.filter((tier) => tier < defaultDays)];
+    return [...new Set(tiers)].sort((a, b) => b - a);
+}
+
+export type RecommendationCooldownResolution = {
+    cooldownDays: number;
+    fallbackTier: number;
+};
+
+/**
+ * Pick the strictest cooldown tier that still leaves enough eligible candidates.
+ * Falls back to the loosest tier when the pool is critically small.
+ */
+export function resolveRecommendationCooldownDays(input: {
+    eligibleCountsByTier: Map<number, number>;
+    minRequired: number;
+    tiers: readonly number[];
+}): RecommendationCooldownResolution {
+    const { eligibleCountsByTier, minRequired, tiers } = input;
+    for (let i = 0; i < tiers.length; i++) {
+        const tier = tiers[i];
+        const count = eligibleCountsByTier.get(tier) ?? 0;
+        if (count >= minRequired) {
+            return { cooldownDays: tier, fallbackTier: i };
+        }
+    }
+    const lastTier = tiers[tiers.length - 1] ?? DEFAULT_RECOMMENDATION_REPEAT_COOLDOWN_DAYS;
+    return { cooldownDays: lastTier, fallbackTier: tiers.length - 1 };
 }

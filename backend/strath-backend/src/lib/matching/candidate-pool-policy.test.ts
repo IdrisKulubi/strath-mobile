@@ -4,7 +4,14 @@ import {
     collectUsersIPassedIds,
     compareScoredCandidatesForFairness,
     computeEffectiveMinScore,
+    collectDyadExcludedIds,
+    collectRecentlyShownIds,
+    buildRecommendationCooldownTiers,
+    computeRecommendationExposurePenalty,
+    resolveRecommendationCooldownDays,
+    shortlistDayKeysWithinCooldown,
     shouldSkipCandidateForExistingDyad,
+    utcDayKey,
     type ClosedPairDecisionRow,
     type FairnessRelaxConfig,
     type PairAggregateSnapshot,
@@ -163,4 +170,68 @@ test("compareScoredCandidatesForFairness: score then exposure then id", () => {
     const tieExp = { score: 70, candidateUserId: "b", activeExposureCount: 1 };
     const tieExp2 = { score: 70, candidateUserId: "c", activeExposureCount: 1 };
     assert(compareScoredCandidatesForFairness(tieExp, tieExp2) < 0);
+});
+
+test("computeRecommendationExposurePenalty: scales by show count and caps at 40", () => {
+    assert.equal(computeRecommendationExposurePenalty(0), 0);
+    assert.equal(computeRecommendationExposurePenalty(3), 15);
+    assert.equal(computeRecommendationExposurePenalty(8), 40);
+    assert.equal(computeRecommendationExposurePenalty(20), 40);
+});
+
+test("shortlistDayKeysWithinCooldown: includes today and prior days", () => {
+    const now = new Date("2026-06-20T15:00:00Z");
+    assert.deepEqual(shortlistDayKeysWithinCooldown(3, now), ["2026-06-20", "2026-06-19", "2026-06-18"]);
+});
+
+test("collectRecentlyShownIds: unions multiple groups", () => {
+    const merged = collectRecentlyShownIds(["a", "b"], new Set(["b", "c"]));
+    assert.deepEqual([...merged].sort(), ["a", "b", "c"]);
+});
+
+test("collectDyadExcludedIds: skips active and recent expired dyads", () => {
+    const pairMap = new Map<string, PairAggregateSnapshot>([
+        ["active-user", { hasClosedOrMutual: false, hasActive: true, oldestExpiredCreatedAt: null }],
+        ["expired-user", {
+            hasClosedOrMutual: false,
+            hasActive: false,
+            oldestExpiredCreatedAt: new Date("2026-06-18T00:00:00Z"),
+        }],
+        ["eligible-user", { hasClosedOrMutual: false, hasActive: false, oldestExpiredCreatedAt: null }],
+    ]);
+    const cutoff = new Date("2026-06-10T00:00:00Z");
+    assert.deepEqual([...collectDyadExcludedIds(pairMap, cutoff)].sort(), ["active-user", "expired-user"]);
+});
+
+test("buildRecommendationCooldownTiers: dedupes and sorts descending", () => {
+    assert.deepEqual(buildRecommendationCooldownTiers(7), [7, 3, 1]);
+    assert.deepEqual(buildRecommendationCooldownTiers(3), [3, 1]);
+});
+
+test("resolveRecommendationCooldownDays: picks strictest tier with enough candidates", () => {
+    const tiers = buildRecommendationCooldownTiers(7);
+    const resolution = resolveRecommendationCooldownDays({
+        tiers,
+        minRequired: 5,
+        eligibleCountsByTier: new Map([
+            [7, 2],
+            [3, 6],
+            [1, 20],
+        ]),
+    });
+    assert.deepEqual(resolution, { cooldownDays: 3, fallbackTier: 1 });
+});
+
+test("resolveRecommendationCooldownDays: falls back to loosest tier when pool is tiny", () => {
+    const tiers = buildRecommendationCooldownTiers(7);
+    const resolution = resolveRecommendationCooldownDays({
+        tiers,
+        minRequired: 5,
+        eligibleCountsByTier: new Map([
+            [7, 1],
+            [3, 2],
+            [1, 3],
+        ]),
+    });
+    assert.deepEqual(resolution, { cooldownDays: 1, fallbackTier: 2 });
 });

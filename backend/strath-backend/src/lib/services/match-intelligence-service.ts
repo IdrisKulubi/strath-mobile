@@ -16,10 +16,20 @@ import {
 } from "@/db/schema";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
 import { faceVerifiedProfileWhereClause, hasCompletedInitialFaceVerification } from "@/lib/matchmaking-pool-eligibility";
-import { collectUsersIPassedIds } from "@/lib/matching/candidate-pool-policy";
+import {
+    collectUsersIPassedIds,
+    collectDyadExcludedIds,
+    collectRecentlyShownIds,
+    buildRecommendationCooldownTiers,
+    computeRecommendationExposurePenalty,
+    resolveRecommendationCooldownDays,
+    shortlistDayKeysWithinCooldown,
+} from "@/lib/matching/candidate-pool-policy";
+import { getExistingPairMap } from "@/lib/matching/dyad-history";
 import {
     canonicalizePairUsers,
     CANDIDATE_PAIR_EXPIRY_HOURS,
+    EXPIRED_PAIR_COOLDOWN_DAYS,
     getCurrentUserDecision,
     recordCandidatePairHistory,
     respondToCandidatePair,
@@ -128,6 +138,7 @@ export interface PreferenceInput {
 const DEFAULT_PREFERENCE_MODE: PreferenceMode = "surprise_me";
 const DAILY_LIMIT = 5;
 const MAX_BROWSE_LIMIT = 50;
+const RECOMMENDATION_REPEAT_COOLDOWN_DAYS = Number(process.env.RECOMMENDATION_REPEAT_COOLDOWN_DAYS) || 7;
 
 function startOfUtcDay(date = new Date()) {
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -543,17 +554,50 @@ async function getViewerDecisionMap(viewerUserId: string, candidateUserIds: stri
     return new Map(rows.map((row) => [row.candidateUserId, row.decision]));
 }
 
+async function getRecentlyShownCandidateIds(viewerUserId: string, cooldownDays: number) {
+    const dayKeys = shortlistDayKeysWithinCooldown(cooldownDays);
+    const since = new Date(Date.now() - cooldownDays * 24 * 60 * 60 * 1000);
+
+    const [shortlistRows, eventRows] = await Promise.all([
+        readDb
+            .select({ candidateUserId: dailyShortlists.candidateUserId })
+            .from(dailyShortlists)
+            .where(
+                and(
+                    eq(dailyShortlists.viewerUserId, viewerUserId),
+                    inArray(dailyShortlists.shortlistDay, dayKeys),
+                ),
+            ),
+        readDb
+            .select({ candidateUserId: recommendationEvents.candidateUserId })
+            .from(recommendationEvents)
+            .where(
+                and(
+                    eq(recommendationEvents.viewerUserId, viewerUserId),
+                    gte(recommendationEvents.shownAt, since),
+                    inArray(recommendationEvents.decision, ["shown", "viewed"]),
+                ),
+            ),
+    ]);
+
+    return collectRecentlyShownIds(
+        shortlistRows.map((row) => row.candidateUserId),
+        eventRows.map((row) => row.candidateUserId),
+    );
+}
+
 async function getEligibleCandidateProfiles(viewerUserId: string, filters: BrowseFilters = {}) {
     const viewerProfile = await readDb.query.profiles.findFirst({
         where: eq(profiles.userId, viewerUserId),
     });
     if (!viewerProfile) return { viewerProfile: null, candidates: [] as CandidateProfile[] };
 
-    const [poolExcludedIds, blockedIds, passedIds, existingDyads] = await Promise.all([
+    const [poolExcludedIds, blockedIds, passedIds, existingDyads, existingPairMap] = await Promise.all([
         resolveMatchExcludedUserIds(),
         getBlockedUserIds(viewerUserId),
         getUsersIPassedIds(viewerUserId),
         getExistingDyadIds(viewerUserId),
+        getExistingPairMap(viewerUserId),
     ]);
     const allowAdminPreview = poolExcludedIds.has(viewerUserId) && await isAdminMatchPreviewUser(viewerUserId);
     if (poolExcludedIds.has(viewerUserId) && !allowAdminPreview) {
@@ -564,39 +608,75 @@ async function getEligibleCandidateProfiles(viewerUserId: string, filters: Brows
         return { viewerProfile, candidates: [] as CandidateProfile[] };
     }
 
-    const excludedIds = unique([
+    const dyadCooldownCutoff = new Date(Date.now() - EXPIRED_PAIR_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
+    const dyadExcludedIds = collectDyadExcludedIds(existingPairMap, dyadCooldownCutoff);
+    const baseExcludedIds = unique([
         viewerUserId,
         ...poolExcludedIds,
         ...blockedIds,
         ...passedIds,
         ...existingDyads,
+        ...dyadExcludedIds,
     ]);
 
     const targetGenders = getTargetGenders(viewerProfile.gender, viewerProfile.interestedIn as string[] | null);
+    const cooldownTiers = buildRecommendationCooldownTiers(RECOMMENDATION_REPEAT_COOLDOWN_DAYS);
+    const eligibleCountsByTier = new Map<number, number>();
+    const candidatesByTier = new Map<number, CandidateProfile[]>();
+    const recentlyShownCountsByTier = new Map<number, number>();
+    let appliedRecentlyShownCount = 0;
 
-    const candidates = await readDb.query.profiles.findMany({
-        where: and(
-            notInArray(profiles.userId, excludedIds),
-            eq(profiles.isVisible, true),
-            eq(profiles.profileCompleted, true),
-            eq(profiles.discoveryPaused, false),
-            eq(profiles.incognitoMode, false),
-            filters.university ? eq(profiles.university, filters.university) : undefined,
-            filters.course ? eq(profiles.course, filters.course) : undefined,
-            filters.ageMin ? gte(profiles.age, filters.ageMin) : undefined,
-            filters.ageMax ? sql`${profiles.age} <= ${filters.ageMax}` : undefined,
-            faceVerifiedProfileWhereClause(),
-            targetGenders.length > 0 ? inArray(profiles.gender, targetGenders) : undefined,
-        ),
-        with: { user: true },
-        limit: 250,
+    for (const tier of cooldownTiers) {
+        const recentlyShownIds = await getRecentlyShownCandidateIds(viewerUserId, tier);
+        recentlyShownCountsByTier.set(tier, recentlyShownIds.size);
+        const excludedIds = unique([...baseExcludedIds, ...recentlyShownIds]);
+
+        const candidates = await readDb.query.profiles.findMany({
+            where: and(
+                notInArray(profiles.userId, excludedIds),
+                eq(profiles.isVisible, true),
+                eq(profiles.profileCompleted, true),
+                eq(profiles.discoveryPaused, false),
+                eq(profiles.incognitoMode, false),
+                filters.university ? eq(profiles.university, filters.university) : undefined,
+                filters.course ? eq(profiles.course, filters.course) : undefined,
+                filters.ageMin ? gte(profiles.age, filters.ageMin) : undefined,
+                filters.ageMax ? sql`${profiles.age} <= ${filters.ageMax}` : undefined,
+                faceVerifiedProfileWhereClause(),
+                targetGenders.length > 0 ? inArray(profiles.gender, targetGenders) : undefined,
+            ),
+            with: { user: true },
+            limit: 250,
+        });
+
+        const now = new Date();
+        const eligibleCandidates = candidates
+            .filter((candidate) => !candidate.user?.deletedAt)
+            .filter((candidate) => isReciprocalGenderMatch(viewerProfile.gender, candidate.gender, candidate.interestedIn as string[] | null))
+            .filter((candidate) => !filters.activeRecently || scoreActivityFromDate(candidate.user?.lastActive ?? candidate.lastActive, now) >= 55);
+
+        eligibleCountsByTier.set(tier, eligibleCandidates.length);
+        candidatesByTier.set(tier, eligibleCandidates);
+    }
+
+    const { cooldownDays, fallbackTier } = resolveRecommendationCooldownDays({
+        tiers: cooldownTiers,
+        minRequired: DAILY_LIMIT,
+        eligibleCountsByTier,
     });
+    const eligibleCandidates = candidatesByTier.get(cooldownDays) ?? [];
+    appliedRecentlyShownCount = recentlyShownCountsByTier.get(cooldownDays) ?? 0;
 
-    const now = new Date();
-    const eligibleCandidates = candidates
-        .filter((candidate) => !candidate.user?.deletedAt)
-        .filter((candidate) => isReciprocalGenderMatch(viewerProfile.gender, candidate.gender, candidate.interestedIn as string[] | null))
-        .filter((candidate) => !filters.activeRecently || scoreActivityFromDate(candidate.user?.lastActive ?? candidate.lastActive, now) >= 55);
+    if (fallbackTier > 0) {
+        console.log("[match-intelligence] sparsePoolFallback", {
+            viewerUserId,
+            requestedCooldownDays: RECOMMENDATION_REPEAT_COOLDOWN_DAYS,
+            appliedCooldownDays: cooldownDays,
+            fallbackTier,
+            eligibleCountsByTier: Object.fromEntries(eligibleCountsByTier),
+            recentlyShownCountsByTier: Object.fromEntries(recentlyShownCountsByTier),
+        });
+    }
 
     console.log("[match-intelligence] eligible pool", {
         viewerUserId,
@@ -609,8 +689,11 @@ async function getEligibleCandidateProfiles(viewerUserId: string, filters: Brows
         blockedCount: blockedIds.size,
         passedCount: passedIds.size,
         existingDyadsCount: existingDyads.size,
-        excludedIdsCount: excludedIds.length,
-        rawCandidateCount: candidates.length,
+        dyadExcludedCount: dyadExcludedIds.size,
+        recentlyShownCooldownDays: cooldownDays,
+        recentlyShownCount: appliedRecentlyShownCount,
+        excludedIdsCount: baseExcludedIds.length + appliedRecentlyShownCount,
+        rawCandidateCount: eligibleCandidates.length,
         eligibleCandidateCount: eligibleCandidates.length,
         filters,
     });
@@ -705,7 +788,7 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             diversityScore,
             availabilityScore,
         });
-        const exposurePenalty = Math.min(20, (exposureCounts.get(candidate.userId) ?? 0) * 5);
+        const exposurePenalty = computeRecommendationExposurePenalty(exposureCounts.get(candidate.userId) ?? 0);
         const passRiskPenalty = candidateSignal?.passRiskPenalty ?? 0;
         const ghostingPenalty = candidateSignal?.ghostingPenalty ?? 0;
         const activeHoldPenalty = usersOnHold.has(candidate.userId) ? 8 : 0;
