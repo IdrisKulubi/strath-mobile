@@ -1,9 +1,10 @@
 import { Redirect, Tabs, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Platform, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HapticTab } from '@/components/haptic-tab';
+import { GlassTabBar, getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
 import { useTheme } from '@/hooks/use-theme';
 import { useNotificationCounts, formatBadgeCount } from '@/hooks/use-notification-counts';
 import { useProfile } from '@/hooks/use-profile';
@@ -13,6 +14,8 @@ import { getProfileRoute } from '@/lib/profile-access';
 export default function TabLayout() {
   const router = useRouter();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = getGlassTabBarHeight(insets.bottom);
   const { unreadMessages, homeAttention, datesActionable } = useNotificationCounts();
   const { data: profile, error: profileError, isError: isProfileError, isLoading, isSuccess } = useProfile();
   const homeBadge = homeAttention ?? 0;
@@ -63,24 +66,18 @@ export default function TabLayout() {
   return (
     <Tabs
       initialRouteName="index"
+      tabBar={(props) => <GlassTabBar {...props} />}
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.tabIconDefault,
         headerShown: false,
-        tabBarButton: HapticTab,
         tabBarStyle: {
-          backgroundColor: colors.background,
+          position: 'absolute',
+          backgroundColor: 'transparent',
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
-          height: Platform.OS === 'ios' ? 94 : 74,
-          paddingTop: 12,
-          paddingBottom: Platform.OS === 'ios' ? 34 : 14,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '500',
-          marginTop: 4,
+          height: tabBarHeight,
         },
         tabBarBadgeStyle: {
           backgroundColor: colors.primary,
