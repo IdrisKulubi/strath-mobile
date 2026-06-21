@@ -1524,6 +1524,17 @@ export async function respondToCandidatePair(
                 });
             }
         }
+
+        if (decision === "open_to_meet" && result.pair.status === "active") {
+            const partnerUserId = result.pair.userAId === userId
+                ? result.pair.userBId
+                : result.pair.userAId;
+            const { recordIncomingLike } = await import("@/lib/services/incoming-like-service");
+            void recordIncomingLike({ swiperId: userId, swipedId: partnerUserId }).catch((err) => {
+                console.warn("[candidate-pairs] incoming like notification failed", err);
+            });
+        }
+
         return { pair: result.pair, mutual: result.mutual };
     });
 }

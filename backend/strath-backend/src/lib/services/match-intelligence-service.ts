@@ -1584,10 +1584,15 @@ export async function handleRecommendationDecision(input: {
             viewerUserId: input.viewerUserId,
             candidateUserId: input.candidateUserId,
         });
-        return { event, interest, pair: pair ?? null, mutual: mutual ?? null, mutualMatchCreated: Boolean(mutual) };
+        const mutualMatchCreated = Boolean(mutual);
+        if (!mutualMatchCreated) {
+            await recordOneSidedIncomingLike(input.viewerUserId, input.candidateUserId);
+        }
+        return { event, interest, pair: pair ?? null, mutual: mutual ?? null, mutualMatchCreated };
     }
 
     if (!reverseInterest) {
+        await recordOneSidedIncomingLike(input.viewerUserId, input.candidateUserId);
         return { event, interest, pair: null, mutual: null, mutualMatchCreated: false };
     }
 
@@ -1607,11 +1612,23 @@ export async function handleRecommendationDecision(input: {
         mutualMatchCreated: Boolean(result.mutual),
     });
 
+    const mutualMatchCreated = Boolean(result.mutual);
+    if (!mutualMatchCreated) {
+        await recordOneSidedIncomingLike(input.viewerUserId, input.candidateUserId);
+    }
+
     return {
         event,
         interest,
         pair: result.pair,
         mutual: result.mutual,
-        mutualMatchCreated: Boolean(result.mutual),
+        mutualMatchCreated,
     };
+}
+
+async function recordOneSidedIncomingLike(swiperId: string, swipedId: string) {
+    const { recordIncomingLike } = await import("@/lib/services/incoming-like-service");
+    await recordIncomingLike({ swiperId, swipedId }).catch((error) => {
+        console.warn("[match-intelligence] incoming like notification failed", error);
+    });
 }
