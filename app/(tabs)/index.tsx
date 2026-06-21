@@ -9,17 +9,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import { HomeHeader } from '@/components/home/home-header';
+import { HomeTabSwitcher, type HomeTab } from '@/components/home/home-tab-switcher';
+import { InterestedInYouSection } from '@/components/home/interested-in-you-section';
 import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/decision-info-sheet';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 import { DailyRecommendationsPreview } from '@/components/discovery/daily-recommendations-preview';
-import { MatchPreferencePanel } from '@/components/discovery/match-preference-panel';
 import { DailyMatchesList } from '@/components/home/daily-matches-list';
 import { DateHoldCard } from '@/components/home/date-hold-card';
 import { MeetupSlotConfirmModal } from '@/components/dates/meetup-slot-confirm-modal';
@@ -35,6 +36,8 @@ import {
     useDailyRecommendations,
     useRecommendationDecision,
 } from '@/hooks/use-match-discovery';
+import { useConnectionRequests } from '@/hooks/use-connection-requests';
+import { useNotificationCounts } from '@/hooks/use-notification-counts';
 import { useHomeIntroLayout } from '@/hooks/use-home-intro-layout';
 
 function HomeSkeleton() {
@@ -49,12 +52,19 @@ function HomeSkeleton() {
     );
 }
 
+function parseHomeTab(value: string | string[] | undefined): HomeTab | null {
+    const raw = Array.isArray(value) ? value[0] : value;
+    if (raw === 'interested' || raw === 'today') return raw;
+    return null;
+}
+
 export default function HomeScreen() {
     const { colors, colorScheme } = useTheme();
     const router = useRouter();
     const toast = useToast();
     const queryClient = useQueryClient();
     const isDark = colorScheme === 'dark';
+    const params = useLocalSearchParams<{ homeTab?: string }>();
 
     const [infoSheet, setInfoSheet] = useState<{
         visible: boolean;
@@ -64,12 +74,15 @@ export default function HomeScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [savedDecisions, setSavedDecisions] = useState<Record<string, RecommendationDecision>>({});
     const [carouselIndex, setCarouselIndex] = useState(0);
-    const [prefsExpanded, setPrefsExpanded] = useState(false);
+    const [interestedCarouselIndex, setInterestedCarouselIndex] = useState(0);
+    const [homeTab, setHomeTab] = useState<HomeTab>('today');
     const { height: windowHeight } = useWindowDimensions();
     const tabBarHeight = useBottomTabBarHeight();
 
     const { data: profile } = useProfile();
     const dailyMatches = useDailyMatches();
+    const connectionRequests = useConnectionRequests();
+    const { incomingLikes } = useNotificationCounts();
     const pairDecision = useRespondToDailyPair();
     const dailyRecommendations = useDailyRecommendations();
     const recommendationDecision = useRecommendationDecision();
@@ -85,18 +98,33 @@ export default function HomeScreen() {
         () => shouldShowRecommendations ? (dailyRecommendations.data?.recommendations ?? []).slice(0, 5) : [],
         [dailyRecommendations.data?.recommendations, shouldShowRecommendations]
     );
-    const showCarousel =
-        !needsConfirmGate
+    const incomingCount = incomingLikes || connectionRequests.data?.length || 0;
+    const interestedHasCarousel = (connectionRequests.data?.length ?? 0) > 0;
+    const showTodayCarousel =
+        homeTab === 'today'
+        && !needsConfirmGate
         && !activeHold
         && (hasPriorityMatch || (shouldShowRecommendations && recommendations.length > 0));
-    const showPrefsPanel = !needsConfirmGate && !hasPriorityMatch && !activeHold;
-    const { cardHeight, headerCompact, itemWidthRatio } = useHomeIntroLayout(prefsExpanded, showPrefsPanel);
+    const showInterestedCarousel = homeTab === 'interested' && interestedHasCarousel;
+    const showCarousel = showTodayCarousel || showInterestedCarousel;
+    const { cardHeight, headerCompact, itemWidthRatio } = useHomeIntroLayout();
 
     const scrollMinHeight = windowHeight - tabBarHeight;
 
     useEffect(() => {
+        const tabFromParams = parseHomeTab(params.homeTab);
+        if (tabFromParams) {
+            setHomeTab(tabFromParams);
+        }
+    }, [params.homeTab]);
+
+    useEffect(() => {
         setCarouselIndex(0);
     }, [hasPriorityMatch, recommendations.length, priorityMatches.length]);
+
+    useEffect(() => {
+        setInterestedCarouselIndex(0);
+    }, [connectionRequests.data?.length, homeTab]);
 
     const handleRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -104,12 +132,13 @@ export default function HomeScreen() {
             await Promise.all([
                 dailyMatches.refetch(),
                 dailyRecommendations.refetch(),
-                queryClient.invalidateQueries({ queryKey: ['matchPreferences'] }),
+                connectionRequests.refetch(),
+                queryClient.invalidateQueries({ queryKey: ['notificationCounts'] }),
             ]);
         } finally {
             setRefreshing(false);
         }
-    }, [dailyMatches, dailyRecommendations, queryClient]);
+    }, [connectionRequests, dailyMatches, dailyRecommendations, queryClient]);
 
     const handleViewDailyMatchProfile = useCallback((match: DailyMatch) => {
         router.push({
@@ -218,7 +247,7 @@ export default function HomeScreen() {
         }
     }, [queryClient, recommendationDecision, toast]);
 
-    const mainContent = dailyMatches.isLoading || (shouldShowRecommendations && dailyRecommendations.isLoading) ? (
+    const todayContent = dailyMatches.isLoading || (shouldShowRecommendations && dailyRecommendations.isLoading) ? (
         <HomeSkeleton />
     ) : needsConfirmGate ? (
         <View style={styles.confirmGatePlaceholder} />
@@ -234,7 +263,6 @@ export default function HomeScreen() {
             onFocusedIndexChange={setCarouselIndex}
             cardHeight={cardHeight}
             itemWidthRatio={itemWidthRatio}
-            sectionCompact={!prefsExpanded}
         />
     ) : dailyMatches.data?.mode === 'manual_curation' && recommendations.length === 0 ? (
         <ManualCurationCard curation={dailyMatches.data.manualCuration} />
@@ -249,8 +277,18 @@ export default function HomeScreen() {
             onFocusedIndexChange={setCarouselIndex}
             cardHeight={cardHeight}
             itemWidthRatio={itemWidthRatio}
-            sectionCompact={!prefsExpanded}
         />
+    );
+
+    const mainContent = homeTab === 'interested' ? (
+        <InterestedInYouSection
+            cardHeight={cardHeight}
+            itemWidthRatio={itemWidthRatio}
+            onFocusedIndexChange={setInterestedCarouselIndex}
+            onSwitchToToday={() => setHomeTab('today')}
+        />
+    ) : (
+        todayContent
     );
 
     return (
@@ -266,21 +304,18 @@ export default function HomeScreen() {
                     ]}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
                     showsVerticalScrollIndicator={false}
-                    scrollEnabled={!showCarousel || prefsExpanded}
+                    scrollEnabled={!showCarousel}
                 >
                     <HomeHeader
                         firstName={profile?.firstName}
-                        matchCount={hasPriorityMatch ? priorityMatches.length : recommendations.length}
-                        focusedIndex={carouselIndex}
                         compact={showCarousel && headerCompact}
                     />
 
-                    {showPrefsPanel ? (
-                        <MatchPreferencePanel
-                            expanded={prefsExpanded}
-                            onExpandedChange={setPrefsExpanded}
-                        />
-                    ) : null}
+                    <HomeTabSwitcher
+                        activeTab={homeTab}
+                        onTabChange={setHomeTab}
+                        interestedCount={incomingCount}
+                    />
 
                     <View style={showCarousel ? styles.carouselHost : undefined}>
                         {mainContent}

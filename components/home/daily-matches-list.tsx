@@ -1,9 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Text } from '@/components/ui/text';
-import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
-import { useTheme } from '@/hooks/use-theme';
 import { DailyMatch } from '@/hooks/use-daily-matches';
 import { FocusMatchCarousel } from '@/components/home/focus-match-carousel';
 import { HomeIntroCard, HomeIntroCardData } from '@/components/home/home-intro-card';
@@ -17,7 +14,6 @@ interface DailyMatchesListProps {
     onFocusedIndexChange?: (index: number) => void;
     cardHeight: number;
     itemWidthRatio?: number;
-    sectionCompact?: boolean;
 }
 
 function buildIdentityLine(match: DailyMatch) {
@@ -49,10 +45,7 @@ export function DailyMatchesList({
     onFocusedIndexChange,
     cardHeight,
     itemWidthRatio,
-    sectionCompact = false,
 }: DailyMatchesListProps) {
-    const { colors } = useTheme();
-
     const cardDataList = useMemo(() => matches.map(toIntroCardData), [matches]);
     const matchByPairId = useMemo(
         () => new Map(matches.map((match) => [match.pairId, match])),
@@ -89,17 +82,6 @@ export function DailyMatchesList({
 
     return (
         <View style={styles.container}>
-            <View style={[styles.header, sectionCompact && styles.headerCompact]}>
-                <Text style={[sectionCompact ? styles.titleCompact : styles.title, { color: colors.foreground }]}>
-                    Your introductions
-                </Text>
-                {!sectionCompact ? (
-                    <Text variant="muted" style={{ color: colors.mutedForeground }}>
-                        Intros refresh in ~12h
-                    </Text>
-                ) : null}
-            </View>
-
             <FocusMatchCarousel
                 items={cardDataList}
                 keyExtractor={(item) => item.id}
@@ -107,6 +89,7 @@ export function DailyMatchesList({
                 onIndexChange={onFocusedIndexChange}
                 cardHeight={cardHeight}
                 itemWidthRatio={itemWidthRatio}
+                showFraction={false}
             />
         </View>
     );
@@ -115,19 +98,5 @@ export function DailyMatchesList({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-    },
-    header: {
-        paddingHorizontal: SPACING.screenX,
-        marginBottom: SPACING.compact,
-        gap: SPACING.micro,
-    },
-    headerCompact: {
-        marginBottom: SPACING.tight,
-    },
-    title: {
-        ...TYPOGRAPHY.title,
-    },
-    titleCompact: {
-        ...TYPOGRAPHY.headline,
     },
 });

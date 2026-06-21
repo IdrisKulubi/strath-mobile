@@ -7,6 +7,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
 import { RADIUS, SPACING } from '@/lib/design-tokens';
+
 export const GLASS_TAB_BAR_PILL_HEIGHT = 62;
 export const GLASS_TAB_BAR_BOTTOM_GAP = SPACING.tight;
 
@@ -25,6 +26,17 @@ function isRouteVisible(options: TabOptions): boolean {
         return false;
     }
     return true;
+}
+
+function getTabLabel(options: TabOptions, routeName: string): string {
+    if (typeof options.tabBarLabel === 'string') return options.tabBarLabel;
+    if (typeof options.title === 'string') return options.title;
+    return routeName;
+}
+
+function getBadgeText(badge: TabOptions['tabBarBadge']): string | null {
+    if (badge === undefined || badge === null || badge === false || badge === '') return null;
+    return String(badge);
 }
 
 export function GlassTabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
@@ -50,7 +62,8 @@ export function GlassTabBar({ state, descriptors, navigation, insets }: BottomTa
                     paddingHorizontal: SPACING.base,
                 },
             ]}
-        >            <View style={styles.pillShadow}>
+        >
+            <View style={styles.pillShadow}>
                 <BlurView
                     intensity={Platform.OS === 'ios' ? 50 : 80}
                     tint={isDark ? 'dark' : 'light'}
@@ -67,14 +80,11 @@ export function GlassTabBar({ state, descriptors, navigation, insets }: BottomTa
                             const { options } = descriptors[route.key];
                             const routeIndex = state.routes.findIndex((r) => r.key === route.key);
                             const isFocused = state.index === routeIndex;
-                            const label =
-                                typeof options.tabBarLabel === 'string'
-                                    ? options.tabBarLabel
-                                    : options.title ?? route.name;
+                            const label = getTabLabel(options, route.name);
                             const activeColor = options.tabBarActiveTintColor ?? colors.primary;
                             const inactiveColor = options.tabBarInactiveTintColor ?? colors.tabIconDefault;
                             const color = isFocused ? activeColor : inactiveColor;
-                            const badge = options.tabBarBadge;
+                            const badgeText = getBadgeText(options.tabBarBadge);
                             const badgeStyle = options.tabBarBadgeStyle;
 
                             const onPress = () => {
@@ -102,12 +112,18 @@ export function GlassTabBar({ state, descriptors, navigation, insets }: BottomTa
                                 }
                             };
 
+                            const icon = options.tabBarIcon?.({
+                                focused: isFocused,
+                                color,
+                                size: 24,
+                            });
+
                             return (
                                 <Pressable
                                     key={route.key}
                                     accessibilityRole="button"
                                     accessibilityState={isFocused ? { selected: true } : {}}
-                                    accessibilityLabel={options.tabBarAccessibilityLabel ?? String(label)}
+                                    accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
                                     onPress={onPress}
                                     onLongPress={onLongPress}
                                     onPressIn={onPressIn}
@@ -116,16 +132,12 @@ export function GlassTabBar({ state, descriptors, navigation, insets }: BottomTa
                                     <View
                                         style={[
                                             styles.tabItem,
-                                            isFocused && { backgroundColor: activePill },
+                                            isFocused ? { backgroundColor: activePill } : null,
                                         ]}
                                     >
                                         <View style={styles.iconWrap}>
-                                            {options.tabBarIcon?.({
-                                                focused: isFocused,
-                                                color,
-                                                size: 24,
-                                            })}
-                                            {badge != null && badge !== '' ? (
+                                            {icon ?? null}
+                                            {badgeText ? (
                                                 <View
                                                     style={[
                                                         styles.badge,
@@ -146,21 +158,23 @@ export function GlassTabBar({ state, descriptors, navigation, insets }: BottomTa
                                                             },
                                                         ]}
                                                     >
-                                                        {badge}
+                                                        {badgeText}
                                                     </Text>
                                                 </View>
                                             ) : null}
                                         </View>
-                                        <Text
-                                            numberOfLines={1}
-                                            style={[
-                                                styles.label,
-                                                { color },
-                                                isFocused && styles.labelActive,
-                                            ]}
-                                        >
-                                            {label}
-                                        </Text>
+                                        {options.tabBarShowLabel !== false ? (
+                                            <Text
+                                                numberOfLines={1}
+                                                style={[
+                                                    styles.label,
+                                                    { color },
+                                                    isFocused ? styles.labelActive : null,
+                                                ]}
+                                            >
+                                                {label}
+                                            </Text>
+                                        ) : null}
                                     </View>
                                 </Pressable>
                             );
@@ -178,7 +192,8 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         bottom: 0,
-    },    pillShadow: {
+    },
+    pillShadow: {
         borderRadius: RADIUS.full,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 8 },

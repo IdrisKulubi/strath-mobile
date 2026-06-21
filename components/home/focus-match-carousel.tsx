@@ -8,6 +8,7 @@ import Animated, {
     useAnimatedScrollHandler,
     useAnimatedStyle,
     useSharedValue,
+    type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
@@ -23,6 +24,7 @@ interface FocusMatchCarouselProps<T> {
     initialIndex?: number;
     cardHeight: number;
     itemWidthRatio?: number;
+    showFraction?: boolean;
 }
 
 function triggerFocusHaptic() {
@@ -39,7 +41,7 @@ function CarouselSlide<T>({
     index: number;
     itemWidth: number;
     cardHeight: number;
-    scrollX: Animated.SharedValue<number>;
+    scrollX: SharedValue<number>;
     children: React.ReactNode;
 }) {
     const animatedStyle = useAnimatedStyle(() => {
@@ -67,6 +69,7 @@ export function FocusMatchCarousel<T>({
     initialIndex = 0,
     cardHeight,
     itemWidthRatio = 0.86,
+    showFraction = true,
 }: FocusMatchCarouselProps<T>) {
     const { width: screenWidth } = useWindowDimensions();
     const { colors, isDark } = useTheme();
@@ -107,8 +110,10 @@ export function FocusMatchCarousel<T>({
         return null;
     }
 
+    const footerHeight = showFraction ? 52 : 36;
+
     return (
-        <View style={[styles.wrap, { height: cardHeight + 52 }]}>
+        <View style={[styles.wrap, { height: cardHeight + footerHeight }]}>
             <Animated.FlatList
                 ref={listRef}
                 data={items}
@@ -164,9 +169,11 @@ export function FocusMatchCarousel<T>({
                             />
                         ))}
                     </View>
-                    <Text variant="muted" style={{ color: colors.mutedForeground }}>
-                        {activeIndex + 1} / {items.length}
-                    </Text>
+                    {showFraction ? (
+                        <Text variant="muted" style={{ color: colors.mutedForeground }}>
+                            {activeIndex + 1} / {items.length}
+                        </Text>
+                    ) : null}
                 </View>
             ) : null}
         </View>

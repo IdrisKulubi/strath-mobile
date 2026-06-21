@@ -1,13 +1,14 @@
 import { and, eq, gt, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 
 import db from "@/db/drizzle";
-import { matches, messages, mutualMatches } from "@/db/schema";
+import { matches, messages, mutualMatches, swipes } from "@/db/schema";
 import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
 import { buildSlotConfirmationView } from "@/lib/services/meetup-confirmation-service";
 
 export interface NotificationCountsResult {
     unopenedMatches: number;
     unreadMessages: number;
+    incomingLikes: number;
     datesAttention: number;
     slotConfirmPending: number;
     partnerWaitingOnYou: number;
@@ -138,16 +139,56 @@ async function countUnreadMessages(userId: string): Promise<number> {
     return unreadResult[0]?.count ?? 0;
 }
 
+async function countIncomingLikes(userId: string): Promise<number> {
+    const incomingLikes = await db.query.swipes.findMany({
+        where: and(eq(swipes.swipedId, userId), eq(swipes.isLike, true)),
+        columns: { id: true, swiperId: true },
+        limit: 50,
+    });
+
+    if (incomingLikes.length === 0) return 0;
+
+    const swiperIds = Array.from(new Set(incomingLikes.map((s) => s.swiperId)));
+
+    const existingMatches = await db.query.matches.findMany({
+        where: or(
+            and(eq(matches.user1Id, userId), inArray(matches.user2Id, swiperIds)),
+            and(eq(matches.user2Id, userId), inArray(matches.user1Id, swiperIds)),
+        ),
+        columns: { user1Id: true, user2Id: true },
+        limit: 200,
+    });
+
+    const matchedPartnerIds = new Set<string>();
+    for (const match of existingMatches) {
+        const partnerId = match.user1Id === userId ? match.user2Id : match.user1Id;
+        matchedPartnerIds.add(partnerId);
+    }
+
+    const myResponses = await db.query.swipes.findMany({
+        where: and(eq(swipes.swiperId, userId), inArray(swipes.swipedId, swiperIds)),
+        columns: { swipedId: true },
+        limit: 200,
+    });
+
+    const respondedIds = new Set(myResponses.map((response) => response.swipedId));
+
+    return incomingLikes.filter(
+        (like) => !matchedPartnerIds.has(like.swiperId) && !respondedIds.has(like.swiperId),
+    ).length;
+}
+
 export async function getNotificationCountsForUser(
     userId: string,
 ): Promise<NotificationCountsResult> {
-    const [unopenedMatches, datesAttention, slotAttention, rescheduleNeedsResponse, unreadMessages] =
+    const [unopenedMatches, datesAttention, slotAttention, rescheduleNeedsResponse, unreadMessages, incomingLikes] =
         await Promise.all([
             countUnopenedMatches(userId),
             countDatesAttention(userId),
             countSlotAttention(userId),
             countRescheduleNeedsResponse(userId),
             countUnreadMessages(userId),
+            countIncomingLikes(userId),
         ]);
 
     const { slotConfirmPending, partnerWaitingOnYou } = slotAttention;
@@ -161,6 +202,7 @@ export async function getNotificationCountsForUser(
     return {
         unopenedMatches,
         unreadMessages,
+        incomingLikes,
         datesAttention,
         slotConfirmPending,
         partnerWaitingOnYou,

@@ -36,6 +36,7 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
         case NOTIFICATION_TYPES.PAYMENT_BOTH_PAID:
         case NOTIFICATION_TYPES.CREDIT_GRANTED:
         case NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH:
+        case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
         case NOTIFICATION_TYPES.MATCH:
             return 'accent';
 
@@ -61,6 +62,8 @@ function resolveRoute(data: NotificationPayload): string | null {
 
     switch (data.type) {
         case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
+            return '/(tabs)?homeTab=interested';
+
         case NOTIFICATION_TYPES.DATE_REQUEST_ACCEPTED:
         case NOTIFICATION_TYPES.DATE_REQUEST_DECLINED:
         case NOTIFICATION_TYPES.MUTUAL_MATCH:
@@ -173,6 +176,11 @@ export function usePushNotifications(options?: {
                     invalidateMessagingCaches(queryClient, data.matchId);
                 }
 
+                if (data.type === NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED) {
+                    queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
+                    queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+                }
+
                 toast.show({
                     message,
                     variant: toastVariantFor(data.type),
@@ -189,6 +197,11 @@ export function usePushNotifications(options?: {
 
                 if (data.type === NOTIFICATION_TYPES.MESSAGE) {
                     invalidateMessagingCaches(queryClient, data.matchId);
+                }
+
+                if (data.type === NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED) {
+                    queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
+                    queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
                 }
 
                 const route = resolveRoute(data);
