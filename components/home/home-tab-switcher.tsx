@@ -132,7 +132,7 @@ function SegmentHalf({
 const styles = StyleSheet.create({
     host: {
         marginHorizontal: SPACING.screenX,
-        marginBottom: SPACING.compact,
+        marginBottom: SPACING.micro,
     },
     track: {
         borderRadius: RADIUS.full,

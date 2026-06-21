@@ -39,6 +39,7 @@ import {
 import { useConnectionRequests } from '@/hooks/use-connection-requests';
 import { useNotificationCounts } from '@/hooks/use-notification-counts';
 import { useHomeIntroLayout } from '@/hooks/use-home-intro-layout';
+import { SPACING } from '@/lib/design-tokens';
 
 function HomeSkeleton() {
     return (
@@ -98,8 +99,8 @@ export default function HomeScreen() {
         () => shouldShowRecommendations ? (dailyRecommendations.data?.recommendations ?? []).slice(0, 5) : [],
         [dailyRecommendations.data?.recommendations, shouldShowRecommendations]
     );
-    const incomingCount = incomingLikes || connectionRequests.data?.length || 0;
-    const interestedHasCarousel = (connectionRequests.data?.length ?? 0) > 0;
+    const incomingCount = connectionRequests.data?.length ?? incomingLikes;
+    const interestedHasCarousel = incomingCount > 0;
     const showTodayCarousel =
         homeTab === 'today'
         && !needsConfirmGate
@@ -125,6 +126,12 @@ export default function HomeScreen() {
     useEffect(() => {
         setInterestedCarouselIndex(0);
     }, [connectionRequests.data?.length, homeTab]);
+
+    useEffect(() => {
+        if (homeTab !== 'interested') return;
+        void connectionRequests.refetch();
+        void queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+    }, [homeTab, connectionRequests.refetch, queryClient]);
 
     const handleRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -357,6 +364,7 @@ const styles = StyleSheet.create({
     },
     carouselHost: {
         flex: 1,
+        marginTop: -SPACING.tight,
     },
     skeletonWrap: {
         paddingHorizontal: 16,

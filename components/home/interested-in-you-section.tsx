@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
-import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { SPACING, TYPOGRAPHY, Palette, RADIUS } from '@/lib/design-tokens';
 import { useTheme } from '@/hooks/use-theme';
 import {
     ConnectionRequest,
@@ -235,6 +235,14 @@ export function InterestedInYouSection({
 
     return (
         <View style={styles.container}>
+            <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                    Interested in you
+                </Text>
+                <View style={[styles.countPill, { backgroundColor: colors.primary }]}>
+                    <Text style={styles.countPillText}>{visibleRequests.length}</Text>
+                </View>
+            </View>
             <FocusMatchCarousel
                 items={cardDataList}
                 keyExtractor={(item) => item.id}
@@ -251,6 +259,32 @@ export function InterestedInYouSection({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: SPACING.screenX,
+        paddingBottom: SPACING.tight,
+        gap: SPACING.tight,
+    },
+    sectionTitle: {
+        ...TYPOGRAPHY.callout,
+        fontWeight: '600',
+    },
+    countPill: {
+        minWidth: 22,
+        height: 22,
+        paddingHorizontal: 7,
+        borderRadius: RADIUS.full,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    countPillText: {
+        fontSize: 12,
+        lineHeight: 14,
+        fontWeight: '700',
+        color: Palette.dark.primaryForeground,
     },
     emptyWrap: {
         paddingHorizontal: SPACING.screenX,

@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     },
     containerCompact: {
         paddingTop: SPACING.compact,
-        paddingBottom: SPACING.tight,
+        paddingBottom: SPACING.micro,
         gap: SPACING.micro,
     },
     greetingRow: {

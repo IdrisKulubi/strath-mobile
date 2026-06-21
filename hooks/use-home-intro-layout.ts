@@ -3,10 +3,10 @@ import { useWindowDimensions } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const HEADER_HEIGHT = 64;
-const TAB_SWITCHER_HEIGHT = 52;
-const CAROUSEL_FOOTER = 36;
-const SCREEN_PADDING = 12;
+const HEADER_HEIGHT = 50;
+const TAB_SWITCHER_HEIGHT = 44;
+const CAROUSEL_FOOTER = 32;
+const SCREEN_PADDING = 4;
 const MIN_CARD_HEIGHT = 360;
 
 export function useHomeIntroLayout() {

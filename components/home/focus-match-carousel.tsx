@@ -182,7 +182,7 @@ export function FocusMatchCarousel<T>({
 
 const styles = StyleSheet.create({
     wrap: {
-        flexGrow: 1,
+        alignSelf: 'stretch',
     },
     footer: {
         alignItems: 'center',
