@@ -97,6 +97,31 @@ export default async function AdminOverviewPage() {
                 />
             </div>
 
+            <div className="mb-8 grid gap-4 md:grid-cols-2">
+                <a
+                    href="/admin/profile-intelligence"
+                    className="rounded-xl border border-white/10 bg-white/5 p-5 transition-colors hover:border-pink-400/40 hover:bg-white/10"
+                >
+                    <p className="text-sm font-semibold uppercase tracking-wide text-pink-200">
+                        Profile Intelligence
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-gray-400">
+                        Monitor matchmaker coverage, stale analysis, ranking health, and recommendation outcomes.
+                    </p>
+                </a>
+                <a
+                    href="/admin/photo-intelligence"
+                    className="rounded-xl border border-white/10 bg-white/5 p-5 transition-colors hover:border-cyan-400/40 hover:bg-white/10"
+                >
+                    <p className="text-sm font-semibold uppercase tracking-wide text-cyan-200">
+                        Photo Intelligence
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-gray-400">
+                        Monitor photo quality coverage, visual preference learning, and review queues.
+                    </p>
+                </a>
+            </div>
+
             <div className="mb-8 rounded-xl border border-white/10 bg-white/5 p-6">
                 <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                     <div>

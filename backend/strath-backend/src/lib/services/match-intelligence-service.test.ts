@@ -4,9 +4,11 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+    applyDailyMix,
     classifyMatchType,
     finalRecommendationScore,
     preferenceFitScore,
+    type RankedRecommendation,
     scoreDiversity,
 } from "@/lib/services/match-intelligence-service";
 
@@ -123,5 +125,51 @@ describe("match intelligence scoring", () => {
         });
 
         assert.ok(healthy > penalized);
+    });
+
+    it("daily mix prioritizes incoming interest and active high-probability candidates", () => {
+        const candidate = (overrides: Partial<RankedRecommendation>): RankedRecommendation => ({
+            candidateUserId: overrides.candidateUserId ?? "candidate",
+            currentUserDecision: "pending",
+            finalScore: overrides.finalScore ?? 70,
+            matchType: overrides.matchType ?? "similarity",
+            compatibilityScore: 70,
+            activityScore: overrides.activityScore ?? 70,
+            responseScore: overrides.responseScore ?? 70,
+            availabilityScore: 60,
+            diversityScore: overrides.diversityScore ?? 50,
+            mutualProbabilityScore: overrides.mutualProbabilityScore ?? 50,
+            preferenceFitScore: 70,
+            profileQualityScore: overrides.profileQualityScore ?? 70,
+            photoQualityScore: 70,
+            photoPreferenceScore: 50,
+            photoVisualDiversityScore: 50,
+            reason: "Similar vibe",
+            reasons: ["Similar vibe"],
+            activityStatus: "active_today",
+            profilePreview: {
+                firstName: "Amina",
+                age: 22,
+                university: "Strathmore",
+                course: "Computer Science",
+                photos: [],
+                profilePhoto: null,
+                bio: null,
+                interests: [],
+            },
+            ...overrides,
+        });
+        const mixed = applyDailyMix([
+            candidate({ candidateUserId: "normal-top", finalScore: 95, matchType: "similarity" }),
+            candidate({ candidateUserId: "incoming", finalScore: 82, mutualProbabilityScore: 100 }),
+            candidate({ candidateUserId: "active", finalScore: 80, matchType: "high_activity", activityScore: 98, responseScore: 85 }),
+            candidate({ candidateUserId: "complementary", finalScore: 75, matchType: "complementary" }),
+            candidate({ candidateUserId: "quality", finalScore: 72, profileQualityScore: 92 }),
+        ], "surprise_me");
+
+        assert.equal(mixed[0].candidateUserId, "incoming");
+        assert.equal(mixed[1].candidateUserId, "active");
+        assert.ok(mixed.some((item) => item.candidateUserId === "complementary"));
+        assert.equal(new Set(mixed.map((item) => item.candidateUserId)).size, mixed.length);
     });
 });

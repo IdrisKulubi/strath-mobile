@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { user } from "@/db/schema";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
 import { successResponse, errorResponse } from "@/lib/api-response";
+import { upsertProfileActivitySignal } from "@/lib/services/profile-intelligence-service";
 import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,9 @@ export async function POST(req: NextRequest) {
                 updatedAt: now,
             })
             .where(eq(user.id, session.user.id));
+        upsertProfileActivitySignal(session.user.id, now).catch((error) => {
+            console.warn("[user/presence] profile activity signal update failed", error);
+        });
 
         return successResponse({
             isOnline,

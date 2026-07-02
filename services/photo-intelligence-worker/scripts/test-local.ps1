@@ -33,4 +33,26 @@ foreach ($item in $batch.results) {
     Write-Host "  $($item.object_key) -> $($item.status)"
 }
 
+$profileBody = @{
+    profile = @{
+        user_id = "local-user"
+        first_name = "Amina"
+        age = 22
+        course = "Computer Science"
+        university = "Strathmore"
+        interests = @("coffee", "music", "tech")
+        looking_for = "intentional dating"
+    }
+} | ConvertTo-Json -Depth 6
+
+$summary = Invoke-RestMethod -Uri "$BaseUrl/profiles/summarize" -Method POST `
+    -Headers @{ Authorization = "Bearer $Secret"; "Content-Type" = "application/json" } `
+    -Body $profileBody
+Write-Host "[profiles/summarize] version=$($summary.summaryVersion)"
+
+$analysis = Invoke-RestMethod -Uri "$BaseUrl/profiles/analyze" -Method POST `
+    -Headers @{ Authorization = "Bearer $Secret"; "Content-Type" = "application/json" } `
+    -Body $profileBody
+Write-Host "[profiles/analyze] textDim=$($analysis.textEmbedding.Count) photoScore=$($analysis.photoPresentation.photoPresentationScore)"
+
 Write-Host "All local checks passed."
