@@ -1,3 +1,5 @@
+import { getNairobiParts } from "@/lib/services/meetup-slot-service";
+
 /**
  * Candidate pool policy — single place for “who can be shown to whom” invariants.
  *
@@ -159,14 +161,19 @@ export function utcDayKey(date = new Date()): string {
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString().slice(0, 10);
 }
 
-/** UTC day keys for today and the prior `cooldownDays - 1` days (inclusive). */
+export function nairobiDayKey(date = new Date()): string {
+    const parts = getNairobiParts(date);
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`;
+}
+
+/** Nairobi day keys for today and the prior `cooldownDays - 1` days (inclusive). */
 export function shortlistDayKeysWithinCooldown(cooldownDays: number, now = new Date()): string[] {
     const safeDays = Math.max(1, cooldownDays);
     const keys: string[] = [];
     for (let offset = 0; offset < safeDays; offset++) {
-        const day = new Date(now);
-        day.setUTCDate(day.getUTCDate() - offset);
-        keys.push(utcDayKey(day));
+        const day = new Date(now.getTime() - offset * 24 * 60 * 60 * 1000);
+        keys.push(nairobiDayKey(day));
     }
     return keys;
 }

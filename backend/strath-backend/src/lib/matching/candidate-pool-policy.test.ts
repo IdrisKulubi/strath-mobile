@@ -8,6 +8,7 @@ import {
     collectRecentlyShownIds,
     buildRecommendationCooldownTiers,
     computeRecommendationExposurePenalty,
+    nairobiDayKey,
     resolveRecommendationCooldownDays,
     shortlistDayKeysWithinCooldown,
     shouldSkipCandidateForExistingDyad,
@@ -182,6 +183,17 @@ test("computeRecommendationExposurePenalty: scales by show count and caps at 40"
 test("shortlistDayKeysWithinCooldown: includes today and prior days", () => {
     const now = new Date("2026-06-20T15:00:00Z");
     assert.deepEqual(shortlistDayKeysWithinCooldown(3, now), ["2026-06-20", "2026-06-19", "2026-06-18"]);
+});
+
+test("nairobiDayKey: uses the Nairobi calendar day near UTC midnight", () => {
+    const lateUtc = new Date("2026-06-20T22:30:00Z");
+    assert.equal(utcDayKey(lateUtc), "2026-06-20");
+    assert.equal(nairobiDayKey(lateUtc), "2026-06-21");
+});
+
+test("shortlistDayKeysWithinCooldown: follows Nairobi day boundaries", () => {
+    const now = new Date("2026-06-20T22:30:00Z");
+    assert.deepEqual(shortlistDayKeysWithinCooldown(3, now), ["2026-06-21", "2026-06-20", "2026-06-19"]);
 });
 
 test("collectRecentlyShownIds: unions multiple groups", () => {

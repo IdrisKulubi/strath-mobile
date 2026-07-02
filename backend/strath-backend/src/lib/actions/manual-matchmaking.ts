@@ -18,16 +18,13 @@ import { resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-serv
 import { releaseStalePreDateMatchHolds } from "@/lib/services/match-hold-service";
 import { hasCompletedInitialFaceVerification } from "@/lib/matchmaking-pool-eligibility";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
+import { nairobiDayKey } from "@/lib/matching/candidate-pool-policy";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
 const HOLD_STATUSES = ["mutual", "being_arranged", "upcoming"] as const;
 const SHUFFLE_HOLD_STATUSES = ["mutual", "being_arranged", "upcoming", "completed"] as const;
 const BUSY_PAIR_STATUSES = ["active", "queued", "mutual"] as const;
-
-function utcDayKey(date = new Date()) {
-    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString().slice(0, 10);
-}
 
 type ManualMatchState = "available" | "active_pair" | "mutual_hold" | "unavailable";
 
@@ -758,7 +755,7 @@ export async function cancelManualCandidatePair(pairId: string, reason = "Admin 
 export async function reshuffleDailyMatchesForAvailableUsers() {
     const session = await requireAdmin();
     const now = new Date();
-    const today = utcDayKey(now);
+    const today = nairobiDayKey(now);
     const releasedStaleHolds = await releaseStalePreDateMatchHolds(now);
 
     const eligibleRows = await readDb

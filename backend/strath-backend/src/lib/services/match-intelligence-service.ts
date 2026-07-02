@@ -22,6 +22,7 @@ import {
     collectRecentlyShownIds,
     buildRecommendationCooldownTiers,
     computeRecommendationExposurePenalty,
+    nairobiDayKey,
     resolveRecommendationCooldownDays,
     shortlistDayKeysWithinCooldown,
 } from "@/lib/matching/candidate-pool-policy";
@@ -139,14 +140,6 @@ const DEFAULT_PREFERENCE_MODE: PreferenceMode = "surprise_me";
 const DAILY_LIMIT = 5;
 const MAX_BROWSE_LIMIT = 50;
 const RECOMMENDATION_REPEAT_COOLDOWN_DAYS = Number(process.env.RECOMMENDATION_REPEAT_COOLDOWN_DAYS) || 7;
-
-function startOfUtcDay(date = new Date()) {
-    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
-function utcDayKey(date = new Date()) {
-    return startOfUtcDay(date).toISOString().slice(0, 10);
-}
 
 function isEligiblePoolCandidate(profile: CandidateProfile | null | undefined): profile is CandidateProfile {
     if (!profile || profile.user?.deletedAt) return false;
@@ -935,7 +928,7 @@ function applyDailyMix(ranked: RankedRecommendation[], preferenceMode: Preferenc
 }
 
 async function getTodaysStableDailyRecommendations(userId: string): Promise<RankedRecommendation[]> {
-    const shortlistDay = utcDayKey();
+    const shortlistDay = nairobiDayKey();
     const rows = await readDb
         .select()
         .from(dailyShortlists)
@@ -1129,7 +1122,7 @@ export async function getDailyRecommendations(userId: string) {
             reason: item.reason,
         })),
     });
-    const shortlistDay = utcDayKey();
+    const shortlistDay = nairobiDayKey();
     const nextPosition = await getDailyShortlistRowCount(userId, shortlistDay);
     await persistDailyShortlistEntries({
         viewerUserId: userId,
