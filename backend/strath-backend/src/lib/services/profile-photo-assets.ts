@@ -6,6 +6,7 @@ import { profilePhotoAssets } from "@/db/schema";
 import { ensureProfilePhotoAuditJob } from "@/lib/services/face-verification-queue";
 import { getFaceVerificationPhotoAuditVersion } from "@/lib/services/face-verification-policy";
 import { detectFacesWithRekognition } from "@/lib/services/face-verification-provider-rekognition";
+import { ensureProfileIntelligenceJob } from "@/lib/services/profile-intelligence-service";
 import {
     extractR2ObjectKeyFromUrl,
     getFaceVerificationComparisonBytes,
@@ -53,6 +54,17 @@ export async function syncProfilePhotoAssetsForUser(userId: string, photoUrls: s
 
         await ensureProfilePhotoAuditJob(userId, asset.objectKey, asset.publicUrl);
     }
+
+    await ensureProfileIntelligenceJob({
+        userId,
+        jobType: "profile_refresh",
+        metadata: {
+            source: "profile_photo_assets_sync",
+            photoCount: uniqueAssets.length,
+        },
+    }).catch((error) => {
+        console.warn("[profile-photo-assets] failed to enqueue profile intelligence refresh", error);
+    });
 
     return uniqueAssets;
 }

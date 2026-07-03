@@ -1,6 +1,6 @@
-# Photo Intelligence Worker
+# Profile Intelligence Worker
 
-Python service for StrathSpace photo embeddings. Deploy on Railway and point the Next.js backend at it.
+Python service for StrathSpace profile intelligence and photo embeddings. Deploy on Railway and point the Next.js backend at it.
 
 **Railway root directory** (repo root is `strath-mobile`):
 
@@ -8,24 +8,34 @@ Python service for StrathSpace photo embeddings. Deploy on Railway and point the
 services/photo-intelligence-worker
 ```
 
-Do **not** use `strath-mobile/services/photo-intelligence-worker` — that path does not exist inside the GitHub repo.
+Do **not** use `strath-mobile/services/photo-intelligence-worker`; that path does not exist inside the GitHub repo.
 
 ## Endpoints
 
-- `GET /health` — health check
-- `POST /embed` — returns a 768-d embedding for a profile photo URL
-- `POST /reanalyze-batch` — batch embedding generation
+- `GET /health`: health check
+- `POST /embed`: legacy image embedding endpoint
+- `POST /reanalyze-batch`: legacy batch image embedding endpoint
+- `POST /profiles/summarize`: deterministic profile summary and searchable text
+- `POST /profiles/embed-text`: deterministic 768-d text embedding
+- `POST /profiles/embed-image`: image embedding endpoint alias
+- `POST /profiles/analyze`: profile summary, text embedding, photo presentation, optional visual embedding
+- `POST /profiles/batch-analyze`: batch profile analysis
 
 ## Environment
 
 | Variable | Description |
 | --- | --- |
 | `PHOTO_INTELLIGENCE_SERVICE_SECRET` | Bearer token shared with `strath-backend` |
-| `PORT` | HTTP port (Railway sets this automatically) |
+| `PROFILE_INTELLIGENCE_SERVICE_SECRET` | Alias for `PHOTO_INTELLIGENCE_SERVICE_SECRET` (checked first) |
+| `PORT` | HTTP port. Railway sets this automatically. |
 
-## Local run
+Both this worker and the Next.js backend accept `PROFILE_INTELLIGENCE_SERVICE_SECRET`
+or `PHOTO_INTELLIGENCE_SERVICE_SECRET`. Set both to the same value locally to avoid
+confusion when one service reads a different variable than the other.
 
-**Terminal A — start the server**
+## Local Run
+
+**Terminal A: start the server**
 
 ```powershell
 cd services/photo-intelligence-worker
@@ -34,7 +44,7 @@ $env:PHOTO_INTELLIGENCE_SERVICE_SECRET = "dev-secret"
 python -m uvicorn main:app --host 127.0.0.1 --port 8080 --reload
 ```
 
-**Terminal B — smoke test**
+**Terminal B: smoke test**
 
 ```powershell
 cd services/photo-intelligence-worker
@@ -52,16 +62,6 @@ Invoke-RestMethod http://127.0.0.1:8080/embed -Method POST `
   -Body $body
 ```
 
-Expected: `health` → `{ status: ok }`, `embed` → 768 floats, `provider: clip-hash`.
+Expected: `health` returns `{ status: ok }`; `embed` returns 768 floats with `provider: clip-hash`.
 
-## Backend wiring
-
-In `strath-backend` `.env.local`:
-
-```env
-PHOTO_INTELLIGENCE_SERVICE_URL=https://your-service.up.railway.app
-PHOTO_INTELLIGENCE_SERVICE_SECRET=your-shared-secret
-PHOTO_INTELLIGENCE_TIMEOUT_MS=15000
-```
-
-The MVP worker uses a deterministic hash-based embedding so you can ship without GPU/CLIP weights. Swap `_hash_embedding` for real CLIP inference when you scale.
+The MVP worker uses deterministic hash-based embeddings so you can ship without GPU or CLIP weights. Swap the internals for real models later without changing the API contract.

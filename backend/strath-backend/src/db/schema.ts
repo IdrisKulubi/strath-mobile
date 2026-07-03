@@ -467,6 +467,87 @@ export const profileInteractionEvents = pgTable(
     }),
 );
 
+export const profileIntelligence = pgTable(
+    "profile_intelligence",
+    {
+        userId: text("user_id")
+            .primaryKey()
+            .references(() => user.id, { onDelete: "cascade" }),
+        profileSummary: text("profile_summary"),
+        searchText: text("search_text"),
+        textEmbedding: vector("text_embedding", { dimension: 768 }),
+        visualEmbedding: vector("visual_embedding", { dimension: 768 }),
+        photoPresentationScore: integer("photo_presentation_score").default(0).notNull(),
+        profileCompletenessScore: integer("profile_completeness_score").default(0).notNull(),
+        activityScore: integer("activity_score").default(0).notNull(),
+        responseScore: integer("response_score").default(0).notNull(),
+        inboundInterestScore: integer("inbound_interest_score").default(0).notNull(),
+        mutualConversionScore: integer("mutual_conversion_score").default(0).notNull(),
+        candidateStrengthScore: integer("candidate_strength_score").default(0).notNull(),
+        lastSeenAt: timestamp("last_seen_at"),
+        lastProfileChangeAt: timestamp("last_profile_change_at"),
+        lastAnalyzedAt: timestamp("last_analyzed_at"),
+        analysisVersion: text("analysis_version").default("profile_intelligence_v1").notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        candidateStrengthIdx: index("profile_intelligence_candidate_strength_idx").on(table.candidateStrengthScore),
+        activityIdx: index("profile_intelligence_activity_idx").on(table.activityScore),
+        lastAnalyzedIdx: index("profile_intelligence_last_analyzed_idx").on(table.lastAnalyzedAt),
+        lastSeenIdx: index("profile_intelligence_last_seen_idx").on(table.lastSeenAt),
+    }),
+);
+
+export const profileIntelligenceJobs = pgTable(
+    "profile_intelligence_jobs",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+        jobType: text("job_type")
+            .$type<"profile_analyze" | "profile_backfill" | "profile_refresh">()
+            .notNull(),
+        status: text("status")
+            .$type<"pending" | "processing" | "completed" | "failed">()
+            .default("pending")
+            .notNull(),
+        attempts: integer("attempts").default(0).notNull(),
+        maxAttempts: integer("max_attempts").default(3).notNull(),
+        lastError: text("last_error"),
+        lockedAt: timestamp("locked_at"),
+        completedAt: timestamp("completed_at"),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userIdx: index("profile_intelligence_jobs_user_idx").on(table.userId),
+        statusIdx: index("profile_intelligence_jobs_status_idx").on(table.status),
+        jobTypeIdx: index("profile_intelligence_jobs_type_idx").on(table.jobType),
+        statusCreatedIdx: index("profile_intelligence_jobs_status_created_idx").on(table.status, table.createdAt),
+    }),
+);
+
+export const matchmakerIntents = pgTable(
+    "matchmaker_intents",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        rawText: text("raw_text").notNull(),
+        parsedIntent: jsonb("parsed_intent").$type<Record<string, unknown>>().default({}).notNull(),
+        intentEmbedding: vector("intent_embedding", { dimension: 768 }),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdx: index("matchmaker_intents_user_idx").on(table.userId),
+        createdAtIdx: index("matchmaker_intents_created_at_idx").on(table.createdAt),
+    }),
+);
+
 export const faceVerificationJobs = pgTable("face_verification_jobs", {
     id: uuid("id").defaultRandom().primaryKey(),
     jobType: text("job_type").notNull(),
@@ -1296,6 +1377,9 @@ export const userRelations = relations(user, ({ one, many }) => ({
     visualPreferenceSignals: one(userVisualPreferenceSignals),
     profileInteractionEventsAsActor: many(profileInteractionEvents, { relationName: "interactionActor" }),
     profileInteractionEventsAsTarget: many(profileInteractionEvents, { relationName: "interactionTarget" }),
+    profileIntelligence: one(profileIntelligence),
+    profileIntelligenceJobs: many(profileIntelligenceJobs),
+    matchmakerIntents: many(matchmakerIntents),
     sessions: many(session),
     accounts: many(account),
 }));
@@ -1434,6 +1518,27 @@ export const profileInteractionEventsRelations = relations(profileInteractionEve
         fields: [profileInteractionEvents.targetUserId],
         references: [user.id],
         relationName: "interactionTarget",
+    }),
+}));
+
+export const profileIntelligenceRelations = relations(profileIntelligence, ({ one }) => ({
+    user: one(user, {
+        fields: [profileIntelligence.userId],
+        references: [user.id],
+    }),
+}));
+
+export const profileIntelligenceJobsRelations = relations(profileIntelligenceJobs, ({ one }) => ({
+    user: one(user, {
+        fields: [profileIntelligenceJobs.userId],
+        references: [user.id],
+    }),
+}));
+
+export const matchmakerIntentsRelations = relations(matchmakerIntents, ({ one }) => ({
+    user: one(user, {
+        fields: [matchmakerIntents.userId],
+        references: [user.id],
     }),
 }));
 
@@ -2353,6 +2458,12 @@ export type ProfilePhotoEmbedding = typeof profilePhotoEmbeddings.$inferSelect;
 export type NewProfilePhotoEmbedding = typeof profilePhotoEmbeddings.$inferInsert;
 export type UserVisualPreferenceSignal = typeof userVisualPreferenceSignals.$inferSelect;
 export type ProfileInteractionEvent = typeof profileInteractionEvents.$inferSelect;
+export type ProfileIntelligence = typeof profileIntelligence.$inferSelect;
+export type NewProfileIntelligence = typeof profileIntelligence.$inferInsert;
+export type ProfileIntelligenceJob = typeof profileIntelligenceJobs.$inferSelect;
+export type NewProfileIntelligenceJob = typeof profileIntelligenceJobs.$inferInsert;
+export type MatchmakerIntent = typeof matchmakerIntents.$inferSelect;
+export type NewMatchmakerIntent = typeof matchmakerIntents.$inferInsert;
 export type FaceVerificationJob = typeof faceVerificationJobs.$inferSelect;
 export type NewFaceVerificationJob = typeof faceVerificationJobs.$inferInsert;
 export type FaceVerificationAssistance = typeof faceVerificationAssistance.$inferSelect;

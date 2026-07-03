@@ -1,5 +1,6 @@
 import db from "@/db/drizzle";
 import { profileInteractionEvents } from "@/db/schema";
+import { refreshProfileBehaviorSignalsForUsers } from "@/lib/services/profile-intelligence-service";
 import { updateVisualPreferenceFromInteraction } from "@/lib/services/visual-preference-service";
 
 export type ProfileInteractionEventType =
@@ -41,6 +42,15 @@ async function recordProfileInteraction(input: {
             eventId: event.id,
         }).catch((error) => {
             console.warn("[profile-interaction] visual preference update failed", error);
+        });
+    }
+    if (
+        input.eventType === "profile_view" ||
+        input.eventType === "profile_like" ||
+        input.eventType === "profile_pass"
+    ) {
+        refreshProfileBehaviorSignalsForUsers([input.actorUserId, input.targetUserId]).catch((error) => {
+            console.warn("[profile-interaction] behavior signal refresh failed", error);
         });
     }
 

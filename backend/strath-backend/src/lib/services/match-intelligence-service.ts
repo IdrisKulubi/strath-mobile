@@ -8,6 +8,7 @@ import {
     dailyShortlists,
     mutualMatches,
     profiles,
+    profileIntelligence,
     recommendationEvents,
     user,
     userMatchInterests,
@@ -48,6 +49,12 @@ import {
     recordProfileLike,
     recordProfilePass,
 } from "@/lib/services/profile-interaction-service";
+import {
+    calculateActivityScore,
+    calculateResponseScore as calculateBehaviorResponseScore,
+} from "@/lib/services/profile-intelligence-scoring";
+import { refreshProfileBehaviorSignalsForUsers } from "@/lib/services/profile-intelligence-service";
+import { finalRecommendationScore as calculateFinalRecommendationScore } from "@/lib/services/recommendation-score";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
@@ -80,6 +87,7 @@ type ProfileRow = typeof profiles.$inferSelect;
 type UserRow = typeof user.$inferSelect;
 type PreferenceRow = typeof userMatchPreferences.$inferSelect;
 type SignalRow = typeof userMatchSignals.$inferSelect;
+type ProfileIntelligenceRow = typeof profileIntelligence.$inferSelect;
 type CandidateProfile = ProfileRow & { user?: UserRow | null };
 
 export interface BrowseFilters {
@@ -162,15 +170,7 @@ function unique<T>(values: T[]) {
 }
 
 function scoreActivityFromDate(lastActive: Date | string | null | undefined, now = new Date()) {
-    if (!lastActive) return 35;
-    const lastActiveAt = lastActive instanceof Date ? lastActive : new Date(lastActive);
-    const minutes = (now.getTime() - lastActiveAt.getTime()) / 60000;
-    if (minutes <= 10) return 100;
-    if (minutes <= 60) return 92;
-    if (minutes <= 24 * 60) return 82;
-    if (minutes <= 3 * 24 * 60) return 66;
-    if (minutes <= 7 * 24 * 60) return 45;
-    return 20;
+    return calculateActivityScore(lastActive, now);
 }
 
 function activityStatusFromScore(score: number): RankedRecommendation["activityStatus"] {
@@ -209,8 +209,15 @@ function scoreProfileQuality(profile: ProfileRow) {
 
 function scoreResponse(signal: SignalRow | null | undefined) {
     if (!signal) return 55;
-    const base = signal.responseRate > 0 ? signal.responseRate : 55;
-    return clampScore(base - signal.ghostingPenalty - Math.min(15, signal.noResponseCount * 3));
+    if (signal.responseRate > 0) {
+        return clampScore(signal.responseRate - signal.ghostingPenalty - Math.min(15, signal.noResponseCount * 3));
+    }
+    return calculateBehaviorResponseScore({
+        openToMeetCount: signal.openToMeetCount,
+        passCount: signal.passCount,
+        noResponseCount: signal.noResponseCount,
+        ghostingPenalty: signal.ghostingPenalty,
+    });
 }
 
 export function scoreDiversity(me: Pick<ProfileRow, "course" | "university" | "interests" | "personalityAnswers" | "lifestyleAnswers">, them: Pick<ProfileRow, "course" | "university" | "interests" | "personalityAnswers" | "lifestyleAnswers">) {
@@ -291,7 +298,11 @@ export function finalRecommendationScore(input: {
     mutualProbabilityScore: number;
     preferenceFitScore: number;
     profileQualityScore: number;
+    profileCompletenessScore?: number;
+    candidateStrengthScore?: number;
+    reciprocalInterestScore?: number;
     photoQualityScore?: number;
+    photoPresentationScore?: number;
     photoPreferenceScore?: number;
     photoVisualDiversityScore?: number;
     photoQualityPenalty?: number;
@@ -300,37 +311,7 @@ export function finalRecommendationScore(input: {
     activeHoldPenalty: number;
     isFirstSessionUser?: boolean;
 }) {
-    const weights =
-        input.preferenceMode === "active_only"
-            ? { compatibility: 0.1, activity: 0.35, response: 0.25, availability: 0.1, diversity: 0.05, mutual: 0.1, preference: 0.05, quality: 0.05 }
-            : input.preferenceMode === "serious_matches"
-                ? { compatibility: 0.2, activity: 0.15, response: 0.25, availability: 0.15, diversity: 0.05, mutual: 0.15, preference: 0.05, quality: 0.05 }
-                : input.preferenceMode === "different_from_me"
-                    ? { compatibility: 0.18, activity: 0.2, response: 0.18, availability: 0.08, diversity: 0.18, mutual: 0.1, preference: 0.08, quality: 0.05 }
-                    : { compatibility: 0.25, activity: 0.22, response: 0.18, availability: 0.08, diversity: 0.08, mutual: 0.11, preference: 0.08, quality: 0.05 };
-
-    const photoWeights = input.isFirstSessionUser
-        ? { quality: 0.08, preference: 0.03, visualDiversity: 0.02 }
-        : { quality: 0.08, preference: 0.05, visualDiversity: 0.05 };
-
-    const score =
-        input.compatibilityScore * weights.compatibility +
-        input.activityScore * weights.activity +
-        input.responseScore * weights.response +
-        input.availabilityScore * weights.availability +
-        input.diversityScore * weights.diversity +
-        input.mutualProbabilityScore * weights.mutual +
-        input.preferenceFitScore * weights.preference +
-        input.profileQualityScore * weights.quality +
-        (input.photoQualityScore ?? 50) * photoWeights.quality +
-        (input.photoPreferenceScore ?? 50) * photoWeights.preference +
-        (input.photoVisualDiversityScore ?? 50) * photoWeights.visualDiversity -
-        (input.photoQualityPenalty ?? 0) -
-        input.ghostingPenalty -
-        input.passRiskPenalty -
-        input.activeHoldPenalty;
-
-    return clampScore(score);
+    return calculateFinalRecommendationScore(input);
 }
 
 function buildReason(
@@ -508,6 +489,15 @@ async function getCandidateSignals(userIds: string[]) {
         .select()
         .from(userMatchSignals)
         .where(inArray(userMatchSignals.userId, userIds));
+    return new Map(rows.map((row) => [row.userId, row]));
+}
+
+async function getCandidateIntelligence(userIds: string[]) {
+    if (userIds.length === 0) return new Map<string, ProfileIntelligenceRow>();
+    const rows = await readDb
+        .select()
+        .from(profileIntelligence)
+        .where(inArray(profileIntelligence.userId, userIds));
     return new Map(rows.map((row) => [row.userId, row]));
 }
 
@@ -719,10 +709,11 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
         ? Date.now() - new Date(viewerAccount.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000
         : false;
 
-    const [candidatePreferences, candidateSignals, exposureCounts, holdEntries, incomingInterestMap, viewerDecisionMap, photoSignalsMap] =
+    const [candidatePreferences, candidateSignals, candidateIntelligence, exposureCounts, holdEntries, incomingInterestMap, viewerDecisionMap, photoSignalsMap] =
         await Promise.all([
         getCandidatePreferences(candidateUserIds),
         getCandidateSignals(candidateUserIds),
+        getCandidateIntelligence(candidateUserIds),
         getRecentExposureCounts(viewerUserId),
         Promise.all(candidateUserIds.map(async (candidateUserId) => [candidateUserId, await isUserOnMatchHold(candidateUserId)] as const)),
         getIncomingOpenInterestMap(viewerUserId, candidateUserIds),
@@ -759,19 +750,33 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             hasUsableProfilePhoto: false,
         };
         const compatibilityScore = compatibility.score;
-        const activityScore = scoreActivityFromDate(candidate.user?.lastActive ?? candidate.lastActive);
-        const responseScore = scoreResponse(candidateSignal);
+        const intelligence = candidateIntelligence.get(candidate.userId);
+        const activityScore = intelligence?.activityScore ?? scoreActivityFromDate(candidate.user?.lastActive ?? candidate.lastActive);
+        const responseScore = intelligence?.responseScore ?? scoreResponse(candidateSignal);
         const availabilityScore = scoreAvailability(candidatePreference);
         const diversityScore = scoreDiversity(viewerProfile, candidate);
         const profileQualityScore = scoreProfileQuality(candidate);
         const photoQualityScore = photoSignal.photoQualityScore || 50;
+        const photoPresentationScore = intelligence?.photoPresentationScore ?? photoQualityScore;
+        const profileCompletenessScore = intelligence?.profileCompletenessScore ?? profileQualityScore;
+        const candidateStrengthScore = intelligence?.candidateStrengthScore;
         const photoPreferenceScore = await calculatePhotoPreferenceScore({
             viewerUserId,
             candidateUserId: candidate.userId,
         });
         const photoVisualDiversityScore = 50;
         const hasIncomingOpenInterest = incomingInterestMap.has(candidate.userId);
-        const baseMutualProbabilityScore = clampScore((compatibilityScore * 0.45) + (responseScore * 0.3) + (activityScore * 0.15) + (availabilityScore * 0.1));
+        const reciprocalInterestScore = hasIncomingOpenInterest ? 100 : (intelligence?.inboundInterestScore ?? 0);
+        const baseMutualProbabilityScore = intelligence
+            ? clampScore(
+                (compatibilityScore * 0.35) +
+                (responseScore * 0.25) +
+                (activityScore * 0.15) +
+                (availabilityScore * 0.1) +
+                (intelligence.inboundInterestScore * 0.08) +
+                (intelligence.mutualConversionScore * 0.07),
+            )
+            : clampScore((compatibilityScore * 0.45) + (responseScore * 0.3) + (activityScore * 0.15) + (availabilityScore * 0.1));
         const mutualProbabilityScore = hasIncomingOpenInterest ? 100 : baseMutualProbabilityScore;
         const preferenceFit = preferenceFitScore({
             preferenceMode: modePreference,
@@ -808,7 +813,11 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             mutualProbabilityScore,
             preferenceFitScore: preferenceFit,
             profileQualityScore,
+            profileCompletenessScore,
+            candidateStrengthScore,
+            reciprocalInterestScore,
             photoQualityScore,
+            photoPresentationScore,
             photoPreferenceScore,
             photoVisualDiversityScore,
             photoQualityPenalty,
@@ -846,6 +855,8 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             mutualProbabilityScore,
             preferenceFitScore: preferenceFit,
             profileQualityScore,
+            profileCompletenessScore,
+            candidateStrengthScore: candidateStrengthScore ?? null,
             hasIncomingOpenInterest,
             incomingInterestAt: incomingInterestMap.get(candidate.userId)?.toISOString() ?? null,
             ghostingPenalty,
@@ -909,9 +920,24 @@ function targetDailyMix(preferenceMode: PreferenceMode): MatchType[] {
     }
 }
 
-function applyDailyMix(ranked: RankedRecommendation[], preferenceMode: PreferenceMode) {
+export function applyDailyMix(ranked: RankedRecommendation[], preferenceMode: PreferenceMode) {
     const selected: RankedRecommendation[] = [];
     const used = new Set<string>();
+
+    const addFirst = (predicate: (item: RankedRecommendation) => boolean, max = 1) => {
+        for (const item of ranked) {
+            if (selected.length >= DAILY_LIMIT || selected.filter(predicate).length >= max) break;
+            if (used.has(item.candidateUserId) || !predicate(item)) continue;
+            selected.push(item);
+            used.add(item.candidateUserId);
+        }
+    };
+
+    addFirst((item) => item.mutualProbabilityScore >= 95, 2);
+    addFirst((item) => item.matchType === "high_activity" && item.activityScore >= 80 && item.responseScore >= 65, 2);
+    addFirst((item) => item.matchType === "complementary" || item.matchType === "discovery", 1);
+    addFirst((item) => item.profileQualityScore >= 80 && item.finalScore >= 65, 1);
+
     for (const matchType of targetDailyMix(preferenceMode)) {
         const next = ranked.find((item) => item.matchType === matchType && !used.has(item.candidateUserId));
         if (!next) continue;
@@ -1529,6 +1555,9 @@ export async function handleRecommendationDecision(input: {
         decision: input.decision,
         source: input.source,
         matchType: input.matchType,
+    });
+    refreshProfileBehaviorSignalsForUsers([input.viewerUserId, input.candidateUserId]).catch((error) => {
+        console.warn("[match-intelligence] profile behavior signal refresh failed", error);
     });
 
     console.log("[match-intelligence] directed interest updated", {

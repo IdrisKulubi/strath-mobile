@@ -7,6 +7,7 @@ import { successResponse, errorResponse } from "@/lib/api-response";
 import { resetAgentContext } from "@/services/agent-context";
 import { syncProfilePhotoAssetsForUser } from "@/lib/services/profile-photo-assets";
 import { reanalyzeUserPhotos } from "@/lib/services/photo-intelligence-service";
+import { ensureProfileIntelligenceJob } from "@/lib/services/profile-intelligence-service";
 import { admitOrWaitlist, getWaitlistViewFor } from "@/lib/services/admission-service";
 import { getSessionWithBearerFallback } from "@/lib/security";
 import { ZodError } from "zod";
@@ -180,6 +181,18 @@ export async function PATCH(req: NextRequest) {
                 console.error("[PATCH /api/user/me] Failed to reanalyze profile photos:", photoAnalysisError);
             });
         }
+
+        ensureProfileIntelligenceJob({
+            userId: session.user.id,
+            jobType: "profile_refresh",
+            metadata: {
+                source: "profile_update",
+                profileId: resultProfile.id,
+                photoCount: verificationPhotoUrls.length,
+            },
+        }).catch((intelligenceError) => {
+            console.error("[PATCH /api/user/me] Failed to enqueue profile intelligence refresh:", intelligenceError);
+        });
 
         // Soft-launch admission gate: when a user flips profileCompleted/isComplete
         // to true, decide whether they're admitted or placed on the waitlist.
