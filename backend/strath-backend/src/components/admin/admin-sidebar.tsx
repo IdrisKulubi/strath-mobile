@@ -5,6 +5,7 @@ import { type ComponentType } from "react";
 import { usePathname } from "next/navigation";
 import {
     BarChart3,
+    BrainCircuit,
     Image,
     Clock3,
     CalendarCheck2,
@@ -84,6 +85,7 @@ const groups: NavGroup[] = [
         items: [
             { href: "/admin/users", label: "Users", icon: Users },
             { href: "/admin/metrics", label: "Metrics", icon: BarChart3 },
+            { href: "/admin/profile-intelligence", label: "Profile Intelligence", icon: BrainCircuit },
             { href: "/admin/photo-intelligence", label: "Photo Intelligence", icon: Image },
             { href: "/admin/push-notifications", label: "Push notifications", icon: Bell },
         ],

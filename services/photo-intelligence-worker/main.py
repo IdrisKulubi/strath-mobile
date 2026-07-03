@@ -116,8 +116,15 @@ class BatchAnalyzeRequest(BaseModel):
     items: list[ProfileAnalyzeRequest]
 
 
+def _service_secret() -> str:
+    return (
+        os.getenv("PROFILE_INTELLIGENCE_SERVICE_SECRET", "").strip()
+        or os.getenv("PHOTO_INTELLIGENCE_SERVICE_SECRET", "").strip()
+    )
+
+
 def require_auth(authorization: str | None = Header(default=None)) -> None:
-    secret = os.getenv("PHOTO_INTELLIGENCE_SERVICE_SECRET", "").strip()
+    secret = _service_secret()
     if not secret:
         return
 

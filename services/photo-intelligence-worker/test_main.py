@@ -76,6 +76,19 @@ class ProfileIntelligenceWorkerTest(unittest.TestCase):
         self.assertEqual(body["photoPresentation"]["photoPresentationScore"], 0)
         self.assertIsNone(body["visualEmbedding"])
 
+    def test_profile_intelligence_secret_alias_is_accepted(self) -> None:
+        del os.environ["PHOTO_INTELLIGENCE_SERVICE_SECRET"]
+        os.environ["PROFILE_INTELLIGENCE_SERVICE_SECRET"] = "test-secret"
+
+        response = self.client.post(
+            "/profiles/embed-text",
+            headers=self.headers,
+            json={"text": "calm serious active today"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["embedding"]), 768)
+
     def test_batch_analyze_returns_one_result_per_item(self) -> None:
         response = self.client.post(
             "/profiles/batch-analyze",

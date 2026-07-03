@@ -26,11 +26,12 @@ Do **not** use `strath-mobile/services/photo-intelligence-worker`; that path doe
 | Variable | Description |
 | --- | --- |
 | `PHOTO_INTELLIGENCE_SERVICE_SECRET` | Bearer token shared with `strath-backend` |
+| `PROFILE_INTELLIGENCE_SERVICE_SECRET` | Alias for `PHOTO_INTELLIGENCE_SERVICE_SECRET` (checked first) |
 | `PORT` | HTTP port. Railway sets this automatically. |
 
-The Next.js backend also supports `PROFILE_INTELLIGENCE_SERVICE_URL` and
-`PROFILE_INTELLIGENCE_SERVICE_SECRET` aliases. If unset, it falls back to the
-existing `PHOTO_INTELLIGENCE_*` values.
+Both this worker and the Next.js backend accept `PROFILE_INTELLIGENCE_SERVICE_SECRET`
+or `PHOTO_INTELLIGENCE_SERVICE_SECRET`. Set both to the same value locally to avoid
+confusion when one service reads a different variable than the other.
 
 ## Local Run
 

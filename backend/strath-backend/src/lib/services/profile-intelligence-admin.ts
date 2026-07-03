@@ -184,10 +184,10 @@ export async function getProfileIntelligenceAdminOverview(): Promise<ProfileInte
             .from(matchmakerIntents)
             .where(gte(matchmakerIntents.createdAt, sevenDaysAgo)),
         db.select({
-            viewersWithShortlist: sql<number>`count(distinct ${dailyShortlists.viewerUserId})::int`,
+            viewersWithShortlist: sql<number>`count(distinct todays_shortlists.viewer_user_id)::int`,
             activeUsersShown: sql<number>`count(*) filter (where coalesce(${profileIntelligence.activityScore}, 0) >= 60)::int`,
             dormantUsersShown: sql<number>`count(*) filter (where coalesce(${profileIntelligence.activityScore}, 0) < 45)::int`,
-            shortlistOverFiveCount: sql<number>`coalesce(sum(case when shortlist_count > 5 then 1 else 0 end), 0)::int`,
+            shortlistOverFiveCount: sql<number>`count(distinct todays_shortlists.viewer_user_id) filter (where todays_shortlists.shortlist_count > 5)::int`,
         }).from(sql`(
             select ${dailyShortlists.viewerUserId} as viewer_user_id,
                    ${dailyShortlists.candidateUserId} as candidate_user_id,
