@@ -16,6 +16,8 @@ import { useToast } from '@/components/ui/toast';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import { HomeHeader } from '@/components/home/home-header';
+import { HomeMatchmakerEntry } from '@/components/home/home-matchmaker-entry';
+import { MatchmakerConversation } from '@/components/matchmaker';
 import { HomeTabSwitcher, type HomeTab } from '@/components/home/home-tab-switcher';
 import { InterestedInYouSection } from '@/components/home/interested-in-you-section';
 import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/decision-info-sheet';
@@ -60,6 +62,31 @@ function parseHomeTab(value: string | string[] | undefined): HomeTab | null {
 }
 
 export default function HomeScreen() {
+    const { colors, colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const { data: profile } = useProfile();
+
+    return (
+        <TabSwipeView route="/(tabs)">
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+                <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+                <ScrollView
+                    style={styles.scroll}
+                    contentContainerStyle={styles.matchmakerContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    <HomeHeader firstName={profile?.firstName} />
+                    <View style={styles.matchmakerHost}>
+                        <MatchmakerConversation />
+                    </View>
+                </ScrollView>
+            </SafeAreaView>
+        </TabSwipeView>
+    );
+}
+
+function LegacyHomeScreen() {
     const { colors, colorScheme } = useTheme();
     const router = useRouter();
     const toast = useToast();
@@ -196,6 +223,10 @@ export default function HomeScreen() {
         });
     }, [router]);
 
+    const handleOpenMatchmaker = useCallback(() => {
+        router.push('/(tabs)/pulse');
+    }, [router]);
+
     const handleRecommendationDecision = useCallback(async (
         recommendation: RankedRecommendation,
         decision: RecommendationDecision
@@ -318,6 +349,11 @@ export default function HomeScreen() {
                         compact={showCarousel && headerCompact}
                     />
 
+                    <HomeMatchmakerEntry
+                        compact={showCarousel && headerCompact}
+                        onPress={handleOpenMatchmaker}
+                    />
+
                     <HomeTabSwitcher
                         activeTab={homeTab}
                         onTabChange={setHomeTab}
@@ -357,6 +393,13 @@ const styles = StyleSheet.create({
     },
     content: {
         paddingBottom: 32,
+    },
+    matchmakerContent: {
+        paddingBottom: 32,
+    },
+    matchmakerHost: {
+        paddingHorizontal: SPACING.screenX,
+        paddingBottom: SPACING.large,
     },
     contentCarousel: {
         flexGrow: 1,

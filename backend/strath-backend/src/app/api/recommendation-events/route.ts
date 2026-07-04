@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 const eventSchema = z.object({
     candidateUserId: z.string().min(1),
-    source: z.enum(["daily_recommendations", "browse", "admin_curated", "available_now"]),
+    source: z.enum(["daily_recommendations", "browse", "matchmaker", "admin_curated", "available_now"]),
     matchType: z.enum(["similarity", "complementary", "discovery", "high_activity", "admin_curated"]).optional(),
     event: z.enum(["shown", "viewed", "ignored"]),
     finalScore: z.number().int().min(0).max(100).optional(),

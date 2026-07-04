@@ -288,7 +288,7 @@ export default function WingmanTabScreen() {
       >
         {/* ── Header ── */}
         <View style={s.header}>
-          <Text style={[s.headerTitle, { color: colors.foreground }]}>Wingman </Text>
+          <Text style={[s.headerTitle, { color: colors.foreground }]}>Wingman</Text>
           <Text style={[s.headerSub, { color: colors.mutedForeground }]}>
             Let friends describe you. Get better matches.
           </Text>
@@ -623,6 +623,10 @@ const s = StyleSheet.create({
     paddingTop: 2,
   },
   headerSub: { fontSize: 13, marginTop: 4, lineHeight: 18 },
+  legacyHeader: {
+    paddingTop: 26,
+    paddingBottom: 12,
+  },
 
   // Error
   errorTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },

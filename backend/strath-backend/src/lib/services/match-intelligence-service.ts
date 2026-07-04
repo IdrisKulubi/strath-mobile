@@ -75,6 +75,7 @@ export type MatchType =
 export type RecommendationSource =
     | "daily_recommendations"
     | "browse"
+    | "matchmaker"
     | "admin_curated"
     | "available_now";
 

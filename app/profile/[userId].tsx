@@ -52,7 +52,7 @@ import {
 } from '@/components/profile-view/profile-view-sections';
 
 const ALREADY_RESPONDED_MSG = 'You have already responded to this pair';
-const RECOMMENDATION_SOURCES: RecommendationSource[] = ['daily_recommendations', 'admin_curated', 'available_now'];
+const RECOMMENDATION_SOURCES: RecommendationSource[] = ['daily_recommendations', 'matchmaker', 'admin_curated', 'available_now'];
 const MATCH_TYPES: MatchType[] = ['similarity', 'complementary', 'discovery', 'high_activity', 'admin_curated'];
 
 function getSingleParam(value: string | string[] | undefined) {

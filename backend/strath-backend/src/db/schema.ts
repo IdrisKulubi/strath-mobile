@@ -548,6 +548,71 @@ export const matchmakerIntents = pgTable(
     }),
 );
 
+export const matchmakerSessions = pgTable(
+    "matchmaker_sessions",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        sessionDay: text("session_day").notNull(),
+        status: text("status")
+            .$type<"active" | "completed" | "expired">()
+            .default("active")
+            .notNull(),
+        state: text("state")
+            .$type<
+                | "greeting"
+                | "collecting_intent"
+                | "clarifying"
+                | "ready_to_search"
+                | "presenting_candidate"
+                | "collecting_feedback"
+                | "limit_reached"
+            >()
+            .default("greeting")
+            .notNull(),
+        dailySearchCount: integer("daily_search_count").default(0).notNull(),
+        searchLimit: integer("search_limit").default(3).notNull(),
+        currentIntent: jsonb("current_intent").$type<Record<string, unknown>>().default({}).notNull(),
+        currentPlan: jsonb("current_plan").$type<Record<string, unknown>>().default({}).notNull(),
+        lastCandidateUserId: text("last_candidate_user_id").references(() => user.id, { onDelete: "set null" }),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userDayIdx: index("matchmaker_sessions_user_day_idx").on(table.userId, table.sessionDay),
+        statusIdx: index("matchmaker_sessions_status_idx").on(table.status),
+        updatedAtIdx: index("matchmaker_sessions_updated_at_idx").on(table.updatedAt),
+    }),
+);
+
+export const matchmakerMessages = pgTable(
+    "matchmaker_messages",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        sessionId: uuid("session_id")
+            .notNull()
+            .references(() => matchmakerSessions.id, { onDelete: "cascade" }),
+        role: text("role")
+            .$type<"user" | "assistant" | "system">()
+            .notNull(),
+        kind: text("kind")
+            .$type<"greeting" | "text" | "intent" | "clarifying_question" | "search_plan" | "candidate" | "feedback" | "limit">()
+            .default("text")
+            .notNull(),
+        text: text("text").notNull(),
+        quickReplies: jsonb("quick_replies").$type<string[]>().default([]).notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        sessionCreatedIdx: index("matchmaker_messages_session_created_idx").on(table.sessionId, table.createdAt),
+        roleIdx: index("matchmaker_messages_role_idx").on(table.role),
+    }),
+);
+
 export const faceVerificationJobs = pgTable("face_verification_jobs", {
     id: uuid("id").defaultRandom().primaryKey(),
     jobType: text("job_type").notNull(),
@@ -809,7 +874,7 @@ export const recommendationEvents = pgTable(
             .notNull()
             .references(() => user.id, { onDelete: "cascade" }),
         source: text("source")
-            .$type<"daily_recommendations" | "browse" | "admin_curated" | "available_now">()
+            .$type<"daily_recommendations" | "browse" | "matchmaker" | "admin_curated" | "available_now">()
             .notNull(),
         matchType: text("match_type")
             .$type<"similarity" | "complementary" | "discovery" | "high_activity" | "admin_curated">(),
@@ -884,7 +949,7 @@ export const userMatchInterests = pgTable(
             .$type<"open_to_meet" | "passed">()
             .notNull(),
         source: text("source")
-            .$type<"daily_recommendations" | "browse" | "admin_curated" | "available_now">()
+            .$type<"daily_recommendations" | "browse" | "matchmaker" | "admin_curated" | "available_now">()
             .notNull(),
         matchType: text("match_type")
             .$type<"similarity" | "complementary" | "discovery" | "high_activity" | "admin_curated">(),
@@ -1380,6 +1445,7 @@ export const userRelations = relations(user, ({ one, many }) => ({
     profileIntelligence: one(profileIntelligence),
     profileIntelligenceJobs: many(profileIntelligenceJobs),
     matchmakerIntents: many(matchmakerIntents),
+    matchmakerSessions: many(matchmakerSessions),
     sessions: many(session),
     accounts: many(account),
 }));
@@ -1539,6 +1605,25 @@ export const matchmakerIntentsRelations = relations(matchmakerIntents, ({ one })
     user: one(user, {
         fields: [matchmakerIntents.userId],
         references: [user.id],
+    }),
+}));
+
+export const matchmakerSessionsRelations = relations(matchmakerSessions, ({ one, many }) => ({
+    user: one(user, {
+        fields: [matchmakerSessions.userId],
+        references: [user.id],
+    }),
+    lastCandidate: one(user, {
+        fields: [matchmakerSessions.lastCandidateUserId],
+        references: [user.id],
+    }),
+    messages: many(matchmakerMessages),
+}));
+
+export const matchmakerMessagesRelations = relations(matchmakerMessages, ({ one }) => ({
+    session: one(matchmakerSessions, {
+        fields: [matchmakerMessages.sessionId],
+        references: [matchmakerSessions.id],
     }),
 }));
 
@@ -2464,6 +2549,10 @@ export type ProfileIntelligenceJob = typeof profileIntelligenceJobs.$inferSelect
 export type NewProfileIntelligenceJob = typeof profileIntelligenceJobs.$inferInsert;
 export type MatchmakerIntent = typeof matchmakerIntents.$inferSelect;
 export type NewMatchmakerIntent = typeof matchmakerIntents.$inferInsert;
+export type MatchmakerSession = typeof matchmakerSessions.$inferSelect;
+export type NewMatchmakerSession = typeof matchmakerSessions.$inferInsert;
+export type MatchmakerMessage = typeof matchmakerMessages.$inferSelect;
+export type NewMatchmakerMessage = typeof matchmakerMessages.$inferInsert;
 export type FaceVerificationJob = typeof faceVerificationJobs.$inferSelect;
 export type NewFaceVerificationJob = typeof faceVerificationJobs.$inferInsert;
 export type FaceVerificationAssistance = typeof faceVerificationAssistance.$inferSelect;

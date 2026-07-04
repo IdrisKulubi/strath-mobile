@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const decisionSchema = z.object({
     candidateUserId: z.string().min(1),
     decision: z.enum(["open_to_meet", "passed"]),
-    source: z.enum(["daily_recommendations", "browse", "admin_curated", "available_now"]).default("browse"),
+    source: z.enum(["daily_recommendations", "browse", "matchmaker", "admin_curated", "available_now"]).default("browse"),
     matchType: z.enum(["similarity", "complementary", "discovery", "high_activity", "admin_curated"]).optional(),
 });
 
