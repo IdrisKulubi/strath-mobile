@@ -59,3 +59,18 @@ She matches the calm, intentional direction you asked for and has been active re
 - Repeating search in the same session does not return the same candidates.
 - Search logs which candidates were shown.
 - Candidate profile opens with `source=matchmaker`.
+
+## Implementation Notes
+
+- Added `matchmaker_session_results` to record every candidate shown by a matchmaker session.
+- Added `POST /api/matchmaker/session/search`.
+- Session search now:
+  - reads the current conversation intent/plan,
+  - builds a search query from the user's latest direction,
+  - calls the profile-intelligence-backed matchmaker search service,
+  - excludes candidates already shown in the same session,
+  - stores the shown candidate in `matchmaker_session_results`,
+  - increments the session daily search count,
+  - appends a `candidate` message to the conversation.
+- Mobile now calls the session search endpoint from the home matchmaker flow.
+- Candidate messages render as tappable cards and open profiles with `source=matchmaker`.

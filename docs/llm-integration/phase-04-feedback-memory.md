@@ -57,3 +57,26 @@ I will avoid very social profiles for now.
 - Interested updates positive memory.
 - Memory can be inspected in logs/admin.
 - User can continue without giving feedback.
+
+## Implementation Notes
+
+- Added `matchmaker_user_memory`.
+- Added weighted positive/negative memory signals and compact feedback history.
+- Added `POST /api/matchmaker/session/feedback`.
+- Added automatic matchmaker memory updates from `recommendation-decisions` when `source=matchmaker`.
+- Session-aware search now appends memory hints to the search text:
+  - learned likes are prioritized,
+  - learned dislikes are avoided.
+- Mobile matchmaker now supports:
+  - `Not this one`,
+  - feedback reason chips,
+  - skip feedback,
+  - search again after feedback.
+
+## Migration
+
+Apply:
+
+```txt
+0031_matchmaker_user_memory.sql
+```

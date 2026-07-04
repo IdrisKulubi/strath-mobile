@@ -2,6 +2,13 @@ import { and, asc, desc, eq } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import { matchmakerMessages, matchmakerSessions, profiles } from "@/db/schema";
+import { generateMatchmakerLlmTurn } from "@/lib/services/matchmaker-llm-client";
+import {
+    recordMatchmakerFeedback,
+    type MatchmakerFeedbackOutcome,
+} from "@/lib/services/matchmaker-memory-service";
+import { trackMatchmakerEvent } from "@/lib/services/matchmaker-analytics-service";
+import { presentNextMatchmakerCandidate } from "@/lib/services/matchmaker-session-search-service";
 
 export type MatchmakerConversationState =
     | "greeting"
@@ -43,6 +50,14 @@ export interface MatchmakerConversationSession {
     remainingSearches: number;
     currentIntent: Record<string, unknown>;
     currentPlan: Record<string, unknown>;
+    quota: {
+        used: number;
+        limit: number;
+        remaining: number;
+        resetsAt: string;
+        timezone: "Africa/Nairobi";
+        limitReason: "daily_search_limit" | null;
+    };
 }
 
 export interface MatchmakerConversationResponse {
@@ -60,20 +75,6 @@ const INITIAL_QUICK_REPLIES = [
     "Help me figure it out",
 ];
 
-const CLARIFY_QUICK_REPLIES = [
-    "Emotionally mature",
-    "Quiet and calm",
-    "Low-drama and consistent",
-    "A mix of all three",
-];
-
-const READY_QUICK_REPLIES = [
-    "Go ahead and search",
-    "Change something",
-    "Make it more serious",
-    "Show someone active",
-];
-
 function getNairobiDay(date = new Date()) {
     return new Intl.DateTimeFormat("en-CA", {
         timeZone: "Africa/Nairobi",
@@ -83,51 +84,14 @@ function getNairobiDay(date = new Date()) {
     }).format(date);
 }
 
+function getNairobiResetAt(date = new Date()) {
+    const day = getNairobiDay(date);
+    const [year, month, dateOfMonth] = day.split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1, dateOfMonth + 1, -3, 0, 0)).toISOString();
+}
+
 function normalizeText(text: string) {
     return text.trim().replace(/\s+/g, " ");
-}
-
-function includesAny(text: string, words: string[]) {
-    const lower = text.toLowerCase();
-    return words.some((word) => lower.includes(word));
-}
-
-function inferIntent(text: string) {
-    const lower = text.toLowerCase();
-    const traits: string[] = [];
-    if (includesAny(lower, ["calm", "quiet", "chill", "peaceful", "low-drama", "low drama"])) traits.push("calm");
-    if (includesAny(lower, ["serious", "intentional", "relationship", "long-term", "long term"])) traits.push("serious");
-    if (includesAny(lower, ["social", "funny", "fun", "outgoing"])) traits.push("social");
-    if (includesAny(lower, ["active", "today", "online", "available"])) traits.push("active_today");
-    if (includesAny(lower, ["consistent", "loyal", "mature"])) traits.push("consistent");
-
-    return {
-        rawText: text,
-        traits: [...new Set(traits)],
-        activeToday: includesAny(lower, ["active", "today", "online", "available"]),
-        seriousIntent: includesAny(lower, ["serious", "intentional", "relationship", "long-term", "long term"]),
-    };
-}
-
-function shouldClarify(text: string) {
-    const lower = text.toLowerCase();
-    return lower.length < 28 || lower === "i want someone calm" || lower === "someone serious";
-}
-
-function buildSearchPlan(intent: ReturnType<typeof inferIntent>) {
-    const priorities = new Set<string>();
-    if (intent.traits.includes("calm")) priorities.add("calm or grounded profile signals");
-    if (intent.traits.includes("serious")) priorities.add("intentional dating signals");
-    if (intent.traits.includes("social")) priorities.add("social energy and shared interests");
-    if (intent.activeToday) priorities.add("recent activity");
-    priorities.add("response likelihood");
-    priorities.add("profile completeness");
-
-    return {
-        intent,
-        priorities: [...priorities],
-        avoid: ["blocked users", "already passed users", "people already shown in this session"],
-    };
 }
 
 function serializeMessage(row: typeof matchmakerMessages.$inferSelect): MatchmakerConversationMessage {
@@ -143,6 +107,7 @@ function serializeMessage(row: typeof matchmakerMessages.$inferSelect): Matchmak
 }
 
 function serializeSession(row: typeof matchmakerSessions.$inferSelect): MatchmakerConversationSession {
+    const remainingSearches = Math.max(0, row.searchLimit - row.dailySearchCount);
     return {
         id: row.id,
         state: row.state,
@@ -150,9 +115,17 @@ function serializeSession(row: typeof matchmakerSessions.$inferSelect): Matchmak
         sessionDay: row.sessionDay,
         dailySearchCount: row.dailySearchCount,
         searchLimit: row.searchLimit,
-        remainingSearches: Math.max(0, row.searchLimit - row.dailySearchCount),
+        remainingSearches,
         currentIntent: row.currentIntent ?? {},
         currentPlan: row.currentPlan ?? {},
+        quota: {
+            used: row.dailySearchCount,
+            limit: row.searchLimit,
+            remaining: remainingSearches,
+            resetsAt: getNairobiResetAt(),
+            timezone: "Africa/Nairobi",
+            limitReason: remainingSearches <= 0 ? "daily_search_limit" : null,
+        },
     };
 }
 
@@ -238,6 +211,15 @@ async function getOrCreateRawSession(userId: string) {
         })
         .returning();
     await ensureGreeting(created);
+    trackMatchmakerEvent({
+        event: "session_started",
+        userId,
+        sessionId: created.id,
+        metadata: {
+            sessionDay,
+            searchLimit: created.searchLimit,
+        },
+    }).catch(() => undefined);
     return created;
 }
 
@@ -271,34 +253,44 @@ export async function addMatchmakerConversationMessage(input: {
     if (cleaned.length > 800) throw new Error("Message is too long");
 
     const session = await getOrCreateRawSession(input.userId);
+    const existingMessages = await listMessages(session.id);
     await createMessage({
         sessionId: session.id,
         role: "user",
         kind: "text",
         text: cleaned,
     });
+    trackMatchmakerEvent({
+        event: "intent_submitted",
+        userId: input.userId,
+        sessionId: session.id,
+        metadata: {
+            state: session.state,
+            messageLength: cleaned.length,
+        },
+    }).catch(() => undefined);
 
-    const intent = inferIntent(cleaned);
-    const nextState: MatchmakerConversationState = shouldClarify(cleaned)
+    const llmTurn = await generateMatchmakerLlmTurn({
+        userMessage: cleaned,
+        state: session.state,
+        currentIntent: session.currentIntent ?? {},
+        recentMessages: existingMessages.map((message) => ({
+            role: message.role,
+            text: message.text,
+        })),
+    });
+    const nextState: MatchmakerConversationState = llmTurn.shouldClarify
         ? "clarifying"
         : "ready_to_search";
-    const plan = buildSearchPlan(intent);
-
-    const assistantMessage = nextState === "clarifying"
-        ? {
-            kind: "clarifying_question" as const,
-            text: "When you say that, what matters most: emotional maturity, a quiet personality, or someone low-drama and consistent?",
-            quickReplies: CLARIFY_QUICK_REPLIES,
-        }
-        : {
-            kind: "search_plan" as const,
-            text: `That makes sense. I would search for ${plan.priorities.slice(0, 3).join(", ")} and avoid people you have already passed or seen in this session. Should I go ahead?`,
-            quickReplies: READY_QUICK_REPLIES,
-        };
-
     const currentIntent = {
-        ...intent,
+        ...llmTurn.intent,
         lastUserMessage: cleaned,
+        provider: llmTurn.provider,
+        model: llmTurn.model,
+    };
+    const plan = {
+        ...llmTurn.searchPlan,
+        intent: llmTurn.intent,
     };
 
     await db
@@ -314,11 +306,102 @@ export async function addMatchmakerConversationMessage(input: {
     await createMessage({
         sessionId: session.id,
         role: "assistant",
-        kind: assistantMessage.kind,
-        text: assistantMessage.text,
-        quickReplies: assistantMessage.quickReplies,
-        metadata: { intent: currentIntent, plan },
+        kind: llmTurn.shouldClarify ? "clarifying_question" : "search_plan",
+        text: llmTurn.reply,
+        quickReplies: llmTurn.quickReplies,
+        metadata: {
+            intent: currentIntent,
+            plan,
+            provider: llmTurn.provider,
+            model: llmTurn.model,
+            fallbackUsed: llmTurn.fallbackUsed,
+            messageType: llmTurn.messageType,
+        },
     });
+    trackMatchmakerEvent({
+        event: llmTurn.shouldClarify ? "clarification_asked" : "search_plan_confirmed",
+        userId: input.userId,
+        sessionId: session.id,
+        metadata: {
+            provider: llmTurn.provider,
+            model: llmTurn.model,
+            fallbackUsed: llmTurn.fallbackUsed,
+            messageType: llmTurn.messageType,
+            quickReplyCount: llmTurn.quickReplies.length,
+        },
+    }).catch(() => undefined);
+
+    return buildResponse(session.id);
+}
+
+export async function presentNextMatchmakerCandidateForUser(userId: string) {
+    const session = await getOrCreateRawSession(userId);
+    await presentNextMatchmakerCandidate(session);
+    return buildResponse(session.id);
+}
+
+export async function addMatchmakerConversationFeedback(input: {
+    userId: string;
+    outcome: MatchmakerFeedbackOutcome;
+    reason?: string | null;
+    candidateUserId?: string | null;
+}) {
+    const session = await getOrCreateRawSession(input.userId);
+    const candidateUserId = input.candidateUserId ?? session.lastCandidateUserId ?? null;
+    const memory = await recordMatchmakerFeedback({
+        userId: input.userId,
+        candidateUserId,
+        outcome: input.outcome,
+        reason: input.reason,
+        metadata: {
+            source: "matchmaker_conversation",
+            sessionId: session.id,
+        },
+    });
+
+    const reasonText = input.reason ? ` ${input.reason}.` : "";
+    const summaryText = memory.memorySummary ? ` ${memory.memorySummary}` : "";
+    const wantsReason = input.outcome === "not_this_one" && !input.reason;
+    if (input.reason) {
+        trackMatchmakerEvent({
+            event: "feedback_reason_selected",
+            userId: input.userId,
+            sessionId: session.id,
+            candidateUserId,
+            metadata: {
+                outcome: input.outcome,
+                reason: input.reason,
+                memorySummary: memory.memorySummary,
+            },
+        }).catch(() => undefined);
+    }
+    await createMessage({
+        sessionId: session.id,
+        role: "assistant",
+        kind: "feedback",
+        text: wantsReason
+            ? "What felt off?"
+            : input.outcome === "interested"
+            ? `Got it. I will look for more people with that kind of fit.${summaryText}`
+            : `Got it.${reasonText} I will adjust the next search.${summaryText}`,
+        quickReplies: wantsReason
+            ? ["Not my vibe", "Too social", "Too quiet", "Not serious enough", "Not active enough", "Different lifestyle", "Skip feedback"]
+            : ["Find another", "Change what I asked for", "Skip feedback"],
+        metadata: {
+            outcome: input.outcome,
+            reason: input.reason,
+            candidateUserId,
+            memorySummary: memory.memorySummary,
+        },
+    });
+
+    await db
+        .update(matchmakerSessions)
+        .set({
+            state: "collecting_feedback",
+            updatedAt: new Date(),
+        })
+        .where(eq(matchmakerSessions.id, session.id));
 
     return buildResponse(session.id);
 }

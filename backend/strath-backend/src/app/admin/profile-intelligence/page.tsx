@@ -126,6 +126,25 @@ export default async function AdminProfileIntelligencePage() {
 
             <section>
                 <div className="mb-4">
+                    <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-300">Matchmaker quality</h2>
+                    <p className="mt-1 text-sm text-gray-500">Last 7 days of conversation-driven search.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">
+                    <MetricCard label="Sessions" value={overview.matchmakerQuality.sessions7d} />
+                    <MetricCard label="Searches" value={overview.matchmakerQuality.searches7d} accent="text-cyan-300" />
+                    <MetricCard label="Repeat rate" value={`${overview.matchmakerQuality.repeatedCandidateRatePct}%`} accent={overview.matchmakerQuality.repeatedCandidateRatePct > 25 ? "text-amber-300" : "text-white"} />
+                    <MetricCard label="Interested rate" value={`${overview.matchmakerQuality.interestedRatePct}%`} accent="text-pink-300" />
+                    <MetricCard label="Pass rate" value={`${overview.matchmakerQuality.passRatePct}%`} />
+                    <MetricCard label="Mutual creation" value={`${overview.matchmakerQuality.mutualMatchCreationRatePct}%`} accent="text-emerald-300" />
+                    <MetricCard label="Avg clarifiers" value={overview.matchmakerQuality.averageClarifyingTurns} />
+                    <MetricCard label="LLM fallback" value={`${overview.matchmakerQuality.llmFallbackRatePct}%`} accent={overview.matchmakerQuality.llmFallbackRatePct > 10 ? "text-amber-300" : "text-white"} />
+                    <MetricCard label="Feedback reasons" value={overview.matchmakerQuality.feedbackReasons7d} />
+                    <MetricCard label="Quota reached" value={overview.matchmakerQuality.quotaReached7d} />
+                </div>
+            </section>
+
+            <section>
+                <div className="mb-4">
                     <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-300">30-day outcomes</h2>
                     <p className="mt-1 text-sm text-gray-500">Useful for tuning ranking after launch.</p>
                 </div>

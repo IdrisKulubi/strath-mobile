@@ -54,3 +54,27 @@ Use structured tags for:
 - Backfill can populate tags for existing eligible profiles.
 - Matchmaker search improves when tags are present.
 - Missing tags do not break search.
+
+## Implementation Notes
+
+- Added structured tag columns to `profile_intelligence`.
+- Extended the Python profile intelligence worker response with `structuredTags`.
+- The worker now emits deterministic MVP tags from profile text, interests, qualities, onboarding answers, and lifestyle answers.
+- The TypeScript worker client accepts optional structured tags.
+- Profile intelligence storage normalizes tags before saving.
+- Matchmaker search uses tag overlap as a relevance boost while preserving text/embedding fallback.
+- Matchmaker feedback memory now learns from structured tags when available.
+
+## Migration
+
+Apply:
+
+```txt
+0032_profile_intelligence_structured_tags.sql
+```
+
+Then rerun the local backfill for profiles that need tags:
+
+```txt
+npx tsx src/scripts/backfill-profile-intelligence.ts --all --limit 25 --only-stale
+```

@@ -55,3 +55,43 @@ The LLM should return structured JSON, not loose prose, for backend decisions.
 - App works with OpenAI or Gemini when configured.
 - Invalid LLM JSON falls back safely.
 - No candidate search happens from LLM output until backend validates it.
+
+## Implementation Notes
+
+- `matchmaker-llm-client.ts` owns the provider abstraction.
+- Supported providers:
+  - `scripted`
+  - `openai`
+  - `gemini`
+- The session service calls the LLM client for each user turn.
+- Assistant messages store provider, model, fallback status, extracted intent, and search plan in message metadata.
+- If OpenAI/Gemini fails, returns invalid JSON, or lacks a key, the service falls back to scripted output.
+- Candidate selection remains out of scope for this phase.
+
+## Environment Notes
+
+Use scripted locally by default:
+
+```txt
+MATCHMAKER_LLM_PROVIDER=scripted
+```
+
+For Gemini:
+
+```txt
+MATCHMAKER_LLM_PROVIDER=gemini
+MATCHMAKER_LLM_MODEL=gemini-2.0-flash
+GOOGLE_GENERATIVE_AI_API_KEY=...
+```
+
+The backend also supports the existing `GEMINI_API_KEY` as a fallback key.
+
+For OpenAI:
+
+```txt
+MATCHMAKER_LLM_PROVIDER=openai
+MATCHMAKER_LLM_MODEL=gpt-4.1-mini
+OPENAI_API_KEY=...
+```
+
+The OpenAI provider uses the Responses API with JSON output, then validates the result with Zod before it can affect matchmaker state.

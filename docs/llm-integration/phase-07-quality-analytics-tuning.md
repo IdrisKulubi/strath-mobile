@@ -58,3 +58,45 @@ Use these findings to adjust:
 - Admin dashboard can show daily health.
 - LLM fallback rate is visible.
 - Repeated candidate rate can be measured.
+
+## Implementation Notes
+
+- Added matchmaker event constants to the shared analytics logger.
+- Added `matchmaker-analytics-service.ts` for consistent event metadata.
+- Events are emitted for:
+  - session started,
+  - intent submitted,
+  - clarification asked,
+  - search plan confirmed,
+  - candidate shown,
+  - profile opened,
+  - interested,
+  - pass,
+  - feedback reason selected,
+  - quota reached.
+- Extended the profile-intelligence admin overview with `matchmakerQuality`.
+- Added admin UI cards for:
+  - sessions,
+  - searches,
+  - repeated candidate rate,
+  - Interested rate,
+  - Pass rate,
+  - mutual creation rate,
+  - average clarifying turns,
+  - LLM fallback rate,
+  - feedback reasons,
+  - quota reached.
+
+## Admin Route
+
+The existing endpoint now includes matchmaker quality:
+
+```txt
+GET /api/admin/profile-intelligence/overview
+```
+
+The existing admin page now renders the metrics:
+
+```txt
+/admin/profile-intelligence
+```

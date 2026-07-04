@@ -67,6 +67,14 @@ export interface MatchmakerConversationSession {
   remainingSearches: number;
   currentIntent: Record<string, unknown>;
   currentPlan: Record<string, unknown>;
+  quota: {
+    used: number;
+    limit: number;
+    remaining: number;
+    resetsAt: string;
+    timezone: 'Africa/Nairobi';
+    limitReason: 'daily_search_limit' | null;
+  };
 }
 
 export interface MatchmakerConversationResponse {

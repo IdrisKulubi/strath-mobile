@@ -74,3 +74,50 @@ export function useSendMatchmakerMessage() {
     },
   });
 }
+
+export function useFindNextMatchmakerCandidate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: ['matchmaker', 'conversation', 'search'],
+    mutationFn: async () => {
+      const response = await apiFetch<{ data: MatchmakerConversationResponse } | MatchmakerConversationResponse>(
+        '/api/matchmaker/session/search',
+        {
+          method: 'POST',
+          timeoutMs: 30_000,
+        },
+      );
+      return unwrapData(response);
+    },
+    onSuccess: (conversation) => {
+      queryClient.setQueryData(['matchmaker', 'conversation'], conversation);
+    },
+  });
+}
+
+export function useSubmitMatchmakerFeedback() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: ['matchmaker', 'conversation', 'feedback'],
+    mutationFn: async (payload: {
+      outcome?: 'interested' | 'passed' | 'not_this_one' | 'refinement';
+      reason?: string;
+      candidateUserId?: string;
+    }) => {
+      const response = await apiFetch<{ data: MatchmakerConversationResponse } | MatchmakerConversationResponse>(
+        '/api/matchmaker/session/feedback',
+        {
+          method: 'POST',
+          body: payload,
+          timeoutMs: 20_000,
+        },
+      );
+      return unwrapData(response);
+    },
+    onSuccess: (conversation) => {
+      queryClient.setQueryData(['matchmaker', 'conversation'], conversation);
+    },
+  });
+}

@@ -42,3 +42,27 @@ Offer useful actions:
 - Conversation can continue after quota.
 - Remaining count is visible in API response.
 - Reset timing is correct for Nairobi day boundaries.
+
+## Implementation Notes
+
+- Matchmaker candidate searches consume quota through `matchmaker_sessions.daily_search_count`.
+- Clarifying conversation turns, feedback, Interested, and Pass do not consume search quota.
+- Session responses now include quota metadata:
+  - `used`
+  - `limit`
+  - `remaining`
+  - `resetsAt`
+  - `timezone`
+  - `limitReason`
+- Reset timing follows Nairobi day boundaries.
+- Limit messages now explain that the matchmaker is preserving quality and offer useful low-cost actions.
+
+## Configuration
+
+Set the daily candidate-search limit with:
+
+```txt
+MATCHMAKER_DAILY_SEARCH_LIMIT=3
+```
+
+This is read when a new daily matchmaker session is created.

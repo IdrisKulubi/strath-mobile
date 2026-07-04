@@ -86,6 +86,14 @@ function asStringArray(value: unknown): string[] {
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function normalizeTags(value: unknown): string[] {
+    return [...new Set(
+        asStringArray(value)
+            .map((item) => item.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""))
+            .filter(Boolean),
+    )].slice(0, 12);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -109,6 +117,14 @@ export function normalizeProfileIntelligenceInput(
 
     return {
         ...normalized,
+        traitTags: normalizeTags(input.traitTags),
+        datingIntentTags: normalizeTags(input.datingIntentTags),
+        socialEnergyTags: normalizeTags(input.socialEnergyTags),
+        lifestyleTags: normalizeTags(input.lifestyleTags),
+        interestTags: normalizeTags(input.interestTags),
+        communicationTags: normalizeTags(input.communicationTags),
+        availabilityTags: normalizeTags(input.availabilityTags),
+        dealbreakerTags: normalizeTags(input.dealbreakerTags),
         candidateStrengthScore: clampScore(
             input.candidateStrengthScore ??
             calculateCandidateStrengthScore(normalized),
@@ -434,6 +450,14 @@ export function mapWorkerAnalysisToProfileIntelligence(input: {
         searchText: input.analysis.searchText,
         textEmbedding: input.analysis.textEmbedding,
         visualEmbedding: input.analysis.visualEmbedding ?? undefined,
+        traitTags: input.analysis.structuredTags?.traitTags ?? [],
+        datingIntentTags: input.analysis.structuredTags?.datingIntentTags ?? [],
+        socialEnergyTags: input.analysis.structuredTags?.socialEnergyTags ?? [],
+        lifestyleTags: input.analysis.structuredTags?.lifestyleTags ?? [],
+        interestTags: input.analysis.structuredTags?.interestTags ?? [],
+        communicationTags: input.analysis.structuredTags?.communicationTags ?? [],
+        availabilityTags: input.analysis.structuredTags?.availabilityTags ?? [],
+        dealbreakerTags: input.analysis.structuredTags?.dealbreakerTags ?? [],
         photoPresentationScore: input.analysis.photoPresentation.photoPresentationScore,
         profileCompletenessScore: profileCompletenessScore(input.profile),
         lastSeenAt: input.lastSeenAt ?? input.profile.lastActive ?? null,
@@ -466,6 +490,14 @@ export async function upsertProfileIntelligence(
                 searchText: values.searchText,
                 textEmbedding: values.textEmbedding,
                 visualEmbedding: values.visualEmbedding,
+                traitTags: values.traitTags,
+                datingIntentTags: values.datingIntentTags,
+                socialEnergyTags: values.socialEnergyTags,
+                lifestyleTags: values.lifestyleTags,
+                interestTags: values.interestTags,
+                communicationTags: values.communicationTags,
+                availabilityTags: values.availabilityTags,
+                dealbreakerTags: values.dealbreakerTags,
                 photoPresentationScore: values.photoPresentationScore,
                 profileCompletenessScore: values.profileCompletenessScore,
                 activityScore: values.activityScore,

@@ -49,6 +49,7 @@ import {
     recordProfileLike,
     recordProfilePass,
 } from "@/lib/services/profile-interaction-service";
+import { recordMatchmakerFeedback } from "@/lib/services/matchmaker-memory-service";
 import {
     calculateActivityScore,
     calculateResponseScore as calculateBehaviorResponseScore,
@@ -1545,6 +1546,20 @@ export async function handleRecommendationDecision(input: {
     } else if (input.decision === "passed") {
         await recordProfilePass(input.viewerUserId, input.candidateUserId, input.source).catch((error) => {
             console.warn("[match-intelligence] profile pass event failed", error);
+        });
+    }
+
+    if (input.source === "matchmaker") {
+        await recordMatchmakerFeedback({
+            userId: input.viewerUserId,
+            candidateUserId: input.candidateUserId,
+            outcome: input.decision === "open_to_meet" ? "interested" : "passed",
+            metadata: {
+                source: "recommendation_decision",
+                matchType: input.matchType,
+            },
+        }).catch((error) => {
+            console.warn("[match-intelligence] matchmaker memory update failed", error);
         });
     }
 

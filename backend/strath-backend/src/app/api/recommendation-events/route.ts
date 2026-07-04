@@ -4,6 +4,7 @@ import { z } from "zod";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { getSessionWithBearerFallback } from "@/lib/security";
 import { recordRecommendationEvent } from "@/lib/services/match-intelligence-service";
+import { trackMatchmakerEvent } from "@/lib/services/matchmaker-analytics-service";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,17 @@ export async function POST(req: NextRequest) {
             viewerUserId: session.user.id,
             ...body,
         });
+        if (body.source === "matchmaker" && body.event === "viewed") {
+            trackMatchmakerEvent({
+                event: "profile_opened",
+                userId: session.user.id,
+                candidateUserId: body.candidateUserId,
+                metadata: {
+                    matchType: body.matchType,
+                    recommendationEventId: event.id,
+                },
+            }).catch(() => undefined);
+        }
         return successResponse({ event });
     } catch (error) {
         console.error("[recommendation-events] Error:", error);

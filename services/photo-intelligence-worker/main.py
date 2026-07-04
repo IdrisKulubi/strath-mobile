@@ -95,6 +95,17 @@ class PhotoPresentationResponse(BaseModel):
     analysisVersion: str = PHOTO_ANALYSIS_VERSION
 
 
+class StructuredProfileTags(BaseModel):
+    traitTags: list[str] = Field(default_factory=list)
+    datingIntentTags: list[str] = Field(default_factory=list)
+    socialEnergyTags: list[str] = Field(default_factory=list)
+    lifestyleTags: list[str] = Field(default_factory=list)
+    interestTags: list[str] = Field(default_factory=list)
+    communicationTags: list[str] = Field(default_factory=list)
+    availabilityTags: list[str] = Field(default_factory=list)
+    dealbreakerTags: list[str] = Field(default_factory=list)
+
+
 class ProfileAnalyzeRequest(BaseModel):
     profile: ProfilePayload
 
@@ -102,6 +113,7 @@ class ProfileAnalyzeRequest(BaseModel):
 class ProfileAnalyzeResponse(BaseModel):
     profileSummary: str
     searchText: str
+    structuredTags: StructuredProfileTags = Field(default_factory=StructuredProfileTags)
     textEmbedding: list[float] = Field(min_length=EMBEDDING_DIM, max_length=EMBEDDING_DIM)
     textEmbeddingProvider: str = TEXT_PROVIDER
     textEmbeddingModel: str = TEXT_MODEL
@@ -171,6 +183,22 @@ def _safe_list(values: list[str], limit: int = 6) -> list[str]:
     return [_clean_text(value) for value in values if _clean_text(value)][:limit]
 
 
+def _tag(value: str) -> str:
+    cleaned = "".join(char.lower() if char.isalnum() else "_" for char in _clean_text(value))
+    return "_".join(part for part in cleaned.split("_") if part)
+
+
+def _unique_tags(values: list[str], limit: int = 12) -> list[str]:
+    tags: list[str] = []
+    for value in values:
+        tag = _tag(value)
+        if tag and tag not in tags:
+            tags.append(tag)
+        if len(tags) >= limit:
+            break
+    return tags
+
+
 def _prompt_responses(prompts: list[dict[str, Any]]) -> list[str]:
     responses: list[str] = []
     for item in prompts:
@@ -203,6 +231,84 @@ def _infer_traits(profile: ProfilePayload) -> list[str]:
 
     traits = [trait for trait, needles in trait_map.items() if any(needle in joined for needle in needles)]
     return traits[:4]
+
+
+def build_structured_tags(profile: ProfilePayload) -> StructuredProfileTags:
+    joined = " ".join(
+        [
+            profile.bio or "",
+            profile.about_me or "",
+            profile.looking_for or "",
+            " ".join(profile.interests),
+            " ".join(profile.qualities),
+            " ".join(str(value) for value in profile.personality_answers.values()),
+            " ".join(str(value) for value in profile.lifestyle_answers.values()),
+        ]
+    ).lower()
+
+    def has_any(*needles: str) -> bool:
+        return any(needle in joined for needle in needles)
+
+    trait_tags = _infer_traits(profile)
+    dating_intent_tags: list[str] = []
+    if has_any("serious", "intentional", "long term", "long-term", "relationship"):
+        dating_intent_tags.append("serious")
+    if has_any("casual", "friends", "friendship"):
+        dating_intent_tags.append("casual")
+    if profile.looking_for:
+        dating_intent_tags.append(profile.looking_for)
+
+    social_energy_tags: list[str] = []
+    if has_any("quiet", "introvert", "calm", "low pressure", "low-pressure"):
+        social_energy_tags.append("low")
+    if has_any("social", "outgoing", "extrovert", "party", "hangout"):
+        social_energy_tags.append("high")
+    if not social_energy_tags and has_any("chill", "balanced", "moderate"):
+        social_energy_tags.append("moderate")
+
+    lifestyle_tags: list[str] = []
+    for label, needles in {
+        "gym": ["gym", "fitness", "workout"],
+        "sports": ["sports", "football", "basketball", "run"],
+        "music": ["music", "spotify", "sing"],
+        "study": ["study", "books", "reading", "library"],
+        "fashion": ["fashion", "style"],
+        "faith": ["church", "faith", "religion"],
+        "nightlife": ["party", "club", "nightlife"],
+    }.items():
+        if has_any(*needles):
+            lifestyle_tags.append(label)
+
+    communication_tags: list[str] = []
+    for label, needles in {
+        "direct": ["direct", "honest", "straightforward"],
+        "deep_talks": ["deep talk", "deep conversation", "thoughtful"],
+        "playful": ["funny", "jokes", "memes", "playful"],
+        "consistent": ["consistent", "reliable", "intentional"],
+    }.items():
+        if has_any(*needles):
+            communication_tags.append(label)
+
+    availability_tags: list[str] = []
+    if has_any("active", "today", "available", "free time"):
+        availability_tags.append("active_recently")
+
+    dealbreaker_tags: list[str] = []
+    if has_any("no smoking", "non smoker", "non-smoker"):
+        dealbreaker_tags.append("no_smoking")
+    if has_any("no party", "doesn't party", "does not party"):
+        dealbreaker_tags.append("low_party")
+
+    return StructuredProfileTags(
+        traitTags=_unique_tags(trait_tags),
+        datingIntentTags=_unique_tags(dating_intent_tags),
+        socialEnergyTags=_unique_tags(social_energy_tags),
+        lifestyleTags=_unique_tags(lifestyle_tags),
+        interestTags=_unique_tags(profile.interests),
+        communicationTags=_unique_tags(communication_tags),
+        availabilityTags=_unique_tags(availability_tags),
+        dealbreakerTags=_unique_tags(dealbreaker_tags),
+    )
 
 
 def build_profile_summary(profile: ProfilePayload) -> ProfileSummaryResponse:
@@ -384,6 +490,7 @@ async def analyze_profile(request: ProfileAnalyzeRequest) -> ProfileAnalyzeRespo
     return ProfileAnalyzeResponse(
         profileSummary=summary.profileSummary,
         searchText=summary.searchText,
+        structuredTags=build_structured_tags(request.profile),
         textEmbedding=text_embedding(text),
         photoPresentation=analyze_photo_bytes(image_bytes, photo_count),
         visualEmbedding=visual_embedding,

@@ -33,6 +33,14 @@ export type MatchmakerCandidateInput = {
     profileSummary?: string | null;
     searchText?: string | null;
     textEmbedding?: number[] | null;
+    traitTags?: string[];
+    datingIntentTags?: string[];
+    socialEnergyTags?: string[];
+    lifestyleTags?: string[];
+    interestTags?: string[];
+    communicationTags?: string[];
+    availabilityTags?: string[];
+    dealbreakerTags?: string[];
     activityScore: number;
     responseScore: number;
     inboundInterestScore: number;
@@ -90,6 +98,37 @@ function keywordScore(intent: MatchmakerParsedIntent, candidate: MatchmakerCandi
     return clampScore((matches.length / Math.min(intent.keywords.length, 8)) * 100);
 }
 
+function normalizeTags(values: string[] | null | undefined) {
+    return (values ?? []).map((value) => value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")).filter(Boolean);
+}
+
+function structuredTagScore(intent: MatchmakerParsedIntent, candidate: MatchmakerCandidateInput) {
+    const requestedTags = new Set([
+        ...normalizeTags(intent.traits),
+        ...normalizeTags(intent.keywords),
+        ...(intent.seriousIntent ? ["serious", "intentional", "relationship"] : []),
+        ...(intent.activeToday ? ["active_recently"] : []),
+    ]);
+    if (requestedTags.size === 0) return 35;
+
+    const candidateTags = new Set([
+        ...normalizeTags(candidate.traitTags),
+        ...normalizeTags(candidate.datingIntentTags),
+        ...normalizeTags(candidate.socialEnergyTags),
+        ...normalizeTags(candidate.lifestyleTags),
+        ...normalizeTags(candidate.interestTags),
+        ...normalizeTags(candidate.communicationTags),
+        ...normalizeTags(candidate.availabilityTags),
+    ]);
+    if (candidateTags.size === 0) return 35;
+
+    let matches = 0;
+    for (const tag of requestedTags) {
+        if (candidateTags.has(tag)) matches += 1;
+    }
+    return clampScore((matches / Math.min(requestedTags.size, 8)) * 100);
+}
+
 function freshnessScore(candidate: MatchmakerCandidateInput) {
     const activityScore = clampScore(candidate.activityScore);
     if (!candidate.lastSeenAt) return activityScore;
@@ -104,10 +143,14 @@ export function buildMatchmakerLabels(intent: MatchmakerParsedIntent, candidate:
     if (candidate.responseScore >= 70) labels.add("Responsive");
     if (candidate.candidateStrengthScore >= 75) labels.add("Strong fit");
     if (candidate.profileCompletenessScore >= 80) labels.add("Complete profile");
-    if (intent.seriousIntent && normalize(candidate.searchText).match(/serious|intentional|relationship|long-term/)) {
+    const datingIntentTags = normalizeTags(candidate.datingIntentTags);
+    const traitTags = normalizeTags(candidate.traitTags);
+    const availabilityTags = normalizeTags(candidate.availabilityTags);
+    if (intent.seriousIntent && (datingIntentTags.some((tag) => ["serious", "intentional", "relationship"].includes(tag)) || normalize(candidate.searchText).match(/serious|intentional|relationship|long-term/))) {
         labels.add("Intentional");
     }
-    if (intent.traits.includes("calm") && normalize(candidate.searchText).match(/calm|chill|quiet|gentle|peaceful/)) {
+    if (intent.activeToday && availabilityTags.includes("active_recently")) labels.add("Active fit");
+    if (intent.traits.includes("calm") && (traitTags.includes("calm") || normalize(candidate.searchText).match(/calm|chill|quiet|gentle|peaceful/))) {
         labels.add("Calm vibe");
     }
 
@@ -128,10 +171,12 @@ export function rankMatchmakerCandidates(input: {
         })
         .map((candidate) => {
             const lexical = keywordScore(input.intent, candidate);
+            const structured = structuredTagScore(input.intent, candidate);
             const semantic = cosineSimilarity(input.intentEmbedding, candidate.textEmbedding) * 100;
+            const textRelevance = lexical * 0.65 + structured * 0.35;
             const relevanceScore = input.intentEmbedding?.length
-                ? semantic * 0.65 + lexical * 0.35
-                : lexical;
+                ? semantic * 0.55 + textRelevance * 0.45
+                : textRelevance;
             const score =
                 relevanceScore * 0.34 +
                 freshnessScore(candidate) * 0.2 +
@@ -228,6 +273,14 @@ async function getCachedCandidates(viewerUserId: string, excludeUserIds: string[
             profileSummary: intelligence.profileSummary,
             searchText: intelligence.searchText,
             textEmbedding: intelligence.textEmbedding,
+            traitTags: intelligence.traitTags,
+            datingIntentTags: intelligence.datingIntentTags,
+            socialEnergyTags: intelligence.socialEnergyTags,
+            lifestyleTags: intelligence.lifestyleTags,
+            interestTags: intelligence.interestTags,
+            communicationTags: intelligence.communicationTags,
+            availabilityTags: intelligence.availabilityTags,
+            dealbreakerTags: intelligence.dealbreakerTags,
             activityScore: intelligence.activityScore,
             responseScore: intelligence.responseScore,
             inboundInterestScore: intelligence.inboundInterestScore,
