@@ -8,7 +8,18 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { BrainCircuit, Search, SendHorizonal } from 'lucide-react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import {
+  ArrowUp,
+  Heart,
+  HeartHandshake,
+  Leaf,
+  Mic,
+  Rocket,
+  Search,
+  Sparkles,
+  Zap,
+} from 'lucide-react-native';
 
 import { Text } from '@/components/ui/text';
 import { MatchmakerCandidateCard } from '@/components/matchmaker/matchmaker-candidate-card';
@@ -27,37 +38,18 @@ import { RADIUS, SPACING } from '@/lib/design-tokens';
 import { useTheme } from '@/hooks/use-theme';
 import type { MatchmakerCandidate, MatchmakerConversationMessage } from '@/types/matchmaker';
 
-function formatRemaining(count: number) {
-  if (count <= 0) return 'Searches reset tomorrow';
-  if (count === 1) return '1 search left today';
-  return `${count} searches left today`;
-}
-
-function getSessionStatus(state: string | undefined, remainingSearches: number) {
-  if (remainingSearches <= 0 || state === 'limit_reached') {
-    return 'Come back tomorrow for a fresh search.';
-  }
-
-  if (state === 'presenting_candidate' || state === 'collecting_feedback') {
-    return 'Review this suggestion, then tell me what to change.';
-  }
-
-  if (state === 'ready_to_search') {
-    return 'I have enough context to start looking.';
-  }
-
-  return 'Tell me what feels right today.';
-}
-
 function MessageBubble({ message }: { message: MatchmakerConversationMessage }) {
   const { colors, isDark } = useTheme();
   const isUser = message.role === 'user';
 
   return (
-    <View style={[styles.messageRow, isUser && styles.userMessageRow]}>
+    <Animated.View
+      entering={FadeInDown.duration(180)}
+      style={[styles.messageRow, isUser && styles.userMessageRow]}
+    >
       {!isUser ? (
-        <View style={[styles.avatar, { backgroundColor: colors.secondary }]}>
-          <BrainCircuit size={17} color={colors.primary} />
+        <View style={[styles.avatar, { backgroundColor: colors.primary, borderColor: colors.primary }]}>
+          <HeartHandshake size={17} color={colors.primaryForeground} />
         </View>
       ) : null}
       <View
@@ -83,7 +75,7 @@ function MessageBubble({ message }: { message: MatchmakerConversationMessage }) 
           {message.text}
         </Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -140,6 +132,7 @@ export function MatchmakerConversation() {
   const remainingSearches = data?.session.remainingSearches ?? 0;
   const canSearch = data?.session.state === 'ready_to_search' || data?.session.state === 'presenting_candidate';
   const isBusy = conversation.isLoading || sendMessage.isPending || findCandidate.isPending || submitFeedback.isPending;
+  const composerSuggestions = ['Calm vibes', 'Emotionally mature', 'Active today'];
 
   const submit = useCallback(async (text: string) => {
     const cleaned = text.trim();
@@ -167,6 +160,15 @@ export function MatchmakerConversation() {
   }, [router]);
 
   const handleQuickReply = useCallback((reply: string) => {
+    const normalized = reply.toLowerCase();
+    if (
+      normalized === 'go ahead and search'
+      || normalized === 'find my person'
+      || normalized === 'search now'
+    ) {
+      findNext().catch(() => undefined);
+      return;
+    }
     if (reply.toLowerCase() === 'not this one') {
       submitFeedback.mutateAsync({ outcome: 'not_this_one' }).catch(() => undefined);
       return;
@@ -205,15 +207,6 @@ export function MatchmakerConversation() {
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.contextRow}>
-        <Text style={[styles.contextText, { color: colors.mutedForeground }]}>
-          {getSessionStatus(data?.session.state, remainingSearches)}
-        </Text>
-        <Text style={[styles.quotaText, { color: colors.mutedForeground }]}>
-          {formatRemaining(remainingSearches)}
-        </Text>
-      </View>
-
       <View style={styles.timeline}>
         {messages.map((message) => {
           const candidate = message.kind === 'candidate' ? getCandidateFromMessage(message) : null;
@@ -292,71 +285,116 @@ export function MatchmakerConversation() {
       ) : null}
 
       {showGenericReplies ? (
-        <View style={styles.quickReplies}>
-          {quickReplies.map((reply) => (
+        <Animated.View
+          entering={FadeIn.duration(180)}
+          style={styles.quickReplies}
+        >
+          {quickReplies.map((reply, index) => {
+            const normalized = reply.toLowerCase();
+            const displayReply = normalized === 'go ahead and search' ? 'Find my person' : reply;
+            const Icon = index === 0 ? Rocket : normalized.includes('serious') ? Heart : Sparkles;
+            return (
             <Pressable
               key={reply}
               accessibilityRole="button"
-              accessibilityLabel={reply}
+              accessibilityLabel={displayReply}
               disabled={isBusy}
               onPress={() => handleQuickReply(reply)}
               style={({ pressed }) => [
                   styles.quickReply,
+                  index === 0 && styles.primaryQuickReply,
                   {
-                    backgroundColor: isDark ? colors.card : colors.background,
-                    borderColor: colors.border,
+                    backgroundColor: index === 0 ? colors.primary : 'rgba(184,50,122,0.08)',
+                    borderColor: index === 0 ? colors.primary : 'rgba(184,50,122,0.10)',
                   },
                   pressed && !isBusy && styles.pressedSecondary,
                   isBusy && styles.disabled,
                 ]}
             >
-              <Text style={[styles.quickReplyText, { color: colors.foreground }]}>
-                {reply}
+              <Icon size={16} color={index === 0 ? colors.primaryForeground : colors.foreground} />
+              <Text
+                style={[
+                  styles.quickReplyText,
+                  { color: index === 0 ? colors.primaryForeground : colors.foreground },
+                ]}
+              >
+                {displayReply}
               </Text>
             </Pressable>
-          ))}
-        </View>
+          );})}
+        </Animated.View>
       ) : null}
 
       <View
         style={[
-          styles.composer,
+          styles.composerDock,
           {
-            backgroundColor: isDark ? colors.card : colors.card,
-            borderColor: colors.border,
+            backgroundColor: 'rgba(253,228,238,0.60)',
+            borderColor: 'rgba(184,50,122,0.14)',
           },
         ]}
       >
-        <TextInput
-          accessibilityLabel="Tell the matchmaker what you want"
-          value={draft}
-          onChangeText={setDraft}
-          placeholder="Tell the matchmaker what you want"
-          placeholderTextColor={colors.mutedForeground}
-          style={[styles.input, { color: colors.foreground }]}
-          multiline
-          textAlignVertical="center"
-          editable={!sendMessage.isPending}
-          returnKeyType="send"
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Send message to matchmaker"
-          disabled={!draft.trim() || sendMessage.isPending}
-          onPress={() => submit(draft).catch(() => undefined)}
-          style={({ pressed }) => [
-              styles.sendButton,
-              { backgroundColor: colors.primary },
-              pressed && draft.trim() && !sendMessage.isPending && styles.pressedPrimary,
-              (!draft.trim() || sendMessage.isPending) && styles.disabled,
-            ]}
-        >
-          {sendMessage.isPending ? (
-            <ActivityIndicator size="small" color={colors.primaryForeground} />
-          ) : (
-            <SendHorizonal size={18} color={colors.primaryForeground} />
-          )}
-        </Pressable>
+        <View style={styles.composerRow}>
+        <View style={[styles.micButton, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Mic size={22} color={colors.primary} />
+        </View>
+          <View style={[styles.inputShell, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TextInput
+              accessibilityLabel="Tell the matchmaker what you want"
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Tell me more about what feels right..."
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.input, { color: colors.foreground }]}
+              multiline
+              textAlignVertical="center"
+              editable={!sendMessage.isPending}
+              returnKeyType="send"
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send message to matchmaker"
+              disabled={!draft.trim() || sendMessage.isPending}
+              onPress={() => submit(draft).catch(() => undefined)}
+              style={({ pressed }) => [
+                  styles.sendButton,
+                  { backgroundColor: colors.primary },
+                  pressed && draft.trim() && !sendMessage.isPending && styles.pressedPrimary,
+                  (!draft.trim() || sendMessage.isPending) && styles.disabled,
+                ]}
+            >
+              {sendMessage.isPending ? (
+                <ActivityIndicator size="small" color={colors.primaryForeground} />
+              ) : (
+                <ArrowUp size={20} color={colors.primaryForeground} />
+              )}
+            </Pressable>
+          </View>
+        </View>
+        <View style={styles.composerSuggestions}>
+          {composerSuggestions.map((suggestion) => {
+            const Icon = suggestion === 'Calm vibes' ? Leaf : suggestion === 'Active today' ? Zap : Heart;
+            const color = suggestion === 'Active today' ? colors.success : suggestion === 'Calm vibes' ? colors.success : colors.primary;
+            return (
+              <Pressable
+                key={suggestion}
+                accessibilityRole="button"
+                accessibilityLabel={suggestion}
+                disabled={isBusy}
+                onPress={() => submit(suggestion).catch(() => undefined)}
+                style={({ pressed }) => [
+                  styles.suggestionChip,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                  pressed && !isBusy && styles.pressedSecondary,
+                  isBusy && styles.disabled,
+                ]}
+              >
+                <Icon size={15} color={color} />
+                <Text style={[styles.suggestionText, { color }]}>{suggestion}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
     </View>
   );
@@ -366,27 +404,8 @@ const styles = StyleSheet.create({
   wrap: {
     gap: SPACING.base,
   },
-  contextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: SPACING.compact,
-  },
-  contextText: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-  },
-  quotaText: {
-    flexShrink: 0,
-    fontSize: 12,
-    lineHeight: 14,
-    fontWeight: '700',
-  },
   timeline: {
-    gap: SPACING.compact,
+    gap: SPACING.base,
   },
   candidateMessage: {
     gap: SPACING.tight,
@@ -403,6 +422,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: RADIUS.full,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -458,25 +478,50 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     borderRadius: RADIUS.full,
     borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.tight,
     paddingHorizontal: 14,
     paddingVertical: 10,
     justifyContent: 'center',
+  },
+  primaryQuickReply: {
+    paddingHorizontal: 16,
   },
   quickReplyText: {
     fontSize: 14,
     lineHeight: 19,
     fontWeight: '700',
   },
-  composer: {
-    minHeight: 54,
-    borderRadius: RADIUS.lg,
+  composerDock: {
+    borderRadius: 28,
     borderWidth: 1,
+    padding: SPACING.compact,
+    gap: SPACING.compact,
+  },
+  composerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.tight,
+  },
+  micButton: {
+    width: 54,
+    height: 54,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inputShell: {
+    flex: 1,
+    minHeight: 54,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingLeft: 14,
-    paddingRight: 8,
-    paddingVertical: 8,
+    paddingRight: 7,
+    gap: SPACING.tight,
   },
   input: {
     flex: 1,
@@ -487,11 +532,31 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   sendButton: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: RADIUS.full,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  composerSuggestions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: SPACING.tight,
+  },
+  suggestionChip: {
+    minHeight: 34,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.micro,
+    paddingHorizontal: SPACING.compact,
+  },
+  suggestionText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
   },
   disabled: {
     opacity: 0.45,

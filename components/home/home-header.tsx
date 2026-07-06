@@ -77,6 +77,10 @@ const styles = StyleSheet.create({
     },
     greeting: {
         ...TYPOGRAPHY.display,
+        fontSize: 40,
+        lineHeight: 44,
+        fontWeight: '800',
+        letterSpacing: 0,
     },
     greetingCompact: {
         ...TYPOGRAPHY.title,
