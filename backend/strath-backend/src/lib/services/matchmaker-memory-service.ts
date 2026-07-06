@@ -54,9 +54,22 @@ function topKeys(signals: Record<string, number>, limit = 5) {
         .map(([key]) => key.replace(/_/g, " "));
 }
 
+function displaySignal(key: string) {
+    return key
+        .replace(/^(avoid|prefer|interest|quality)\s+/, "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function topDisplayLabels(signals: Record<string, number>, limit = 5) {
+    return topKeys(signals, limit)
+        .map(displaySignal)
+        .filter(Boolean);
+}
+
 function summarizeMemory(positiveSignals: Record<string, number>, negativeSignals: Record<string, number>) {
-    const likes = topKeys(positiveSignals, 4);
-    const avoids = topKeys(negativeSignals, 4);
+    const likes = topDisplayLabels(positiveSignals, 4);
+    const avoids = topDisplayLabels(negativeSignals, 4);
     const parts = [];
     if (likes.length > 0) parts.push(`Lean toward ${likes.join(", ")}.`);
     if (avoids.length > 0) parts.push(`Avoid ${avoids.join(", ")}.`);

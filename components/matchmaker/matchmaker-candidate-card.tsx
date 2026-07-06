@@ -1,14 +1,15 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { ChevronRight, Sparkles } from 'lucide-react-native';
+import { ChevronRight, HeartHandshake, ImageIcon } from 'lucide-react-native';
 
+import { CachedImage } from '@/components/ui/cached-image';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
+import { RADIUS, SPACING } from '@/lib/design-tokens';
 import type { MatchmakerCandidate } from '@/types/matchmaker';
 
 interface MatchmakerCandidateCardProps {
   candidate: MatchmakerCandidate;
-  index: number;
   onPress: (candidate: MatchmakerCandidate) => void;
 }
 
@@ -23,53 +24,64 @@ function buildSubtitle(candidate: MatchmakerCandidate) {
 
 export function MatchmakerCandidateCard({
   candidate,
-  index,
   onPress,
 }: MatchmakerCandidateCardProps) {
   const { colors, isDark } = useTheme();
   const labels = useMemo(() => candidate.labels.slice(0, 3), [candidate.labels]);
+  const photo = candidate.profilePhoto ?? candidate.photos?.[0] ?? null;
 
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open profile for ${candidate.firstName || 'this match'}${candidate.age ? `, ${candidate.age}` : ''}. Suggested by your matchmaker.`}
+      accessibilityHint="Opens their full profile so you can choose Interested or Pass."
       onPress={() => onPress(candidate)}
-      style={[
-        styles.card,
-        {
-          backgroundColor: isDark ? colors.card : '#fff',
-          borderColor: colors.border,
-          shadowColor: isDark ? '#000' : '#1C1524',
-        },
-      ]}
+      style={({ pressed }) => [
+          styles.card,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            shadowColor: isDark ? colors.background : colors.foreground,
+          },
+          pressed && styles.pressed,
+        ]}
     >
-      <View style={styles.topRow}>
-        <View style={[styles.avatar, { backgroundColor: colors.secondary }]}>
-          <Text style={[styles.avatarText, { color: colors.primary }]}>
-            {getInitial(candidate.firstName)}
-          </Text>
+      <View style={styles.headerRow}>
+        <View style={[styles.photoFrame, { backgroundColor: colors.secondary }]}>
+          {photo ? (
+            <CachedImage uri={photo} style={styles.photo} fallbackType="avatar" contentFit="cover" />
+          ) : (
+            <View style={styles.photoFallback}>
+              <Text style={[styles.avatarText, { color: colors.primary }]}>
+                {getInitial(candidate.firstName)}
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.identity}>
+          <View style={[styles.introPill, { backgroundColor: colors.secondary }]}>
+            <HeartHandshake size={12} color={colors.primary} />
+            <Text style={[styles.introText, { color: colors.primary }]}>Matchmaker pick</Text>
+          </View>
           <View style={styles.nameRow}>
-            <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
+            <Text style={[styles.name, { color: colors.foreground }]}>
               {candidate.firstName || 'Someone new'}
               {candidate.age ? `, ${candidate.age}` : ''}
             </Text>
-            <View style={[styles.rankBadge, { backgroundColor: colors.secondary }]}>
-              <Sparkles size={11} color={colors.primary} />
-              <Text style={[styles.rankText, { color: colors.primary }]}>#{index + 1}</Text>
-            </View>
           </View>
-          <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
             {buildSubtitle(candidate)}
           </Text>
         </View>
-
-        <ChevronRight size={18} color={colors.mutedForeground} />
       </View>
 
-      <Text style={[styles.reason, { color: colors.foreground }]} numberOfLines={3}>
-        {candidate.reason}
-      </Text>
+      <View style={[styles.reasonBlock, { backgroundColor: isDark ? colors.secondary : colors.background }]}>
+        <Text style={[styles.reasonLabel, { color: colors.mutedForeground }]}>Why this person</Text>
+        <Text style={[styles.reason, { color: colors.foreground }]}>
+          {candidate.reason}
+        </Text>
+      </View>
 
       {labels.length > 0 ? (
         <View style={styles.chips}>
@@ -79,89 +91,129 @@ export function MatchmakerCandidateCard({
               style={[
                 styles.chip,
                 {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F3F0F5',
+                  backgroundColor: isDark ? colors.secondary : colors.background,
                   borderColor: colors.border,
                 },
               ]}
             >
-              <Text style={[styles.chipText, { color: colors.mutedForeground }]} numberOfLines={1}>
+              <Text style={[styles.chipText, { color: colors.mutedForeground }]}>
                 {label}
               </Text>
             </View>
           ))}
         </View>
       ) : null}
+
+      <View style={[styles.openRow, { borderTopColor: colors.border }]}>
+        <View style={styles.openCopy}>
+          <ImageIcon size={15} color={colors.mutedForeground} />
+          <Text style={[styles.openHint, { color: colors.mutedForeground }]}>
+            Open profile to decide
+          </Text>
+        </View>
+        <View style={styles.openAction}>
+          <Text style={[styles.openText, { color: colors.primary }]}>View profile</Text>
+          <ChevronRight size={17} color={colors.primary} />
+        </View>
+      </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 18,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
-    padding: 14,
-    gap: 12,
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 2,
+    padding: SPACING.base,
+    gap: SPACING.compact,
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 1,
   },
-  topRow: {
+  pressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: SPACING.compact,
   },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  photoFrame: {
+    width: 68,
+    height: 82,
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
+  },
+  photoFallback: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '800',
   },
   identity: {
     flex: 1,
     minWidth: 0,
+    gap: SPACING.micro,
+  },
+  introPill: {
+    alignSelf: 'flex-start',
+    minHeight: 26,
+    borderRadius: RADIUS.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  introText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '800',
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   name: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  rankBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  rankText: {
-    fontSize: 11,
+    fontSize: 20,
+    lineHeight: 25,
     fontWeight: '800',
   },
   subtitle: {
-    marginTop: 3,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  reasonBlock: {
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.compact,
+    paddingVertical: SPACING.tight,
+    gap: 3,
+  },
+  reasonLabel: {
     fontSize: 12,
-    fontWeight: '500',
+    lineHeight: 16,
+    fontWeight: '700',
   },
   reason: {
-    fontSize: 14,
+    fontSize: 15,
     lineHeight: 20,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: SPACING.tight,
   },
   chip: {
     maxWidth: '100%',
@@ -173,5 +225,38 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  openRow: {
+    minHeight: 44,
+    borderTopWidth: 1,
+    paddingTop: SPACING.tight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.compact,
+  },
+  openCopy: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  openHint: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  openAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  openText: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '800',
   },
 });

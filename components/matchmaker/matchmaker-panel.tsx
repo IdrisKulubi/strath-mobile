@@ -104,17 +104,20 @@ export function MatchmakerPanel({ onOpenProfile }: MatchmakerPanelProps) {
           {QUICK_PROMPTS.map((prompt) => (
             <Pressable
               key={prompt}
+              accessibilityRole="button"
+              accessibilityLabel={`Use prompt: ${prompt}`}
               onPress={() => choosePrompt(prompt)}
               disabled={search.isPending}
-              style={[
-                styles.quickChip,
-                {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F0F5',
-                  borderColor: colors.border,
-                },
-              ]}
+              style={({ pressed }) => [
+                  styles.quickChip,
+                  {
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F0F5',
+                    borderColor: colors.border,
+                  },
+                  pressed && !search.isPending && styles.pressedSecondary,
+                ]}
             >
-              <Text style={[styles.quickText, { color: colors.foreground }]} numberOfLines={2}>
+              <Text style={[styles.quickText, { color: colors.foreground }]}>
                 {prompt}
               </Text>
             </Pressable>
@@ -122,13 +125,17 @@ export function MatchmakerPanel({ onOpenProfile }: MatchmakerPanelProps) {
         </View>
 
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Find my people"
+          accessibilityHint="Searches matchmaker candidates from your typed preference."
           onPress={() => runSearch().catch(() => undefined)}
           disabled={!canSearch}
-          style={[
-            styles.searchButton,
-            { backgroundColor: colors.primary },
-            !canSearch && styles.disabled,
-          ]}
+          style={({ pressed }) => [
+              styles.searchButton,
+              { backgroundColor: colors.primary },
+              pressed && canSearch && styles.pressedPrimary,
+              !canSearch && styles.disabled,
+            ]}
         >
           {search.isPending ? (
             <ActivityIndicator color={colors.primaryForeground} />
@@ -191,11 +198,10 @@ export function MatchmakerPanel({ onOpenProfile }: MatchmakerPanelProps) {
           ) : null}
 
           <View style={styles.cards}>
-            {result.candidates.map((candidate, index) => (
+            {result.candidates.map((candidate) => (
               <MatchmakerCandidateCard
                 key={candidate.candidateUserId}
                 candidate={candidate}
-                index={index}
                 onPress={openCandidate}
               />
             ))}
@@ -287,6 +293,14 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.55,
+  },
+  pressedPrimary: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  pressedSecondary: {
+    opacity: 0.86,
+    transform: [{ scale: 0.98 }],
   },
   searchText: {
     fontSize: 15,

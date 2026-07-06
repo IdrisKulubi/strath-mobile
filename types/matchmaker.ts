@@ -10,6 +10,8 @@ export interface MatchmakerCandidate {
   age: number | null;
   university: string | null;
   course: string | null;
+  profilePhoto?: string | null;
+  photos?: string[];
   reason: string;
   labels: string[];
 }

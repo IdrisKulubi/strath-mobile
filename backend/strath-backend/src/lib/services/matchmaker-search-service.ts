@@ -30,6 +30,8 @@ export type MatchmakerCandidateInput = {
     age?: number | null;
     university?: string | null;
     course?: string | null;
+    profilePhoto?: string | null;
+    photos?: string[] | null;
     profileSummary?: string | null;
     searchText?: string | null;
     textEmbedding?: number[] | null;
@@ -57,6 +59,8 @@ export type RankedMatchmakerCandidate = {
     age: number | null;
     university: string | null;
     course: string | null;
+    profilePhoto: string | null;
+    photos: string[];
     reason: string;
     labels: string[];
     internalScore: number;
@@ -135,6 +139,17 @@ function freshnessScore(candidate: MatchmakerCandidateInput) {
     return activityScore;
 }
 
+function cleanPhotos(photos: string[] | null | undefined) {
+    return (photos ?? []).filter((photo): photo is string => typeof photo === "string" && photo.trim().length > 0);
+}
+
+function primaryPhoto(candidate: MatchmakerCandidateInput) {
+    const profilePhoto = typeof candidate.profilePhoto === "string" && candidate.profilePhoto.trim().length > 0
+        ? candidate.profilePhoto
+        : null;
+    return profilePhoto ?? cleanPhotos(candidate.photos)[0] ?? null;
+}
+
 export function buildMatchmakerLabels(intent: MatchmakerParsedIntent, candidate: MatchmakerCandidateInput) {
     const labels = new Set<string>();
     if (candidate.activityScore >= 80) labels.add("Active today");
@@ -196,6 +211,8 @@ export function rankMatchmakerCandidates(input: {
                 age: candidate.age ?? null,
                 university: candidate.university ?? null,
                 course: candidate.course ?? null,
+                profilePhoto: primaryPhoto(candidate),
+                photos: cleanPhotos(candidate.photos),
                 labels,
                 reason,
                 internalScore: clampScore(score),
@@ -270,6 +287,8 @@ async function getCachedCandidates(viewerUserId: string, excludeUserIds: string[
             age: profile.age,
             university: profile.university,
             course: profile.course,
+            profilePhoto: profile.profilePhoto,
+            photos: profile.photos,
             profileSummary: intelligence.profileSummary,
             searchText: intelligence.searchText,
             textEmbedding: intelligence.textEmbedding,

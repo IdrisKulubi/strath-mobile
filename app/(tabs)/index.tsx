@@ -17,7 +17,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import { HomeHeader } from '@/components/home/home-header';
 import { HomeMatchmakerEntry } from '@/components/home/home-matchmaker-entry';
-import { MatchmakerConversation } from '@/components/matchmaker';
+import { MatchmakerHomeShell } from '@/components/matchmaker';
 import { HomeTabSwitcher, type HomeTab } from '@/components/home/home-tab-switcher';
 import { InterestedInYouSection } from '@/components/home/interested-in-you-section';
 import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/decision-info-sheet';
@@ -73,12 +73,13 @@ export default function HomeScreen() {
                 <ScrollView
                     style={styles.scroll}
                     contentContainerStyle={styles.matchmakerContent}
+                    keyboardDismissMode="interactive"
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
                 >
                     <HomeHeader firstName={profile?.firstName} />
                     <View style={styles.matchmakerHost}>
-                        <MatchmakerConversation />
+                        <MatchmakerHomeShell />
                     </View>
                 </ScrollView>
             </SafeAreaView>

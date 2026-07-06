@@ -13,6 +13,11 @@ import { BrainCircuit, Search, SendHorizonal } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { MatchmakerCandidateCard } from '@/components/matchmaker/matchmaker-candidate-card';
 import {
+  isMatchmakerFeedbackReply,
+  MatchmakerFeedbackPanel,
+} from '@/components/matchmaker/matchmaker-feedback-panel';
+import { MatchmakerStatePanel } from '@/components/matchmaker/matchmaker-state-panel';
+import {
   useFindNextMatchmakerCandidate,
   useMatchmakerConversation,
   useSendMatchmakerMessage,
@@ -26,6 +31,22 @@ function formatRemaining(count: number) {
   if (count <= 0) return 'Searches reset tomorrow';
   if (count === 1) return '1 search left today';
   return `${count} searches left today`;
+}
+
+function getSessionStatus(state: string | undefined, remainingSearches: number) {
+  if (remainingSearches <= 0 || state === 'limit_reached') {
+    return 'Come back tomorrow for a fresh search.';
+  }
+
+  if (state === 'presenting_candidate' || state === 'collecting_feedback') {
+    return 'Review this suggestion, then tell me what to change.';
+  }
+
+  if (state === 'ready_to_search') {
+    return 'I have enough context to start looking.';
+  }
+
+  return 'Tell me what feels right today.';
 }
 
 function MessageBubble({ message }: { message: MatchmakerConversationMessage }) {
@@ -78,9 +99,18 @@ function getCandidateFromMessage(message: MatchmakerConversationMessage): Matchm
     age: candidateRecord.age ?? null,
     university: candidateRecord.university ?? null,
     course: candidateRecord.course ?? null,
+    profilePhoto: typeof candidateRecord.profilePhoto === 'string' ? candidateRecord.profilePhoto : null,
+    photos: Array.isArray(candidateRecord.photos) ? candidateRecord.photos.filter((photo): photo is string => typeof photo === 'string') : [],
     reason: candidateRecord.reason ?? message.text,
     labels: Array.isArray(candidateRecord.labels) ? candidateRecord.labels : [],
   };
+}
+
+function isNoResultMessage(message: MatchmakerConversationMessage | null) {
+  if (!message) return false;
+  return message.kind === 'text'
+    && typeof message.metadata?.searchedCachedCandidates === 'number'
+    && typeof message.metadata?.excludedAlreadyShown === 'number';
 }
 
 export function MatchmakerConversation() {
@@ -98,16 +128,17 @@ export function MatchmakerConversation() {
     () => data?.quickReplies?.filter(Boolean).slice(0, 7) ?? [],
     [data?.quickReplies],
   );
+  const latestAssistantMessage = useMemo(
+    () => [...messages].reverse().find((message) => message.role === 'assistant') ?? null,
+    [messages],
+  );
+  const showFeedbackPanel = latestAssistantMessage?.kind === 'feedback' && quickReplies.length > 0;
+  const showLimitPanel = latestAssistantMessage?.kind === 'limit';
+  const showNoResultPanel = isNoResultMessage(latestAssistantMessage);
+  const showStatePanel = showLimitPanel || showNoResultPanel;
+  const showGenericReplies = quickReplies.length > 0 && !showFeedbackPanel && !showStatePanel;
   const remainingSearches = data?.session.remainingSearches ?? 0;
   const canSearch = data?.session.state === 'ready_to_search' || data?.session.state === 'presenting_candidate';
-  const feedbackReasons = useMemo(() => new Set([
-    'Not my vibe',
-    'Too social',
-    'Too quiet',
-    'Not serious enough',
-    'Not active enough',
-    'Different lifestyle',
-  ]), []);
   const isBusy = conversation.isLoading || sendMessage.isPending || findCandidate.isPending || submitFeedback.isPending;
 
   const submit = useCallback(async (text: string) => {
@@ -140,7 +171,7 @@ export function MatchmakerConversation() {
       submitFeedback.mutateAsync({ outcome: 'not_this_one' }).catch(() => undefined);
       return;
     }
-    if (feedbackReasons.has(reply)) {
+    if (isMatchmakerFeedbackReply(reply) && reply !== 'Skip feedback') {
       submitFeedback.mutateAsync({ outcome: 'not_this_one', reason: reply }).catch(() => undefined);
       return;
     }
@@ -153,52 +184,34 @@ export function MatchmakerConversation() {
       return;
     }
     submit(reply).catch(() => undefined);
-  }, [feedbackReasons, findNext, submit, submitFeedback]);
+  }, [findNext, submit, submitFeedback]);
 
-  if (conversation.isLoading) {
+  if (conversation.isLoading && messages.length === 0) {
     return (
-      <View style={[styles.stateCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
-        <ActivityIndicator color={colors.primary} />
-        <Text style={[styles.stateText, { color: colors.mutedForeground }]}>
-          Opening your matchmaker
-        </Text>
-      </View>
+      <MatchmakerStatePanel variant="loading" />
     );
   }
 
-  if (conversation.isError) {
+  if (conversation.isError && messages.length === 0) {
     return (
-      <View style={[styles.stateCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
-        <Text style={[styles.stateTitle, { color: colors.foreground }]}>
-          Matchmaker is not available
-        </Text>
-        <Text style={[styles.stateText, { color: colors.mutedForeground }]}>
-          {conversation.error instanceof Error ? conversation.error.message : 'Try again in a moment.'}
-        </Text>
-        <Pressable
-          onPress={() => conversation.refetch()}
-          style={[styles.retryButton, { borderColor: colors.border }]}
-        >
-          <Text style={[styles.retryText, { color: colors.foreground }]}>Try again</Text>
-        </Pressable>
-      </View>
+      <MatchmakerStatePanel
+        variant="error"
+        body={conversation.error instanceof Error ? conversation.error.message : undefined}
+        busy={conversation.isFetching}
+        onRetry={() => conversation.refetch()}
+      />
     );
   }
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.topRow}>
-        <View>
-          <Text style={[styles.kicker, { color: colors.primary }]}>AI Matchmaker</Text>
-          <Text style={[styles.title, { color: colors.foreground }]}>
-            Let us find the right person today.
-          </Text>
-        </View>
-        <View style={[styles.quotaPill, { backgroundColor: colors.secondary }]}>
-          <Text style={[styles.quotaText, { color: colors.mutedForeground }]}>
-            {formatRemaining(remainingSearches)}
-          </Text>
-        </View>
+      <View style={styles.contextRow}>
+        <Text style={[styles.contextText, { color: colors.mutedForeground }]}>
+          {getSessionStatus(data?.session.state, remainingSearches)}
+        </Text>
+        <Text style={[styles.quotaText, { color: colors.mutedForeground }]}>
+          {formatRemaining(remainingSearches)}
+        </Text>
       </View>
 
       <View style={styles.timeline}>
@@ -210,7 +223,6 @@ export function MatchmakerConversation() {
                 <MessageBubble message={{ ...message, text: message.text }} />
                 <MatchmakerCandidateCard
                   candidate={candidate}
-                  index={Number(message.metadata?.position ?? 1) - 1}
                   onPress={openCandidate}
                 />
               </View>
@@ -220,43 +232,85 @@ export function MatchmakerConversation() {
         })}
       </View>
 
-      {canSearch ? (
-        <Pressable
-          disabled={isBusy || remainingSearches <= 0}
-          onPress={() => findNext().catch(() => undefined)}
-          style={[
-            styles.searchButton,
-            { backgroundColor: colors.primary },
-            (isBusy || remainingSearches <= 0) && styles.disabled,
-          ]}
-        >
-          {findCandidate.isPending ? (
-            <ActivityIndicator size="small" color={colors.primaryForeground} />
-          ) : (
-            <Search size={17} color={colors.primaryForeground} />
-          )}
-          <Text style={[styles.searchButtonText, { color: colors.primaryForeground }]}>
-            {data?.session.state === 'presenting_candidate' ? 'Find another' : 'Find my person'}
-          </Text>
-        </Pressable>
+      {conversation.isError ? (
+        <MatchmakerStatePanel
+          variant="inline_error"
+          body={conversation.error instanceof Error ? conversation.error.message : undefined}
+          busy={conversation.isFetching}
+          onRetry={() => conversation.refetch()}
+        />
       ) : null}
 
-      {quickReplies.length > 0 ? (
+      {canSearch ? (
+        <View style={styles.searchAction}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={data?.session.state === 'presenting_candidate' ? 'Find another matchmaker suggestion' : 'Find my person'}
+            accessibilityHint={data?.session.state === 'presenting_candidate' ? "Uses one of today's searches." : 'Asks the matchmaker to search for a compatible person.'}
+            disabled={isBusy || remainingSearches <= 0}
+            onPress={() => findNext().catch(() => undefined)}
+            style={({ pressed }) => [
+                styles.searchButton,
+                { backgroundColor: colors.primary },
+                pressed && !isBusy && remainingSearches > 0 && styles.pressedPrimary,
+                (isBusy || remainingSearches <= 0) && styles.disabled,
+              ]}
+          >
+            {findCandidate.isPending ? (
+              <ActivityIndicator size="small" color={colors.primaryForeground} />
+            ) : (
+              <Search size={17} color={colors.primaryForeground} />
+            )}
+            <Text style={[styles.searchButtonText, { color: colors.primaryForeground }]}>
+              {data?.session.state === 'presenting_candidate' ? 'Find another' : 'Find my person'}
+            </Text>
+          </Pressable>
+          {data?.session.state === 'presenting_candidate' ? (
+            <Text style={[styles.searchHint, { color: colors.mutedForeground }]}>
+              Uses one of today's searches.
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {showFeedbackPanel && latestAssistantMessage ? (
+        <MatchmakerFeedbackPanel
+          message={latestAssistantMessage}
+          replies={quickReplies}
+          busy={isBusy}
+          onSelect={handleQuickReply}
+        />
+      ) : null}
+
+      {showStatePanel && latestAssistantMessage ? (
+        <MatchmakerStatePanel
+          variant={showLimitPanel ? 'limit' : 'no_result'}
+          replies={quickReplies}
+          busy={isBusy}
+          onReply={handleQuickReply}
+        />
+      ) : null}
+
+      {showGenericReplies ? (
         <View style={styles.quickReplies}>
           {quickReplies.map((reply) => (
             <Pressable
               key={reply}
+              accessibilityRole="button"
+              accessibilityLabel={reply}
               disabled={isBusy}
               onPress={() => handleQuickReply(reply)}
-              style={[
-                styles.quickReply,
-                {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : colors.card,
-                  borderColor: colors.border,
-                },
-              ]}
+              style={({ pressed }) => [
+                  styles.quickReply,
+                  {
+                    backgroundColor: isDark ? colors.card : colors.background,
+                    borderColor: colors.border,
+                  },
+                  pressed && !isBusy && styles.pressedSecondary,
+                  isBusy && styles.disabled,
+                ]}
             >
-              <Text style={[styles.quickReplyText, { color: colors.foreground }]} numberOfLines={2}>
+              <Text style={[styles.quickReplyText, { color: colors.foreground }]}>
                 {reply}
               </Text>
             </Pressable>
@@ -274,6 +328,7 @@ export function MatchmakerConversation() {
         ]}
       >
         <TextInput
+          accessibilityLabel="Tell the matchmaker what you want"
           value={draft}
           onChangeText={setDraft}
           placeholder="Tell the matchmaker what you want"
@@ -282,15 +337,19 @@ export function MatchmakerConversation() {
           multiline
           textAlignVertical="center"
           editable={!sendMessage.isPending}
+          returnKeyType="send"
         />
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Send message to matchmaker"
           disabled={!draft.trim() || sendMessage.isPending}
           onPress={() => submit(draft).catch(() => undefined)}
-          style={[
-            styles.sendButton,
-            { backgroundColor: colors.primary },
-            (!draft.trim() || sendMessage.isPending) && styles.disabled,
-          ]}
+          style={({ pressed }) => [
+              styles.sendButton,
+              { backgroundColor: colors.primary },
+              pressed && draft.trim() && !sendMessage.isPending && styles.pressedPrimary,
+              (!draft.trim() || sendMessage.isPending) && styles.disabled,
+            ]}
         >
           {sendMessage.isPending ? (
             <ActivityIndicator size="small" color={colors.primaryForeground} />
@@ -307,31 +366,22 @@ const styles = StyleSheet.create({
   wrap: {
     gap: SPACING.base,
   },
-  topRow: {
+  contextRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: SPACING.compact,
   },
-  kicker: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '800',
-  },
-  title: {
-    marginTop: 3,
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: '800',
-    maxWidth: 260,
-  },
-  quotaPill: {
-    borderRadius: RADIUS.full,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+  contextText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
   },
   quotaText: {
-    fontSize: 11,
+    flexShrink: 0,
+    fontSize: 12,
     lineHeight: 14,
     fontWeight: '700',
   },
@@ -375,6 +425,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   quickReplies: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: SPACING.tight,
   },
   searchButton: {
@@ -386,14 +438,25 @@ const styles = StyleSheet.create({
     gap: SPACING.tight,
     paddingHorizontal: 16,
   },
+  searchAction: {
+    gap: SPACING.tight,
+  },
   searchButtonText: {
     fontSize: 15,
     lineHeight: 20,
     fontWeight: '800',
   },
+  searchHint: {
+    marginTop: -SPACING.tight,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   quickReply: {
     minHeight: 46,
-    borderRadius: RADIUS.lg,
+    maxWidth: '100%',
+    borderRadius: RADIUS.full,
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -405,8 +468,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   composer: {
-    minHeight: 58,
-    borderRadius: 20,
+    minHeight: 54,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -433,37 +496,12 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.45,
   },
-  stateCard: {
-    minHeight: 180,
-    borderRadius: 22,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.tight,
-    padding: SPACING.base,
+  pressedPrimary: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
   },
-  stateTitle: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  stateText: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  retryButton: {
-    minHeight: 44,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  retryText: {
-    fontSize: 14,
-    fontWeight: '700',
+  pressedSecondary: {
+    opacity: 0.86,
+    transform: [{ scale: 0.98 }],
   },
 });
