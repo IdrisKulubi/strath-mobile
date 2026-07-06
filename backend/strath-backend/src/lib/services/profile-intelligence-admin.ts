@@ -4,7 +4,11 @@ import db from "@/db/drizzle";
 import {
     candidatePairs,
     dailyShortlists,
+    analyticsEvents,
     matchmakerIntents,
+    matchmakerMessages,
+    matchmakerSessionResults,
+    matchmakerSessions,
     mutualMatches,
     profiles,
     profileIntelligence,
@@ -58,6 +62,21 @@ export type ProfileIntelligenceAdminOverview = {
         reciprocalMatchRatePct: number;
         mutualMatches: number;
         averageTimeToFirstMutualHours: number | null;
+    };
+    matchmakerQuality: {
+        sessions7d: number;
+        searches7d: number;
+        candidatesShown7d: number;
+        repeatedCandidateRatePct: number;
+        interestedCount7d: number;
+        interestedRatePct: number;
+        passCount7d: number;
+        passRatePct: number;
+        mutualMatchCreationRatePct: number;
+        averageClarifyingTurns: number;
+        llmFallbackRatePct: number;
+        feedbackReasons7d: number;
+        quotaReached7d: number;
     };
     tuning: {
         profileIntelligenceWeightEnabled: boolean;
@@ -166,6 +185,11 @@ export async function getProfileIntelligenceAdminOverview(): Promise<ProfileInte
         mutualRows,
         incomingRows,
         timeToFirstMutualRows,
+        matchmakerSessionRows,
+        matchmakerResultRows,
+        matchmakerDecisionRows,
+        matchmakerMessageRows,
+        matchmakerAnalyticsRows,
     ] = await Promise.all([
         getEligibleProfileCount(),
         db.select({
@@ -217,6 +241,39 @@ export async function getProfileIntelligenceAdminOverview(): Promise<ProfileInte
             .from(mutualMatches)
             .innerJoin(candidatePairs, eq(candidatePairs.id, mutualMatches.candidatePairId))
             .where(gte(mutualMatches.createdAt, thirtyDaysAgo)),
+        db.select({
+            sessions7d: sql<number>`count(*)::int`,
+        })
+            .from(matchmakerSessions)
+            .where(gte(matchmakerSessions.createdAt, sevenDaysAgo)),
+        db.select({
+            searches7d: sql<number>`count(*)::int`,
+            distinctCandidates7d: sql<number>`count(distinct ${matchmakerSessionResults.candidateUserId})::int`,
+            candidatesShown7d: sql<number>`count(*)::int`,
+        })
+            .from(matchmakerSessionResults)
+            .where(gte(matchmakerSessionResults.createdAt, sevenDaysAgo)),
+        db.select({
+            decisions7d: sql<number>`count(*) filter (where ${recommendationEvents.decision} in ('open_to_meet', 'passed'))::int`,
+            interestedCount7d: sql<number>`count(*) filter (where ${recommendationEvents.decision} = 'open_to_meet')::int`,
+            passCount7d: sql<number>`count(*) filter (where ${recommendationEvents.decision} = 'passed')::int`,
+            mutualCreated7d: sql<number>`count(*) filter (where ${recommendationEvents.createdCandidatePairId} is not null)::int`,
+        })
+            .from(recommendationEvents)
+            .where(and(eq(recommendationEvents.source, "matchmaker"), gte(recommendationEvents.shownAt, sevenDaysAgo))),
+        db.select({
+            clarifyingTurns7d: sql<number>`count(*) filter (where ${matchmakerMessages.kind} = 'clarifying_question')::int`,
+            llmTurns7d: sql<number>`count(*) filter (where ${matchmakerMessages.metadata}->>'provider' is not null)::int`,
+            llmFallbacks7d: sql<number>`count(*) filter (where ${matchmakerMessages.metadata}->>'fallbackUsed' = 'true')::int`,
+        })
+            .from(matchmakerMessages)
+            .where(gte(matchmakerMessages.createdAt, sevenDaysAgo)),
+        db.select({
+            feedbackReasons7d: sql<number>`count(*) filter (where ${analyticsEvents.eventType} = 'matchmaker_feedback_reason_selected')::int`,
+            quotaReached7d: sql<number>`count(*) filter (where ${analyticsEvents.eventType} = 'matchmaker_quota_reached')::int`,
+        })
+            .from(analyticsEvents)
+            .where(gte(analyticsEvents.createdAt, sevenDaysAgo)),
     ]);
 
     const coverage = coverageRows[0];
@@ -227,6 +284,11 @@ export async function getProfileIntelligenceAdminOverview(): Promise<ProfileInte
     const mutual = mutualRows[0];
     const incoming = incomingRows[0];
     const timeToFirstMutual = timeToFirstMutualRows[0];
+    const matchmakerSessionMetrics = matchmakerSessionRows[0];
+    const matchmakerResultMetrics = matchmakerResultRows[0];
+    const matchmakerDecisionMetrics = matchmakerDecisionRows[0];
+    const matchmakerMessageMetrics = matchmakerMessageRows[0];
+    const matchmakerAnalyticsMetrics = matchmakerAnalyticsRows[0];
 
     const intelligenceRecords = num(coverage?.intelligenceRecords);
     const staleRecords = num(coverage?.staleRecords);
@@ -250,6 +312,17 @@ export async function getProfileIntelligenceAdminOverview(): Promise<ProfileInte
     const rollingDecisions = num(rolling?.decisions);
     const rollingOpenToMeet = num(rolling?.openToMeetCount);
     const mutualMatchCount = num(mutual?.mutualMatches);
+    const matchmakerSessions7d = num(matchmakerSessionMetrics?.sessions7d);
+    const matchmakerSearches7d = num(matchmakerResultMetrics?.searches7d);
+    const matchmakerCandidatesShown7d = num(matchmakerResultMetrics?.candidatesShown7d);
+    const matchmakerDistinctCandidates7d = num(matchmakerResultMetrics?.distinctCandidates7d);
+    const matchmakerDecisions7d = num(matchmakerDecisionMetrics?.decisions7d);
+    const matchmakerInterested7d = num(matchmakerDecisionMetrics?.interestedCount7d);
+    const matchmakerPass7d = num(matchmakerDecisionMetrics?.passCount7d);
+    const matchmakerMutualCreated7d = num(matchmakerDecisionMetrics?.mutualCreated7d);
+    const clarifyingTurns7d = num(matchmakerMessageMetrics?.clarifyingTurns7d);
+    const llmTurns7d = num(matchmakerMessageMetrics?.llmTurns7d);
+    const llmFallbacks7d = num(matchmakerMessageMetrics?.llmFallbacks7d);
 
     return {
         generatedAt: now.toISOString(),
@@ -291,6 +364,23 @@ export async function getProfileIntelligenceAdminOverview(): Promise<ProfileInte
             averageTimeToFirstMutualHours: timeToFirstMutual?.averageHours == null
                 ? null
                 : Math.round(num(timeToFirstMutual.averageHours) * 10) / 10,
+        },
+        matchmakerQuality: {
+            sessions7d: matchmakerSessions7d,
+            searches7d: matchmakerSearches7d,
+            candidatesShown7d: matchmakerCandidatesShown7d,
+            repeatedCandidateRatePct: pct(Math.max(0, matchmakerCandidatesShown7d - matchmakerDistinctCandidates7d), matchmakerCandidatesShown7d),
+            interestedCount7d: matchmakerInterested7d,
+            interestedRatePct: pct(matchmakerInterested7d, matchmakerDecisions7d),
+            passCount7d: matchmakerPass7d,
+            passRatePct: pct(matchmakerPass7d, matchmakerDecisions7d),
+            mutualMatchCreationRatePct: pct(matchmakerMutualCreated7d, matchmakerInterested7d),
+            averageClarifyingTurns: matchmakerSessions7d <= 0
+                ? 0
+                : Math.round((clarifyingTurns7d / matchmakerSessions7d) * 10) / 10,
+            llmFallbackRatePct: pct(llmFallbacks7d, llmTurns7d),
+            feedbackReasons7d: num(matchmakerAnalyticsMetrics?.feedbackReasons7d),
+            quotaReached7d: num(matchmakerAnalyticsMetrics?.quotaReached7d),
         },
         tuning: {
             profileIntelligenceWeightEnabled: profileIntelligenceWeightEnabled(),

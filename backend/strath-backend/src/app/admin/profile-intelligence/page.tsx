@@ -2,6 +2,9 @@ import Link from "next/link";
 
 import { getAdminProfileIntelligenceOverview } from "@/lib/actions/admin";
 
+type MatchmakerQuality = Awaited<ReturnType<typeof getAdminProfileIntelligenceOverview>>["matchmakerQuality"];
+type RolloutTone = "good" | "watch" | "neutral";
+
 function MetricCard({
     label,
     value,
@@ -22,6 +25,20 @@ function MetricCard({
     );
 }
 
+function RolloutStatusPill({ tone, label }: { tone: RolloutTone; label: string }) {
+    const tones = {
+        good: "border-emerald-500/25 bg-emerald-500/10 text-emerald-200",
+        watch: "border-amber-500/25 bg-amber-500/10 text-amber-200",
+        neutral: "border-white/10 bg-white/5 text-gray-300",
+    };
+
+    return (
+        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${tones[tone]}`}>
+            {label}
+        </span>
+    );
+}
+
 function StatusBadge({ status }: { status: "healthy" | "warning" | "critical" }) {
     const tones = {
         healthy: "border-emerald-500/30 bg-emerald-500/15 text-emerald-300",
@@ -33,6 +50,140 @@ function StatusBadge({ status }: { status: "healthy" | "warning" | "critical" })
         <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${tones[status]}`}>
             {status}
         </span>
+    );
+}
+
+function RolloutReadinessRow({
+    label,
+    value,
+    hint,
+    tone,
+    status,
+}: {
+    label: string;
+    value: string;
+    hint: string;
+    tone: RolloutTone;
+    status: string;
+}) {
+    return (
+        <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+            <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-medium text-gray-200">{label}</p>
+                <RolloutStatusPill tone={tone} label={status} />
+            </div>
+            <p className="mt-3 text-2xl font-bold text-white">{value}</p>
+            <p className="mt-1 text-xs leading-5 text-gray-500">{hint}</p>
+        </div>
+    );
+}
+
+function QaChecklistItem({ label }: { label: string }) {
+    return (
+        <li className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-300">
+            <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-pink-300" />
+            <span>{label}</span>
+        </li>
+    );
+}
+
+function MatchmakerRolloutPanel({ quality }: { quality: MatchmakerQuality }) {
+    const hasTraffic = quality.sessions7d > 0 || quality.searches7d > 0 || quality.candidatesShown7d > 0;
+    const repeatTone: RolloutTone = !hasTraffic ? "neutral" : quality.repeatedCandidateRatePct > 25 ? "watch" : "good";
+    const interestedTone: RolloutTone = !hasTraffic ? "neutral" : quality.interestedRatePct < 15 ? "watch" : "good";
+    const llmTone: RolloutTone = !hasTraffic ? "neutral" : quality.llmFallbackRatePct > 10 ? "watch" : "good";
+    const quotaTone: RolloutTone = !hasTraffic ? "neutral" : quality.quotaReached7d > Math.max(5, quality.sessions7d * 0.25) ? "watch" : "good";
+
+    const qaItems = [
+        "New user starts Home with no matchmaker session.",
+        "Returning user resumes an active matchmaker session.",
+        "Quota remaining shows the next useful candidate action.",
+        "Quota reached shows a calm recovery path.",
+        "No candidates state gives a next step, not a dead end.",
+        "Feedback memory changes the next search.",
+        "Network or API failure keeps the user on Home with retry.",
+        "Matchmaker profile Interested creates the right decision.",
+        "Matchmaker profile Pass creates the right decision.",
+        "Mutual match creation works from matchmaker source.",
+    ];
+
+    const watchItems = [
+        "Repeat candidate rate above 25%.",
+        "LLM fallback rate above 10%.",
+        "Interested rate below old discovery baseline.",
+        "Quota reached grows faster than sessions.",
+        "Support reports mention homepage confusion.",
+    ];
+
+    return (
+        <section className="rounded-xl border border-white/10 bg-white/5 p-6">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-pink-200/80">Phase 7 rollout</p>
+                    <h2 className="mt-1 text-lg font-semibold text-white">Matchmaker launch readiness</h2>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
+                        Use this before widening the homepage rollout. It combines behavior signals with the manual QA cases that protect the new matchmaker flow.
+                    </p>
+                </div>
+                <RolloutStatusPill tone={hasTraffic ? "good" : "neutral"} label={hasTraffic ? "Live signals" : "Waiting"} />
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <RolloutReadinessRow
+                    label="Candidate variety"
+                    value={`${quality.repeatedCandidateRatePct}%`}
+                    hint={`${quality.candidatesShown7d} candidates shown in the last 7 days.`}
+                    tone={repeatTone}
+                    status={repeatTone === "watch" ? "Watch" : hasTraffic ? "Good" : "No traffic"}
+                />
+                <RolloutReadinessRow
+                    label="Decision quality"
+                    value={`${quality.interestedRatePct}%`}
+                    hint={`${quality.interestedCount7d} Interested from matchmaker decisions.`}
+                    tone={interestedTone}
+                    status={interestedTone === "watch" ? "Watch" : hasTraffic ? "Good" : "No traffic"}
+                />
+                <RolloutReadinessRow
+                    label="LLM stability"
+                    value={`${quality.llmFallbackRatePct}%`}
+                    hint="Fallbacks should stay low so the assistant feels consistent."
+                    tone={llmTone}
+                    status={llmTone === "watch" ? "Watch" : hasTraffic ? "Good" : "No traffic"}
+                />
+                <RolloutReadinessRow
+                    label="Quota pressure"
+                    value={`${quality.quotaReached7d}`}
+                    hint={`${quality.sessions7d} sessions in the last 7 days.`}
+                    tone={quotaTone}
+                    status={quotaTone === "watch" ? "Watch" : hasTraffic ? "Good" : "No traffic"}
+                />
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+                <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-semibold text-gray-200">QA checklist</h3>
+                        <span className="text-xs text-gray-500">Run before each rollout step</span>
+                    </div>
+                    <ul className="mt-3 grid gap-2 md:grid-cols-2">
+                        {qaItems.map((item) => (
+                            <QaChecklistItem key={item} label={item} />
+                        ))}
+                    </ul>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                    <h3 className="text-sm font-semibold text-gray-200">Watch before widening</h3>
+                    <div className="mt-3 space-y-2">
+                        {watchItems.map((item) => (
+                            <p key={item} className="rounded-lg bg-white/[0.03] px-3 py-2 text-sm text-gray-400">
+                                {item}
+                            </p>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </section>
     );
 }
 
@@ -123,6 +274,27 @@ export default async function AdminProfileIntelligencePage() {
                     <MetricCard label="Waiting likes" value={overview.dailyRecommendations.incomingInterestWaitingCount} accent="text-cyan-300" />
                 </div>
             </section>
+
+            <section>
+                <div className="mb-4">
+                    <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-300">Matchmaker quality</h2>
+                    <p className="mt-1 text-sm text-gray-500">Last 7 days of conversation-driven search.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">
+                    <MetricCard label="Sessions" value={overview.matchmakerQuality.sessions7d} />
+                    <MetricCard label="Searches" value={overview.matchmakerQuality.searches7d} accent="text-cyan-300" />
+                    <MetricCard label="Repeat rate" value={`${overview.matchmakerQuality.repeatedCandidateRatePct}%`} accent={overview.matchmakerQuality.repeatedCandidateRatePct > 25 ? "text-amber-300" : "text-white"} />
+                    <MetricCard label="Interested rate" value={`${overview.matchmakerQuality.interestedRatePct}%`} accent="text-pink-300" />
+                    <MetricCard label="Pass rate" value={`${overview.matchmakerQuality.passRatePct}%`} />
+                    <MetricCard label="Mutual creation" value={`${overview.matchmakerQuality.mutualMatchCreationRatePct}%`} accent="text-emerald-300" />
+                    <MetricCard label="Avg clarifiers" value={overview.matchmakerQuality.averageClarifyingTurns} />
+                    <MetricCard label="LLM fallback" value={`${overview.matchmakerQuality.llmFallbackRatePct}%`} accent={overview.matchmakerQuality.llmFallbackRatePct > 10 ? "text-amber-300" : "text-white"} />
+                    <MetricCard label="Feedback reasons" value={overview.matchmakerQuality.feedbackReasons7d} />
+                    <MetricCard label="Quota reached" value={overview.matchmakerQuality.quotaReached7d} />
+                </div>
+            </section>
+
+            <MatchmakerRolloutPanel quality={overview.matchmakerQuality} />
 
             <section>
                 <div className="mb-4">

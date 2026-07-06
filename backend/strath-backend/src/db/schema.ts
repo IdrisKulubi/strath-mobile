@@ -477,6 +477,14 @@ export const profileIntelligence = pgTable(
         searchText: text("search_text"),
         textEmbedding: vector("text_embedding", { dimension: 768 }),
         visualEmbedding: vector("visual_embedding", { dimension: 768 }),
+        traitTags: jsonb("trait_tags").$type<string[]>().default([]).notNull(),
+        datingIntentTags: jsonb("dating_intent_tags").$type<string[]>().default([]).notNull(),
+        socialEnergyTags: jsonb("social_energy_tags").$type<string[]>().default([]).notNull(),
+        lifestyleTags: jsonb("lifestyle_tags").$type<string[]>().default([]).notNull(),
+        interestTags: jsonb("interest_tags").$type<string[]>().default([]).notNull(),
+        communicationTags: jsonb("communication_tags").$type<string[]>().default([]).notNull(),
+        availabilityTags: jsonb("availability_tags").$type<string[]>().default([]).notNull(),
+        dealbreakerTags: jsonb("dealbreaker_tags").$type<string[]>().default([]).notNull(),
         photoPresentationScore: integer("photo_presentation_score").default(0).notNull(),
         profileCompletenessScore: integer("profile_completeness_score").default(0).notNull(),
         activityScore: integer("activity_score").default(0).notNull(),
@@ -545,6 +553,126 @@ export const matchmakerIntents = pgTable(
     (table) => ({
         userIdx: index("matchmaker_intents_user_idx").on(table.userId),
         createdAtIdx: index("matchmaker_intents_created_at_idx").on(table.createdAt),
+    }),
+);
+
+export const matchmakerSessions = pgTable(
+    "matchmaker_sessions",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        sessionDay: text("session_day").notNull(),
+        status: text("status")
+            .$type<"active" | "completed" | "expired">()
+            .default("active")
+            .notNull(),
+        state: text("state")
+            .$type<
+                | "greeting"
+                | "collecting_intent"
+                | "clarifying"
+                | "ready_to_search"
+                | "presenting_candidate"
+                | "collecting_feedback"
+                | "limit_reached"
+            >()
+            .default("greeting")
+            .notNull(),
+        dailySearchCount: integer("daily_search_count").default(0).notNull(),
+        searchLimit: integer("search_limit").default(3).notNull(),
+        currentIntent: jsonb("current_intent").$type<Record<string, unknown>>().default({}).notNull(),
+        currentPlan: jsonb("current_plan").$type<Record<string, unknown>>().default({}).notNull(),
+        lastCandidateUserId: text("last_candidate_user_id").references(() => user.id, { onDelete: "set null" }),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userDayIdx: index("matchmaker_sessions_user_day_idx").on(table.userId, table.sessionDay),
+        statusIdx: index("matchmaker_sessions_status_idx").on(table.status),
+        updatedAtIdx: index("matchmaker_sessions_updated_at_idx").on(table.updatedAt),
+    }),
+);
+
+export const matchmakerMessages = pgTable(
+    "matchmaker_messages",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        sessionId: uuid("session_id")
+            .notNull()
+            .references(() => matchmakerSessions.id, { onDelete: "cascade" }),
+        role: text("role")
+            .$type<"user" | "assistant" | "system">()
+            .notNull(),
+        kind: text("kind")
+            .$type<"greeting" | "text" | "intent" | "clarifying_question" | "search_plan" | "candidate" | "feedback" | "limit">()
+            .default("text")
+            .notNull(),
+        text: text("text").notNull(),
+        quickReplies: jsonb("quick_replies").$type<string[]>().default([]).notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        sessionCreatedIdx: index("matchmaker_messages_session_created_idx").on(table.sessionId, table.createdAt),
+        roleIdx: index("matchmaker_messages_role_idx").on(table.role),
+    }),
+);
+
+export const matchmakerSessionResults = pgTable(
+    "matchmaker_session_results",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        sessionId: uuid("session_id")
+            .notNull()
+            .references(() => matchmakerSessions.id, { onDelete: "cascade" }),
+        viewerUserId: text("viewer_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        candidateUserId: text("candidate_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        position: integer("position").notNull(),
+        score: integer("score").default(0).notNull(),
+        reason: text("reason"),
+        labels: jsonb("labels").$type<string[]>().default([]).notNull(),
+        intentSnapshot: jsonb("intent_snapshot").$type<Record<string, unknown>>().default({}).notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        sessionIdx: index("matchmaker_session_results_session_idx").on(table.sessionId),
+        viewerIdx: index("matchmaker_session_results_viewer_idx").on(table.viewerUserId),
+        candidateIdx: index("matchmaker_session_results_candidate_idx").on(table.candidateUserId),
+        sessionCandidateUniqueIdx: uniqueIndex("matchmaker_session_results_session_candidate_unique_idx").on(table.sessionId, table.candidateUserId),
+    }),
+);
+
+export const matchmakerUserMemory = pgTable(
+    "matchmaker_user_memory",
+    {
+        userId: text("user_id")
+            .primaryKey()
+            .references(() => user.id, { onDelete: "cascade" }),
+        positiveSignals: jsonb("positive_signals").$type<Record<string, number>>().default({}).notNull(),
+        negativeSignals: jsonb("negative_signals").$type<Record<string, number>>().default({}).notNull(),
+        feedbackHistory: jsonb("feedback_history").$type<{
+            candidateUserId?: string;
+            outcome: "interested" | "passed" | "not_this_one" | "refinement";
+            reason?: string;
+            signals: string[];
+            createdAt: string;
+        }[]>().default([]).notNull(),
+        memorySummary: text("memory_summary"),
+        lastFeedbackAt: timestamp("last_feedback_at"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        updatedAtIdx: index("matchmaker_user_memory_updated_at_idx").on(table.updatedAt),
+        lastFeedbackIdx: index("matchmaker_user_memory_last_feedback_idx").on(table.lastFeedbackAt),
     }),
 );
 
@@ -809,7 +937,7 @@ export const recommendationEvents = pgTable(
             .notNull()
             .references(() => user.id, { onDelete: "cascade" }),
         source: text("source")
-            .$type<"daily_recommendations" | "browse" | "admin_curated" | "available_now">()
+            .$type<"daily_recommendations" | "browse" | "matchmaker" | "admin_curated" | "available_now">()
             .notNull(),
         matchType: text("match_type")
             .$type<"similarity" | "complementary" | "discovery" | "high_activity" | "admin_curated">(),
@@ -884,7 +1012,7 @@ export const userMatchInterests = pgTable(
             .$type<"open_to_meet" | "passed">()
             .notNull(),
         source: text("source")
-            .$type<"daily_recommendations" | "browse" | "admin_curated" | "available_now">()
+            .$type<"daily_recommendations" | "browse" | "matchmaker" | "admin_curated" | "available_now">()
             .notNull(),
         matchType: text("match_type")
             .$type<"similarity" | "complementary" | "discovery" | "high_activity" | "admin_curated">(),
@@ -1380,6 +1508,7 @@ export const userRelations = relations(user, ({ one, many }) => ({
     profileIntelligence: one(profileIntelligence),
     profileIntelligenceJobs: many(profileIntelligenceJobs),
     matchmakerIntents: many(matchmakerIntents),
+    matchmakerSessions: many(matchmakerSessions),
     sessions: many(session),
     accounts: many(account),
 }));
@@ -1538,6 +1667,50 @@ export const profileIntelligenceJobsRelations = relations(profileIntelligenceJob
 export const matchmakerIntentsRelations = relations(matchmakerIntents, ({ one }) => ({
     user: one(user, {
         fields: [matchmakerIntents.userId],
+        references: [user.id],
+    }),
+}));
+
+export const matchmakerSessionsRelations = relations(matchmakerSessions, ({ one, many }) => ({
+    user: one(user, {
+        fields: [matchmakerSessions.userId],
+        references: [user.id],
+    }),
+    lastCandidate: one(user, {
+        fields: [matchmakerSessions.lastCandidateUserId],
+        references: [user.id],
+    }),
+    messages: many(matchmakerMessages),
+    results: many(matchmakerSessionResults),
+}));
+
+export const matchmakerMessagesRelations = relations(matchmakerMessages, ({ one }) => ({
+    session: one(matchmakerSessions, {
+        fields: [matchmakerMessages.sessionId],
+        references: [matchmakerSessions.id],
+    }),
+}));
+
+export const matchmakerSessionResultsRelations = relations(matchmakerSessionResults, ({ one }) => ({
+    session: one(matchmakerSessions, {
+        fields: [matchmakerSessionResults.sessionId],
+        references: [matchmakerSessions.id],
+    }),
+    viewer: one(user, {
+        fields: [matchmakerSessionResults.viewerUserId],
+        references: [user.id],
+        relationName: "matchmakerResultViewer",
+    }),
+    candidate: one(user, {
+        fields: [matchmakerSessionResults.candidateUserId],
+        references: [user.id],
+        relationName: "matchmakerResultCandidate",
+    }),
+}));
+
+export const matchmakerUserMemoryRelations = relations(matchmakerUserMemory, ({ one }) => ({
+    user: one(user, {
+        fields: [matchmakerUserMemory.userId],
         references: [user.id],
     }),
 }));
@@ -2464,6 +2637,14 @@ export type ProfileIntelligenceJob = typeof profileIntelligenceJobs.$inferSelect
 export type NewProfileIntelligenceJob = typeof profileIntelligenceJobs.$inferInsert;
 export type MatchmakerIntent = typeof matchmakerIntents.$inferSelect;
 export type NewMatchmakerIntent = typeof matchmakerIntents.$inferInsert;
+export type MatchmakerSession = typeof matchmakerSessions.$inferSelect;
+export type NewMatchmakerSession = typeof matchmakerSessions.$inferInsert;
+export type MatchmakerMessage = typeof matchmakerMessages.$inferSelect;
+export type NewMatchmakerMessage = typeof matchmakerMessages.$inferInsert;
+export type MatchmakerSessionResult = typeof matchmakerSessionResults.$inferSelect;
+export type NewMatchmakerSessionResult = typeof matchmakerSessionResults.$inferInsert;
+export type MatchmakerUserMemory = typeof matchmakerUserMemory.$inferSelect;
+export type NewMatchmakerUserMemory = typeof matchmakerUserMemory.$inferInsert;
 export type FaceVerificationJob = typeof faceVerificationJobs.$inferSelect;
 export type NewFaceVerificationJob = typeof faceVerificationJobs.$inferInsert;
 export type FaceVerificationAssistance = typeof faceVerificationAssistance.$inferSelect;

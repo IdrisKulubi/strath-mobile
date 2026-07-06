@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/toast';
 import { useTheme } from '@/hooks/use-theme';
 import { useUserProfile } from '@/hooks/use-user-profile';
 import { useRespondToDailyPair } from '@/hooks/use-daily-matches';
+import { useSubmitMatchmakerFeedback } from '@/hooks/use-matchmaker';
 import {
     MatchType,
     RecommendationSource,
@@ -52,7 +53,7 @@ import {
 } from '@/components/profile-view/profile-view-sections';
 
 const ALREADY_RESPONDED_MSG = 'You have already responded to this pair';
-const RECOMMENDATION_SOURCES: RecommendationSource[] = ['daily_recommendations', 'admin_curated', 'available_now'];
+const RECOMMENDATION_SOURCES: RecommendationSource[] = ['daily_recommendations', 'matchmaker', 'admin_curated', 'available_now'];
 const MATCH_TYPES: MatchType[] = ['similarity', 'complementary', 'discovery', 'high_activity', 'admin_curated'];
 
 function getSingleParam(value: string | string[] | undefined) {
@@ -88,6 +89,7 @@ export default function ProfileViewScreen() {
     const respondToPair = useRespondToDailyPair();
     const recommendationDecision = useRecommendationDecision();
     const recommendationEvent = useRecommendationEvent();
+    const matchmakerFeedback = useSubmitMatchmakerFeedback();
     const hasLoggedProfileView = useRef(false);
     const [fullScreenPhotoUri, setFullScreenPhotoUri] = useState<string | null>(null);
     const [infoSheet, setInfoSheet] = useState<{ visible: boolean; type: DecisionSheetType }>({
@@ -106,6 +108,7 @@ export default function ProfileViewScreen() {
             : undefined
     ), [matchTypeParam]);
     const canUseRecommendationDecision = Boolean(recommendationSource && userId);
+    const isMatchmakerProfile = recommendationSource === 'matchmaker';
 
     useEffect(() => {
         if (!userId || !recommendationSource || hasLoggedProfileView.current) {
@@ -151,6 +154,12 @@ export default function ProfileViewScreen() {
                 {
                     onSuccess: ({ result }) => {
                         updateProfileDecision('open_to_meet');
+                        if (isMatchmakerProfile) {
+                            matchmakerFeedback.mutate({
+                                outcome: 'interested',
+                                candidateUserId: userId,
+                            });
+                        }
                         toast.show({
                             message: result.mutualMatchCreated
                                 ? "It's mutual. Check Dates."
@@ -177,6 +186,12 @@ export default function ProfileViewScreen() {
             {
                 onSuccess: () => {
                     updateProfileDecision('open_to_meet');
+                    if (isMatchmakerProfile && userId) {
+                        matchmakerFeedback.mutate({
+                            outcome: 'interested',
+                            candidateUserId: userId,
+                        });
+                    }
                     setInfoSheet({ visible: true, type: 'open_to_meet' });
                 },
                 onError: (err) => {
@@ -196,6 +211,8 @@ export default function ProfileViewScreen() {
         );
     }, [
         canUseRecommendationDecision,
+        isMatchmakerProfile,
+        matchmakerFeedback,
         profile?.pairId,
         recommendationDecision,
         recommendationMatchType,
@@ -220,8 +237,16 @@ export default function ProfileViewScreen() {
                 {
                     onSuccess: () => {
                         updateProfileDecision('passed');
+                        if (isMatchmakerProfile) {
+                            matchmakerFeedback.mutate({
+                                outcome: 'passed',
+                                candidateUserId: userId,
+                            });
+                        }
                         toast.show({
-                            message: 'Passed. Tomorrow\'s picks will learn from this.',
+                            message: isMatchmakerProfile
+                                ? 'Passed. The matchmaker will adjust.'
+                                : 'Passed. Tomorrow\'s picks will learn from this.',
                             variant: 'default',
                             position: 'bottom',
                         });
@@ -243,6 +268,13 @@ export default function ProfileViewScreen() {
             { pairId: profile.pairId, decision: 'passed' },
             {
                 onSuccess: () => {
+                    updateProfileDecision('passed');
+                    if (isMatchmakerProfile && userId) {
+                        matchmakerFeedback.mutate({
+                            outcome: 'passed',
+                            candidateUserId: userId,
+                        });
+                    }
                     setInfoSheet({ visible: true, type: 'pass' });
                 },
                 onError: () => {
@@ -256,6 +288,8 @@ export default function ProfileViewScreen() {
         );
     }, [
         canUseRecommendationDecision,
+        isMatchmakerProfile,
+        matchmakerFeedback,
         profile?.pairId,
         recommendationDecision,
         recommendationMatchType,
@@ -269,10 +303,14 @@ export default function ProfileViewScreen() {
     const handleCloseInfoSheet = useCallback(() => {
         const wasPass = infoSheet.type === 'pass';
         setInfoSheet((state) => ({ ...state, visible: false }));
+        if (isMatchmakerProfile) {
+            router.replace('/(tabs)');
+            return;
+        }
         if (wasPass) {
             router.back();
         }
-    }, [infoSheet.type, router]);
+    }, [infoSheet.type, isMatchmakerProfile, router]);
 
     if (isLoading) {
         return (
@@ -534,11 +572,19 @@ export default function ProfileViewScreen() {
                 </View>
             </ScrollView>
 
+            {isMatchmakerProfile ? (
+                <View style={[styles.matchmakerDecisionNote, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+                    <Text style={[styles.matchmakerDecisionText, { color: colors.mutedForeground }]}>
+                        Suggested by your matchmaker. Your decision updates the next search.
+                    </Text>
+                </View>
+            ) : null}
+
             <ProfileViewCta
                 onOpenToMeet={handleOpenToMeet}
                 onPass={profile.pairId || canUseRecommendationDecision ? handlePass : undefined}
                 completed={profile.currentUserDecision !== 'pending'}
-                disabled={(!profile.pairId && !canUseRecommendationDecision) || respondToPair.isPending || recommendationDecision.isPending}
+                disabled={(!profile.pairId && !canUseRecommendationDecision) || respondToPair.isPending || recommendationDecision.isPending || matchmakerFeedback.isPending}
                 label={profile.pairId || canUseRecommendationDecision ? 'Interested' : "Not in today's curated set"}
                 safetyTarget={{
                     userId: profile.userId,
@@ -582,6 +628,18 @@ const styles = StyleSheet.create({
         paddingTop: 20,
         paddingBottom: 28,
         gap: 24,
+    },
+    matchmakerDecisionNote: {
+        borderTopWidth: 1,
+        paddingHorizontal: 20,
+        paddingTop: 10,
+        paddingBottom: 2,
+    },
+    matchmakerDecisionText: {
+        fontSize: 12,
+        lineHeight: 16,
+        fontWeight: '600',
+        textAlign: 'center',
     },
     nameSection: {
         gap: 4,

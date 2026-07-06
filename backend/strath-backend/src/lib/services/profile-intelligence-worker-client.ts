@@ -45,9 +45,21 @@ export interface WorkerPhotoPresentationResponse {
     analysisVersion: string;
 }
 
+export interface WorkerStructuredProfileTags {
+    traitTags: string[];
+    datingIntentTags: string[];
+    socialEnergyTags: string[];
+    lifestyleTags: string[];
+    interestTags: string[];
+    communicationTags: string[];
+    availabilityTags: string[];
+    dealbreakerTags: string[];
+}
+
 export interface WorkerProfileAnalyzeResponse {
     profileSummary: string;
     searchText: string;
+    structuredTags?: WorkerStructuredProfileTags;
     textEmbedding: number[];
     textEmbeddingProvider: string;
     textEmbeddingModel: string;

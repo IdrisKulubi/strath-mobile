@@ -73,6 +73,7 @@ class ProfileIntelligenceWorkerTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual(len(body["textEmbedding"]), 768)
+        self.assertIn("reading", body["structuredTags"]["interestTags"])
         self.assertEqual(body["photoPresentation"]["photoPresentationScore"], 0)
         self.assertIsNone(body["visualEmbedding"])
 

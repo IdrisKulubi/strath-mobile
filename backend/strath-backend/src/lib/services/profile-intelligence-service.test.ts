@@ -253,6 +253,16 @@ test("mapWorkerAnalysisToProfileIntelligence normalizes worker result for storag
         analysis: {
             profileSummary: "Amina seems calm.",
             searchText: "name: Amina",
+            structuredTags: {
+                traitTags: ["Calm", "Intentional"],
+                datingIntentTags: ["Serious"],
+                socialEnergyTags: ["Low"],
+                lifestyleTags: ["Coffee"],
+                interestTags: ["Reading"],
+                communicationTags: ["Deep talks"],
+                availabilityTags: ["Active recently"],
+                dealbreakerTags: [],
+            },
             textEmbedding: Array.from({ length: 768 }, () => 0),
             textEmbeddingProvider: "text-hash",
             textEmbeddingModel: "profile-text-hash-v1",
@@ -275,6 +285,9 @@ test("mapWorkerAnalysisToProfileIntelligence normalizes worker result for storag
 
     assert.equal(mapped.userId, "user-1");
     assert.equal(mapped.profileSummary, "Amina seems calm.");
+    assert.deepEqual(mapped.traitTags, ["calm", "intentional"]);
+    assert.deepEqual(mapped.datingIntentTags, ["serious"]);
+    assert.deepEqual(mapped.communicationTags, ["deep_talks"]);
     assert.equal(mapped.photoPresentationScore, 87);
     assert.equal(mapped.profileCompletenessScore, 100);
     assert.ok((mapped.candidateStrengthScore ?? 0) > 0);
