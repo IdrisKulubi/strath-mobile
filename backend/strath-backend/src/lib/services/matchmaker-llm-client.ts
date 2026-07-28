@@ -10,6 +10,49 @@ export interface MatchmakerLlmInput {
     state: MatchmakerConversationState;
     currentIntent?: Record<string, unknown>;
     recentMessages?: Array<{ role: "user" | "assistant" | "system"; text: string }>;
+    memorySummary?: string | null;
+}
+
+export interface MatchmakerVoiceContext {
+    recentMessages?: Array<{ role: "user" | "assistant" | "system"; text: string }>;
+    memorySummary?: string | null;
+}
+
+export interface MatchmakerGreetingInput extends MatchmakerVoiceContext {
+    firstName?: string | null;
+}
+
+export interface MatchmakerCandidateIntroInput extends MatchmakerVoiceContext {
+    firstName?: string | null;
+    age?: number | null;
+    university?: string | null;
+    course?: string | null;
+    labels: string[];
+    matchReason: string;
+    intentText?: string;
+}
+
+export interface MatchmakerFeedbackReplyInput extends MatchmakerVoiceContext {
+    outcome: string;
+    reason?: string | null;
+    asksForReason?: boolean;
+}
+
+export interface MatchmakerLimitReplyInput extends MatchmakerVoiceContext {
+    used: number;
+    limit: number;
+}
+
+export interface MatchmakerSearchStatusReplyInput extends MatchmakerVoiceContext {
+    status: "needs_intent" | "no_result";
+    intentText?: string;
+}
+
+export interface MatchmakerVoiceReply {
+    text: string;
+    provider: MatchmakerLlmProvider;
+    model: string;
+    fallbackUsed: boolean;
 }
 
 export interface MatchmakerLlmTurn {
@@ -68,6 +111,28 @@ const CLARIFY_REPLIES = [
     "Low-drama and consistent",
     "A mix of all three",
 ];
+
+const MATCHMAKER_VOICE_SYSTEM = `You are the StrathSpace matchmaker — a warm, perceptive friend helping university students find someone on campus. You sound human, not like a chatbot or customer support.
+
+Voice rules:
+- Short sentences. Campus-casual, never corporate.
+- Mirror the user's energy when you have their words.
+- One idea per message. No bullet lists in the spoken reply.
+- Never invent profile details beyond what you are given.
+- Never infer gender or pronouns. Use the candidate's first name or singular "they".
+- Never promise a match or guarantee chemistry.
+- Use first names only when provided.
+- Avoid: "Got it.", "I understand.", "Certainly!", "As an AI", "I'd be happy to help."
+
+Good tone examples:
+- "Okay — calm and intentional. That's a clear direction. Want me to start searching?"
+- "I'd start with Maya — active lately, with the calm, serious signals you asked me to prioritize."
+- "Fair enough. Too much social energy can feel draining. I'll steer away from that next round."
+`;
+
+const MATCHMAKER_JSON_CONTRACT = `Return valid JSON only. Follow the matchmaker contract exactly.
+The "reply" field must sound like the voice described above — warm, specific, and conversational.
+Keep replies under 55 words.`;
 
 function uniqueStrings(values: string[]) {
     return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
@@ -173,10 +238,10 @@ function inferScriptedTurn(input: MatchmakerLlmInput): MatchmakerLlmTurn {
         messageType: shouldClarify ? "clarifying_question" : "search_plan",
         shouldClarify,
         reply: shouldClarify
-            ? "When you say that, what matters most: emotional maturity, a quiet personality, or someone low-drama and consistent?"
-            : `That makes sense. I would search for ${[...priorities].slice(0, 3).join(", ")} and avoid people you have already passed or seen in this session. Should I go ahead?`,
+            ? "Tell me what matters most here — emotional maturity, a quieter personality, or someone low-drama and consistent?"
+            : `Okay — I'd lean into ${[...priorities].slice(0, 3).join(", ")} and skip anyone you've already passed or seen today. Want me to search?`,
         clarifyingQuestion: shouldClarify
-            ? "What matters most: emotional maturity, a quiet personality, or someone low-drama and consistent?"
+            ? "What matters most here — emotional maturity, a quieter personality, or someone low-drama and consistent?"
             : null,
         quickReplies: shouldClarify ? CLARIFY_REPLIES : READY_REPLIES,
         intent: {
@@ -197,29 +262,37 @@ function inferScriptedTurn(input: MatchmakerLlmInput): MatchmakerLlmTurn {
     };
 }
 
-function buildPrompt(input: MatchmakerLlmInput) {
-    const recentMessages = (input.recentMessages ?? [])
+function formatRecentMessages(messages?: MatchmakerVoiceContext["recentMessages"]) {
+    return (messages ?? [])
         .slice(-8)
         .map((message) => `${message.role}: ${message.text}`)
         .join("\n");
+}
 
-    return `You are the StrathSpace AI matchmaker for university students.
-Your goal is to help the user find a partner inside StrathSpace.
-You are warm, direct, emotionally intelligent, and practical.
+function buildPrompt(input: MatchmakerLlmInput) {
+    const recentMessages = formatRecentMessages(input.recentMessages);
+    const memoryLine = input.memorySummary?.trim()
+        ? `What you have learned about this user: ${input.memorySummary.trim()}`
+        : "";
+
+    return `${MATCHMAKER_VOICE_SYSTEM}
+
+You are also extracting structured search intent for the backend.
 
 Rules:
-- Do not act like a generic chatbot.
 - Do not invent candidate profiles.
 - Do not promise a match.
-- If the user's request is vague, ask one useful clarifying question.
+- If the user's request is vague, ask one useful clarifying question in your own words.
 - If the current state is clarifying, treat the user message as the answer to your previous question and return a search_plan.
 - Never repeat the same clarifying question twice in a row.
 - If the user's intent is clear, produce a search plan the backend can use.
-- Keep replies under 80 words.
+- For a search_plan reply, summarize the direction and ask permission to search. Do not ask another preference question.
+- Only ask a preference question when shouldClarify is true.
 - Return valid JSON only.
 
 Current state: ${input.state}
 Current intent: ${JSON.stringify(input.currentIntent ?? {})}
+${memoryLine}
 Recent conversation:
 ${recentMessages || "(none)"}
 
@@ -290,7 +363,7 @@ async function generateWithGemini(input: MatchmakerLlmInput): Promise<Matchmaker
     const geminiModel = genAI.getGenerativeModel({
         model,
         generationConfig: {
-            temperature: 0.35,
+            temperature: 0.65,
             maxOutputTokens: 900,
             responseMimeType: "application/json",
         },
@@ -316,6 +389,201 @@ function extractOpenAiText(data: unknown) {
     throw new Error("OpenAI response did not include text output");
 }
 
+function cleanVoiceReply(text: string) {
+    const cleaned = text.trim().replace(/^["']|["']$/g, "").trim();
+    if (!cleaned) throw new Error("LLM returned an empty matchmaker reply");
+    return cleaned.slice(0, 500);
+}
+
+function voiceContextBlock(input: MatchmakerVoiceContext) {
+    const recentMessages = formatRecentMessages(input.recentMessages);
+    return `What you have learned: ${input.memorySummary?.trim() || "(none)"}
+Recent conversation:
+${recentMessages || "(none)"}`;
+}
+
+async function generateVoiceReply(task: string, fallback: string): Promise<MatchmakerVoiceReply> {
+    const provider = configuredProvider();
+
+    try {
+        if (provider === "openai") {
+            const apiKey = process.env.OPENAI_API_KEY;
+            if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
+
+            const model = process.env.MATCHMAKER_LLM_MODEL || "gpt-4.1-mini";
+            const response = await fetch("https://api.openai.com/v1/responses", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    model,
+                    input: [
+                        {
+                            role: "developer",
+                            content: [{
+                                type: "input_text",
+                                text: `${MATCHMAKER_VOICE_SYSTEM}\nReturn only the spoken reply text. No quotes, JSON, or labels.`,
+                            }],
+                        },
+                        {
+                            role: "user",
+                            content: [{ type: "input_text", text: task }],
+                        },
+                    ],
+                    temperature: 0.75,
+                }),
+            });
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`OpenAI Responses API failed (${response.status}): ${error}`);
+            }
+            return {
+                text: cleanVoiceReply(extractOpenAiText(await response.json())),
+                provider,
+                model,
+                fallbackUsed: false,
+            };
+        }
+
+        if (provider === "gemini") {
+            const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
+            if (!apiKey) throw new Error("Gemini API key is not configured");
+
+            const model = process.env.MATCHMAKER_LLM_MODEL || "gemini-2.0-flash";
+            const genAI = new GoogleGenerativeAI(apiKey);
+            const geminiModel = genAI.getGenerativeModel({
+                model,
+                systemInstruction: `${MATCHMAKER_VOICE_SYSTEM}\nReturn only the spoken reply text. No quotes, JSON, or labels.`,
+                generationConfig: {
+                    temperature: 0.75,
+                    maxOutputTokens: 180,
+                },
+            });
+            const result = await geminiModel.generateContent(task);
+            return {
+                text: cleanVoiceReply(result.response.text()),
+                provider,
+                model,
+                fallbackUsed: false,
+            };
+        }
+
+        return {
+            text: fallback,
+            provider: "scripted",
+            model: "scripted-v2",
+            fallbackUsed: false,
+        };
+    } catch (error) {
+        console.warn("[matchmaker-llm] voice generation failed, falling back to scripted", {
+            provider,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return {
+            text: fallback,
+            provider: "scripted",
+            model: "scripted-v2",
+            fallbackUsed: true,
+        };
+    }
+}
+
+export function generateMatchmakerGreeting(
+    input: MatchmakerGreetingInput,
+): Promise<MatchmakerVoiceReply> {
+    const name = input.firstName?.trim();
+    const fallback = name
+        ? `Hey ${name}, who would feel right for you today? Tell me what matters, even if you're still figuring it out.`
+        : "Hey, who would feel right for you today? Tell me what matters, even if you're still figuring it out.";
+    return generateVoiceReply(
+        `Write today's opening greeting. Ask what kind of person would feel right today.
+First name: ${name || "(unknown)"}
+${voiceContextBlock(input)}`,
+        fallback,
+    );
+}
+
+export async function generateMatchmakerCandidateIntro(
+    input: MatchmakerCandidateIntroInput,
+): Promise<MatchmakerVoiceReply> {
+    const name = input.firstName?.trim() || "this person";
+    const fallback = `I'd start with ${name}. ${input.matchReason}`;
+    const reply = await generateVoiceReply(
+        `Introduce this real candidate and explain why they may fit.
+Candidate facts are limited to labels and matchReason below.
+Use only explicit candidate facts. Do not infer personality or gender.
+Preserve time qualifiers exactly: "active recently" must not become "active today" or "around today".
+The phrase "close to what was requested" is not evidence that the candidate has every requested trait.
+Candidate: ${JSON.stringify({
+            firstName: input.firstName,
+            labels: input.labels,
+            matchReason: input.matchReason,
+        })}
+Refer to the candidate by first name or singular "they".
+Do not invite the user to chat or imply messaging is already available; the interface handles next actions.`,
+        fallback,
+    );
+    const hasGenderedPronoun = /\b(?:she|her|hers|he|him|his)\b|(?:she|he)[’']s\b/i.test(reply.text);
+    if (!hasGenderedPronoun) return reply;
+
+    return {
+        ...reply,
+        text: fallback,
+        fallbackUsed: true,
+    };
+}
+
+export function generateMatchmakerFeedbackReply(
+    input: MatchmakerFeedbackReplyInput,
+): Promise<MatchmakerVoiceReply> {
+    const fallback = input.asksForReason
+        ? "What felt off about this one?"
+        : input.outcome === "interested"
+            ? "I can see why this one caught your attention. I'll keep that signal in mind for whoever I show you next."
+            : input.reason
+                ? `That helps—I'll steer away from ${input.reason.toLowerCase()} in the next search.`
+                : "No problem. I'll adjust the next search instead of giving you more of the same.";
+    return generateVoiceReply(
+        `${input.asksForReason
+            ? "Ask one gentle, short question about what felt off."
+            : "Acknowledge the feedback and briefly say how it will shape the next search. Do not begin with Okay, Got it, or I understand."}
+Feedback: ${JSON.stringify({ outcome: input.outcome, reason: input.reason ?? null })}
+${voiceContextBlock(input)}`,
+        fallback,
+    );
+}
+
+export function generateMatchmakerLimitReply(
+    input: MatchmakerLimitReplyInput,
+): Promise<MatchmakerVoiceReply> {
+    const fallback = "That's the strongest set I can responsibly show you today. I've kept what you told me, so tomorrow's search can pick up with a clearer sense of your type.";
+    return generateVoiceReply(
+        `Warmly explain that today's search limit is reached, their preferences were retained, and they can return tomorrow. Do not mention internal policy.
+Searches used: ${input.used} of ${input.limit}
+${voiceContextBlock(input)}`,
+        fallback,
+    );
+}
+
+export function generateMatchmakerSearchStatusReply(
+    input: MatchmakerSearchStatusReplyInput,
+): Promise<MatchmakerVoiceReply> {
+    const fallback = input.status === "needs_intent"
+        ? "Give me a little more to work with—what kind of person would feel right today?"
+        : "I don't want to force a weak match from that direction. Change one thing that matters less, and I'll take another look.";
+    const task = input.status === "needs_intent"
+        ? "Ask the user for one useful detail about who would feel right before searching."
+        : "Explain that no strong new candidate was found. Be encouraging and ask the user to adjust one preference without implying that no people exist.";
+    return generateVoiceReply(
+        `${task}
+Current search direction: ${input.intentText || "(none)"}
+${voiceContextBlock(input)}`,
+        fallback,
+    );
+}
+
 async function generateWithOpenAi(input: MatchmakerLlmInput): Promise<MatchmakerLlmTurn> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
@@ -335,7 +603,7 @@ async function generateWithOpenAi(input: MatchmakerLlmInput): Promise<Matchmaker
                     content: [
                         {
                             type: "input_text",
-                            text: "Return valid JSON only. Follow the matchmaker contract exactly.",
+                            text: `${MATCHMAKER_VOICE_SYSTEM}\n\n${MATCHMAKER_JSON_CONTRACT}`,
                         },
                     ],
                 },
@@ -347,6 +615,7 @@ async function generateWithOpenAi(input: MatchmakerLlmInput): Promise<Matchmaker
             text: {
                 format: { type: "json_object" },
             },
+            temperature: 0.65,
         }),
     });
 

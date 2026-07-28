@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
     RefreshControl,
     ScrollView,
     StatusBar,
@@ -11,22 +14,34 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useToast } from '@/components/ui/toast';
-import { useTheme } from '@/hooks/use-theme';
-import { useProfile } from '@/hooks/use-profile';
+
+import { AiConsentCard } from '@/components/ai/ai-consent-card';
 import { HomeHeader } from '@/components/home/home-header';
 import { HomeMatchmakerEntry } from '@/components/home/home-matchmaker-entry';
 import { MatchmakerHomeShell } from '@/components/matchmaker';
-import { HomeTabSwitcher, type HomeTab } from '@/components/home/home-tab-switcher';
-import { InterestedInYouSection } from '@/components/home/interested-in-you-section';
-import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/decision-info-sheet';
+import { MatchmakerHeader } from '@/components/matchmaker/matchmaker-header';
+import { MatchmakerStatePanel } from '@/components/matchmaker/matchmaker-state-panel';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
+import { useAiConsent } from '@/hooks/use-ai-consent';
+import { useProfile } from '@/hooks/use-profile';
+import { useTheme } from '@/hooks/use-theme';
+import {
+    MATCHMAKER_AI_CONSENT_DESCRIPTION,
+    MATCHMAKER_AI_CONSENT_DISCLOSURE,
+    MATCHMAKER_AI_CONSENT_TITLE,
+} from '@/lib/ai-consent';
+import { MATCHMAKER_HOME, SPACING } from '@/lib/design-tokens';
+import { shouldEnableMatchmakerQuery } from '@/lib/matchmaker/conversation-ui';
 import { DailyRecommendationsPreview } from '@/components/discovery/daily-recommendations-preview';
 import { DailyMatchesList } from '@/components/home/daily-matches-list';
 import { DateHoldCard } from '@/components/home/date-hold-card';
 import { MeetupSlotConfirmModal } from '@/components/dates/meetup-slot-confirm-modal';
 import { ManualCurationCard } from '@/components/home/manual-curation-card';
+import { HomeTabSwitcher, type HomeTab } from '@/components/home/home-tab-switcher';
+import { InterestedInYouSection } from '@/components/home/interested-in-you-section';
+import { DecisionInfoSheet, type DecisionSheetType } from '@/components/home/decision-info-sheet';
 import {
     DailyMatch,
     useDailyMatches,
@@ -41,7 +56,6 @@ import {
 import { useConnectionRequests } from '@/hooks/use-connection-requests';
 import { useNotificationCounts } from '@/hooks/use-notification-counts';
 import { useHomeIntroLayout } from '@/hooks/use-home-intro-layout';
-import { SPACING } from '@/lib/design-tokens';
 
 function HomeSkeleton() {
     return (
@@ -62,26 +76,66 @@ function parseHomeTab(value: string | string[] | undefined): HomeTab | null {
 }
 
 export default function HomeScreen() {
-    const { colors, colorScheme } = useTheme();
-    const isDark = colorScheme === 'dark';
-    const { data: profile } = useProfile();
+    const router = useRouter();
+    const tabBarHeight = useBottomTabBarHeight();
+    const {
+        hasAiConsent,
+        grantAiConsent,
+        isAiConsentLoading,
+        isAiConsentUpdating,
+    } = useAiConsent();
+    const conversationEnabled = shouldEnableMatchmakerQuery(hasAiConsent, isAiConsentLoading);
+
+    const handleAllowAi = useCallback(async () => {
+        try {
+            await grantAiConsent();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to update AI consent';
+            Alert.alert('Matchmaker', message);
+        }
+    }, [grantAiConsent]);
 
     return (
         <TabSwipeView route="/(tabs)">
-            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-                <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-                <ScrollView
-                    style={styles.scroll}
-                    contentContainerStyle={styles.matchmakerContent}
-                    keyboardDismissMode="interactive"
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
+            <SafeAreaView style={styles.matchmakerScreen} edges={['top']}>
+                <StatusBar barStyle="light-content" backgroundColor={MATCHMAKER_HOME.background} />
+                <KeyboardAvoidingView
+                    style={styles.keyboardAvoider}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 >
-                    <HomeHeader firstName={profile?.firstName} />
-                    <View style={styles.matchmakerHost}>
-                        <MatchmakerHomeShell />
+                    <View style={[styles.matchmakerHost, { paddingBottom: tabBarHeight + SPACING.tight }]}>
+                        {isAiConsentLoading ? (
+                            <>
+                                <MatchmakerHeader session={null} visualState="thinking" />
+                                <View style={styles.centeredState}>
+                                    <MatchmakerStatePanel variant="loading" />
+                                </View>
+                            </>
+                        ) : !hasAiConsent ? (
+                            <>
+                                <MatchmakerHeader session={null} visualState="idle" />
+                                <ScrollView
+                                    contentContainerStyle={styles.consentContent}
+                                    keyboardShouldPersistTaps="handled"
+                                    showsVerticalScrollIndicator={false}
+                                >
+                            <AiConsentCard
+                                title={MATCHMAKER_AI_CONSENT_TITLE}
+                                description={MATCHMAKER_AI_CONSENT_DESCRIPTION}
+                                disclosure={MATCHMAKER_AI_CONSENT_DISCLOSURE}
+                                allowLabel="Allow matchmaker"
+                                tone="matchmaker-dark"
+                                isLoading={isAiConsentUpdating}
+                                onAllow={handleAllowAi}
+                                onOpenPrivacy={() => router.push('/legal?section=privacy')}
+                            />
+                                </ScrollView>
+                            </>
+                        ) : (
+                            <MatchmakerHomeShell conversationEnabled={conversationEnabled} />
+                        )}
                     </View>
-                </ScrollView>
+                </KeyboardAvoidingView>
             </SafeAreaView>
         </TabSwipeView>
     );
@@ -395,12 +449,29 @@ const styles = StyleSheet.create({
     content: {
         paddingBottom: 32,
     },
-    matchmakerContent: {
-        paddingBottom: 32,
+    matchmakerScreen: {
+        flex: 1,
+        backgroundColor: MATCHMAKER_HOME.background,
+    },
+    keyboardAvoider: {
+        flex: 1,
     },
     matchmakerHost: {
+        flex: 1,
+        minHeight: 0,
         paddingHorizontal: SPACING.screenX,
-        paddingBottom: SPACING.large,
+        paddingTop: SPACING.tight,
+    },
+    centeredState: {
+        flex: 1,
+        justifyContent: 'center',
+        paddingBottom: SPACING.xl,
+    },
+    consentContent: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        paddingTop: SPACING.large,
+        paddingBottom: SPACING.xl,
     },
     contentCarousel: {
         flexGrow: 1,

@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -11,128 +12,111 @@ import { useRouter } from 'expo-router';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import {
   ArrowUp,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
   Heart,
-  HeartHandshake,
-  Leaf,
-  Mic,
-  Rocket,
+  MessageCircle,
   Search,
-  Sparkles,
+  SlidersHorizontal,
   Zap,
 } from 'lucide-react-native';
 
-import { Text } from '@/components/ui/text';
+import type { UseQueryResult } from '@tanstack/react-query';
+
 import { MatchmakerCandidateCard } from '@/components/matchmaker/matchmaker-candidate-card';
-import {
-  isMatchmakerFeedbackReply,
-  MatchmakerFeedbackPanel,
-} from '@/components/matchmaker/matchmaker-feedback-panel';
+// Force Metro to rebundle candidate card CTA styles.
+import { MatchmakerFeedbackPanel } from '@/components/matchmaker/matchmaker-feedback-panel';
 import { MatchmakerStatePanel } from '@/components/matchmaker/matchmaker-state-panel';
+import { MatchmakerVoiceBubble } from '@/components/matchmaker/matchmaker-voice-bubble';
+import { Text } from '@/components/ui/text';
 import {
   useFindNextMatchmakerCandidate,
-  useMatchmakerConversation,
   useSendMatchmakerMessage,
   useSubmitMatchmakerFeedback,
 } from '@/hooks/use-matchmaker';
-import { RADIUS, SPACING } from '@/lib/design-tokens';
-import { useTheme } from '@/hooks/use-theme';
-import type { MatchmakerCandidate, MatchmakerConversationMessage } from '@/types/matchmaker';
+import {
+  normalizeQuickReplyLabel,
+  partitionConversationMessages,
+  resolveQuickReplyAction,
+  selectActiveTurn,
+  shouldShowMatchmakerComposer,
+  type ActiveTurn,
+} from '@/lib/matchmaker/conversation-ui';
+import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
+import type {
+  MatchmakerConversationMessage,
+  MatchmakerConversationResponse,
+} from '@/types/matchmaker';
 
-function MessageBubble({ message }: { message: MatchmakerConversationMessage }) {
-  const { colors, isDark } = useTheme();
+interface MatchmakerConversationProps {
+  conversation: UseQueryResult<MatchmakerConversationResponse, Error>;
+}
+
+function HistoryBubble({ message }: { message: MatchmakerConversationMessage }) {
   const isUser = message.role === 'user';
 
   return (
-    <Animated.View
-      entering={FadeInDown.duration(180)}
-      style={[styles.messageRow, isUser && styles.userMessageRow]}
-    >
-      {!isUser ? (
-        <View style={[styles.avatar, { backgroundColor: colors.primary, borderColor: colors.primary }]}>
-          <HeartHandshake size={17} color={colors.primaryForeground} />
-        </View>
-      ) : null}
-      <View
+    <View style={[styles.historyRow, isUser && styles.historyRowUser]}>
+      <Text
         style={[
-          styles.bubble,
-          isUser ? styles.userBubble : styles.assistantBubble,
-          {
-            backgroundColor: isUser
-              ? colors.primary
-              : isDark
-                ? colors.card
-                : colors.card,
-            borderColor: isUser ? colors.primary : colors.border,
-          },
+          styles.historyText,
+          isUser ? styles.historyTextUser : styles.historyTextAssistant,
         ]}
+        numberOfLines={isUser ? 2 : 3}
       >
-        <Text
-          style={[
-            styles.bubbleText,
-            { color: isUser ? colors.primaryForeground : colors.foreground },
-          ]}
-        >
-          {message.text}
-        </Text>
-      </View>
+        {isUser ? `You: ${message.text}` : message.text}
+      </Text>
+    </View>
+  );
+}
+
+function ActivePrompt({ turn }: { turn: ActiveTurn }) {
+  return (
+    <Animated.View entering={FadeInDown.duration(200)} style={styles.promptBlock}>
+      <Text style={styles.promptEyebrow}>Today&apos;s direction</Text>
+      <Text style={styles.promptText}>{turn.promptText}</Text>
     </Animated.View>
   );
 }
 
-function getCandidateFromMessage(message: MatchmakerConversationMessage): MatchmakerCandidate | null {
-  const candidate = message.metadata?.candidate;
-  if (!candidate || typeof candidate !== 'object') return null;
-  const candidateRecord = candidate as Partial<MatchmakerCandidate>;
-  if (typeof candidateRecord.candidateUserId !== 'string') return null;
-
-  return {
-    candidateUserId: candidateRecord.candidateUserId,
-    firstName: candidateRecord.firstName ?? null,
-    age: candidateRecord.age ?? null,
-    university: candidateRecord.university ?? null,
-    course: candidateRecord.course ?? null,
-    profilePhoto: typeof candidateRecord.profilePhoto === 'string' ? candidateRecord.profilePhoto : null,
-    photos: Array.isArray(candidateRecord.photos) ? candidateRecord.photos.filter((photo): photo is string => typeof photo === 'string') : [],
-    reason: candidateRecord.reason ?? message.text,
-    labels: Array.isArray(candidateRecord.labels) ? candidateRecord.labels : [],
-  };
+function QuickReplyIcon({ label }: { label: string }) {
+  const normalized = label.toLowerCase();
+  if (normalized.includes('active')) return <Zap size={20} color={MATCHMAKER_HOME.orbLavender} />;
+  if (normalized.includes('serious') || normalized.includes('calm')) {
+    return <Heart size={20} color={MATCHMAKER_HOME.orbLavender} />;
+  }
+  return <SlidersHorizontal size={20} color={MATCHMAKER_HOME.orbLavender} />;
 }
 
-function isNoResultMessage(message: MatchmakerConversationMessage | null) {
-  if (!message) return false;
-  return message.kind === 'text'
-    && typeof message.metadata?.searchedCachedCandidates === 'number'
-    && typeof message.metadata?.excludedAlreadyShown === 'number';
-}
-
-export function MatchmakerConversation() {
-  const { colors, isDark } = useTheme();
+export function MatchmakerConversation({ conversation }: MatchmakerConversationProps) {
   const router = useRouter();
-  const conversation = useMatchmakerConversation();
   const sendMessage = useSendMatchmakerMessage();
   const findCandidate = useFindNextMatchmakerCandidate();
   const submitFeedback = useSubmitMatchmakerFeedback();
   const [draft, setDraft] = useState('');
+  const [historyExpanded, setHistoryExpanded] = useState(false);
 
   const data = conversation.data;
-  const messages = data?.messages ?? [];
-  const quickReplies = useMemo(
-    () => data?.quickReplies?.filter(Boolean).slice(0, 7) ?? [],
-    [data?.quickReplies],
-  );
-  const latestAssistantMessage = useMemo(
-    () => [...messages].reverse().find((message) => message.role === 'assistant') ?? null,
-    [messages],
-  );
-  const showFeedbackPanel = latestAssistantMessage?.kind === 'feedback' && quickReplies.length > 0;
-  const showLimitPanel = latestAssistantMessage?.kind === 'limit';
-  const showNoResultPanel = isNoResultMessage(latestAssistantMessage);
-  const showStatePanel = showLimitPanel || showNoResultPanel;
-  const showGenericReplies = quickReplies.length > 0 && !showFeedbackPanel && !showStatePanel;
+  const messages = useMemo(() => data?.messages ?? [], [data?.messages]);
+  const turn = useMemo(() => selectActiveTurn(data), [data]);
+  const { history, active } = useMemo(() => partitionConversationMessages(messages), [messages]);
+  const isBusy = conversation.isLoading
+    || conversation.isFetching
+    || sendMessage.isPending
+    || findCandidate.isPending
+    || submitFeedback.isPending;
   const remainingSearches = data?.session.remainingSearches ?? 0;
-  const canSearch = data?.session.state === 'ready_to_search' || data?.session.state === 'presenting_candidate';
-  const isBusy = conversation.isLoading || sendMessage.isPending || findCandidate.isPending || submitFeedback.isPending;
-  const composerSuggestions = ['Calm vibes', 'Emotionally mature', 'Active today'];
+  const showComposer = shouldShowMatchmakerComposer(turn.variant, remainingSearches);
+  const composerPlaceholder = turn.variant === 'candidate'
+    ? 'Tell me what to adjust'
+    : 'Say it your way';
+
+  const findNext = useCallback(async () => {
+    if (findCandidate.isPending || (data?.session.remainingSearches ?? 0) <= 0) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await findCandidate.mutateAsync();
+  }, [data?.session.remainingSearches, findCandidate]);
 
   const submit = useCallback(async (text: string) => {
     const cleaned = text.trim();
@@ -142,17 +126,11 @@ export function MatchmakerConversation() {
     await sendMessage.mutateAsync(cleaned);
   }, [sendMessage]);
 
-  const findNext = useCallback(async () => {
-    if (findCandidate.isPending || remainingSearches <= 0) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await findCandidate.mutateAsync();
-  }, [findCandidate, remainingSearches]);
-
-  const openCandidate = useCallback((candidate: MatchmakerCandidate) => {
+  const openCandidate = useCallback((candidateUserId: string) => {
     router.push({
       pathname: '/profile/[userId]',
       params: {
-        userId: candidate.candidateUserId,
+        userId: candidateUserId,
         source: 'matchmaker',
         matchType: 'discovery',
       },
@@ -160,38 +138,32 @@ export function MatchmakerConversation() {
   }, [router]);
 
   const handleQuickReply = useCallback((reply: string) => {
-    const normalized = reply.toLowerCase();
-    if (
-      normalized === 'go ahead and search'
-      || normalized === 'find my person'
-      || normalized === 'search now'
-    ) {
+    const action = resolveQuickReplyAction(reply);
+    if (action === 'search' || action === 'find_another') {
       findNext().catch(() => undefined);
       return;
     }
-    if (reply.toLowerCase() === 'not this one') {
+    if (action === 'not_this_one') {
       submitFeedback.mutateAsync({ outcome: 'not_this_one' }).catch(() => undefined);
       return;
     }
-    if (isMatchmakerFeedbackReply(reply) && reply !== 'Skip feedback') {
+    if (action === 'feedback_reason') {
       submitFeedback.mutateAsync({ outcome: 'not_this_one', reason: reply }).catch(() => undefined);
       return;
     }
-    if (reply.toLowerCase() === 'skip feedback') {
+    if (action === 'skip_feedback') {
       findNext().catch(() => undefined);
       return;
     }
-    if (reply.toLowerCase() === 'find another') {
-      findNext().catch(() => undefined);
+    if (action === 'open_messages') {
+      router.push('/(tabs)/chats');
       return;
     }
     submit(reply).catch(() => undefined);
-  }, [findNext, submit, submitFeedback]);
+  }, [findNext, router, submit, submitFeedback]);
 
   if (conversation.isLoading && messages.length === 0) {
-    return (
-      <MatchmakerStatePanel variant="loading" />
-    );
+    return <MatchmakerStatePanel variant="loading" />;
   }
 
   if (conversation.isError && messages.length === 0) {
@@ -207,366 +179,466 @@ export function MatchmakerConversation() {
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.timeline}>
-        {messages.map((message) => {
-          const candidate = message.kind === 'candidate' ? getCandidateFromMessage(message) : null;
-          if (candidate) {
-            return (
-              <View key={message.id} style={styles.candidateMessage}>
-                <MessageBubble message={{ ...message, text: message.text }} />
-                <MatchmakerCandidateCard
-                  candidate={candidate}
-                  onPress={openCandidate}
-                />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {history.length > 0 ? (
+          <View style={styles.historySection}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={historyExpanded ? 'Hide earlier conversation' : 'Show earlier conversation'}
+              onPress={() => setHistoryExpanded((value) => !value)}
+              style={({ pressed }) => [styles.historyToggle, pressed && styles.pressedNeutral]}
+            >
+              <View style={styles.historyToggleContent}>
+                <Text style={styles.historyToggleText}>
+                  {historyExpanded ? 'Hide earlier' : `Earlier conversation (${history.length})`}
+                </Text>
+                {historyExpanded ? (
+                  <ChevronUp size={18} color={MATCHMAKER_HOME.mutedForeground} />
+                ) : (
+                  <ChevronDown size={18} color={MATCHMAKER_HOME.mutedForeground} />
+                )}
               </View>
-            );
-          }
-          return <MessageBubble key={message.id} message={message} />;
-        })}
-      </View>
+            </Pressable>
+            {historyExpanded ? (
+              <Animated.View entering={FadeIn.duration(180)} style={styles.historyList}>
+                {history.map((message) => (
+                  <HistoryBubble key={message.id} message={message} />
+                ))}
+              </Animated.View>
+            ) : null}
+          </View>
+        ) : null}
 
-      {conversation.isError ? (
-        <MatchmakerStatePanel
-          variant="inline_error"
-          body={conversation.error instanceof Error ? conversation.error.message : undefined}
-          busy={conversation.isFetching}
-          onRetry={() => conversation.refetch()}
-        />
-      ) : null}
+        <View style={styles.activeSection}>
+          {active.map((message) => (
+            message.role === 'user' ? <HistoryBubble key={message.id} message={message} /> : null
+          ))}
 
-      {canSearch ? (
-        <View style={styles.searchAction}>
+          {turn.variant === 'candidate' && turn.candidate ? (
+            <View style={styles.candidateSection}>
+              <MatchmakerVoiceBubble
+                text={turn.promptText}
+                compact
+              />
+              <MatchmakerCandidateCard
+                candidate={turn.candidate}
+                onPress={(candidate) => openCandidate(candidate.candidateUserId)}
+                onNotThisOne={() => handleQuickReply('Not this one')}
+              />
+              {remainingSearches <= 0 ? (
+                <Text style={styles.limitNote}>
+                  No searches left today. You can still open the profile and decide.
+                </Text>
+              ) : null}
+            </View>
+          ) : turn.variant === 'feedback' ? (
+            <MatchmakerFeedbackPanel
+              message={turn.promptMessage!}
+              replies={turn.quickReplies}
+              busy={isBusy}
+              onSelect={handleQuickReply}
+            />
+          ) : turn.variant === 'limit' || turn.variant === 'no_result' ? (
+            <MatchmakerStatePanel
+              variant={turn.variant === 'limit' ? 'limit' : 'no_result'}
+              body={turn.promptText}
+              replies={turn.quickReplies}
+              busy={isBusy}
+              onReply={handleQuickReply}
+            />
+          ) : (
+            <ActivePrompt turn={turn} />
+          )}
+        </View>
+
+        {conversation.isError ? (
+          <MatchmakerStatePanel
+            variant="inline_error"
+            body={conversation.error instanceof Error ? conversation.error.message : undefined}
+            busy={conversation.isFetching}
+            onRetry={() => conversation.refetch()}
+          />
+        ) : null}
+
+        {turn.variant === 'prompt' && turn.quickReplies.length > 0 ? (
+          <Animated.View entering={FadeIn.duration(180)} style={styles.replies}>
+            {turn.quickReplies.map((reply) => {
+              const label = normalizeQuickReplyLabel(reply);
+              return (
+                <Pressable
+                  key={reply}
+                  accessibilityRole="button"
+                  accessibilityLabel={label}
+                  disabled={isBusy}
+                  onPress={() => handleQuickReply(reply)}
+                  style={({ pressed }) => [
+                    styles.reply,
+                    pressed && !isBusy && styles.pressedNeutral,
+                    isBusy && styles.disabled,
+                  ]}
+                >
+                  <View style={styles.replyContent}>
+                    <View style={styles.replyIcon}>
+                      <QuickReplyIcon label={label} />
+                    </View>
+                    <Text style={styles.replyText} numberOfLines={2}>
+                      {label}
+                    </Text>
+                    <View style={styles.replyChevron}>
+                      <ChevronRight size={18} color={MATCHMAKER_HOME.primary} />
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </Animated.View>
+        ) : null}
+
+        {turn.showSearchAction ? (
+          <View style={styles.searchAction}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={turn.searchActionLabel}
+              accessibilityHint="Uses one of today's searches."
+              disabled={isBusy}
+              onPress={() => findNext().catch(() => undefined)}
+              style={({ pressed }) => [
+                styles.searchButton,
+                pressed && !isBusy && styles.pressedPrimary,
+                isBusy && styles.disabled,
+              ]}
+            >
+              <View style={styles.actionButtonContent}>
+                {findCandidate.isPending ? (
+                  <ActivityIndicator size="small" color={MATCHMAKER_HOME.primaryForeground} />
+                ) : (
+                  <Search size={18} color={MATCHMAKER_HOME.primaryForeground} />
+                )}
+                <Text style={styles.searchButtonText}>{turn.searchActionLabel}</Text>
+              </View>
+            </Pressable>
+            <Text style={styles.searchHint}>Uses one of today&apos;s searches.</Text>
+          </View>
+        ) : null}
+
+        {turn.showMessagesAction ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={data?.session.state === 'presenting_candidate' ? 'Find another matchmaker suggestion' : 'Find my person'}
-            accessibilityHint={data?.session.state === 'presenting_candidate' ? "Uses one of today's searches." : 'Asks the matchmaker to search for a compatible person.'}
-            disabled={isBusy || remainingSearches <= 0}
-            onPress={() => findNext().catch(() => undefined)}
-            style={({ pressed }) => [
-                styles.searchButton,
-                { backgroundColor: colors.primary },
-                pressed && !isBusy && remainingSearches > 0 && styles.pressedPrimary,
-                (isBusy || remainingSearches <= 0) && styles.disabled,
-              ]}
+            accessibilityLabel="Open Messages"
+            onPress={() => router.push('/(tabs)/chats')}
+            style={({ pressed }) => [styles.messagesButton, pressed && styles.pressedNeutral]}
           >
-            {findCandidate.isPending ? (
-              <ActivityIndicator size="small" color={colors.primaryForeground} />
-            ) : (
-              <Search size={17} color={colors.primaryForeground} />
-            )}
-            <Text style={[styles.searchButtonText, { color: colors.primaryForeground }]}>
-              {data?.session.state === 'presenting_candidate' ? 'Find another' : 'Find my person'}
-            </Text>
+            <View style={styles.actionButtonContent}>
+              <MessageCircle size={18} color={MATCHMAKER_HOME.primary} />
+              <Text style={styles.messagesButtonText}>Open Messages</Text>
+            </View>
           </Pressable>
-          {data?.session.state === 'presenting_candidate' ? (
-            <Text style={[styles.searchHint, { color: colors.mutedForeground }]}>
-              Uses one of today's searches.
+        ) : null}
+      </ScrollView>
+
+      {showComposer ? (
+        <View style={styles.composerDock}>
+          {turn.variant !== 'candidate' ? (
+            <Text style={styles.composerLabel}>Your preference</Text>
+          ) : null}
+          <View style={[styles.composer, isBusy && styles.composerBusy]}>
+            <TextInput
+              accessibilityLabel="Tell the matchmaker what you want"
+              accessibilityState={{ disabled: isBusy }}
+              value={draft}
+              onChangeText={setDraft}
+              placeholder={composerPlaceholder}
+              placeholderTextColor={MATCHMAKER_HOME.mutedForeground}
+              style={styles.input}
+              multiline
+              textAlignVertical="center"
+              editable={!isBusy}
+              maxLength={500}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send preference to matchmaker"
+              accessibilityState={{ disabled: !draft.trim() || isBusy, busy: sendMessage.isPending }}
+              disabled={!draft.trim() || isBusy}
+              onPress={() => submit(draft).catch(() => undefined)}
+              style={({ pressed }) => [
+                styles.sendButton,
+                pressed && draft.trim() && !isBusy && styles.pressedPrimary,
+                (!draft.trim() || isBusy) && styles.disabled,
+              ]}
+            >
+              {sendMessage.isPending ? (
+                <ActivityIndicator size="small" color={MATCHMAKER_HOME.primaryForeground} />
+              ) : (
+                <ArrowUp size={19} color={MATCHMAKER_HOME.primaryForeground} />
+              )}
+            </Pressable>
+          </View>
+          {isBusy ? (
+            <Text accessibilityLiveRegion="polite" style={styles.composerStatus}>
+              {findCandidate.isPending ? 'Searching for a thoughtful match…' : 'Matchmaker is thinking…'}
             </Text>
           ) : null}
         </View>
       ) : null}
-
-      {showFeedbackPanel && latestAssistantMessage ? (
-        <MatchmakerFeedbackPanel
-          message={latestAssistantMessage}
-          replies={quickReplies}
-          busy={isBusy}
-          onSelect={handleQuickReply}
-        />
-      ) : null}
-
-      {showStatePanel && latestAssistantMessage ? (
-        <MatchmakerStatePanel
-          variant={showLimitPanel ? 'limit' : 'no_result'}
-          replies={quickReplies}
-          busy={isBusy}
-          onReply={handleQuickReply}
-        />
-      ) : null}
-
-      {showGenericReplies ? (
-        <Animated.View
-          entering={FadeIn.duration(180)}
-          style={styles.quickReplies}
-        >
-          {quickReplies.map((reply, index) => {
-            const normalized = reply.toLowerCase();
-            const displayReply = normalized === 'go ahead and search' ? 'Find my person' : reply;
-            const Icon = index === 0 ? Rocket : normalized.includes('serious') ? Heart : Sparkles;
-            return (
-            <Pressable
-              key={reply}
-              accessibilityRole="button"
-              accessibilityLabel={displayReply}
-              disabled={isBusy}
-              onPress={() => handleQuickReply(reply)}
-              style={({ pressed }) => [
-                  styles.quickReply,
-                  index === 0 && styles.primaryQuickReply,
-                  {
-                    backgroundColor: index === 0 ? colors.primary : 'rgba(184,50,122,0.08)',
-                    borderColor: index === 0 ? colors.primary : 'rgba(184,50,122,0.10)',
-                  },
-                  pressed && !isBusy && styles.pressedSecondary,
-                  isBusy && styles.disabled,
-                ]}
-            >
-              <Icon size={16} color={index === 0 ? colors.primaryForeground : colors.foreground} />
-              <Text
-                style={[
-                  styles.quickReplyText,
-                  { color: index === 0 ? colors.primaryForeground : colors.foreground },
-                ]}
-              >
-                {displayReply}
-              </Text>
-            </Pressable>
-          );})}
-        </Animated.View>
-      ) : null}
-
-      <View
-        style={[
-          styles.composerDock,
-          {
-            backgroundColor: 'rgba(253,228,238,0.60)',
-            borderColor: 'rgba(184,50,122,0.14)',
-          },
-        ]}
-      >
-        <View style={styles.composerRow}>
-        <View style={[styles.micButton, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Mic size={22} color={colors.primary} />
-        </View>
-          <View style={[styles.inputShell, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <TextInput
-              accessibilityLabel="Tell the matchmaker what you want"
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Tell me more about what feels right..."
-              placeholderTextColor={colors.mutedForeground}
-              style={[styles.input, { color: colors.foreground }]}
-              multiline
-              textAlignVertical="center"
-              editable={!sendMessage.isPending}
-              returnKeyType="send"
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Send message to matchmaker"
-              disabled={!draft.trim() || sendMessage.isPending}
-              onPress={() => submit(draft).catch(() => undefined)}
-              style={({ pressed }) => [
-                  styles.sendButton,
-                  { backgroundColor: colors.primary },
-                  pressed && draft.trim() && !sendMessage.isPending && styles.pressedPrimary,
-                  (!draft.trim() || sendMessage.isPending) && styles.disabled,
-                ]}
-            >
-              {sendMessage.isPending ? (
-                <ActivityIndicator size="small" color={colors.primaryForeground} />
-              ) : (
-                <ArrowUp size={20} color={colors.primaryForeground} />
-              )}
-            </Pressable>
-          </View>
-        </View>
-        <View style={styles.composerSuggestions}>
-          {composerSuggestions.map((suggestion) => {
-            const Icon = suggestion === 'Calm vibes' ? Leaf : suggestion === 'Active today' ? Zap : Heart;
-            const color = suggestion === 'Active today' ? colors.success : suggestion === 'Calm vibes' ? colors.success : colors.primary;
-            return (
-              <Pressable
-                key={suggestion}
-                accessibilityRole="button"
-                accessibilityLabel={suggestion}
-                disabled={isBusy}
-                onPress={() => submit(suggestion).catch(() => undefined)}
-                style={({ pressed }) => [
-                  styles.suggestionChip,
-                  { backgroundColor: colors.card, borderColor: colors.border },
-                  pressed && !isBusy && styles.pressedSecondary,
-                  isBusy && styles.disabled,
-                ]}
-              >
-                <Icon size={15} color={color} />
-                <Text style={[styles.suggestionText, { color }]}>{suggestion}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    gap: SPACING.base,
+    flex: 1,
+    minHeight: 0,
   },
-  timeline: {
-    gap: SPACING.base,
+  scroll: {
+    flex: 1,
   },
-  candidateMessage: {
+  scrollContent: {
+    flexGrow: 1,
+    gap: SPACING.comfortable,
+    paddingTop: SPACING.tight,
+    paddingBottom: SPACING.section,
+  },
+  historySection: {
     gap: SPACING.tight,
   },
-  messageRow: {
+  historyToggle: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: MATCHMAKER_HOME.border,
+    backgroundColor: MATCHMAKER_HOME.backgroundRaised,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.compact,
+  },
+  historyToggleContent: {
+    width: '100%',
+    minHeight: 42,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: SPACING.tight,
   },
-  userMessageRow: {
-    justifyContent: 'flex-end',
+  historyToggleText: {
+    color: MATCHMAKER_HOME.mutedForeground,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
   },
-  avatar: {
-    width: 34,
-    height: 34,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  historyList: {
+    gap: SPACING.tight,
+    paddingHorizontal: SPACING.tight,
   },
-  bubble: {
-    maxWidth: '86%',
-    borderWidth: 1,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+  historyRow: {
+    paddingVertical: 2,
   },
-  assistantBubble: {
-    borderTopLeftRadius: 8,
+  historyRowUser: {
+    alignItems: 'flex-end',
   },
-  userBubble: {
-    borderTopRightRadius: 8,
-  },
-  bubbleText: {
-    fontSize: 15,
-    lineHeight: 21,
+  historyText: {
+    fontSize: 13,
+    lineHeight: 19,
     fontWeight: '500',
   },
-  quickReplies: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.tight,
+  historyTextUser: {
+    color: MATCHMAKER_HOME.mutedForeground,
   },
-  searchButton: {
-    minHeight: 50,
+  historyTextAssistant: {
+    color: MATCHMAKER_HOME.foreground,
+  },
+  activeSection: {
+    gap: SPACING.base,
+  },
+  candidateSection: {
+    gap: SPACING.compact,
+  },
+  limitNote: {
+    color: MATCHMAKER_HOME.subtleForeground,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+    textAlign: 'center',
+    paddingHorizontal: SPACING.tight,
+  },
+  promptBlock: {
+    gap: SPACING.compact,
+    paddingTop: SPACING.comfortable,
+    paddingBottom: SPACING.tight,
+  },
+  promptEyebrow: {
+    color: MATCHMAKER_HOME.primary,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  promptText: {
+    color: MATCHMAKER_HOME.foreground,
+    maxWidth: 340,
+    fontSize: 28,
+    lineHeight: 35,
+    fontWeight: '600',
+    letterSpacing: -0.45,
+  },
+  replies: {
+    width: '100%',
+    gap: 10,
+  },
+  reply: {
+    width: '100%',
+    minHeight: 66,
+    borderWidth: 1,
+    borderColor: MATCHMAKER_HOME.borderStrong,
+    backgroundColor: MATCHMAKER_HOME.surface,
     borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  replyContent: {
+    width: '100%',
+    minHeight: 46,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+  },
+  replyIcon: {
+    width: 40,
+    height: 40,
+    flexShrink: 0,
+    borderRadius: RADIUS.md,
+    backgroundColor: MATCHMAKER_HOME.surfaceStrong,
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.tight,
-    paddingHorizontal: 16,
+  },
+  replyText: {
+    flex: 1,
+    flexShrink: 1,
+    color: MATCHMAKER_HOME.foreground,
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '600',
+  },
+  replyChevron: {
+    width: 32,
+    height: 40,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchAction: {
     gap: SPACING.tight,
   },
+  searchButton: {
+    minHeight: 52,
+    backgroundColor: MATCHMAKER_HOME.primary,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.compact,
+  },
+  actionButtonContent: {
+    width: '100%',
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.tight,
+  },
   searchButtonText: {
+    color: MATCHMAKER_HOME.primaryForeground,
     fontSize: 15,
     lineHeight: 20,
     fontWeight: '800',
   },
   searchHint: {
-    marginTop: -SPACING.tight,
+    color: MATCHMAKER_HOME.subtleForeground,
     fontSize: 12,
     lineHeight: 16,
     fontWeight: '600',
     textAlign: 'center',
   },
-  quickReply: {
-    minHeight: 46,
-    maxWidth: '100%',
-    borderRadius: RADIUS.full,
+  messagesButton: {
+    minHeight: 48,
     borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.tight,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    justifyContent: 'center',
+    borderColor: MATCHMAKER_HOME.border,
+    backgroundColor: MATCHMAKER_HOME.backgroundRaised,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.compact,
   },
-  primaryQuickReply: {
-    paddingHorizontal: 16,
-  },
-  quickReplyText: {
-    fontSize: 14,
-    lineHeight: 19,
+  messagesButtonText: {
+    color: MATCHMAKER_HOME.foreground,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: '700',
   },
   composerDock: {
-    borderRadius: 28,
-    borderWidth: 1,
-    padding: SPACING.compact,
-    gap: SPACING.compact,
-  },
-  composerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingTop: SPACING.compact,
+    paddingBottom: SPACING.tight,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: MATCHMAKER_HOME.border,
+    backgroundColor: MATCHMAKER_HOME.background,
     gap: SPACING.tight,
   },
-  micButton: {
-    width: 54,
-    height: 54,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  composerLabel: {
+    color: MATCHMAKER_HOME.mutedForeground,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
   },
-  inputShell: {
-    flex: 1,
-    minHeight: 54,
-    borderRadius: RADIUS.xl,
+  composer: {
+    minHeight: 58,
     borderWidth: 1,
+    borderColor: MATCHMAKER_HOME.borderStrong,
+    backgroundColor: MATCHMAKER_HOME.surface,
+    borderRadius: RADIUS.lg,
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: 14,
+    alignItems: 'flex-end',
+    gap: SPACING.tight,
+    paddingLeft: SPACING.base,
     paddingRight: 7,
-    gap: SPACING.tight,
+    paddingVertical: 7,
+  },
+  composerBusy: {
+    borderColor: MATCHMAKER_HOME.border,
   },
   input: {
     flex: 1,
-    minHeight: 38,
+    minHeight: 44,
     maxHeight: 96,
-    fontSize: 15,
-    lineHeight: 20,
+    color: MATCHMAKER_HOME.foreground,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '500',
+    paddingVertical: 10,
+  },
+  composerStatus: {
+    color: MATCHMAKER_HOME.mutedForeground,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '500',
   },
   sendButton: {
     width: 44,
     height: 44,
+    backgroundColor: MATCHMAKER_HOME.primary,
     borderRadius: RADIUS.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  composerSuggestions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: SPACING.tight,
-  },
-  suggestionChip: {
-    minHeight: 34,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.micro,
-    paddingHorizontal: SPACING.compact,
-  },
-  suggestionText: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-  },
-  disabled: {
-    opacity: 0.45,
+  pressedNeutral: {
+    backgroundColor: MATCHMAKER_HOME.surfacePressed,
+    transform: [{ scale: 0.995 }],
   },
   pressedPrimary: {
-    opacity: 0.9,
-    transform: [{ scale: 0.99 }],
+    backgroundColor: MATCHMAKER_HOME.primaryPressed,
+    transform: [{ scale: 0.985 }],
   },
-  pressedSecondary: {
-    opacity: 0.86,
-    transform: [{ scale: 0.98 }],
+  disabled: {
+    opacity: 0.48,
   },
 });

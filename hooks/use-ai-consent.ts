@@ -25,6 +25,7 @@ export function useAiConsent() {
     const refreshAiQueries = useCallback(async () => {
         await Promise.all([
             queryClient.invalidateQueries({ queryKey: ['profile'] }),
+            queryClient.invalidateQueries({ queryKey: ['matchmaker', 'conversation'] }),
             queryClient.invalidateQueries({ queryKey: ['wingman'] }),
             queryClient.invalidateQueries({ queryKey: ['wingman-stats'] }),
             queryClient.invalidateQueries({ queryKey: ['wingman-context'] }),

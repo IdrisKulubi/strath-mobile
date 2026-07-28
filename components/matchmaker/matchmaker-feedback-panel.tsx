@@ -1,20 +1,11 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
-import { Check, SlidersHorizontal } from 'lucide-react-native';
+import { ChevronRight } from 'lucide-react-native';
 
 import { Text } from '@/components/ui/text';
-import { useTheme } from '@/hooks/use-theme';
-import { RADIUS, SPACING } from '@/lib/design-tokens';
+import { isFeedbackReasonReply } from '@/lib/matchmaker/conversation-ui';
+import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 import type { MatchmakerConversationMessage } from '@/types/matchmaker';
-
-const FEEDBACK_REASON_REPLIES = new Set([
-  'Not my vibe',
-  'Too social',
-  'Too quiet',
-  'Not serious enough',
-  'Not active enough',
-  'Different lifestyle',
-]);
 
 interface MatchmakerFeedbackPanelProps {
   message: MatchmakerConversationMessage;
@@ -25,10 +16,6 @@ interface MatchmakerFeedbackPanelProps {
 
 function displayReply(reply: string) {
   return reply === 'Skip feedback' ? 'Skip' : reply;
-}
-
-function isReasonStep(replies: string[]) {
-  return replies.some((reply) => FEEDBACK_REASON_REPLIES.has(reply));
 }
 
 function memorySummary(message: MatchmakerConversationMessage) {
@@ -42,39 +29,18 @@ export function MatchmakerFeedbackPanel({
   busy,
   onSelect,
 }: MatchmakerFeedbackPanelProps) {
-  const { colors, isDark } = useTheme();
-  const awaitingReason = isReasonStep(replies);
+  const awaitingReason = replies.some((reply) => isFeedbackReasonReply(reply));
   const summary = memorySummary(message);
 
   return (
-    <View
-      style={[
-        styles.wrap,
-        {
-          backgroundColor: isDark ? colors.card : colors.background,
-          borderColor: colors.border,
-        },
-      ]}
-    >
-      <View style={styles.headerRow}>
-        <View style={[styles.icon, { backgroundColor: colors.secondary }]}>
-          {awaitingReason ? (
-            <SlidersHorizontal size={16} color={colors.primary} />
-          ) : (
-            <Check size={16} color={colors.primary} />
-          )}
-        </View>
-        <View style={styles.copy}>
-          <Text style={[styles.title, { color: colors.foreground }]}>
-            {awaitingReason ? 'What should I adjust?' : 'Saved for the next search'}
-          </Text>
-          <Text style={[styles.body, { color: colors.mutedForeground }]}>
-            {awaitingReason
-              ? 'Pick one reason or skip. This does not use a search.'
-              : summary ?? 'I will use that when I look again.'}
-          </Text>
-        </View>
-      </View>
+    <View style={styles.wrap}>
+      <Text style={styles.prompt}>{message.text}</Text>
+      {!awaitingReason && summary ? (
+        <Text style={styles.summary}>{summary}</Text>
+      ) : null}
+      {awaitingReason ? (
+        <Text style={styles.hint}>Optional. This does not use a search.</Text>
+      ) : null}
 
       <View style={styles.replies}>
         {replies.map((reply) => {
@@ -84,30 +50,30 @@ export function MatchmakerFeedbackPanel({
               key={reply}
               accessibilityRole="button"
               accessibilityLabel={isSkip ? 'Skip feedback' : `Feedback reason: ${reply}`}
-              accessibilityHint={isSkip ? 'Skips feedback and continues with the matchmaker.' : 'Saves this reason so the matchmaker can adjust.'}
               disabled={busy}
               onPress={() => onSelect(reply)}
               style={({ pressed }) => [
-                  styles.reply,
-                  {
-                    backgroundColor: isSkip ? 'transparent' : colors.card,
-                    borderColor: colors.border,
-                  },
-                  pressed && !busy && styles.pressed,
-                  busy && styles.disabled,
-                ]}
+                styles.reply,
+                isSkip && styles.replySkip,
+                pressed && !busy && styles.pressed,
+                busy && styles.disabled,
+              ]}
             >
-              {busy ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : null}
-              <Text
-                style={[
-                  styles.replyText,
-                  { color: isSkip ? colors.mutedForeground : colors.foreground },
-                ]}
-              >
-                {displayReply(reply)}
-              </Text>
+              <View style={styles.replyContent}>
+                {busy ? (
+                  <ActivityIndicator size="small" color={MATCHMAKER_HOME.primary} />
+                ) : (
+                  <View style={styles.replyMarker} />
+                )}
+                <Text style={[styles.replyText, isSkip && styles.replyTextSkip]}>
+                  {displayReply(reply)}
+                </Text>
+                {!busy ? (
+                  <View style={styles.replyChevron}>
+                    <ChevronRight size={18} color={MATCHMAKER_HOME.primary} />
+                  </View>
+                ) : null}
+              </View>
             </Pressable>
           );
         })}
@@ -116,68 +82,81 @@ export function MatchmakerFeedbackPanel({
   );
 }
 
-export function isMatchmakerFeedbackReply(reply: string) {
-  return FEEDBACK_REASON_REPLIES.has(reply) || reply === 'Skip feedback';
-}
+export { isFeedbackReasonReply as isMatchmakerFeedbackReply };
 
 const styles = StyleSheet.create({
   wrap: {
-    borderWidth: 1,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.compact,
     gap: SPACING.compact,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACING.tight,
+  prompt: {
+    color: MATCHMAKER_HOME.foreground,
+    fontSize: 17,
+    lineHeight: 24,
+    fontWeight: '600',
   },
-  icon: {
-    width: 34,
-    height: 34,
-    borderRadius: RADIUS.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  copy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  title: {
-    fontSize: 15,
+  summary: {
+    color: MATCHMAKER_HOME.mutedForeground,
+    fontSize: 14,
     lineHeight: 20,
-    fontWeight: '800',
+    fontWeight: '500',
   },
-  body: {
-    marginTop: 2,
+  hint: {
+    color: MATCHMAKER_HOME.mutedForeground,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '500',
   },
   replies: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.tight,
+    gap: SPACING.compact,
   },
   reply: {
-    minHeight: 44,
-    maxWidth: '100%',
+    width: '100%',
+    minHeight: 56,
     borderWidth: 1,
-    borderRadius: RADIUS.full,
-    paddingHorizontal: 13,
-    paddingVertical: 9,
+    borderColor: MATCHMAKER_HOME.border,
+    backgroundColor: MATCHMAKER_HOME.backgroundRaised,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.base,
+    paddingVertical: SPACING.compact,
+    overflow: 'hidden',
+  },
+  replyContent: {
+    width: '100%',
+    minHeight: 46,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.tight,
+    gap: SPACING.compact,
+  },
+  replyMarker: {
+    width: 7,
+    height: 7,
+    flexShrink: 0,
+    borderRadius: RADIUS.full,
+    backgroundColor: MATCHMAKER_HOME.orbLavender,
+  },
+  replySkip: {
+    backgroundColor: 'transparent',
   },
   replyText: {
-    fontSize: 13,
+    flex: 1,
+    flexShrink: 1,
+    color: MATCHMAKER_HOME.foreground,
+    fontSize: 14,
     lineHeight: 18,
     fontWeight: '700',
   },
+  replyTextSkip: {
+    color: MATCHMAKER_HOME.mutedForeground,
+  },
+  replyChevron: {
+    width: 28,
+    height: 40,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   pressed: {
-    opacity: 0.86,
+    backgroundColor: MATCHMAKER_HOME.surfacePressed,
     transform: [{ scale: 0.98 }],
   },
   disabled: {

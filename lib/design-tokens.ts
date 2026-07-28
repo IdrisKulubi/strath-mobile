@@ -42,6 +42,36 @@ export const MOTION = {
   easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
 } as const;
 
+/**
+ * Direction B surface tokens for the always-dark Matchmaker Home.
+ * These stay local to Home so the rest of the app can follow the selected theme.
+ */
+export const MATCHMAKER_HOME = {
+  background: '#130D1D',
+  backgroundRaised: '#1A1226',
+  surface: '#21182E',
+  surfacePressed: '#2B203A',
+  surfaceStrong: '#342443',
+  foreground: '#F8F4FB',
+  mutedForeground: '#B6A9C2',
+  subtleForeground: '#8E809C',
+  border: '#443451',
+  borderStrong: '#665071',
+  primary: '#D94A8F',
+  primaryPressed: '#BD3778',
+  primaryForeground: '#FFF8FC',
+  orbCyan: '#72D9E8',
+  orbLavender: '#B48AE8',
+  orbRose: '#F278B1',
+  success: '#4FC38A',
+  error: '#F07878',
+  warning: '#E2AD57',
+  scrim: 'rgba(19, 13, 29, 0.84)',
+  navFill: 'rgba(30, 21, 43, 0.94)',
+  navBorder: 'rgba(196, 169, 214, 0.20)',
+  navActive: '#30233F',
+} as const;
+
 /** Restrained palette — tinted neutrals + single accent (see DESIGN.md) */
 export const Palette = {
   light: {

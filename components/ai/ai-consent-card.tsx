@@ -4,11 +4,14 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { AI_CONSENT_DISCLOSURE, AI_PROVIDER_NAME } from '@/lib/ai-consent';
+import { MATCHMAKER_HOME } from '@/lib/design-tokens';
 
 interface AiConsentCardProps {
     title?: string;
     description?: string;
+    disclosure?: string[];
     allowLabel?: string;
+    tone?: 'default' | 'matchmaker-dark';
     isLoading?: boolean;
     onAllow: () => void | Promise<void>;
     onOpenPrivacy: () => void;
@@ -17,44 +20,70 @@ interface AiConsentCardProps {
 export function AiConsentCard({
     title = 'Allow AI features to continue',
     description = `${AI_PROVIDER_NAME} powers voice transcription and Wingman recommendations in this part of the app.`,
+    disclosure = AI_CONSENT_DISCLOSURE,
     allowLabel = 'Allow AI Features',
+    tone = 'default',
     isLoading = false,
     onAllow,
     onOpenPrivacy,
 }: AiConsentCardProps) {
     const { colors } = useTheme();
+    const isMatchmakerDark = tone === 'matchmaker-dark';
+    const foreground = isMatchmakerDark ? MATCHMAKER_HOME.foreground : colors.foreground;
+    const mutedForeground = isMatchmakerDark ? MATCHMAKER_HOME.mutedForeground : colors.mutedForeground;
+    const primary = isMatchmakerDark ? MATCHMAKER_HOME.primary : colors.primary;
+    const border = isMatchmakerDark ? MATCHMAKER_HOME.border : colors.border;
 
     return (
         <View style={styles.content}>
-            <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
-            <Text style={[styles.description, { color: colors.mutedForeground }]}>{description}</Text>
+            <Text style={[styles.title, { color: foreground }]}>{title}</Text>
+            <Text style={[styles.description, { color: mutedForeground }]}>{description}</Text>
 
             <View style={styles.list}>
-                {AI_CONSENT_DISCLOSURE.map((item) => (
+                {disclosure.map((item) => (
                     <View key={item} style={styles.listItem}>
-                        <Text style={[styles.bullet, { color: colors.primary }]}>•</Text>
-                        <Text style={[styles.listText, { color: colors.foreground }]}>{item}</Text>
+                        <Text style={[styles.bullet, { color: primary }]}>•</Text>
+                        <Text style={[styles.listText, { color: foreground }]}>{item}</Text>
                     </View>
                 ))}
             </View>
 
             <Pressable
-                style={[styles.allowButton, { borderColor: colors.primary }]}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: isLoading, busy: isLoading }}
+                style={[
+                    styles.allowButton,
+                    {
+                        borderColor: primary,
+                        backgroundColor: isMatchmakerDark ? MATCHMAKER_HOME.primary : 'transparent',
+                    },
+                ]}
                 onPress={onAllow}
                 disabled={isLoading}
             >
                 {isLoading ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
+                    <ActivityIndicator
+                        size="small"
+                        color={isMatchmakerDark ? MATCHMAKER_HOME.primaryForeground : primary}
+                    />
                 ) : (
-                    <Text style={[styles.allowButtonText, { color: colors.primary }]}>{allowLabel}</Text>
+                    <Text
+                        style={[
+                            styles.allowButtonText,
+                            { color: isMatchmakerDark ? MATCHMAKER_HOME.primaryForeground : primary },
+                        ]}
+                    >
+                        {allowLabel}
+                    </Text>
                 )}
             </Pressable>
 
             <Pressable
-                style={[styles.secondaryButton, { borderColor: colors.border }]}
+                accessibilityRole="button"
+                style={[styles.secondaryButton, { borderColor: border }]}
                 onPress={onOpenPrivacy}
             >
-                <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>Review Privacy Policy</Text>
+                <Text style={[styles.secondaryButtonText, { color: foreground }]}>Review Privacy Policy</Text>
             </Pressable>
         </View>
     );

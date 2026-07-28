@@ -1,7 +1,46 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { generateMatchmakerLlmTurn } from "@/lib/services/matchmaker-llm-client";
+import {
+    generateMatchmakerCandidateIntro,
+    generateMatchmakerFeedbackReply,
+    generateMatchmakerGreeting,
+    generateMatchmakerLimitReply,
+    generateMatchmakerLlmTurn,
+    generateMatchmakerSearchStatusReply,
+} from "@/lib/services/matchmaker-llm-client";
+
+test("scripted voice fallbacks cover every user-facing matchmaker turn", async () => {
+    process.env.MATCHMAKER_LLM_PROVIDER = "scripted";
+
+    const [greeting, candidate, feedback, limit, noResult] = await Promise.all([
+        generateMatchmakerGreeting({ firstName: "Idris" }),
+        generateMatchmakerCandidateIntro({
+            firstName: "Maya",
+            labels: ["Active recently", "Calm"],
+            matchReason: "Calm and active recently.",
+        }),
+        generateMatchmakerFeedbackReply({
+            outcome: "not_this_one",
+            reason: "Too social",
+        }),
+        generateMatchmakerLimitReply({ used: 3, limit: 3 }),
+        generateMatchmakerSearchStatusReply({
+            status: "no_result",
+            intentText: "calm and intentional",
+        }),
+    ]);
+
+    assert.match(greeting.text, /Idris/);
+    assert.match(candidate.text, /Maya/);
+    assert.match(feedback.text, /too social/i);
+    assert.match(limit.text, /tomorrow/i);
+    assert.match(noResult.text, /weak match/i);
+    assert.deepEqual(
+        [greeting, candidate, feedback, limit, noResult].map((reply) => reply.provider),
+        ["scripted", "scripted", "scripted", "scripted", "scripted"],
+    );
+});
 
 test("clarifier answer advances to a search plan instead of repeating the same question", async () => {
     process.env.MATCHMAKER_LLM_PROVIDER = "scripted";

@@ -10,6 +10,7 @@
     "ios": "node ./scripts/expo-cli.mjs start --ios",
     "web": "node ./scripts/expo-cli.mjs start --web",
     "lint": "expo lint",
+    "test:matchmaker-ui": "node --experimental-strip-types --test lib/matchmaker/conversation-ui.test.ts",
     "generate:android-icon": "python scripts/generate-android-adaptive-icon.py"
   },
   "dependencies": {
@@ -50,7 +51,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "expo": "~54.0.35",
+    "expo": "~54.0.36",
     "expo-apple-authentication": "~8.0.8",
     "expo-av": "~16.0.8",
     "expo-blur": "~15.0.8",
@@ -74,7 +75,7 @@
     "expo-status-bar": "~3.0.9",
     "expo-symbols": "~1.0.8",
     "expo-system-ui": "~6.0.9",
-    "expo-updates": "~29.0.18",
+    "expo-updates": "~29.0.19",
     "expo-web-browser": "~15.0.11",
     "libphonenumber-js": "^1.12.38",
     "lucide-react-native": "^0.555.0",

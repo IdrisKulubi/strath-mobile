@@ -2,8 +2,13 @@ import { and, asc, desc, eq } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import { matchmakerMessages, matchmakerSessions, profiles } from "@/db/schema";
-import { generateMatchmakerLlmTurn } from "@/lib/services/matchmaker-llm-client";
 import {
+    generateMatchmakerFeedbackReply,
+    generateMatchmakerGreeting,
+    generateMatchmakerLlmTurn,
+} from "@/lib/services/matchmaker-llm-client";
+import {
+    getMatchmakerUserMemory,
     recordMatchmakerFeedback,
     type MatchmakerFeedbackOutcome,
 } from "@/lib/services/matchmaker-memory-service";
@@ -174,13 +179,18 @@ async function ensureGreeting(session: typeof matchmakerSessions.$inferSelect) {
     if (existing) return;
 
     const firstName = await getUserFirstName(session.userId);
-    const greetingName = firstName ? ` ${firstName}` : "";
+    const greeting = await generateMatchmakerGreeting({ firstName });
     await createMessage({
         sessionId: session.id,
         role: "assistant",
         kind: "greeting",
-        text: `Morning${greetingName}. I can help you find someone who fits how you feel today. What kind of person would feel right?`,
+        text: greeting.text,
         quickReplies: INITIAL_QUICK_REPLIES,
+        metadata: {
+            provider: greeting.provider,
+            model: greeting.model,
+            fallbackUsed: greeting.fallbackUsed,
+        },
     });
 }
 
@@ -207,7 +217,7 @@ async function getOrCreateRawSession(userId: string) {
             status: "active",
             state: "greeting",
             searchLimit: Math.max(1, DEFAULT_SEARCH_LIMIT),
-            metadata: { provider: "scripted", phase: "conversation_shell" },
+            metadata: { phase: "conversational_matchmaker" },
         })
         .returning();
     await ensureGreeting(created);
@@ -270,10 +280,12 @@ export async function addMatchmakerConversationMessage(input: {
         },
     }).catch(() => undefined);
 
+    const memory = await getMatchmakerUserMemory(input.userId);
     const llmTurn = await generateMatchmakerLlmTurn({
         userMessage: cleaned,
         state: session.state,
         currentIntent: session.currentIntent ?? {},
+        memorySummary: memory?.memorySummary,
         recentMessages: existingMessages.map((message) => ({
             role: message.role,
             text: message.text,
@@ -359,8 +371,6 @@ export async function addMatchmakerConversationFeedback(input: {
         },
     });
 
-    const reasonText = input.reason ? ` ${input.reason}.` : "";
-    const summaryText = memory.memorySummary ? ` ${memory.memorySummary}` : "";
     const wantsReason = input.outcome === "not_this_one" && !input.reason;
     if (input.reason) {
         trackMatchmakerEvent({
@@ -375,15 +385,22 @@ export async function addMatchmakerConversationFeedback(input: {
             },
         }).catch(() => undefined);
     }
+    const recentMessages = await listMessages(session.id);
+    const reply = await generateMatchmakerFeedbackReply({
+        outcome: input.outcome,
+        reason: input.reason,
+        asksForReason: wantsReason,
+        memorySummary: memory.memorySummary,
+        recentMessages: recentMessages.map((message) => ({
+            role: message.role,
+            text: message.text,
+        })),
+    });
     await createMessage({
         sessionId: session.id,
         role: "assistant",
         kind: "feedback",
-        text: wantsReason
-            ? "What felt off?"
-            : input.outcome === "interested"
-            ? `Got it. I will look for more people with that kind of fit.${summaryText}`
-            : `Got it.${reasonText} I will adjust the next search.${summaryText}`,
+        text: reply.text,
         quickReplies: wantsReason
             ? ["Not my vibe", "Too social", "Too quiet", "Not serious enough", "Not active enough", "Different lifestyle", "Skip feedback"]
             : ["Find another", "Change what I asked for", "Skip feedback"],
@@ -392,6 +409,9 @@ export async function addMatchmakerConversationFeedback(input: {
             reason: input.reason,
             candidateUserId,
             memorySummary: memory.memorySummary,
+            provider: reply.provider,
+            model: reply.model,
+            fallbackUsed: reply.fallbackUsed,
         },
     });
 
