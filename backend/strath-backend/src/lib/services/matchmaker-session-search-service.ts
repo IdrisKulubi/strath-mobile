@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import {
@@ -10,6 +10,11 @@ import {
     buildMatchmakerMemoryHint,
     getMatchmakerUserMemory,
 } from "@/lib/services/matchmaker-memory-service";
+import {
+    generateMatchmakerCandidateIntro,
+    generateMatchmakerLimitReply,
+    generateMatchmakerSearchStatusReply,
+} from "@/lib/services/matchmaker-llm-client";
 import { trackMatchmakerEvent } from "@/lib/services/matchmaker-analytics-service";
 import { searchMatchmakerCandidates } from "@/lib/services/matchmaker-search-service";
 
@@ -83,6 +88,17 @@ async function getNextPosition(sessionId: string) {
     return rows.length + 1;
 }
 
+async function listRecentMessages(sessionId: string) {
+    const rows = await db.query.matchmakerMessages.findMany({
+        where: eq(matchmakerMessages.sessionId, sessionId),
+        orderBy: [asc(matchmakerMessages.createdAt)],
+    });
+    return rows.slice(-8).map((message) => ({
+        role: message.role,
+        text: message.text,
+    }));
+}
+
 async function createAssistantMessage(input: {
     sessionId: string;
     kind: "candidate" | "limit" | "text";
@@ -102,6 +118,16 @@ async function createAssistantMessage(input: {
 
 export async function presentNextMatchmakerCandidate(session: MatchmakerSessionRow) {
     if (session.dailySearchCount >= session.searchLimit) {
+        const [memory, recentMessages] = await Promise.all([
+            getMatchmakerUserMemory(session.userId),
+            listRecentMessages(session.id),
+        ]);
+        const limitReply = await generateMatchmakerLimitReply({
+            used: session.dailySearchCount,
+            limit: session.searchLimit,
+            memorySummary: memory?.memorySummary,
+            recentMessages,
+        });
         await db
             .update(matchmakerSessions)
             .set({ state: "limit_reached", updatedAt: new Date() })
@@ -110,7 +136,7 @@ export async function presentNextMatchmakerCandidate(session: MatchmakerSessionR
         await createAssistantMessage({
             sessionId: session.id,
             kind: "limit",
-            text: "I do not want to keep showing weaker matches today. I have saved what I learned, and tomorrow I can search again with that in mind.",
+            text: limitReply.text,
             quickReplies: [
                 "Help me describe what I want",
                 "Give me a date idea",
@@ -121,6 +147,9 @@ export async function presentNextMatchmakerCandidate(session: MatchmakerSessionR
                 limitReason: "daily_search_limit",
                 used: session.dailySearchCount,
                 limit: session.searchLimit,
+                provider: limitReply.provider,
+                model: limitReply.model,
+                fallbackUsed: limitReply.fallbackUsed,
             },
         });
         trackMatchmakerEvent({
@@ -145,11 +174,21 @@ export async function presentNextMatchmakerCandidate(session: MatchmakerSessionR
         memoryHint,
     ].filter(Boolean).join(". ");
     if (!intentText.trim()) {
+        const statusReply = await generateMatchmakerSearchStatusReply({
+            status: "needs_intent",
+            memorySummary: memory?.memorySummary,
+            recentMessages: await listRecentMessages(session.id),
+        });
         await createAssistantMessage({
             sessionId: session.id,
             kind: "text",
-            text: "Tell me a little more about who would feel right today, then I can search properly.",
+            text: statusReply.text,
             quickReplies: ["Someone calm", "Someone serious", "Someone active today"],
+            metadata: {
+                provider: statusReply.provider,
+                model: statusReply.model,
+                fallbackUsed: statusReply.fallbackUsed,
+            },
         });
         return;
     }
@@ -163,6 +202,12 @@ export async function presentNextMatchmakerCandidate(session: MatchmakerSessionR
     const candidate = result.candidates[0];
 
     if (!candidate) {
+        const statusReply = await generateMatchmakerSearchStatusReply({
+            status: "no_result",
+            intentText,
+            memorySummary: memory?.memorySummary,
+            recentMessages: await listRecentMessages(session.id),
+        });
         await db
             .update(matchmakerSessions)
             .set({ state: "ready_to_search", updatedAt: new Date() })
@@ -171,13 +216,16 @@ export async function presentNextMatchmakerCandidate(session: MatchmakerSessionR
         await createAssistantMessage({
             sessionId: session.id,
             kind: "text",
-            text: "I could not find a strong new person from that direction yet. Change one thing and I can try again.",
+            text: statusReply.text,
             quickReplies: ["Broaden it", "More active today", "More serious"],
             metadata: {
                 intentText,
                 memorySummary: memory?.memorySummary,
                 searchedCachedCandidates: result.meta.searchedCachedCandidates,
                 excludedAlreadyShown: shownCandidateIds.length,
+                provider: statusReply.provider,
+                model: statusReply.model,
+                fallbackUsed: statusReply.fallbackUsed,
             },
         });
         return;
@@ -213,17 +261,37 @@ export async function presentNextMatchmakerCandidate(session: MatchmakerSessionR
         })
         .where(eq(matchmakerSessions.id, session.id));
 
+    const recentMessages = await listRecentMessages(session.id);
+    const candidateIntro = await generateMatchmakerCandidateIntro({
+        firstName: candidate.firstName,
+        age: candidate.age,
+        university: candidate.university,
+        course: candidate.course,
+        labels: candidate.labels,
+        matchReason: candidate.reason,
+        intentText,
+        memorySummary: memory?.memorySummary,
+        recentMessages,
+    });
+    const presentedCandidate = {
+        ...candidate,
+        reason: candidateIntro.text,
+    };
     await createAssistantMessage({
         sessionId: session.id,
         kind: "candidate",
-        text: `I would start here. ${candidate.reason}`,
+        text: candidateIntro.text,
         quickReplies: SEARCH_QUICK_REPLIES,
         metadata: {
-            candidate,
+            candidate: presentedCandidate,
+            matchingReason: candidate.reason,
             position,
             intentText,
             memorySummary: memory?.memorySummary,
             source: "matchmaker",
+            provider: candidateIntro.provider,
+            model: candidateIntro.model,
+            fallbackUsed: candidateIntro.fallbackUsed,
         },
     });
     trackMatchmakerEvent({

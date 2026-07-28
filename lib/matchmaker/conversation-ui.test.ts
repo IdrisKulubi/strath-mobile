@@ -31,7 +31,7 @@ test('getSessionStatusLabel maps session states', () => {
   assert.equal(getSessionStatusLabel('limit_reached'), 'Paused for today');
 });
 
-test('greeting messages never expose personalized greeting copy', () => {
+test('greeting messages preserve the conversational backend copy', () => {
   const greeting = {
     id: 'g1',
     role: 'assistant',
@@ -42,7 +42,8 @@ test('greeting messages never expose personalized greeting copy', () => {
     createdAt: '',
   } as MatchmakerConversationResponse['messages'][number];
 
-  assert.equal(getAssistantPromptText(greeting), CANONICAL_MATCHMAKER_PROMPT);
+  assert.equal(getAssistantPromptText(greeting), greeting.text);
+  assert.equal(getAssistantPromptText(null), CANONICAL_MATCHMAKER_PROMPT);
 });
 
 test('visual state prioritizes errors, pauses, searches, and success', () => {
@@ -139,13 +140,13 @@ test('selectActiveTurn surfaces candidate introduction state', () => {
         id: 'm1',
         role: 'assistant',
         kind: 'candidate',
-        text: 'I would start here.',
+        text: "I'd start with Alex. Calm and active feels close to your direction.",
         quickReplies: ['Not this one'],
         metadata: {
           candidate: {
             candidateUserId: 'u1',
             firstName: 'Alex',
-            reason: 'Calm and active',
+            reason: "I'd start with Alex. Calm and active feels close to your direction.",
             labels: ['Active today'],
           },
         },
@@ -158,7 +159,7 @@ test('selectActiveTurn surfaces candidate introduction state', () => {
   const turn = selectActiveTurn(data);
   assert.equal(turn.variant, 'candidate');
   assert.equal(turn.candidate?.firstName, 'Alex');
-  assert.equal(turn.promptText, 'Calm and active');
+  assert.equal(turn.promptText, "I'd start with Alex. Calm and active feels close to your direction.");
   assert.equal(turn.showSearchAction, true);
   assert.equal(turn.searchActionLabel, 'Find another');
 });

@@ -223,7 +223,7 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
           {turn.variant === 'candidate' && turn.candidate ? (
             <View style={styles.candidateSection}>
               <MatchmakerVoiceBubble
-                text={`I would start with ${turn.candidate.firstName || 'this person'}.`}
+                text={turn.promptText}
                 compact
               />
               <MatchmakerCandidateCard

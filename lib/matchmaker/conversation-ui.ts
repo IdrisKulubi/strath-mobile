@@ -54,8 +54,7 @@ export type QuickReplyAction =
 export function getAssistantPromptText(
   message: MatchmakerConversationMessage | null,
 ): string {
-  if (!message || message.kind === 'greeting') return CANONICAL_MATCHMAKER_PROMPT;
-  return message.text;
+  return message?.text?.trim() || CANONICAL_MATCHMAKER_PROMPT;
 }
 
 export function getMatchmakerVisualState(input: {
