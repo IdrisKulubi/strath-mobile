@@ -5,7 +5,7 @@ import { useIsMutating } from '@tanstack/react-query';
 import { MatchmakerConversation } from '@/components/matchmaker/matchmaker-conversation';
 import { MatchmakerHeader } from '@/components/matchmaker/matchmaker-header';
 import { useMatchmakerConversation } from '@/hooks/use-matchmaker';
-import { getMatchmakerVisualState } from '@/lib/matchmaker/conversation-ui';
+import { getMatchmakerVisualState, getCandidateFromMessage } from '@/lib/matchmaker/conversation-ui';
 import { MATCHMAKER_HOME, SPACING } from '@/lib/design-tokens';
 
 interface MatchmakerHomeShellProps {
@@ -21,12 +21,19 @@ export function MatchmakerHomeShell({ conversationEnabled = true }: MatchmakerHo
     isError: conversation.isError,
     isMutating: mutationCount > 0,
   });
+  const latestCandidateMessage = [...(conversation.data?.messages ?? [])]
+    .reverse()
+    .find((message) => message.kind === 'candidate');
+  const candidateFirstName = latestCandidateMessage
+    ? getCandidateFromMessage(latestCandidateMessage)?.firstName ?? null
+    : null;
 
   return (
     <View style={styles.wrap}>
       <MatchmakerHeader
         session={conversation.data?.session ?? null}
         visualState={visualState}
+        candidateFirstName={candidateFirstName}
       />
       <MatchmakerConversation conversation={conversation} />
     </View>

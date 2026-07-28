@@ -7,8 +7,10 @@ import {
   CANONICAL_MATCHMAKER_PROMPT,
   formatRemainingSearches,
   getAssistantPromptText,
+  getDistinctCandidateLabels,
   getMatchmakerVisualState,
   getSessionStatusLabel,
+  humanizeCandidateLead,
   isFeedbackReasonReply,
   normalizeQuickReplyLabel,
   partitionConversationMessages,
@@ -56,10 +58,27 @@ test('visual state prioritizes errors, pauses, searches, and success', () => {
 
 test('composer is available for typing and hidden for terminal feedback states', () => {
   assert.equal(shouldShowMatchmakerComposer('prompt'), true);
-  assert.equal(shouldShowMatchmakerComposer('candidate'), true);
+  assert.equal(shouldShowMatchmakerComposer('candidate', 2), true);
+  assert.equal(shouldShowMatchmakerComposer('candidate', 0), false);
   assert.equal(shouldShowMatchmakerComposer('no_result'), true);
   assert.equal(shouldShowMatchmakerComposer('feedback'), false);
   assert.equal(shouldShowMatchmakerComposer('limit'), false);
+});
+
+test('humanizeCandidateLead strips robotic prefixes', () => {
+  assert.equal(
+    humanizeCandidateLead('I would start here. Active today and complete profile.', 'Cynthia'),
+    'Active today and complete profile.',
+  );
+});
+
+test('getDistinctCandidateLabels removes labels already covered by reason', () => {
+  const labels = getDistinctCandidateLabels(
+    ['Active today', 'Complete profile', 'Serious'],
+    'Active today, complete profile and close to what you asked for.',
+  );
+  assert.equal(labels.length, 1);
+  assert.equal(labels[0], 'Serious');
 });
 
 test('normalizeQuickReplyLabel rewrites search aliases', () => {
@@ -139,6 +158,7 @@ test('selectActiveTurn surfaces candidate introduction state', () => {
   const turn = selectActiveTurn(data);
   assert.equal(turn.variant, 'candidate');
   assert.equal(turn.candidate?.firstName, 'Alex');
+  assert.equal(turn.promptText, 'Calm and active');
   assert.equal(turn.showSearchAction, true);
   assert.equal(turn.searchActionLabel, 'Find another');
 });

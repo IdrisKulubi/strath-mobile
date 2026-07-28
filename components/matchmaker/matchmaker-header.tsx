@@ -4,26 +4,40 @@ import { StyleSheet, View } from 'react-native';
 import { MatchmakerOrb } from '@/components/matchmaker/matchmaker-orb';
 import { Text } from '@/components/ui/text';
 import { formatRemainingSearches } from '@/lib/matchmaker/conversation-ui';
-import { MATCHMAKER_HOME, SPACING } from '@/lib/design-tokens';
+import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 import type { MatchmakerVisualState } from '@/lib/matchmaker/conversation-ui';
 import type { MatchmakerConversationSession } from '@/types/matchmaker';
 
 interface MatchmakerHeaderProps {
   session: MatchmakerConversationSession | null;
   visualState: MatchmakerVisualState;
+  candidateFirstName?: string | null;
 }
 
-function getVisualStatusLabel(state: MatchmakerVisualState) {
+function getVisualStatusLabel(
+  state: MatchmakerVisualState,
+  candidateFirstName?: string | null,
+) {
   if (state === 'searching') return 'Searching thoughtfully';
   if (state === 'thinking') return 'Thinking';
-  if (state === 'success') return 'A promising direction';
+  if (state === 'success') {
+    return candidateFirstName
+      ? `I found someone for you`
+      : 'A thoughtful match';
+  }
   if (state === 'error') return 'Connection needs attention';
   if (state === 'paused') return 'Paused for today';
   return 'Your private guide';
 }
 
-export function MatchmakerHeader({ session, visualState }: MatchmakerHeaderProps) {
-  const quotaLabel = session ? formatRemainingSearches(session.remainingSearches) : null;
+export function MatchmakerHeader({
+  session,
+  visualState,
+  candidateFirstName,
+}: MatchmakerHeaderProps) {
+  const remaining = session?.remainingSearches ?? 0;
+  const quotaLabel = session ? formatRemainingSearches(remaining) : null;
+  const quotaExhausted = remaining <= 0;
 
   return (
     <View style={styles.wrap}>
@@ -31,10 +45,18 @@ export function MatchmakerHeader({ session, visualState }: MatchmakerHeaderProps
         <MatchmakerOrb state={visualState} />
         <View style={styles.copy}>
           <Text style={styles.title}>Matchmaker</Text>
-          <Text style={styles.status}>{getVisualStatusLabel(visualState)}</Text>
+          <Text style={styles.status}>
+            {getVisualStatusLabel(visualState, candidateFirstName)}
+          </Text>
         </View>
       </View>
-      {quotaLabel ? <Text style={styles.quota}>{quotaLabel}</Text> : null}
+      {quotaLabel ? (
+        <View style={[styles.quotaPill, quotaExhausted && styles.quotaPillExhausted]}>
+          <Text style={[styles.quota, quotaExhausted && styles.quotaExhausted]}>
+            {quotaLabel}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -74,11 +96,27 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontWeight: '500',
   },
+  quotaPill: {
+    maxWidth: 132,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: MATCHMAKER_HOME.border,
+    backgroundColor: MATCHMAKER_HOME.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  quotaPillExhausted: {
+    borderColor: 'rgba(240, 120, 120, 0.35)',
+    backgroundColor: 'rgba(240, 120, 120, 0.10)',
+  },
   quota: {
     color: MATCHMAKER_HOME.mutedForeground,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-    textAlign: 'right',
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  quotaExhausted: {
+    color: MATCHMAKER_HOME.error,
   },
 });

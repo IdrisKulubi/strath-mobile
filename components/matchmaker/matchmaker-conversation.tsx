@@ -25,8 +25,10 @@ import {
 import type { UseQueryResult } from '@tanstack/react-query';
 
 import { MatchmakerCandidateCard } from '@/components/matchmaker/matchmaker-candidate-card';
+// Force Metro to rebundle candidate card CTA styles.
 import { MatchmakerFeedbackPanel } from '@/components/matchmaker/matchmaker-feedback-panel';
 import { MatchmakerStatePanel } from '@/components/matchmaker/matchmaker-state-panel';
+import { MatchmakerVoiceBubble } from '@/components/matchmaker/matchmaker-voice-bubble';
 import { Text } from '@/components/ui/text';
 import {
   useFindNextMatchmakerCandidate,
@@ -104,9 +106,10 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
     || sendMessage.isPending
     || findCandidate.isPending
     || submitFeedback.isPending;
-  const showComposer = shouldShowMatchmakerComposer(turn.variant);
+  const remainingSearches = data?.session.remainingSearches ?? 0;
+  const showComposer = shouldShowMatchmakerComposer(turn.variant, remainingSearches);
   const composerPlaceholder = turn.variant === 'candidate'
-    ? 'Refine what you want'
+    ? 'Tell me what to adjust'
     : 'Say it your way';
 
   const findNext = useCallback(async () => {
@@ -218,12 +221,22 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
           ))}
 
           {turn.variant === 'candidate' && turn.candidate ? (
-            <MatchmakerCandidateCard
-              candidate={turn.candidate}
-              introductionText={turn.promptText}
-              onPress={(candidate) => openCandidate(candidate.candidateUserId)}
-              onNotThisOne={() => handleQuickReply('Not this one')}
-            />
+            <View style={styles.candidateSection}>
+              <MatchmakerVoiceBubble
+                text={`I would start with ${turn.candidate.firstName || 'this person'}.`}
+                compact
+              />
+              <MatchmakerCandidateCard
+                candidate={turn.candidate}
+                onPress={(candidate) => openCandidate(candidate.candidateUserId)}
+                onNotThisOne={() => handleQuickReply('Not this one')}
+              />
+              {remainingSearches <= 0 ? (
+                <Text style={styles.limitNote}>
+                  No searches left today. You can still open the profile and decide.
+                </Text>
+              ) : null}
+            </View>
           ) : turn.variant === 'feedback' ? (
             <MatchmakerFeedbackPanel
               message={turn.promptMessage!}
@@ -331,7 +344,9 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
 
       {showComposer ? (
         <View style={styles.composerDock}>
-          <Text style={styles.composerLabel}>Your preference</Text>
+          {turn.variant !== 'candidate' ? (
+            <Text style={styles.composerLabel}>Your preference</Text>
+          ) : null}
           <View style={[styles.composer, isBusy && styles.composerBusy]}>
             <TextInput
               accessibilityLabel="Tell the matchmaker what you want"
@@ -438,6 +453,17 @@ const styles = StyleSheet.create({
   },
   activeSection: {
     gap: SPACING.base,
+  },
+  candidateSection: {
+    gap: SPACING.compact,
+  },
+  limitNote: {
+    color: MATCHMAKER_HOME.subtleForeground,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+    textAlign: 'center',
+    paddingHorizontal: SPACING.tight,
   },
   promptBlock: {
     gap: SPACING.compact,

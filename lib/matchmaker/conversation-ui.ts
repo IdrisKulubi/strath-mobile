@@ -77,8 +77,32 @@ export function getMatchmakerVisualState(input: {
   return 'idle';
 }
 
-export function shouldShowMatchmakerComposer(variant: ActiveTurnVariant): boolean {
+export function shouldShowMatchmakerComposer(
+  variant: ActiveTurnVariant,
+  remainingSearches = 0,
+): boolean {
+  if (variant === 'limit' || variant === 'feedback') return false;
+  if (variant === 'candidate' && remainingSearches <= 0) return false;
   return variant === 'prompt' || variant === 'candidate' || variant === 'no_result';
+}
+
+export function humanizeCandidateLead(text: string, firstName?: string | null): string {
+  const cleaned = text
+    .trim()
+    .replace(/^i would start here\.?\s*/i, '')
+    .replace(/^i would start with\s+[^.]+\.?\s*/i, '')
+    .trim();
+
+  if (cleaned.length > 0) return cleaned;
+  if (firstName) return `${firstName} feels close to what you asked for.`;
+  return 'This person feels close to what you asked for.';
+}
+
+export function getDistinctCandidateLabels(labels: string[], reason: string): string[] {
+  const reasonLower = reason.toLowerCase();
+  return labels
+    .filter((label) => !reasonLower.includes(label.toLowerCase()))
+    .slice(0, 2);
 }
 
 export function formatRemainingSearches(remaining: number): string {
@@ -232,11 +256,13 @@ export function selectActiveTurn(
 
   if (latestAssistant?.kind === 'candidate') {
     const candidate = getCandidateFromMessage(latestAssistant);
+    const insight = candidate?.reason?.trim()
+      || humanizeCandidateLead(latestAssistant.text, candidate?.firstName);
     return {
       variant: 'candidate',
-      promptText: latestAssistant.text,
+      promptText: insight,
       promptMessage: latestAssistant,
-      candidate,
+      candidate: candidate ? { ...candidate, reason: insight } : null,
       quickReplies,
       showSearchAction: remainingSearches > 0,
       searchActionLabel: 'Find another',
