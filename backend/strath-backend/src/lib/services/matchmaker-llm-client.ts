@@ -1,7 +1,18 @@
+import { randomUUID } from "node:crypto";
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
 
 import type { MatchmakerConversationState } from "@/lib/services/matchmaker-session-service";
+
+export class MatchmakerLlmUnavailableError extends Error {
+    readonly code = "MATCHMAKER_LLM_UNAVAILABLE";
+
+    constructor(message = "Matchmaker is temporarily unavailable. Please try again.") {
+        super(message);
+        this.name = "MatchmakerLlmUnavailableError";
+    }
+}
 
 export type MatchmakerLlmProvider = "scripted" | "openai" | "gemini";
 
@@ -134,6 +145,15 @@ const MATCHMAKER_JSON_CONTRACT = `Return valid JSON only. Follow the matchmaker 
 The "reply" field must sound like the voice described above — warm, specific, and conversational.
 Keep replies under 55 words.`;
 
+const CONVERSATION_MODES = ["reflective", "direct", "curious", "warm"] as const;
+
+const FORBIDDEN_REPLY_PATTERNS = [
+    /got it\.?\s*i will prioritize/i,
+    /should i go ahead\??/i,
+    /avoid people you have already passed/i,
+    /based on your preferences/i,
+];
+
 function uniqueStrings(values: string[]) {
     return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
@@ -151,11 +171,28 @@ function readRecord(value: unknown): Record<string, unknown> {
 }
 
 function configuredProvider(): MatchmakerLlmProvider {
-    const provider = (process.env.MATCHMAKER_LLM_PROVIDER || "scripted").toLowerCase();
+    const provider = (process.env.MATCHMAKER_LLM_PROVIDER || "openai").toLowerCase();
     if (provider === "openai" || provider === "gemini" || provider === "scripted") {
         return provider;
     }
-    return "scripted";
+    return "openai";
+}
+
+function buildVariationContext(input: MatchmakerVoiceContext) {
+    const mode = CONVERSATION_MODES[Math.floor(Math.random() * CONVERSATION_MODES.length)];
+    const openings = (input.recentMessages ?? [])
+        .filter((message) => message.role === "assistant")
+        .map((message) => message.text.split(/[.!?]/)[0]?.trim())
+        .filter(Boolean)
+        .slice(-4);
+
+    return `Variation nonce: ${randomUUID().slice(0, 8)}
+Conversational mode: ${mode}
+Do not reuse these recent openings: ${openings.join(" | ") || "(none)"}`;
+}
+
+function containsForbiddenReply(text: string) {
+    return FORBIDDEN_REPLY_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 function normalizeText(text: string) {
@@ -207,7 +244,7 @@ function buildSearchPriorities(input: {
     return [...priorities];
 }
 
-function inferScriptedTurn(input: MatchmakerLlmInput): MatchmakerLlmTurn {
+export function inferStructuredIntent(input: MatchmakerLlmInput) {
     const cleaned = normalizeText(input.userMessage);
     const lower = cleaned.toLowerCase();
     const traits: string[] = [];
@@ -235,30 +272,76 @@ function inferScriptedTurn(input: MatchmakerLlmInput): MatchmakerLlmTurn {
     });
 
     return {
-        messageType: shouldClarify ? "clarifying_question" : "search_plan",
         shouldClarify,
-        reply: shouldClarify
-            ? "Tell me what matters most here — emotional maturity, a quieter personality, or someone low-drama and consistent?"
-            : `Okay — I'd lean into ${[...priorities].slice(0, 3).join(", ")} and skip anyone you've already passed or seen today. Want me to search?`,
-        clarifyingQuestion: shouldClarify
-            ? "What matters most here — emotional maturity, a quieter personality, or someone low-drama and consistent?"
-            : null,
-        quickReplies: shouldClarify ? CLARIFY_REPLIES : READY_REPLIES,
         intent: {
             rawText: cleaned,
             traits: [...new Set(traits)],
             relationshipIntent,
             activityRequirement,
             socialEnergy,
-            dealbreakers: [],
+            dealbreakers: [] as string[],
         },
         searchPlan: {
             priorities,
             avoid: ["blocked users", "already passed users", "people already shown in this session"],
         },
-        provider: "scripted",
-        model: "scripted-v1",
-        fallbackUsed: false,
+    };
+}
+
+export function buildClarifiedSearchPlanTurn(input: MatchmakerLlmInput, turn: MatchmakerLlmTurn): MatchmakerLlmTurn {
+    const previousIntent = readRecord(input.currentIntent);
+    const previousTraits = asStringArray(previousIntent.traits);
+    const answerTraits = inferClarifierAnswerTraits(input.userMessage);
+    const turnTraits = asStringArray(turn.intent.traits);
+    const traits = uniqueStrings([...previousTraits, ...answerTraits, ...turnTraits]);
+    const relationshipIntent = turn.intent.relationshipIntent !== "unknown"
+        ? turn.intent.relationshipIntent
+        : typeof previousIntent.relationshipIntent === "string"
+            ? previousIntent.relationshipIntent as MatchmakerLlmTurn["intent"]["relationshipIntent"]
+            : "unknown";
+    const activityRequirement = turn.intent.activityRequirement !== "any"
+        ? turn.intent.activityRequirement
+        : typeof previousIntent.activityRequirement === "string"
+            ? previousIntent.activityRequirement as MatchmakerLlmTurn["intent"]["activityRequirement"]
+            : "any";
+    const socialEnergy = traits.includes("calm")
+        ? "quiet"
+        : turn.intent.socialEnergy !== "unknown"
+            ? turn.intent.socialEnergy
+            : typeof previousIntent.socialEnergy === "string"
+                ? previousIntent.socialEnergy as MatchmakerLlmTurn["intent"]["socialEnergy"]
+                : "unknown";
+    const priorities = buildSearchPriorities({
+        traits,
+        activityRequirement,
+        relationshipIntent,
+        socialEnergy,
+    });
+
+    return {
+        ...turn,
+        messageType: "search_plan",
+        shouldClarify: false,
+        reply: turn.reply,
+        clarifyingQuestion: null,
+        quickReplies: READY_REPLIES,
+        intent: {
+            ...turn.intent,
+            rawText: [String(previousIntent.rawText ?? ""), input.userMessage].filter(Boolean).join(". "),
+            traits,
+            relationshipIntent,
+            activityRequirement,
+            socialEnergy,
+        },
+        searchPlan: {
+            priorities,
+            avoid: uniqueStrings([
+                ...turn.searchPlan.avoid,
+                "blocked users",
+                "already passed users",
+                "people already shown in this session",
+            ]),
+        },
     };
 }
 
@@ -274,6 +357,7 @@ function buildPrompt(input: MatchmakerLlmInput) {
     const memoryLine = input.memorySummary?.trim()
         ? `What you have learned about this user: ${input.memorySummary.trim()}`
         : "";
+    const variation = buildVariationContext(input);
 
     return `${MATCHMAKER_VOICE_SYSTEM}
 
@@ -289,6 +373,8 @@ Rules:
 - For a search_plan reply, summarize the direction and ask permission to search. Do not ask another preference question.
 - Only ask a preference question when shouldClarify is true.
 - Return valid JSON only.
+
+${variation}
 
 Current state: ${input.state}
 Current intent: ${JSON.stringify(input.currentIntent ?? {})}
@@ -356,14 +442,14 @@ function normalizeTurn(raw: unknown, provider: MatchmakerLlmProvider, model: str
 
 async function generateWithGemini(input: MatchmakerLlmInput): Promise<MatchmakerLlmTurn> {
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("Gemini API key is not configured");
+    if (!apiKey) throw new MatchmakerLlmUnavailableError("Gemini API key is not configured");
 
     const model = process.env.MATCHMAKER_LLM_MODEL || "gemini-2.0-flash";
     const genAI = new GoogleGenerativeAI(apiKey);
     const geminiModel = genAI.getGenerativeModel({
         model,
         generationConfig: {
-            temperature: 0.65,
+            temperature: 0.82,
             maxOutputTokens: 900,
             responseMimeType: "application/json",
         },
@@ -372,7 +458,11 @@ async function generateWithGemini(input: MatchmakerLlmInput): Promise<Matchmaker
     const result = await geminiModel.generateContent({
         contents: [{ role: "user", parts: [{ text: buildPrompt(input) }] }],
     });
-    return normalizeTurn(parseJsonObject(result.response.text()), "gemini", model);
+    const turn = normalizeTurn(parseJsonObject(result.response.text()), "gemini", model);
+    if (containsForbiddenReply(turn.reply)) {
+        throw new MatchmakerLlmUnavailableError("Gemini returned a forbidden template-style reply");
+    }
+    return turn;
 }
 
 function extractOpenAiText(data: unknown) {
@@ -402,114 +492,127 @@ Recent conversation:
 ${recentMessages || "(none)"}`;
 }
 
-async function generateVoiceReply(task: string, fallback: string): Promise<MatchmakerVoiceReply> {
-    const provider = configuredProvider();
+async function callOpenAiVoice(task: string, temperature = 0.82): Promise<MatchmakerVoiceReply> {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new MatchmakerLlmUnavailableError("OPENAI_API_KEY is not configured");
 
-    try {
-        if (provider === "openai") {
-            const apiKey = process.env.OPENAI_API_KEY;
-            if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
-
-            const model = process.env.MATCHMAKER_LLM_MODEL || "gpt-4.1-mini";
-            const response = await fetch("https://api.openai.com/v1/responses", {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                    "Content-Type": "application/json",
+    const model = process.env.MATCHMAKER_LLM_MODEL || "gpt-4.1-mini";
+    const response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            model,
+            input: [
+                {
+                    role: "developer",
+                    content: [{
+                        type: "input_text",
+                        text: `${MATCHMAKER_VOICE_SYSTEM}\nReturn only the spoken reply text. No quotes, JSON, or labels.`,
+                    }],
                 },
-                body: JSON.stringify({
-                    model,
-                    input: [
-                        {
-                            role: "developer",
-                            content: [{
-                                type: "input_text",
-                                text: `${MATCHMAKER_VOICE_SYSTEM}\nReturn only the spoken reply text. No quotes, JSON, or labels.`,
-                            }],
-                        },
-                        {
-                            role: "user",
-                            content: [{ type: "input_text", text: task }],
-                        },
-                    ],
-                    temperature: 0.75,
-                }),
-            });
-            if (!response.ok) {
-                const error = await response.text();
-                throw new Error(`OpenAI Responses API failed (${response.status}): ${error}`);
-            }
-            return {
-                text: cleanVoiceReply(extractOpenAiText(await response.json())),
-                provider,
-                model,
-                fallbackUsed: false,
-            };
-        }
-
-        if (provider === "gemini") {
-            const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
-            if (!apiKey) throw new Error("Gemini API key is not configured");
-
-            const model = process.env.MATCHMAKER_LLM_MODEL || "gemini-2.0-flash";
-            const genAI = new GoogleGenerativeAI(apiKey);
-            const geminiModel = genAI.getGenerativeModel({
-                model,
-                systemInstruction: `${MATCHMAKER_VOICE_SYSTEM}\nReturn only the spoken reply text. No quotes, JSON, or labels.`,
-                generationConfig: {
-                    temperature: 0.75,
-                    maxOutputTokens: 180,
+                {
+                    role: "user",
+                    content: [{ type: "input_text", text: task }],
                 },
-            });
-            const result = await geminiModel.generateContent(task);
-            return {
-                text: cleanVoiceReply(result.response.text()),
-                provider,
-                model,
-                fallbackUsed: false,
-            };
-        }
-
-        return {
-            text: fallback,
-            provider: "scripted",
-            model: "scripted-v2",
-            fallbackUsed: false,
-        };
-    } catch (error) {
-        console.warn("[matchmaker-llm] voice generation failed, falling back to scripted", {
-            provider,
-            error: error instanceof Error ? error.message : String(error),
-        });
-        return {
-            text: fallback,
-            provider: "scripted",
-            model: "scripted-v2",
-            fallbackUsed: true,
-        };
+            ],
+            temperature,
+        }),
+    });
+    if (!response.ok) {
+        const error = await response.text();
+        throw new MatchmakerLlmUnavailableError(`OpenAI Responses API failed (${response.status}): ${error}`);
     }
+
+    const text = cleanVoiceReply(extractOpenAiText(await response.json()));
+    if (containsForbiddenReply(text)) {
+        throw new MatchmakerLlmUnavailableError("OpenAI returned a forbidden template-style reply");
+    }
+
+    return {
+        text,
+        provider: "openai",
+        model,
+        fallbackUsed: false,
+    };
+}
+
+async function callGeminiVoice(task: string, temperature = 0.82): Promise<MatchmakerVoiceReply> {
+    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new MatchmakerLlmUnavailableError("Gemini API key is not configured");
+
+    const model = process.env.MATCHMAKER_LLM_MODEL || "gemini-2.0-flash";
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const geminiModel = genAI.getGenerativeModel({
+        model,
+        systemInstruction: `${MATCHMAKER_VOICE_SYSTEM}\nReturn only the spoken reply text. No quotes, JSON, or labels.`,
+        generationConfig: {
+            temperature,
+            maxOutputTokens: 180,
+        },
+    });
+    const result = await geminiModel.generateContent(task);
+    const text = cleanVoiceReply(result.response.text());
+    if (containsForbiddenReply(text)) {
+        throw new MatchmakerLlmUnavailableError("Gemini returned a forbidden template-style reply");
+    }
+
+    return {
+        text,
+        provider: "gemini",
+        model,
+        fallbackUsed: false,
+    };
+}
+
+async function generateVoiceReply(task: string, context: MatchmakerVoiceContext = {}): Promise<MatchmakerVoiceReply> {
+    const provider = configuredProvider();
+    const prompt = `${task}
+
+${buildVariationContext(context)}
+${voiceContextBlock(context)}`;
+
+    if (provider === "openai") {
+        try {
+            return await callOpenAiVoice(prompt);
+        } catch (error) {
+            if (error instanceof MatchmakerLlmUnavailableError && error.message.includes("forbidden")) {
+                return callOpenAiVoice(`${prompt}\nRewrite with completely fresh wording.`, 0.9);
+            }
+            throw error;
+        }
+    }
+
+    if (provider === "gemini") {
+        try {
+            return await callGeminiVoice(prompt);
+        } catch (error) {
+            if (error instanceof MatchmakerLlmUnavailableError && error.message.includes("forbidden")) {
+                return callGeminiVoice(`${prompt}\nRewrite with completely fresh wording.`, 0.9);
+            }
+            throw error;
+        }
+    }
+
+    throw new MatchmakerLlmUnavailableError("Matchmaker LLM provider is not configured for conversational replies");
 }
 
 export function generateMatchmakerGreeting(
     input: MatchmakerGreetingInput,
 ): Promise<MatchmakerVoiceReply> {
     const name = input.firstName?.trim();
-    const fallback = name
-        ? `Hey ${name}, who would feel right for you today? Tell me what matters, even if you're still figuring it out.`
-        : "Hey, who would feel right for you today? Tell me what matters, even if you're still figuring it out.";
     return generateVoiceReply(
         `Write today's opening greeting. Ask what kind of person would feel right today.
-First name: ${name || "(unknown)"}
-${voiceContextBlock(input)}`,
-        fallback,
+First name: ${name || "(unknown)"}`,
+        input,
     );
 }
 
 export async function generateMatchmakerCandidateIntro(
     input: MatchmakerCandidateIntroInput,
 ): Promise<MatchmakerVoiceReply> {
-    const name = input.firstName?.trim() || "this person";
-    const fallback = `I'd start with ${name}. ${input.matchReason}`;
     const reply = await generateVoiceReply(
         `Introduce this real candidate and explain why they may fit.
 Candidate facts are limited to labels and matchReason below.
@@ -523,70 +626,76 @@ Candidate: ${JSON.stringify({
         })}
 Refer to the candidate by first name or singular "they".
 Do not invite the user to chat or imply messaging is already available; the interface handles next actions.`,
-        fallback,
+        input,
     );
     const hasGenderedPronoun = /\b(?:she|her|hers|he|him|his)\b|(?:she|he)[’']s\b/i.test(reply.text);
     if (!hasGenderedPronoun) return reply;
 
-    return {
-        ...reply,
-        text: fallback,
-        fallbackUsed: true,
-    };
+    return generateVoiceReply(
+        `Introduce this candidate again using only first name or "they". Never use gendered pronouns.
+Candidate: ${JSON.stringify({
+            firstName: input.firstName,
+            labels: input.labels,
+            matchReason: input.matchReason,
+        })}`,
+        input,
+    );
 }
 
 export function generateMatchmakerFeedbackReply(
     input: MatchmakerFeedbackReplyInput,
 ): Promise<MatchmakerVoiceReply> {
-    const fallback = input.asksForReason
-        ? "What felt off about this one?"
-        : input.outcome === "interested"
-            ? "I can see why this one caught your attention. I'll keep that signal in mind for whoever I show you next."
-            : input.reason
-                ? `That helps—I'll steer away from ${input.reason.toLowerCase()} in the next search.`
-                : "No problem. I'll adjust the next search instead of giving you more of the same.";
     return generateVoiceReply(
         `${input.asksForReason
             ? "Ask one gentle, short question about what felt off."
             : "Acknowledge the feedback and briefly say how it will shape the next search. Do not begin with Okay, Got it, or I understand."}
-Feedback: ${JSON.stringify({ outcome: input.outcome, reason: input.reason ?? null })}
-${voiceContextBlock(input)}`,
-        fallback,
+Feedback: ${JSON.stringify({ outcome: input.outcome, reason: input.reason ?? null })}`,
+        input,
     );
 }
 
 export function generateMatchmakerLimitReply(
     input: MatchmakerLimitReplyInput,
 ): Promise<MatchmakerVoiceReply> {
-    const fallback = "That's the strongest set I can responsibly show you today. I've kept what you told me, so tomorrow's search can pick up with a clearer sense of your type.";
     return generateVoiceReply(
         `Warmly explain that today's search limit is reached, their preferences were retained, and they can return tomorrow. Do not mention internal policy.
-Searches used: ${input.used} of ${input.limit}
-${voiceContextBlock(input)}`,
-        fallback,
+Searches used: ${input.used} of ${input.limit}`,
+        input,
     );
 }
 
 export function generateMatchmakerSearchStatusReply(
     input: MatchmakerSearchStatusReplyInput,
 ): Promise<MatchmakerVoiceReply> {
-    const fallback = input.status === "needs_intent"
-        ? "Give me a little more to work with—what kind of person would feel right today?"
-        : "I don't want to force a weak match from that direction. Change one thing that matters less, and I'll take another look.";
     const task = input.status === "needs_intent"
         ? "Ask the user for one useful detail about who would feel right before searching."
         : "Explain that no strong new candidate was found. Be encouraging and ask the user to adjust one preference without implying that no people exist.";
     return generateVoiceReply(
         `${task}
-Current search direction: ${input.intentText || "(none)"}
-${voiceContextBlock(input)}`,
-        fallback,
+Current search direction: ${input.intentText || "(none)"}`,
+        input,
     );
+}
+
+async function generateSearchConfirmationReply(
+    input: MatchmakerLlmInput,
+    turn: MatchmakerLlmTurn,
+): Promise<string> {
+    const reply = await generateVoiceReply(
+        `The user just answered your clarifying question. Confirm the search direction in your own words and ask permission to search.
+Structured intent: ${JSON.stringify({
+            intent: turn.intent,
+            priorities: turn.searchPlan.priorities.slice(0, 4),
+        })}
+User answer: ${input.userMessage}`,
+        input,
+    );
+    return reply.text;
 }
 
 async function generateWithOpenAi(input: MatchmakerLlmInput): Promise<MatchmakerLlmTurn> {
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
+    if (!apiKey) throw new MatchmakerLlmUnavailableError("OPENAI_API_KEY is not configured");
 
     const model = process.env.MATCHMAKER_LLM_MODEL || "gpt-4.1-mini";
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -615,95 +724,59 @@ async function generateWithOpenAi(input: MatchmakerLlmInput): Promise<Matchmaker
             text: {
                 format: { type: "json_object" },
             },
-            temperature: 0.65,
+            temperature: 0.82,
         }),
     });
 
     if (!response.ok) {
         const error = await response.text();
-        throw new Error(`OpenAI Responses API failed (${response.status}): ${error}`);
+        throw new MatchmakerLlmUnavailableError(`OpenAI Responses API failed (${response.status}): ${error}`);
     }
 
-    return normalizeTurn(parseJsonObject(extractOpenAiText(await response.json())), "openai", model);
+    const turn = normalizeTurn(parseJsonObject(extractOpenAiText(await response.json())), "openai", model);
+    if (containsForbiddenReply(turn.reply)) {
+        throw new MatchmakerLlmUnavailableError("OpenAI returned a forbidden template-style reply");
+    }
+    return turn;
 }
 
-function preventClarifyingLoop(input: MatchmakerLlmInput, turn: MatchmakerLlmTurn): MatchmakerLlmTurn {
+async function preventClarifyingLoop(input: MatchmakerLlmInput, turn: MatchmakerLlmTurn): Promise<MatchmakerLlmTurn> {
     if (!turn.shouldClarify) return turn;
     if (input.state !== "clarifying" && !latestAssistantAskedClarifier(input)) return turn;
 
-    const previousIntent = readRecord(input.currentIntent);
-    const previousTraits = asStringArray(previousIntent.traits);
-    const answerTraits = inferClarifierAnswerTraits(input.userMessage);
-    const turnTraits = asStringArray(turn.intent.traits);
-    const traits = uniqueStrings([...previousTraits, ...answerTraits, ...turnTraits]);
-    const relationshipIntent = turn.intent.relationshipIntent !== "unknown"
-        ? turn.intent.relationshipIntent
-        : typeof previousIntent.relationshipIntent === "string"
-            ? previousIntent.relationshipIntent as MatchmakerLlmTurn["intent"]["relationshipIntent"]
-            : "unknown";
-    const activityRequirement = turn.intent.activityRequirement !== "any"
-        ? turn.intent.activityRequirement
-        : typeof previousIntent.activityRequirement === "string"
-            ? previousIntent.activityRequirement as MatchmakerLlmTurn["intent"]["activityRequirement"]
-            : "any";
-    const socialEnergy = traits.includes("calm")
-        ? "quiet"
-        : turn.intent.socialEnergy !== "unknown"
-            ? turn.intent.socialEnergy
-            : typeof previousIntent.socialEnergy === "string"
-                ? previousIntent.socialEnergy as MatchmakerLlmTurn["intent"]["socialEnergy"]
-                : "unknown";
-    const priorities = buildSearchPriorities({
-        traits,
-        activityRequirement,
-        relationshipIntent,
-        socialEnergy,
-    });
-    const readablePriorities = priorities.slice(0, 3).join(", ");
-
+    const merged = buildClarifiedSearchPlanTurn(input, turn);
+    const reply = await generateSearchConfirmationReply(input, merged);
     return {
-        ...turn,
-        messageType: "search_plan",
-        shouldClarify: false,
-        reply: `Got it. I will prioritize ${readablePriorities} and avoid people you have already passed or seen in this session. Should I go ahead?`,
-        clarifyingQuestion: null,
-        quickReplies: READY_REPLIES,
-        intent: {
-            ...turn.intent,
-            rawText: [String(previousIntent.rawText ?? ""), input.userMessage].filter(Boolean).join(". "),
-            traits,
-            relationshipIntent,
-            activityRequirement,
-            socialEnergy,
-        },
-        searchPlan: {
-            priorities,
-            avoid: uniqueStrings([
-                ...turn.searchPlan.avoid,
-                "blocked users",
-                "already passed users",
-                "people already shown in this session",
-            ]),
-        },
+        ...merged,
+        reply,
     };
 }
 
 export async function generateMatchmakerLlmTurn(input: MatchmakerLlmInput): Promise<MatchmakerLlmTurn> {
     const provider = configuredProvider();
-    try {
+
+    const run = async () => {
         if (provider === "gemini") return preventClarifyingLoop(input, await generateWithGemini(input));
         if (provider === "openai") return preventClarifyingLoop(input, await generateWithOpenAi(input));
-        return preventClarifyingLoop(input, inferScriptedTurn(input));
+        throw new MatchmakerLlmUnavailableError("Matchmaker LLM provider is not configured for conversational replies");
+    };
+
+    try {
+        return await run();
     } catch (error) {
-        console.warn("[matchmaker-llm] provider failed, falling back to scripted", {
+        if (error instanceof MatchmakerLlmUnavailableError) {
+            throw error;
+        }
+        console.warn("[matchmaker-llm] provider failed, retrying once", {
             provider,
             error: error instanceof Error ? error.message : String(error),
         });
-        return preventClarifyingLoop(input, {
-            ...inferScriptedTurn(input),
-            provider: "scripted",
-            model: "scripted-v1",
-            fallbackUsed: true,
-        });
+        try {
+            return await run();
+        } catch (retryError) {
+            throw new MatchmakerLlmUnavailableError(
+                retryError instanceof Error ? retryError.message : "Matchmaker LLM request failed",
+            );
+        }
     }
 }

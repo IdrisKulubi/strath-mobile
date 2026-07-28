@@ -71,6 +71,8 @@ export interface MatchmakerConversationResponse {
     quickReplies: string[];
 }
 
+export const MATCHMAKER_VOICE_VERSION = "v3-no-templates";
+
 const DEFAULT_SEARCH_LIMIT = Number(process.env.MATCHMAKER_DAILY_SEARCH_LIMIT || 3);
 
 const INITIAL_QUICK_REPLIES = [
@@ -190,8 +192,58 @@ async function ensureGreeting(session: typeof matchmakerSessions.$inferSelect) {
             provider: greeting.provider,
             model: greeting.model,
             fallbackUsed: greeting.fallbackUsed,
+            voiceVersion: MATCHMAKER_VOICE_VERSION,
         },
     });
+}
+
+function readSessionMetadata(row: typeof matchmakerSessions.$inferSelect) {
+    return row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? row.metadata as Record<string, unknown>
+        : {};
+}
+
+function hasCurrentVoiceVersion(row: typeof matchmakerSessions.$inferSelect) {
+    return readSessionMetadata(row).voiceVersion === MATCHMAKER_VOICE_VERSION;
+}
+
+async function expireSession(sessionId: string) {
+    await db
+        .update(matchmakerSessions)
+        .set({
+            status: "expired",
+            updatedAt: new Date(),
+        })
+        .where(eq(matchmakerSessions.id, sessionId));
+}
+
+async function createSession(userId: string, sessionDay: string) {
+    const [created] = await db
+        .insert(matchmakerSessions)
+        .values({
+            userId,
+            sessionDay,
+            status: "active",
+            state: "greeting",
+            searchLimit: Math.max(1, DEFAULT_SEARCH_LIMIT),
+            metadata: {
+                phase: "conversational_matchmaker",
+                voiceVersion: MATCHMAKER_VOICE_VERSION,
+            },
+        })
+        .returning();
+    await ensureGreeting(created);
+    trackMatchmakerEvent({
+        event: "session_started",
+        userId,
+        sessionId: created.id,
+        metadata: {
+            sessionDay,
+            searchLimit: created.searchLimit,
+            voiceVersion: MATCHMAKER_VOICE_VERSION,
+        },
+    }).catch(() => undefined);
+    return created;
 }
 
 async function getOrCreateRawSession(userId: string) {
@@ -205,32 +257,15 @@ async function getOrCreateRawSession(userId: string) {
         orderBy: [desc(matchmakerSessions.updatedAt)],
     });
     if (existing) {
+        if (!hasCurrentVoiceVersion(existing)) {
+            await expireSession(existing.id);
+            return createSession(userId, sessionDay);
+        }
         await ensureGreeting(existing);
         return existing;
     }
 
-    const [created] = await db
-        .insert(matchmakerSessions)
-        .values({
-            userId,
-            sessionDay,
-            status: "active",
-            state: "greeting",
-            searchLimit: Math.max(1, DEFAULT_SEARCH_LIMIT),
-            metadata: { phase: "conversational_matchmaker" },
-        })
-        .returning();
-    await ensureGreeting(created);
-    trackMatchmakerEvent({
-        event: "session_started",
-        userId,
-        sessionId: created.id,
-        metadata: {
-            sessionDay,
-            searchLimit: created.searchLimit,
-        },
-    }).catch(() => undefined);
-    return created;
+    return createSession(userId, sessionDay);
 }
 
 async function buildResponse(sessionId: string): Promise<MatchmakerConversationResponse> {
@@ -264,6 +299,18 @@ export async function addMatchmakerConversationMessage(input: {
 
     const session = await getOrCreateRawSession(input.userId);
     const existingMessages = await listMessages(session.id);
+    const memory = await getMatchmakerUserMemory(input.userId);
+    const llmTurn = await generateMatchmakerLlmTurn({
+        userMessage: cleaned,
+        state: session.state,
+        currentIntent: session.currentIntent ?? {},
+        memorySummary: memory?.memorySummary,
+        recentMessages: existingMessages.map((message) => ({
+            role: message.role,
+            text: message.text,
+        })),
+    });
+
     await createMessage({
         sessionId: session.id,
         role: "user",
@@ -279,18 +326,6 @@ export async function addMatchmakerConversationMessage(input: {
             messageLength: cleaned.length,
         },
     }).catch(() => undefined);
-
-    const memory = await getMatchmakerUserMemory(input.userId);
-    const llmTurn = await generateMatchmakerLlmTurn({
-        userMessage: cleaned,
-        state: session.state,
-        currentIntent: session.currentIntent ?? {},
-        memorySummary: memory?.memorySummary,
-        recentMessages: existingMessages.map((message) => ({
-            role: message.role,
-            text: message.text,
-        })),
-    });
     const nextState: MatchmakerConversationState = llmTurn.shouldClarify
         ? "clarifying"
         : "ready_to_search";

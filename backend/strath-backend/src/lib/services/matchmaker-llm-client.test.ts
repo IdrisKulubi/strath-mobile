@@ -2,104 +2,80 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-    generateMatchmakerCandidateIntro,
-    generateMatchmakerFeedbackReply,
-    generateMatchmakerGreeting,
-    generateMatchmakerLimitReply,
+    buildClarifiedSearchPlanTurn,
     generateMatchmakerLlmTurn,
-    generateMatchmakerSearchStatusReply,
+    inferStructuredIntent,
+    MatchmakerLlmUnavailableError,
 } from "@/lib/services/matchmaker-llm-client";
 
-test("scripted voice fallbacks cover every user-facing matchmaker turn", async () => {
-    process.env.MATCHMAKER_LLM_PROVIDER = "scripted";
-
-    const [greeting, candidate, feedback, limit, noResult] = await Promise.all([
-        generateMatchmakerGreeting({ firstName: "Idris" }),
-        generateMatchmakerCandidateIntro({
-            firstName: "Maya",
-            labels: ["Active recently", "Calm"],
-            matchReason: "Calm and active recently.",
-        }),
-        generateMatchmakerFeedbackReply({
-            outcome: "not_this_one",
-            reason: "Too social",
-        }),
-        generateMatchmakerLimitReply({ used: 3, limit: 3 }),
-        generateMatchmakerSearchStatusReply({
-            status: "no_result",
-            intentText: "calm and intentional",
-        }),
-    ]);
-
-    assert.match(greeting.text, /Idris/);
-    assert.match(candidate.text, /Maya/);
-    assert.match(feedback.text, /too social/i);
-    assert.match(limit.text, /tomorrow/i);
-    assert.match(noResult.text, /weak match/i);
-    assert.deepEqual(
-        [greeting, candidate, feedback, limit, noResult].map((reply) => reply.provider),
-        ["scripted", "scripted", "scripted", "scripted", "scripted"],
-    );
-});
-
-test("clarifier answer advances to a search plan instead of repeating the same question", async () => {
-    process.env.MATCHMAKER_LLM_PROVIDER = "scripted";
-
-    const turn = await generateMatchmakerLlmTurn({
-        userMessage: "Emotionally mature",
-        state: "clarifying",
-        currentIntent: {
-            rawText: "I want someone calm",
-            traits: ["calm"],
-            activityRequirement: "any",
-            relationshipIntent: "unknown",
-            socialEnergy: "quiet",
-        },
-        recentMessages: [
-            {
-                role: "assistant",
-                text: "When you say that, what matters most: emotional maturity, a quiet personality, or someone low-drama and consistent?",
-            },
-        ],
-    });
-
-    assert.equal(turn.shouldClarify, false);
-    assert.equal(turn.messageType, "search_plan");
-    assert.equal(turn.clarifyingQuestion, null);
-    assert.ok(turn.reply.includes("Should I go ahead?"));
-    assert.deepEqual(turn.quickReplies, [
-        "Go ahead and search",
-        "Change something",
-        "Make it more serious",
-        "Show someone active",
-    ]);
-    assert.ok(turn.intent.traits.includes("emotionally_mature"));
-    assert.ok(turn.searchPlan.priorities.includes("emotional maturity"));
-});
-
-test("clarifier answer advances even when the stored state is stale", async () => {
-    process.env.MATCHMAKER_LLM_PROVIDER = "scripted";
-
-    const turn = await generateMatchmakerLlmTurn({
-        userMessage: "Low-drama and consistent",
+test("inferStructuredIntent extracts traits without canned prose", () => {
+    const structured = inferStructuredIntent({
+        userMessage: "I want someone calm and serious",
         state: "collecting_intent",
-        currentIntent: {
-            rawText: "I want someone cool and nice",
-            traits: [],
-            activityRequirement: "any",
-            relationshipIntent: "unknown",
-            socialEnergy: "unknown",
-        },
-        recentMessages: [
-            {
-                role: "assistant",
-                text: "When you say that, what matters most: emotional maturity, a quiet personality, or someone low-drama and consistent?",
-            },
-        ],
     });
 
-    assert.equal(turn.shouldClarify, false);
-    assert.equal(turn.messageType, "search_plan");
-    assert.ok(turn.intent.traits.includes("low_drama"));
-    assert.ok(turn.searchPlan.priorities.includes("low-drama profile signals"));
+    assert.equal(structured.shouldClarify, false);
+    assert.ok(structured.intent.traits.includes("calm"));
+    assert.ok(structured.intent.traits.includes("serious"));
+    assert.ok(structured.searchPlan.priorities.includes("intentional dating signals"));
+});
+
+test("buildClarifiedSearchPlanTurn merges clarifier answers without template reply text", () => {
+    const merged = buildClarifiedSearchPlanTurn(
+        {
+            userMessage: "Emotionally mature",
+            state: "clarifying",
+            currentIntent: {
+                rawText: "I want someone calm",
+                traits: ["calm"],
+            },
+            recentMessages: [
+                {
+                    role: "assistant",
+                    text: "When you say that, what matters most: emotional maturity, a quiet personality, or someone low-drama and consistent?",
+                },
+            ],
+        },
+        {
+            messageType: "clarifying_question",
+            shouldClarify: true,
+            reply: "placeholder",
+            clarifyingQuestion: "placeholder",
+            quickReplies: [],
+            intent: {
+                rawText: "Emotionally mature",
+                traits: [],
+                relationshipIntent: "unknown",
+                activityRequirement: "any",
+                socialEnergy: "unknown",
+                dealbreakers: [],
+            },
+            searchPlan: {
+                priorities: [],
+                avoid: [],
+            },
+            provider: "openai",
+            model: "gpt-4.1-mini",
+            fallbackUsed: false,
+        },
+    );
+
+    assert.equal(merged.shouldClarify, false);
+    assert.equal(merged.messageType, "search_plan");
+    assert.ok(merged.intent.traits.includes("emotionally_mature"));
+    assert.ok(merged.searchPlan.priorities.includes("emotional maturity"));
+    assert.doesNotMatch(merged.reply, /got it\.?\s*i will prioritize/i);
+    assert.doesNotMatch(merged.reply, /should i go ahead/i);
+});
+
+test("generateMatchmakerLlmTurn throws when provider is unavailable", async () => {
+    process.env.MATCHMAKER_LLM_PROVIDER = "scripted";
+
+    await assert.rejects(
+        () => generateMatchmakerLlmTurn({
+            userMessage: "Someone calm",
+            state: "collecting_intent",
+        }),
+        (error: unknown) => error instanceof MatchmakerLlmUnavailableError,
+    );
 });

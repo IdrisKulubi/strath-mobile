@@ -106,6 +106,12 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
     || sendMessage.isPending
     || findCandidate.isPending
     || submitFeedback.isPending;
+  const sendErrorMessage = sendMessage.isError
+    ? sendMessage.error instanceof Error
+      ? sendMessage.error.message
+      : 'Matchmaker is temporarily unavailable. Try again.'
+    : undefined;
+  const retryDraft = draft.trim() || (typeof sendMessage.variables === 'string' ? sendMessage.variables : '');
   const remainingSearches = data?.session.remainingSearches ?? 0;
   const showComposer = shouldShowMatchmakerComposer(turn.variant, remainingSearches);
   const composerPlaceholder = turn.variant === 'candidate'
@@ -122,8 +128,13 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
     const cleaned = text.trim();
     if (!cleaned || sendMessage.isPending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const pendingText = cleaned;
     setDraft('');
-    await sendMessage.mutateAsync(cleaned);
+    try {
+      await sendMessage.mutateAsync(pendingText);
+    } catch {
+      setDraft(pendingText);
+    }
   }, [sendMessage]);
 
   const openCandidate = useCallback((candidateUserId: string) => {
@@ -263,6 +274,18 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
             body={conversation.error instanceof Error ? conversation.error.message : undefined}
             busy={conversation.isFetching}
             onRetry={() => conversation.refetch()}
+          />
+        ) : null}
+
+        {sendErrorMessage ? (
+          <MatchmakerStatePanel
+            variant="inline_error"
+            title="Matchmaker is thinking"
+            body={sendErrorMessage}
+            busy={sendMessage.isPending}
+            onRetry={retryDraft
+              ? () => submit(retryDraft).catch(() => undefined)
+              : undefined}
           />
         ) : null}
 
