@@ -6,7 +6,7 @@ import React, { useContext } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
-import { RADIUS, SPACING } from '@/lib/design-tokens';
+import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 
 export const GLASS_TAB_BAR_PILL_HEIGHT = 62;
 export const GLASS_TAB_BAR_BOTTOM_GAP = SPACING.tight;
@@ -35,17 +35,27 @@ function getTabLabel(options: TabOptions, routeName: string): string {
 }
 
 function getBadgeText(badge: TabOptions['tabBarBadge']): string | null {
-    if (badge === undefined || badge === null || badge === false || badge === '') return null;
+    if (badge === undefined || badge === null || badge === '') return null;
     return String(badge);
 }
 
 export function GlassTabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
     const { colors, isDark } = useTheme();
     const onHeightChange = useContext(BottomTabBarHeightCallbackContext);
-    const glassFill = isDark ? 'rgba(28, 23, 36, 0.55)' : 'rgba(255, 255, 255, 0.72)';
-    const glassBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)';
-    const activePill = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)';
-    const androidFill = isDark ? 'rgba(28, 23, 36, 0.82)' : 'rgba(255, 255, 255, 0.92)';
+    const activeRoute = state.routes[state.index];
+    const isMatchmakerHome = activeRoute?.name === 'index';
+    const glassFill = isMatchmakerHome
+        ? MATCHMAKER_HOME.navFill
+        : isDark ? 'rgba(28, 23, 36, 0.55)' : 'rgba(255, 255, 255, 0.72)';
+    const glassBorder = isMatchmakerHome
+        ? MATCHMAKER_HOME.navBorder
+        : isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)';
+    const activePill = isMatchmakerHome
+        ? MATCHMAKER_HOME.navActive
+        : isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)';
+    const androidFill = isMatchmakerHome
+        ? MATCHMAKER_HOME.navFill
+        : isDark ? 'rgba(28, 23, 36, 0.82)' : 'rgba(255, 255, 255, 0.92)';
 
     const visibleRoutes = state.routes.filter((route) => isRouteVisible(descriptors[route.key].options));
 
@@ -63,10 +73,10 @@ export function GlassTabBar({ state, descriptors, navigation, insets }: BottomTa
                 },
             ]}
         >
-            <View style={styles.pillShadow}>
+            <View style={[styles.pillShadow, isMatchmakerHome && styles.pillShadowMatchmaker]}>
                 <BlurView
                     intensity={Platform.OS === 'ios' ? 50 : 80}
-                    tint={isDark ? 'dark' : 'light'}
+                    tint={isMatchmakerHome || isDark ? 'dark' : 'light'}
                     style={[
                         styles.pill,
                         {
@@ -81,8 +91,12 @@ export function GlassTabBar({ state, descriptors, navigation, insets }: BottomTa
                             const routeIndex = state.routes.findIndex((r) => r.key === route.key);
                             const isFocused = state.index === routeIndex;
                             const label = getTabLabel(options, route.name);
-                            const activeColor = options.tabBarActiveTintColor ?? colors.primary;
-                            const inactiveColor = options.tabBarInactiveTintColor ?? colors.tabIconDefault;
+                            const activeColor = isMatchmakerHome
+                                ? MATCHMAKER_HOME.primary
+                                : options.tabBarActiveTintColor ?? colors.primary;
+                            const inactiveColor = isMatchmakerHome
+                                ? MATCHMAKER_HOME.mutedForeground
+                                : options.tabBarInactiveTintColor ?? colors.tabIconDefault;
                             const color = isFocused ? activeColor : inactiveColor;
                             const badgeText = getBadgeText(options.tabBarBadge);
                             const badgeStyle = options.tabBarBadgeStyle;
@@ -200,6 +214,12 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.18,
         shadowRadius: 16,
         elevation: 12,
+    },
+    pillShadowMatchmaker: {
+        shadowColor: MATCHMAKER_HOME.background,
+        shadowOpacity: 0.42,
+        shadowRadius: 20,
+        elevation: 14,
     },
     pill: {
         minHeight: GLASS_TAB_BAR_PILL_HEIGHT,

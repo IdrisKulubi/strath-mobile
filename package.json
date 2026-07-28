@@ -10,6 +10,7 @@
     "ios": "node ./scripts/expo-cli.mjs start --ios",
     "web": "node ./scripts/expo-cli.mjs start --web",
     "lint": "expo lint",
+    "test:matchmaker-ui": "node --experimental-strip-types --test lib/matchmaker/conversation-ui.test.ts",
     "generate:android-icon": "python scripts/generate-android-adaptive-icon.py"
   },
   "dependencies": {

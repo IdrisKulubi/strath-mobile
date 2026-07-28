@@ -3,8 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Clock3, RefreshCw, SearchX, WifiOff } from 'lucide-react-native';
 
 import { Text } from '@/components/ui/text';
-import { useTheme } from '@/hooks/use-theme';
-import { RADIUS, SPACING } from '@/lib/design-tokens';
+import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 
 type MatchmakerStateVariant = 'loading' | 'error' | 'inline_error' | 'limit' | 'no_result';
 
@@ -47,11 +46,10 @@ function defaultCopy(variant: MatchmakerStateVariant) {
 }
 
 function StateIcon({ variant }: { variant: MatchmakerStateVariant }) {
-  const { colors } = useTheme();
-  if (variant === 'loading') return <ActivityIndicator size="small" color={colors.primary} />;
-  if (variant === 'limit') return <Clock3 size={17} color={colors.primary} />;
-  if (variant === 'no_result') return <SearchX size={17} color={colors.primary} />;
-  return <WifiOff size={17} color={colors.primary} />;
+  if (variant === 'loading') return <ActivityIndicator size="small" color={MATCHMAKER_HOME.primary} />;
+  if (variant === 'limit') return <Clock3 size={17} color={MATCHMAKER_HOME.warning} />;
+  if (variant === 'no_result') return <SearchX size={17} color={MATCHMAKER_HOME.primary} />;
+  return <WifiOff size={17} color={MATCHMAKER_HOME.error} />;
 }
 
 export function MatchmakerStatePanel({
@@ -63,7 +61,6 @@ export function MatchmakerStatePanel({
   onRetry,
   onReply,
 }: MatchmakerStatePanelProps) {
-  const { colors, isDark } = useTheme();
   const copy = defaultCopy(variant);
   const canRetry = Boolean(onRetry) && (variant === 'error' || variant === 'inline_error');
 
@@ -71,25 +68,15 @@ export function MatchmakerStatePanel({
     <View
       accessibilityRole={variant === 'loading' ? 'progressbar' : 'summary'}
       accessibilityLabel={`${title ?? copy.title}. ${body ?? copy.body}`}
-      style={[
-        styles.wrap,
-        {
-          backgroundColor: isDark ? colors.card : colors.background,
-          borderColor: colors.border,
-        },
-      ]}
+      style={styles.wrap}
     >
       <View style={styles.headerRow}>
-        <View style={[styles.icon, { backgroundColor: colors.secondary }]}>
+        <View style={styles.icon}>
           <StateIcon variant={variant} />
         </View>
         <View style={styles.copy}>
-          <Text style={[styles.title, { color: colors.foreground }]}>
-            {title ?? copy.title}
-          </Text>
-          <Text style={[styles.body, { color: colors.mutedForeground }]}>
-            {body ?? copy.body}
-          </Text>
+          <Text style={styles.title}>{title ?? copy.title}</Text>
+          <Text style={styles.body}>{body ?? copy.body}</Text>
         </View>
       </View>
 
@@ -101,7 +88,7 @@ export function MatchmakerStatePanel({
               style={[
                 styles.skeletonLine,
                 item === 2 && styles.skeletonLineShort,
-                { backgroundColor: colors.secondary },
+                { backgroundColor: MATCHMAKER_HOME.surface },
               ]}
             />
           ))}
@@ -117,20 +104,17 @@ export function MatchmakerStatePanel({
           onPress={onRetry}
           style={({ pressed }) => [
               styles.retry,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-              },
+              styles.retrySurface,
               pressed && !busy && styles.pressed,
               busy && styles.disabled,
             ]}
         >
           {busy ? (
-            <ActivityIndicator size="small" color={colors.primary} />
+            <ActivityIndicator size="small" color={MATCHMAKER_HOME.primary} />
           ) : (
-            <RefreshCw size={15} color={colors.primary} />
+            <RefreshCw size={15} color={MATCHMAKER_HOME.primary} />
           )}
-          <Text style={[styles.retryText, { color: colors.foreground }]}>Try again</Text>
+          <Text style={styles.retryText}>Try again</Text>
         </Pressable>
       ) : null}
 
@@ -145,17 +129,12 @@ export function MatchmakerStatePanel({
               onPress={() => onReply?.(reply)}
               style={({ pressed }) => [
                   styles.reply,
-                  {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
-                  },
+                  styles.replySurface,
                   pressed && !busy && styles.pressed,
                   busy && styles.disabled,
                 ]}
             >
-              <Text style={[styles.replyText, { color: colors.foreground }]}>
-                {reply}
-              </Text>
+              <Text style={styles.replyText}>{reply}</Text>
             </Pressable>
           ))}
         </View>
@@ -166,6 +145,8 @@ export function MatchmakerStatePanel({
 
 const styles = StyleSheet.create({
   wrap: {
+    backgroundColor: MATCHMAKER_HOME.backgroundRaised,
+    borderColor: MATCHMAKER_HOME.border,
     minHeight: 148,
     borderWidth: 1,
     borderRadius: RADIUS.lg,
@@ -178,6 +159,7 @@ const styles = StyleSheet.create({
     gap: SPACING.tight,
   },
   icon: {
+    backgroundColor: MATCHMAKER_HOME.surface,
     width: 36,
     height: 36,
     borderRadius: RADIUS.full,
@@ -189,11 +171,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
+    color: MATCHMAKER_HOME.foreground,
     fontSize: 15,
     lineHeight: 20,
     fontWeight: '800',
   },
   body: {
+    color: MATCHMAKER_HOME.mutedForeground,
     marginTop: 2,
     fontSize: 13,
     lineHeight: 18,
@@ -219,27 +203,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.tight,
   },
+  retrySurface: {
+    backgroundColor: MATCHMAKER_HOME.surface,
+    borderColor: MATCHMAKER_HOME.border,
+  },
   retryText: {
+    color: MATCHMAKER_HOME.foreground,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '800',
   },
   replies: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: SPACING.tight,
   },
   reply: {
-    minHeight: 44,
-    maxWidth: '100%',
+    minHeight: 48,
     borderWidth: 1,
-    borderRadius: RADIUS.full,
+    borderRadius: RADIUS.md,
     paddingHorizontal: 13,
     paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  replySurface: {
+    backgroundColor: MATCHMAKER_HOME.surface,
+    borderColor: MATCHMAKER_HOME.border,
+  },
   replyText: {
+    color: MATCHMAKER_HOME.foreground,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',

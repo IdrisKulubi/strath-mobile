@@ -40,7 +40,7 @@ export function useMatchmakerSearch() {
   });
 }
 
-export function useMatchmakerConversation() {
+export function useMatchmakerConversation(enabled = true) {
   return useQuery({
     queryKey: ['matchmaker', 'conversation'],
     queryFn: async () => {
@@ -50,6 +50,7 @@ export function useMatchmakerConversation() {
       return unwrapData(response);
     },
     staleTime: 30_000,
+    enabled,
   });
 }
 
