@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { errorResponse, successResponse } from "@/lib/api-response";
-import { isAuthorizedCronRequest } from "@/lib/security";
+import { checkMatchmakerHealthAuth } from "@/lib/security";
 import {
     generateMatchmakerGreeting,
     generateMatchmakerLlmTurn,
@@ -25,11 +25,9 @@ function summarizeReply(text: string) {
 
 export async function GET(req: NextRequest) {
     try {
-        if (!isAuthorizedCronRequest(req)) {
-            return errorResponse(
-                new Error("Unauthorized. Pass ?secret=<CRON_SECRET>, Authorization: Bearer <CRON_SECRET>, or x-cron-secret header."),
-                401,
-            );
+        const auth = checkMatchmakerHealthAuth(req);
+        if (!auth.authorized) {
+            return errorResponse(new Error(auth.reason), 401);
         }
 
         const config = getMatchmakerLlmConfig();
