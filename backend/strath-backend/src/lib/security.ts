@@ -129,7 +129,9 @@ export function checkMatchmakerHealthAuth(req: NextRequest) {
     if (!providedSecret) {
         return {
             authorized: false as const,
-            reason: "Missing secret. Pass ?secret=..., Authorization: Bearer ..., x-matchmaker-health-secret, or x-cron-secret.",
+            reason: configuredSecrets.length > 0
+                ? "Missing secret in request. CRON_SECRET is configured on the server, but you must still pass it: ?secret=<value> or Authorization: Bearer <value>."
+                : "Missing secret. Pass ?secret=..., Authorization: Bearer ..., x-matchmaker-health-secret, or x-cron-secret.",
         };
     }
 
