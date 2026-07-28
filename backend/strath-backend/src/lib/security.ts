@@ -81,10 +81,12 @@ export function isAuthorizedCronRequest(req: NextRequest) {
         ? authHeader.slice("Bearer ".length).trim()
         : null;
     const xCronSecret = req.headers.get("x-cron-secret");
+    const querySecret = req.nextUrl.searchParams.get("secret");
 
     return (
         (!!bearer && safeEqual(bearer, cronSecret)) ||
-        (!!xCronSecret && safeEqual(xCronSecret, cronSecret))
+        (!!xCronSecret && safeEqual(xCronSecret, cronSecret)) ||
+        (!!querySecret && safeEqual(querySecret, cronSecret))
     );
 }
 

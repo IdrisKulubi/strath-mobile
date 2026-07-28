@@ -26,7 +26,10 @@ function summarizeReply(text: string) {
 export async function GET(req: NextRequest) {
     try {
         if (!isAuthorizedCronRequest(req)) {
-            return errorResponse(new Error("Unauthorized"), 401);
+            return errorResponse(
+                new Error("Unauthorized. Pass ?secret=<CRON_SECRET>, Authorization: Bearer <CRON_SECRET>, or x-cron-secret header."),
+                401,
+            );
         }
 
         const config = getMatchmakerLlmConfig();

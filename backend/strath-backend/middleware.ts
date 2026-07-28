@@ -9,6 +9,7 @@ export async function middleware(request: NextRequest) {
     const publicPaths = [
         "/api/auth",
         "/api/public",
+        "/api/matchmaker/health",
         "/api/hype/write",
         "/api/wingman/submit", // public token-gated endpoint (no user auth needed)
         "/api/test-db",
