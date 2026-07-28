@@ -178,6 +178,20 @@ function configuredProvider(): MatchmakerLlmProvider {
     return "openai";
 }
 
+export function getMatchmakerLlmConfig() {
+    const provider = configuredProvider();
+    return {
+        provider,
+        model: process.env.MATCHMAKER_LLM_MODEL || (provider === "gemini" ? "gemini-2.0-flash" : "gpt-4.1-mini"),
+        openAiKeyConfigured: Boolean(process.env.OPENAI_API_KEY?.trim()),
+        geminiKeyConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    };
+}
+
+export function isForbiddenMatchmakerReply(text: string) {
+    return containsForbiddenReply(text);
+}
+
 function buildVariationContext(input: MatchmakerVoiceContext) {
     const mode = CONVERSATION_MODES[Math.floor(Math.random() * CONVERSATION_MODES.length)];
     const openings = (input.recentMessages ?? [])
