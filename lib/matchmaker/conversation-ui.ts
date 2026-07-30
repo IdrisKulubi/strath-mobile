@@ -377,6 +377,19 @@ export function selectActiveTurn(
     };
   }
 
+  if (remainingSearches <= 0) {
+    return {
+      variant: 'limit',
+      promptText: latestAssistant?.text ?? 'Searches resume tomorrow. Fine-tune now if you want.',
+      promptMessage: latestAssistant,
+      candidate: null,
+      quickReplies,
+      showSearchAction: false,
+      searchActionLabel: 'Find my person',
+      showMessagesAction: false,
+    };
+  }
+
   return {
     variant: 'prompt',
     promptText: getAssistantPromptText(latestAssistant),

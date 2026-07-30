@@ -360,3 +360,136 @@ test('selectActiveTurn surfaces limit state with refine replies only', () => {
   assert.equal(turn.quickReplies.includes('Find another'), false);
   assert.equal(shouldShowMatchmakerComposer('limit', 0), true);
 });
+
+test('selectActiveTurn forces limit when searches are zero and latest is search_plan', () => {
+  const data = {
+    session: {
+      id: 's1',
+      state: 'ready_to_search',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'search_plan',
+        text: 'Looking for someone calm and active. Ready when you are.',
+        quickReplies: ['Find my person', 'Change something'],
+        metadata: {},
+        createdAt: '',
+      },
+    ],
+    quickReplies: ['Find my person', 'Change something', 'Keep looking'],
+  } satisfies MatchmakerConversationResponse;
+
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'limit');
+  assert.equal(turn.showSearchAction, false);
+  assert.equal(turn.quickReplies.includes('Find my person'), false);
+  assert.equal(turn.quickReplies.includes('Keep looking'), false);
+});
+
+test('selectActiveTurn keeps candidate visible with zero searches but no search action', () => {
+  const data = {
+    session: {
+      id: 's1',
+      state: 'presenting_candidate',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'candidate',
+        text: 'Try Alex. Calm and active feels close.',
+        quickReplies: ['Not this one', 'Find another'],
+        metadata: {
+          candidate: {
+            candidateUserId: 'u1',
+            firstName: 'Alex',
+            reason: 'Try Alex. Calm and active feels close.',
+            labels: ['Active today'],
+          },
+        },
+        createdAt: '',
+      },
+    ],
+    quickReplies: ['Not this one', 'Find another', 'Keep looking'],
+  } satisfies MatchmakerConversationResponse;
+
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'candidate');
+  assert.equal(turn.showSearchAction, false);
+  assert.equal(turn.quickReplies.includes('Find another'), false);
+  assert.equal(turn.quickReplies.includes('Keep looking'), false);
+  assert.equal(shouldShowMatchmakerComposer('candidate', 0), false);
+});
+
+test('selectActiveTurn forces limit when searches are zero and latest is text', () => {
+  const data = {
+    session: {
+      id: 's1',
+      state: 'clarifying',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'text',
+        text: 'Tell me more about the vibe you want.',
+        quickReplies: ['Someone calm'],
+        metadata: {},
+        createdAt: '',
+      },
+    ],
+    quickReplies: ['Someone calm', 'Go ahead and search'],
+  } satisfies MatchmakerConversationResponse;
+
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'limit');
+  assert.equal(turn.showSearchAction, false);
+  assert.equal(turn.quickReplies.includes('Go ahead and search'), false);
+});

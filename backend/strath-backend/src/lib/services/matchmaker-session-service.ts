@@ -5,7 +5,9 @@ import { matchmakerMessages, matchmakerSessions, profiles } from "@/db/schema";
 import {
     generateMatchmakerFeedbackReply,
     generateMatchmakerGreeting,
+    generateMatchmakerLimitReply,
     generateMatchmakerLlmTurn,
+    generateMatchmakerRefineAckReply,
     isMatchmakerSearchConfirmation,
 } from "@/lib/services/matchmaker-llm-client";
 import {
@@ -82,6 +84,89 @@ const INITIAL_QUICK_REPLIES = [
     "Someone active today",
     "Help me figure it out",
 ];
+
+const LIMIT_REFINE_QUICK_REPLIES = [
+    "Help me refine my type",
+    "What should I improve?",
+    "Give me a date idea",
+    "Save this for tomorrow",
+];
+
+function getRemainingSearches(session: typeof matchmakerSessions.$inferSelect) {
+    return Math.max(0, session.searchLimit - session.dailySearchCount);
+}
+
+async function respondAtSearchLimit(input: {
+    sessionId: string;
+    userId: string;
+    session: typeof matchmakerSessions.$inferSelect;
+    userMessage?: string;
+    recordRefinement?: boolean;
+}) {
+    const recentMessages = await listMessages(input.sessionId);
+    const latestAssistant = [...recentMessages].reverse().find((message) => message.role === "assistant") ?? null;
+    const alreadyAtLimit = latestAssistant?.kind === "limit" || input.session.state === "limit_reached";
+    const memory = await getMatchmakerUserMemory(input.userId);
+    let memorySummary = memory?.memorySummary ?? null;
+
+    if (input.recordRefinement && input.userMessage) {
+        const recorded = await recordMatchmakerFeedback({
+            userId: input.userId,
+            outcome: "refinement",
+            reason: input.userMessage,
+            metadata: {
+                source: "matchmaker_conversation_limit",
+                sessionId: input.sessionId,
+            },
+        });
+        memorySummary = recorded.memorySummary;
+    }
+
+    const voiceContext = {
+        memorySummary,
+        recentMessages: recentMessages.map((message) => ({
+            role: message.role,
+            text: message.text,
+        })),
+    };
+
+    const reply = alreadyAtLimit && input.userMessage
+        ? await generateMatchmakerRefineAckReply({
+            ...voiceContext,
+            userMessage: input.userMessage,
+        })
+        : await generateMatchmakerLimitReply({
+            ...voiceContext,
+            used: input.session.dailySearchCount,
+            limit: input.session.searchLimit,
+        });
+
+    await db
+        .update(matchmakerSessions)
+        .set({
+            state: "limit_reached",
+            updatedAt: new Date(),
+        })
+        .where(eq(matchmakerSessions.id, input.sessionId));
+
+    await createMessage({
+        sessionId: input.sessionId,
+        role: "assistant",
+        kind: "limit",
+        text: reply.text,
+        quickReplies: LIMIT_REFINE_QUICK_REPLIES,
+        metadata: {
+            limitReason: "daily_search_limit",
+            used: input.session.dailySearchCount,
+            limit: input.session.searchLimit,
+            provider: reply.provider,
+            model: reply.model,
+            fallbackUsed: reply.fallbackUsed,
+        },
+    });
+
+    return buildResponse(input.sessionId);
+}
 
 function getNairobiDay(date = new Date()) {
     return new Intl.DateTimeFormat("en-CA", {
@@ -309,6 +394,7 @@ export async function addMatchmakerConversationMessage(input: {
 
     const session = await getOrCreateRawSession(input.userId);
     const existingMessages = await listMessages(session.id);
+    const remainingSearches = getRemainingSearches(session);
 
     if (
         isAwaitingSearchConfirmation(session.state, existingMessages)
@@ -320,6 +406,27 @@ export async function addMatchmakerConversationMessage(input: {
             kind: "text",
             text: cleaned,
         });
+
+        if (remainingSearches <= 0) {
+            trackMatchmakerEvent({
+                event: "search_blocked_limit",
+                userId: input.userId,
+                sessionId: session.id,
+                metadata: {
+                    confirmedVia: "message",
+                    messageLength: cleaned.length,
+                },
+            }).catch(() => undefined);
+
+            return respondAtSearchLimit({
+                sessionId: session.id,
+                userId: input.userId,
+                session,
+                userMessage: cleaned,
+                recordRefinement: false,
+            });
+        }
+
         trackMatchmakerEvent({
             event: "search_plan_confirmed",
             userId: input.userId,
@@ -337,6 +444,32 @@ export async function addMatchmakerConversationMessage(input: {
 
         await presentNextMatchmakerCandidate(refreshedSession);
         return buildResponse(session.id);
+    }
+
+    if (remainingSearches <= 0) {
+        await createMessage({
+            sessionId: session.id,
+            role: "user",
+            kind: "text",
+            text: cleaned,
+        });
+        trackMatchmakerEvent({
+            event: "limit_refinement_submitted",
+            userId: input.userId,
+            sessionId: session.id,
+            metadata: {
+                state: session.state,
+                messageLength: cleaned.length,
+            },
+        }).catch(() => undefined);
+
+        return respondAtSearchLimit({
+            sessionId: session.id,
+            userId: input.userId,
+            session,
+            userMessage: cleaned,
+            recordRefinement: true,
+        });
     }
 
     const memory = await getMatchmakerUserMemory(input.userId);

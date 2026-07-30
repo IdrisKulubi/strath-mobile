@@ -759,6 +759,20 @@ Searches used: ${input.used} of ${input.limit}`,
     );
 }
 
+export interface MatchmakerRefineAckReplyInput extends MatchmakerVoiceContext {
+    userMessage: string;
+}
+
+export function generateMatchmakerRefineAckReply(
+    input: MatchmakerRefineAckReplyInput,
+): Promise<MatchmakerVoiceReply> {
+    return generateVoiceReply(
+        `The user is out of searches for today but is fine-tuning preferences for tomorrow. Acknowledge what they said in one or two short sentences. Confirm you saved it. Do not offer another search today. Sound warm and human.
+User refinement: ${input.userMessage}`,
+        input,
+    );
+}
+
 export function generateMatchmakerSearchStatusReply(
     input: MatchmakerSearchStatusReplyInput,
 ): Promise<MatchmakerVoiceReply> {

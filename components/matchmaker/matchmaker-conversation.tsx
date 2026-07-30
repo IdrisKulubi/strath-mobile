@@ -122,7 +122,7 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
   const composerPlaceholder = turn.variant === 'candidate'
     ? 'Tell me what to adjust'
     : turn.variant === 'limit'
-      ? 'Tell me what to refine for tomorrow'
+      ? 'Tell me what to sharpen for tomorrow'
       : 'Say it your way';
 
   const findNext = useCallback(async () => {
@@ -143,7 +143,8 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
     const cleaned = text.trim();
     if (!cleaned || sendMessage.isPending) return;
     if (
-      data?.session.state === 'ready_to_search'
+      (data?.session.remainingSearches ?? 0) > 0
+      && data?.session.state === 'ready_to_search'
       && isMatchmakerSearchConfirmation(cleaned)
     ) {
       await findNext();
@@ -157,7 +158,7 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
     } catch {
       setDraft(pendingText);
     }
-  }, [data?.session.state, findNext, sendMessage]);
+  }, [data?.session.remainingSearches, data?.session.state, findNext, sendMessage]);
 
   const openCandidate = useCallback((candidateUserId: string) => {
     router.push({
@@ -172,7 +173,7 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
 
   const handleQuickReply = useCallback((reply: string) => {
     const action = resolveQuickReplyAction(reply);
-    if (action === 'search' || action === 'find_another') {
+    if (action === 'search' || action === 'find_another' || action === 'skip_feedback') {
       findNext().catch(() => undefined);
       return;
     }
@@ -182,10 +183,6 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
     }
     if (action === 'feedback_reason') {
       submitFeedback.mutateAsync({ outcome: 'not_this_one', reason: reply }).catch(() => undefined);
-      return;
-    }
-    if (action === 'skip_feedback') {
-      findNext().catch(() => undefined);
       return;
     }
     if (action === 'wait_for_response') {
@@ -281,6 +278,7 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
               message={turn.promptMessage!}
               replies={turn.quickReplies}
               outcome={turn.promptMessage?.metadata?.outcome}
+              remainingSearches={remainingSearches}
               busy={isBusy}
               onSelect={handleQuickReply}
             />
