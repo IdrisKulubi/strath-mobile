@@ -427,6 +427,52 @@ export async function presentNextMatchmakerCandidateForUser(userId: string) {
     return buildResponse(session.id);
 }
 
+function buildFeedbackQuickReplies(input: {
+    outcome: MatchmakerFeedbackOutcome;
+    wantsReason: boolean;
+    remainingSearches: number;
+}): string[] {
+    if (input.wantsReason) {
+        return [
+            "Not my vibe",
+            "Too social",
+            "Too quiet",
+            "Not serious enough",
+            "Not active enough",
+            "Different lifestyle",
+            "Skip feedback",
+        ];
+    }
+
+    if (input.outcome === "interested") {
+        if (input.remainingSearches > 0) {
+            return [
+                "Keep looking",
+                "I'll wait for their response",
+                "Open Messages",
+                "Change what I asked for",
+            ];
+        }
+
+        return [
+            "I'll wait for their response",
+            "Open Messages",
+            "Help me refine my type",
+            "What should I improve?",
+        ];
+    }
+
+    if (input.remainingSearches > 0) {
+        return ["Find another", "Change what I asked for", "Skip feedback"];
+    }
+
+    return [
+        "Change what I asked for",
+        "Help me refine my type",
+        "Save this for tomorrow",
+    ];
+}
+
 export async function addMatchmakerConversationFeedback(input: {
     userId: string;
     outcome: MatchmakerFeedbackOutcome;
@@ -447,6 +493,7 @@ export async function addMatchmakerConversationFeedback(input: {
     });
 
     const wantsReason = input.outcome === "not_this_one" && !input.reason;
+    const remainingSearches = Math.max(0, session.searchLimit - session.dailySearchCount);
     if (input.reason) {
         trackMatchmakerEvent({
             event: "feedback_reason_selected",
@@ -465,6 +512,7 @@ export async function addMatchmakerConversationFeedback(input: {
         outcome: input.outcome,
         reason: input.reason,
         asksForReason: wantsReason,
+        remainingSearches,
         memorySummary: memory.memorySummary,
         recentMessages: recentMessages.map((message) => ({
             role: message.role,
@@ -476,9 +524,11 @@ export async function addMatchmakerConversationFeedback(input: {
         role: "assistant",
         kind: "feedback",
         text: reply.text,
-        quickReplies: wantsReason
-            ? ["Not my vibe", "Too social", "Too quiet", "Not serious enough", "Not active enough", "Different lifestyle", "Skip feedback"]
-            : ["Find another", "Change what I asked for", "Skip feedback"],
+        quickReplies: buildFeedbackQuickReplies({
+            outcome: input.outcome,
+            wantsReason,
+            remainingSearches,
+        }),
         metadata: {
             outcome: input.outcome,
             reason: input.reason,

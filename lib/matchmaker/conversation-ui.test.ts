@@ -5,6 +5,7 @@ import type { MatchmakerConversationResponse } from '../../types/matchmaker';
 
 import {
   CANONICAL_MATCHMAKER_PROMPT,
+  filterMatchmakerQuickReplies,
   formatRemainingSearches,
   getAssistantPromptText,
   getDistinctCandidateLabels,
@@ -65,7 +66,7 @@ test('composer is available for typing and hidden for terminal feedback states',
   assert.equal(shouldShowMatchmakerComposer('candidate', 0), false);
   assert.equal(shouldShowMatchmakerComposer('no_result'), true);
   assert.equal(shouldShowMatchmakerComposer('feedback'), false);
-  assert.equal(shouldShowMatchmakerComposer('limit'), false);
+  assert.equal(shouldShowMatchmakerComposer('limit'), true);
 });
 
 test('humanizeCandidateLead strips robotic prefixes', () => {
@@ -91,6 +92,8 @@ test('normalizeQuickReplyLabel rewrites search aliases', () => {
 
 test('resolveQuickReplyAction maps guided actions', () => {
   assert.equal(resolveQuickReplyAction('Find another'), 'find_another');
+  assert.equal(resolveQuickReplyAction('Keep looking'), 'find_another');
+  assert.equal(resolveQuickReplyAction("I'll wait for their response"), 'wait_for_response');
   assert.equal(resolveQuickReplyAction('Not this one'), 'not_this_one');
   assert.equal(resolveQuickReplyAction('Not my vibe'), 'feedback_reason');
   assert.equal(resolveQuickReplyAction('yes please'), 'search');
@@ -185,4 +188,175 @@ test('shouldEnableMatchmakerQuery respects consent', () => {
 test('isFeedbackReasonReply identifies reason chips', () => {
   assert.equal(isFeedbackReasonReply('Too social'), true);
   assert.equal(isFeedbackReasonReply('Find another'), false);
+});
+
+test('filterMatchmakerQuickReplies removes search actions when quota is exhausted', () => {
+  const replies = [
+    'Find another',
+    'Keep looking',
+    'Skip feedback',
+    "I'll wait for their response",
+    'Help me refine my type',
+    'Go ahead and search',
+  ];
+
+  const filtered = filterMatchmakerQuickReplies(replies, 0);
+  assert.deepEqual(filtered, [
+    "I'll wait for their response",
+    'Help me refine my type',
+  ]);
+  assert.deepEqual(filterMatchmakerQuickReplies(replies, 2), replies);
+});
+
+test('selectActiveTurn hides search actions after interested feedback with no searches left', () => {
+  const data = {
+    session: {
+      id: 's1',
+      state: 'collecting_feedback',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'feedback',
+        text: 'I see you liked them. While you wait, we can fine-tune what you want.',
+        quickReplies: [
+          "I'll wait for their response",
+          'Open Messages',
+          'Help me refine my type',
+        ],
+        metadata: { outcome: 'interested' },
+        createdAt: '',
+      },
+    ],
+    quickReplies: [
+      "I'll wait for their response",
+      'Open Messages',
+      'Help me refine my type',
+      'Find another',
+    ],
+  } satisfies MatchmakerConversationResponse;
+
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'feedback');
+  assert.equal(turn.showSearchAction, false);
+  assert.equal(turn.showMessagesAction, true);
+  assert.equal(turn.quickReplies.includes('Find another'), false);
+  assert.equal(turn.quickReplies.includes('Keep looking'), false);
+});
+
+test('selectActiveTurn keeps keep-looking path when searches remain after interest', () => {
+  const data = {
+    session: {
+      id: 's1',
+      state: 'collecting_feedback',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 1,
+      searchLimit: 3,
+      remainingSearches: 2,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 1,
+        limit: 3,
+        remaining: 2,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: null,
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'feedback',
+        text: 'Nice choice. Want to keep looking while you wait?',
+        quickReplies: [
+          'Keep looking',
+          "I'll wait for their response",
+          'Open Messages',
+        ],
+        metadata: { outcome: 'interested' },
+        createdAt: '',
+      },
+    ],
+    quickReplies: [
+      'Keep looking',
+      "I'll wait for their response",
+      'Open Messages',
+    ],
+  } satisfies MatchmakerConversationResponse;
+
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'feedback');
+  assert.equal(turn.showSearchAction, true);
+  assert.equal(turn.quickReplies.includes('Keep looking'), true);
+  assert.equal(resolveQuickReplyAction('Keep looking'), 'find_another');
+  assert.equal(resolveQuickReplyAction("I'll wait for their response"), 'wait_for_response');
+});
+
+test('selectActiveTurn surfaces limit state with refine replies only', () => {
+  const data = {
+    session: {
+      id: 's1',
+      state: 'limit_reached',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'limit',
+        text: 'That is enough for today. Tell me one thing to sharpen tomorrow.',
+        quickReplies: [
+          'Help me refine my type',
+          'What should I improve?',
+          'Find another',
+        ],
+        metadata: {},
+        createdAt: '',
+      },
+    ],
+    quickReplies: [
+      'Help me refine my type',
+      'What should I improve?',
+      'Find another',
+    ],
+  } satisfies MatchmakerConversationResponse;
+
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'limit');
+  assert.equal(turn.showSearchAction, false);
+  assert.equal(turn.quickReplies.includes('Find another'), false);
+  assert.equal(shouldShowMatchmakerComposer('limit', 0), true);
 });

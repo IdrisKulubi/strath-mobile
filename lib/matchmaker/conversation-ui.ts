@@ -49,7 +49,16 @@ export type QuickReplyAction =
   | 'feedback_reason'
   | 'skip_feedback'
   | 'open_messages'
+  | 'wait_for_response'
   | 'send_text';
+
+const SEARCH_CONSUMING_REPLIES = new Set([
+  'find another',
+  'find my person',
+  'keep looking',
+  'skip feedback',
+  'go ahead and search',
+]);
 
 export function getAssistantPromptText(
   message: MatchmakerConversationMessage | null,
@@ -80,7 +89,8 @@ export function shouldShowMatchmakerComposer(
   variant: ActiveTurnVariant,
   remainingSearches = 0,
 ): boolean {
-  if (variant === 'limit' || variant === 'feedback') return false;
+  if (variant === 'feedback') return false;
+  if (variant === 'limit') return true;
   if (variant === 'candidate' && remainingSearches <= 0) return false;
   return variant === 'prompt' || variant === 'candidate' || variant === 'no_result';
 }
@@ -243,10 +253,25 @@ export function normalizeQuickReplyLabel(reply: string): string {
   return reply;
 }
 
+export function filterMatchmakerQuickReplies(
+  replies: string[],
+  remainingSearches: number,
+): string[] {
+  if (remainingSearches > 0) return replies;
+
+  return replies.filter((reply) => {
+    const normalized = reply.trim().toLowerCase();
+    if (SEARCH_CONSUMING_REPLIES.has(normalized)) return false;
+    if (isMatchmakerSearchConfirmation(reply)) return false;
+    return true;
+  });
+}
+
 export function resolveQuickReplyAction(reply: string): QuickReplyAction {
   if (isMatchmakerSearchConfirmation(reply)) return 'search';
   const normalized = reply.toLowerCase();
-  if (normalized === 'find another') return 'find_another';
+  if (normalized === 'find another' || normalized === 'keep looking') return 'find_another';
+  if (normalized === "i'll wait for their response") return 'wait_for_response';
   if (normalized === 'not this one') return 'not_this_one';
   if (normalized === 'skip feedback') return 'skip_feedback';
   if (normalized.includes('message')) return 'open_messages';
@@ -291,7 +316,10 @@ export function selectActiveTurn(
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant') ?? null;
   const state = data?.session.state ?? 'greeting';
   const remainingSearches = data?.session.remainingSearches ?? 0;
-  const quickReplies = data?.quickReplies?.filter(Boolean).slice(0, 6) ?? [];
+  const quickReplies = filterMatchmakerQuickReplies(
+    data?.quickReplies?.filter(Boolean).slice(0, 6) ?? [],
+    remainingSearches,
+  );
 
   if (latestAssistant?.kind === 'limit' || state === 'limit_reached') {
     return {

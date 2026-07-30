@@ -27,7 +27,9 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import { MatchmakerCandidateCard } from '@/components/matchmaker/matchmaker-candidate-card';
 // Force Metro to rebundle candidate card CTA styles.
 import { MatchmakerFeedbackPanel } from '@/components/matchmaker/matchmaker-feedback-panel';
+import { MatchmakerLimitEmptyState } from '@/components/matchmaker/matchmaker-limit-empty-state';
 import { MatchmakerStatePanel } from '@/components/matchmaker/matchmaker-state-panel';
+import { useToast } from '@/components/ui/toast';
 import { MatchmakerVoiceBubble } from '@/components/matchmaker/matchmaker-voice-bubble';
 import { Text } from '@/components/ui/text';
 import {
@@ -92,6 +94,7 @@ function QuickReplyIcon({ label }: { label: string }) {
 
 export function MatchmakerConversation({ conversation }: MatchmakerConversationProps) {
   const router = useRouter();
+  const toast = useToast();
   const onScroll = useMinimizeOnScroll();
   const sendMessage = useSendMatchmakerMessage();
   const findCandidate = useFindNextMatchmakerCandidate();
@@ -118,13 +121,23 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
   const showComposer = shouldShowMatchmakerComposer(turn.variant, remainingSearches);
   const composerPlaceholder = turn.variant === 'candidate'
     ? 'Tell me what to adjust'
-    : 'Say it your way';
+    : turn.variant === 'limit'
+      ? 'Tell me what to refine for tomorrow'
+      : 'Say it your way';
 
   const findNext = useCallback(async () => {
-    if (findCandidate.isPending || (data?.session.remainingSearches ?? 0) <= 0) return;
+    if (findCandidate.isPending) return;
+    if ((data?.session.remainingSearches ?? 0) <= 0) {
+      toast.show({
+        message: 'No searches left today — refine what you want for tomorrow.',
+        variant: 'warning',
+        position: 'bottom',
+      });
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await findCandidate.mutateAsync();
-  }, [data?.session.remainingSearches, findCandidate]);
+  }, [data?.session.remainingSearches, findCandidate, toast]);
 
   const submit = useCallback(async (text: string) => {
     const cleaned = text.trim();
@@ -173,6 +186,10 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
     }
     if (action === 'skip_feedback') {
       findNext().catch(() => undefined);
+      return;
+    }
+    if (action === 'wait_for_response') {
+      submit("I'll wait for their response").catch(() => undefined);
       return;
     }
     if (action === 'open_messages') {
@@ -263,12 +280,20 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
             <MatchmakerFeedbackPanel
               message={turn.promptMessage!}
               replies={turn.quickReplies}
+              outcome={turn.promptMessage?.metadata?.outcome}
               busy={isBusy}
               onSelect={handleQuickReply}
             />
-          ) : turn.variant === 'limit' || turn.variant === 'no_result' ? (
+          ) : turn.variant === 'limit' ? (
+            <MatchmakerLimitEmptyState
+              voiceText={turn.promptText}
+              replies={turn.quickReplies}
+              busy={isBusy}
+              onReply={handleQuickReply}
+            />
+          ) : turn.variant === 'no_result' ? (
             <MatchmakerStatePanel
-              variant={turn.variant === 'limit' ? 'limit' : 'no_result'}
+              variant="no_result"
               body={turn.promptText}
               replies={turn.quickReplies}
               busy={isBusy}
@@ -378,7 +403,7 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
 
       {showComposer ? (
         <View style={styles.composerDock}>
-          {turn.variant !== 'candidate' ? (
+          {turn.variant !== 'candidate' && turn.variant !== 'limit' ? (
             <Text style={styles.composerLabel}>Your preference</Text>
           ) : null}
           <View style={[styles.composer, isBusy && styles.composerBusy]}>

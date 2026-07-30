@@ -2,6 +2,7 @@ export { MatchmakerConversation } from './matchmaker-conversation';
 export { MatchmakerFeedbackPanel } from './matchmaker-feedback-panel';
 export { MatchmakerHeader } from './matchmaker-header';
 export { MatchmakerHomeShell } from './matchmaker-home-shell';
+export { MatchmakerLimitEmptyState } from './matchmaker-limit-empty-state';
 export { MatchmakerOrb } from './matchmaker-orb';
 export { MatchmakerPanel } from './matchmaker-panel';
 export { MatchmakerVoiceBubble } from './matchmaker-voice-bubble';

@@ -47,6 +47,7 @@ export interface MatchmakerFeedbackReplyInput extends MatchmakerVoiceContext {
     outcome: string;
     reason?: string | null;
     asksForReason?: boolean;
+    remainingSearches?: number;
 }
 
 export interface MatchmakerLimitReplyInput extends MatchmakerVoiceContext {
@@ -726,11 +727,24 @@ Candidate: ${JSON.stringify({
 export function generateMatchmakerFeedbackReply(
     input: MatchmakerFeedbackReplyInput,
 ): Promise<MatchmakerVoiceReply> {
+    const remaining = input.remainingSearches ?? 0;
+    let task: string;
+
+    if (input.asksForReason) {
+        task = "Ask one gentle, short question about what felt off.";
+    } else if (input.outcome === "interested") {
+        task = remaining > 0
+            ? `The user marked interest in someone. Acknowledge that warmly in one or two short sentences. Mention they have ${remaining} search${remaining === 1 ? "" : "es"} left today and ask whether they want to keep looking while they wait for a response, or pause for now. Sound human, not robotic. Do not begin with Okay, Got it, or I understand.`
+            : "The user marked interest in someone but has no searches left today. Acknowledge the interest warmly. Let them know they can fine-tune what they want while they wait for a response, and tomorrow's searches will use what you learned. Do not offer to search more today. Sound human, not robotic. Do not begin with Okay, Got it, or I understand.";
+    } else {
+        task = remaining > 0
+            ? "Acknowledge the feedback and briefly say how it will shape the next search. Do not begin with Okay, Got it, or I understand."
+            : "Acknowledge the feedback warmly. They have no searches left today, so invite one small refinement they can share now that will improve tomorrow's matches. Do not offer another search today. Do not begin with Okay, Got it, or I understand.";
+    }
+
     return generateVoiceReply(
-        `${input.asksForReason
-            ? "Ask one gentle, short question about what felt off."
-            : "Acknowledge the feedback and briefly say how it will shape the next search. Do not begin with Okay, Got it, or I understand."}
-Feedback: ${JSON.stringify({ outcome: input.outcome, reason: input.reason ?? null })}`,
+        `${task}
+Feedback: ${JSON.stringify({ outcome: input.outcome, reason: input.reason ?? null, remainingSearches: remaining })}`,
         input,
     );
 }
@@ -739,7 +753,7 @@ export function generateMatchmakerLimitReply(
     input: MatchmakerLimitReplyInput,
 ): Promise<MatchmakerVoiceReply> {
     return generateVoiceReply(
-        `Warmly explain that today's search limit is reached, their preferences were retained, and they can return tomorrow. Do not mention internal policy.
+        `Warmly explain that today's search limit is reached. Their preferences were saved. Invite them to fine-tune one thing now — vibe, seriousness, or lifestyle — so tomorrow's searches start sharper. They can also ask for a date idea or profile tip. Do not mention internal policy. Sound warm and human.
 Searches used: ${input.used} of ${input.limit}`,
         input,
     );

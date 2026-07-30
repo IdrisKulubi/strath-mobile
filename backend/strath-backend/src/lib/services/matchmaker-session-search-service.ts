@@ -138,9 +138,9 @@ export async function presentNextMatchmakerCandidate(session: MatchmakerSessionR
             kind: "limit",
             text: limitReply.text,
             quickReplies: [
-                "Help me describe what I want",
+                "Help me refine my type",
+                "What should I improve?",
                 "Give me a date idea",
-                "Improve my profile",
                 "Save this for tomorrow",
             ],
             metadata: {

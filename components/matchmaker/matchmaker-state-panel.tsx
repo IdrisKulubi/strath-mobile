@@ -27,8 +27,8 @@ function defaultCopy(variant: MatchmakerStateVariant) {
 
   if (variant === 'limit') {
     return {
-      title: 'That is enough searching for today',
-      body: 'I saved what I learned, so tomorrow can start from a better place.',
+      title: "You're out of searches for today",
+      body: 'I saved what I learned. Fine-tune your type now and tomorrow\'s searches will start sharper.',
     };
   }
 

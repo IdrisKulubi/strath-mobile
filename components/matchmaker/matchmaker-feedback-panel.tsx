@@ -12,6 +12,7 @@ interface MatchmakerFeedbackPanelProps {
   replies: string[];
   busy: boolean;
   onSelect: (reply: string) => void;
+  outcome?: string | null;
 }
 
 function displayReply(reply: string) {
@@ -28,13 +29,20 @@ export function MatchmakerFeedbackPanel({
   replies,
   busy,
   onSelect,
+  outcome,
 }: MatchmakerFeedbackPanelProps) {
   const awaitingReason = replies.some((reply) => isFeedbackReasonReply(reply));
   const summary = memorySummary(message);
+  const isInterested = outcome === 'interested';
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.prompt}>{message.text}</Text>
+      {isInterested && !awaitingReason ? (
+        <Text style={styles.hint}>
+          They&apos;re deciding. You can keep looking or wait for their response.
+        </Text>
+      ) : null}
       {!awaitingReason && summary ? (
         <Text style={styles.summary}>{summary}</Text>
       ) : null}
