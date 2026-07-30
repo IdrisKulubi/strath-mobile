@@ -12,6 +12,8 @@ import {
   getSessionStatusLabel,
   humanizeCandidateLead,
   isFeedbackReasonReply,
+  isMatchmakerSearchConfirmation,
+  isMatchmakerSearchRefinement,
   normalizeQuickReplyLabel,
   partitionConversationMessages,
   resolveQuickReplyAction,
@@ -91,6 +93,16 @@ test('resolveQuickReplyAction maps guided actions', () => {
   assert.equal(resolveQuickReplyAction('Find another'), 'find_another');
   assert.equal(resolveQuickReplyAction('Not this one'), 'not_this_one');
   assert.equal(resolveQuickReplyAction('Not my vibe'), 'feedback_reason');
+  assert.equal(resolveQuickReplyAction('yes please'), 'search');
+  assert.equal(resolveQuickReplyAction('keep searching'), 'search');
+  assert.equal(resolveQuickReplyAction('Change something'), 'send_text');
+});
+
+test('confirmation helpers distinguish proceed vs refine', () => {
+  assert.equal(isMatchmakerSearchConfirmation('start now'), true);
+  assert.equal(isMatchmakerSearchConfirmation('thanks'), true);
+  assert.equal(isMatchmakerSearchRefinement('Make it more serious'), true);
+  assert.equal(isMatchmakerSearchConfirmation('Make it more serious'), false);
 });
 
 test('partitionConversationMessages keeps candidate turns focused', () => {

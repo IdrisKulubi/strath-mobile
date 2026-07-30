@@ -36,6 +36,7 @@ import {
   useSubmitMatchmakerFeedback,
 } from '@/hooks/use-matchmaker';
 import {
+  isMatchmakerSearchConfirmation,
   normalizeQuickReplyLabel,
   partitionConversationMessages,
   resolveQuickReplyAction,
@@ -127,6 +128,13 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
   const submit = useCallback(async (text: string) => {
     const cleaned = text.trim();
     if (!cleaned || sendMessage.isPending) return;
+    if (
+      data?.session.state === 'ready_to_search'
+      && isMatchmakerSearchConfirmation(cleaned)
+    ) {
+      await findNext();
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const pendingText = cleaned;
     setDraft('');
@@ -135,7 +143,7 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
     } catch {
       setDraft(pendingText);
     }
-  }, [sendMessage]);
+  }, [data?.session.state, findNext, sendMessage]);
 
   const openCandidate = useCallback((candidateUserId: string) => {
     router.push({

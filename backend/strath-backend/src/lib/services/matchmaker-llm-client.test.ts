@@ -5,6 +5,8 @@ import {
     buildClarifiedSearchPlanTurn,
     generateMatchmakerLlmTurn,
     inferStructuredIntent,
+    isMatchmakerSearchConfirmation,
+    isMatchmakerSearchRefinement,
     MatchmakerLlmUnavailableError,
 } from "@/lib/services/matchmaker-llm-client";
 
@@ -78,4 +80,67 @@ test("generateMatchmakerLlmTurn throws when provider is unavailable", async () =
         }),
         (error: unknown) => error instanceof MatchmakerLlmUnavailableError,
     );
+});
+
+test("isMatchmakerSearchConfirmation recognizes common proceed phrases", () => {
+    assert.equal(isMatchmakerSearchConfirmation("yes please"), true);
+    assert.equal(isMatchmakerSearchConfirmation("start now"), true);
+    assert.equal(isMatchmakerSearchConfirmation("keep searching"), true);
+    assert.equal(isMatchmakerSearchConfirmation("thanks"), true);
+    assert.equal(isMatchmakerSearchConfirmation("Go ahead and search"), true);
+});
+
+test("isMatchmakerSearchRefinement keeps change requests in chat", () => {
+    assert.equal(isMatchmakerSearchRefinement("Change something"), true);
+    assert.equal(isMatchmakerSearchRefinement("Make it more serious"), true);
+    assert.equal(isMatchmakerSearchConfirmation("Change something"), false);
+    assert.equal(isMatchmakerSearchConfirmation("Make it more serious"), false);
+});
+
+test("buildClarifiedSearchPlanTurn uses canonical ready replies", () => {
+    const merged = buildClarifiedSearchPlanTurn(
+        {
+            userMessage: "Quiet and calm",
+            state: "clarifying",
+            currentIntent: {
+                rawText: "I want someone calm",
+                traits: ["calm"],
+            },
+            recentMessages: [
+                {
+                    role: "assistant",
+                    text: "What matters most here?",
+                },
+            ],
+        },
+        {
+            messageType: "clarifying_question",
+            shouldClarify: true,
+            reply: "placeholder",
+            clarifyingQuestion: "placeholder",
+            quickReplies: ["Yes, start searching", "Thanks"],
+            intent: {
+                rawText: "Quiet and calm",
+                traits: [],
+                relationshipIntent: "unknown",
+                activityRequirement: "any",
+                socialEnergy: "unknown",
+                dealbreakers: [],
+            },
+            searchPlan: {
+                priorities: [],
+                avoid: [],
+            },
+            provider: "openai",
+            model: "gpt-4.1-mini",
+            fallbackUsed: false,
+        },
+    );
+
+    assert.deepEqual(merged.quickReplies, [
+        "Go ahead and search",
+        "Change something",
+        "Make it more serious",
+        "Show someone active",
+    ]);
 });

@@ -6,6 +6,7 @@ import {
     generateMatchmakerFeedbackReply,
     generateMatchmakerGreeting,
     generateMatchmakerLlmTurn,
+    isMatchmakerSearchConfirmation,
 } from "@/lib/services/matchmaker-llm-client";
 import {
     getMatchmakerUserMemory,
@@ -289,6 +290,15 @@ export async function getOrCreateMatchmakerConversation(userId: string) {
     return buildResponse(session.id);
 }
 
+function isAwaitingSearchConfirmation(
+    state: MatchmakerConversationState,
+    messages: MatchmakerConversationMessage[],
+) {
+    if (state === "ready_to_search") return true;
+    const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant");
+    return latestAssistant?.kind === "search_plan";
+}
+
 export async function addMatchmakerConversationMessage(input: {
     userId: string;
     text: string;
@@ -299,6 +309,36 @@ export async function addMatchmakerConversationMessage(input: {
 
     const session = await getOrCreateRawSession(input.userId);
     const existingMessages = await listMessages(session.id);
+
+    if (
+        isAwaitingSearchConfirmation(session.state, existingMessages)
+        && isMatchmakerSearchConfirmation(cleaned)
+    ) {
+        await createMessage({
+            sessionId: session.id,
+            role: "user",
+            kind: "text",
+            text: cleaned,
+        });
+        trackMatchmakerEvent({
+            event: "search_plan_confirmed",
+            userId: input.userId,
+            sessionId: session.id,
+            metadata: {
+                confirmedVia: "message",
+                messageLength: cleaned.length,
+            },
+        }).catch(() => undefined);
+
+        const refreshedSession = await db.query.matchmakerSessions.findFirst({
+            where: eq(matchmakerSessions.id, session.id),
+        });
+        if (!refreshedSession) throw new Error("Matchmaker session not found");
+
+        await presentNextMatchmakerCandidate(refreshedSession);
+        return buildResponse(session.id);
+    }
+
     const memory = await getMatchmakerUserMemory(input.userId);
     const llmTurn = await generateMatchmakerLlmTurn({
         userMessage: cleaned,

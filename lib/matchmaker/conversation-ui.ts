@@ -164,6 +164,78 @@ export function isFeedbackReasonReply(reply: string): boolean {
   return FEEDBACK_REASON_REPLIES.has(reply);
 }
 
+const SEARCH_REFINEMENT_REPLIES = new Set([
+  'change something',
+  'make it more serious',
+  'show someone active',
+]);
+
+const SEARCH_CONFIRMATION_PATTERNS = [
+  /^yes\b/i,
+  /^yeah\b/i,
+  /^yep\b/i,
+  /^yup\b/i,
+  /^sure\b/i,
+  /^ok(?:ay)?\b/i,
+  /^please\b/i,
+  /^go ahead\b/i,
+  /^start(?:\s+now|\s+searching)?\b/i,
+  /^search(?:\s+now)?\b/i,
+  /^keep\s+(?:searching|going)\b/i,
+  /^continue\b/i,
+  /^find\s+(?:my\s+person|someone)\b/i,
+  /^thanks?\b/i,
+  /^thank\s+you\b/i,
+  /^sounds?\s+good\b/i,
+  /^let'?s\s+(?:go|do\s+it)\b/i,
+  /^do\s+it\b/i,
+  /^proceed\b/i,
+];
+
+const SEARCH_REFINEMENT_PATTERNS = [
+  /change something/i,
+  /make it more/i,
+  /show someone active/i,
+  /\btweak\b/i,
+  /\badjust\b/i,
+  /more serious/i,
+  /less social/i,
+  /\bdifferent\b/i,
+];
+
+export function isMatchmakerSearchRefinement(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+
+  return SEARCH_REFINEMENT_REPLIES.has(normalized)
+    || SEARCH_REFINEMENT_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+export function isMatchmakerSearchConfirmation(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized || isMatchmakerSearchRefinement(normalized)) return false;
+
+  if (
+    normalized === 'go ahead and search'
+    || normalized === 'find my person'
+    || normalized === 'search now'
+  ) {
+    return true;
+  }
+
+  if (
+    normalized.includes('yes please')
+    || normalized.includes('start now')
+    || normalized.includes('start searching')
+    || normalized.includes('keep searching')
+    || normalized.includes('keep going')
+  ) {
+    return true;
+  }
+
+  return SEARCH_CONFIRMATION_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
 export function normalizeQuickReplyLabel(reply: string): string {
   const normalized = reply.toLowerCase();
   if (normalized === 'go ahead and search') return 'Find my person';
@@ -172,14 +244,8 @@ export function normalizeQuickReplyLabel(reply: string): string {
 }
 
 export function resolveQuickReplyAction(reply: string): QuickReplyAction {
+  if (isMatchmakerSearchConfirmation(reply)) return 'search';
   const normalized = reply.toLowerCase();
-  if (
-    normalized === 'go ahead and search'
-    || normalized === 'find my person'
-    || normalized === 'search now'
-  ) {
-    return 'search';
-  }
   if (normalized === 'find another') return 'find_another';
   if (normalized === 'not this one') return 'not_this_one';
   if (normalized === 'skip feedback') return 'skip_feedback';

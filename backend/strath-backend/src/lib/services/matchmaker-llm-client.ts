@@ -116,6 +116,76 @@ const READY_REPLIES = [
     "Show someone active",
 ];
 
+const SEARCH_REFINEMENT_REPLIES = new Set(
+    READY_REPLIES.slice(1).map((reply) => reply.toLowerCase()),
+);
+
+const SEARCH_CONFIRMATION_PATTERNS = [
+    /^yes\b/i,
+    /^yeah\b/i,
+    /^yep\b/i,
+    /^yup\b/i,
+    /^sure\b/i,
+    /^ok(?:ay)?\b/i,
+    /^please\b/i,
+    /^go ahead\b/i,
+    /^start(?:\s+now|\s+searching)?\b/i,
+    /^search(?:\s+now)?\b/i,
+    /^keep\s+(?:searching|going)\b/i,
+    /^continue\b/i,
+    /^find\s+(?:my\s+person|someone)\b/i,
+    /^thanks?\b/i,
+    /^thank\s+you\b/i,
+    /^sounds?\s+good\b/i,
+    /^let'?s\s+(?:go|do\s+it)\b/i,
+    /^do\s+it\b/i,
+    /^proceed\b/i,
+];
+
+const SEARCH_REFINEMENT_PATTERNS = [
+    /change something/i,
+    /make it more/i,
+    /show someone active/i,
+    /\btweak\b/i,
+    /\badjust\b/i,
+    /more serious/i,
+    /less social/i,
+    /\bdifferent\b/i,
+];
+
+export function isMatchmakerSearchRefinement(text: string) {
+    const normalized = text.trim().toLowerCase();
+    if (!normalized) return false;
+
+    return SEARCH_REFINEMENT_REPLIES.has(normalized)
+        || SEARCH_REFINEMENT_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+export function isMatchmakerSearchConfirmation(text: string) {
+    const normalized = text.trim().toLowerCase();
+    if (!normalized || isMatchmakerSearchRefinement(normalized)) return false;
+
+    if (
+        normalized === "go ahead and search"
+        || normalized === "find my person"
+        || normalized === "search now"
+    ) {
+        return true;
+    }
+
+    if (
+        normalized.includes("yes please")
+        || normalized.includes("start now")
+        || normalized.includes("start searching")
+        || normalized.includes("keep searching")
+        || normalized.includes("keep going")
+    ) {
+        return true;
+    }
+
+    return SEARCH_CONFIRMATION_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
 const CLARIFY_REPLIES = [
     "Emotionally mature",
     "Quiet and calm",
@@ -384,7 +454,8 @@ Rules:
 - If the current state is clarifying, treat the user message as the answer to your previous question and return a search_plan.
 - Never repeat the same clarifying question twice in a row.
 - If the user's intent is clear, produce a search plan the backend can use.
-- For a search_plan reply, summarize the direction and ask permission to search. Do not ask another preference question.
+- For a search_plan reply, summarize the direction in one short message and ask if they want you to search now. Do not say you are already searching. Do not produce acknowledgment loops like "you're welcome" or "keep going".
+- When state is ready_to_search, assume the backend will search after confirmation — do not ask permission again.
 - Only ask a preference question when shouldClarify is true.
 - Return valid JSON only.
 
@@ -443,11 +514,7 @@ function normalizeTurn(raw: unknown, provider: MatchmakerLlmProvider, model: str
     return {
         ...parsed,
         reply,
-        quickReplies: parsed.quickReplies.length > 0
-            ? parsed.quickReplies
-            : parsed.shouldClarify
-                ? CLARIFY_REPLIES
-                : READY_REPLIES,
+        quickReplies: parsed.shouldClarify ? CLARIFY_REPLIES : READY_REPLIES,
         provider,
         model,
         fallbackUsed: false,
