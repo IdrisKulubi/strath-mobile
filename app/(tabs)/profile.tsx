@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { View, StyleSheet } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useMinimizeOnScroll } from 'expo-glass-tabs';
+import Animated from 'react-native-reanimated';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useMyHype } from '@/hooks/use-hype';
@@ -35,6 +36,7 @@ import {
     Globe,
     Church,
 } from 'phosphor-react-native';
+import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 
 function calculateCompletion(profile: any): number {
@@ -81,7 +83,9 @@ export default function ProfileScreen() {
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const router = useRouter();
-    const tabBarHeight = useBottomTabBarHeight();
+    const insets = useSafeAreaInsets();
+    const tabBarHeight = getGlassTabBarHeight(insets.bottom);
+    const onScroll = useMinimizeOnScroll();
     const { data: profile, isLoading } = useProfile();
     const { data: hypeData } = useMyHype();
 
@@ -176,7 +180,9 @@ export default function ProfileScreen() {
                 style={[styles.container, { backgroundColor: colors.background }]}
                 edges={['top']}
             >
-                <ScrollView
+                <Animated.ScrollView
+                    onScroll={onScroll}
+                    scrollEventThrottle={16}
                     contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottom }]}
                     showsVerticalScrollIndicator={false}
                     contentInsetAdjustmentBehavior="automatic"
@@ -259,7 +265,7 @@ export default function ProfileScreen() {
                             snapchat={profile.snapchat}
                         />
                     </ProfileContentSection>
-                </ScrollView>
+                </Animated.ScrollView>
 
                 <ProfileFloatingEditBar onEditPress={() => handlePress('/edit-profile')} />
             </SafeAreaView>

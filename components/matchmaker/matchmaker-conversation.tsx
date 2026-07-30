@@ -2,11 +2,11 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
+import { useMinimizeOnScroll } from 'expo-glass-tabs';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -92,6 +92,7 @@ function QuickReplyIcon({ label }: { label: string }) {
 
 export function MatchmakerConversation({ conversation }: MatchmakerConversationProps) {
   const router = useRouter();
+  const onScroll = useMinimizeOnScroll();
   const sendMessage = useSendMatchmakerMessage();
   const findCandidate = useFindNextMatchmakerCandidate();
   const submitFeedback = useSubmitMatchmakerFeedback();
@@ -198,7 +199,9 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
 
   return (
     <View style={styles.wrap}>
-      <ScrollView
+      <Animated.ScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardDismissMode="interactive"
@@ -371,7 +374,7 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
             </View>
           </Pressable>
         ) : null}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {showComposer ? (
         <View style={styles.composerDock}>

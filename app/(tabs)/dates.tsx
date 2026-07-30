@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, StatusBar, Pressable } from 'react-native';
+import { View, StyleSheet, RefreshControl, StatusBar, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useMinimizeOnScroll } from 'expo-glass-tabs';
 import { ScreenGradient } from '@/components/ui/screen-gradient';
 import Animated, {
     FadeIn,
@@ -55,6 +56,7 @@ function SectionSkeleton() {
 }
 
 export default function DatesScreen() {
+    const onScroll = useMinimizeOnScroll();
     const router = useRouter();
     const { rescheduleRequestId } = useLocalSearchParams<{ rescheduleRequestId?: string }>();
     const { colors, colorScheme } = useTheme();
@@ -390,7 +392,9 @@ export default function DatesScreen() {
                 </View>
             </View>
 
-            <ScrollView
+            <Animated.ScrollView
+                onScroll={onScroll}
+                scrollEventThrottle={16}
                 style={styles.scroll}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
@@ -409,7 +413,7 @@ export default function DatesScreen() {
                 >
                     {renderContent()}
                 </Animated.View>
-            </ScrollView>
+            </Animated.ScrollView>
 
             <DateMatchModal
                 visible={matchModalVisible}

@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { useWindowDimensions } from 'react-native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
 
 const HEADER_HEIGHT = 50;
 const TAB_SWITCHER_HEIGHT = 44;
@@ -11,8 +12,8 @@ const MIN_CARD_HEIGHT = 360;
 
 export function useHomeIntroLayout() {
     const { height: windowHeight } = useWindowDimensions();
-    const tabBarHeight = useBottomTabBarHeight();
     const insets = useSafeAreaInsets();
+    const tabBarHeight = getGlassTabBarHeight(insets.bottom);
 
     return useMemo(() => {
         const cardHeight = Math.max(

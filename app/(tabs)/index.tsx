@@ -4,15 +4,15 @@ import {
     KeyboardAvoidingView,
     Platform,
     RefreshControl,
-    ScrollView,
     StatusBar,
     StyleSheet,
     useWindowDimensions,
     View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useMinimizeOnScroll } from 'expo-glass-tabs';
+import Animated from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { AiConsentCard } from '@/components/ai/ai-consent-card';
@@ -21,6 +21,7 @@ import { HomeMatchmakerEntry } from '@/components/home/home-matchmaker-entry';
 import { MatchmakerHomeShell } from '@/components/matchmaker';
 import { MatchmakerHeader } from '@/components/matchmaker/matchmaker-header';
 import { MatchmakerStatePanel } from '@/components/matchmaker/matchmaker-state-panel';
+import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toast';
@@ -77,7 +78,9 @@ function parseHomeTab(value: string | string[] | undefined): HomeTab | null {
 
 export default function HomeScreen() {
     const router = useRouter();
-    const tabBarHeight = useBottomTabBarHeight();
+    const insets = useSafeAreaInsets();
+    const tabBarHeight = getGlassTabBarHeight(insets.bottom);
+    const onScroll = useMinimizeOnScroll();
     const {
         hasAiConsent,
         grantAiConsent,
@@ -114,7 +117,9 @@ export default function HomeScreen() {
                         ) : !hasAiConsent ? (
                             <>
                                 <MatchmakerHeader session={null} visualState="idle" />
-                                <ScrollView
+                                <Animated.ScrollView
+                                    onScroll={onScroll}
+                                    scrollEventThrottle={16}
                                     contentContainerStyle={styles.consentContent}
                                     keyboardShouldPersistTaps="handled"
                                     showsVerticalScrollIndicator={false}
@@ -129,7 +134,7 @@ export default function HomeScreen() {
                                 onAllow={handleAllowAi}
                                 onOpenPrivacy={() => router.push('/legal?section=privacy')}
                             />
-                                </ScrollView>
+                                </Animated.ScrollView>
                             </>
                         ) : (
                             <MatchmakerHomeShell conversationEnabled={conversationEnabled} />
@@ -160,7 +165,9 @@ function LegacyHomeScreen() {
     const [interestedCarouselIndex, setInterestedCarouselIndex] = useState(0);
     const [homeTab, setHomeTab] = useState<HomeTab>('today');
     const { height: windowHeight } = useWindowDimensions();
-    const tabBarHeight = useBottomTabBarHeight();
+    const insets = useSafeAreaInsets();
+    const tabBarHeight = getGlassTabBarHeight(insets.bottom);
+    const onScroll = useMinimizeOnScroll();
 
     const { data: profile } = useProfile();
     const dailyMatches = useDailyMatches();
@@ -388,7 +395,9 @@ function LegacyHomeScreen() {
         <TabSwipeView route="/(tabs)">
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
                 <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-                <ScrollView
+                <Animated.ScrollView
+                    onScroll={onScroll}
+                    scrollEventThrottle={16}
                     style={styles.scroll}
                     contentContainerStyle={[
                         styles.content,
@@ -418,7 +427,7 @@ function LegacyHomeScreen() {
                     <View style={showCarousel ? styles.carouselHost : undefined}>
                         {mainContent}
                     </View>
-                </ScrollView>
+                </Animated.ScrollView>
 
                 <DecisionInfoSheet
                     visible={infoSheet.visible}

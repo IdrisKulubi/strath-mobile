@@ -1,13 +1,13 @@
 import React, { useCallback } from 'react';
-import { View, FlatList, StyleSheet, RefreshControl, Pressable } from 'react-native';
+import { View, StyleSheet, RefreshControl, Pressable } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { useMinimizeOnScroll } from 'expo-glass-tabs';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import type { Conversation } from '@/hooks/use-conversations';
 import { ConversationCard } from './conversation-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatCircleDots } from 'phosphor-react-native';
-
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 interface ConversationsListProps {
     conversations: Conversation[];
@@ -23,6 +23,7 @@ interface ConversationsListProps {
     onMute?: (conversation: Conversation) => void;
     onExplore?: () => void;
     mutedIds?: Set<string>;
+    onScroll?: ReturnType<typeof useMinimizeOnScroll>;
 }
 
 // Skeleton loader for conversations
@@ -116,6 +117,7 @@ export function ConversationsList({
     onMute,
     onExplore,
     mutedIds = new Set(),
+    onScroll,
 }: ConversationsListProps) {
     const { colors } = useTheme();
 
@@ -170,13 +172,15 @@ export function ConversationsList({
     }
 
     return (
-        <FlatList
+        <Animated.FlatList
             data={conversations}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
             contentContainerStyle={styles.listContent}
             ListHeaderComponent={renderHeader}
             showsVerticalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
             refreshControl={
                 <RefreshControl
                     refreshing={isRefreshing}

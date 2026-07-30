@@ -2,13 +2,14 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   ActivityIndicator,
-  ScrollView,
   Share,
   StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { useMinimizeOnScroll } from 'expo-glass-tabs';
+import Animated from 'react-native-reanimated';
 import { ScreenGradient } from '@/components/ui/screen-gradient';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -85,6 +86,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.strathspace.com'
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function WingmanTabScreen() {
+  const onScroll = useMinimizeOnScroll();
   const router = useRouter();
   const { colors, colorScheme } = useTheme();
   const isDark = colorScheme === 'dark';
@@ -281,7 +283,9 @@ export default function WingmanTabScreen() {
   return (
     <TabSwipeView route="/(tabs)/pulse">
     <ScreenGradient edges={['top']} style={s.root}>
-      <ScrollView
+      <Animated.ScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         contentContainerStyle={s.scroll}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -585,7 +589,7 @@ export default function WingmanTabScreen() {
         )}
 
         <View style={{ height: 40 }} />
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* ── Match detail sheet ── */}
       <WingmanMatchDetail
