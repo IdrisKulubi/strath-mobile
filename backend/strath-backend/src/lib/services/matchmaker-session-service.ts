@@ -5,9 +5,12 @@ import { matchmakerMessages, matchmakerSessions, profiles } from "@/db/schema";
 import {
     generateMatchmakerFeedbackReply,
     generateMatchmakerGreeting,
+    generateMatchmakerDateIdeaReply,
     generateMatchmakerLimitReply,
     generateMatchmakerLlmTurn,
-    generateMatchmakerRefineAckReply,
+    generateMatchmakerProfileTipsReply,
+    generateMatchmakerRefinePromptReply,
+    generateMatchmakerRefineSavedReply,
     isMatchmakerSearchConfirmation,
 } from "@/lib/services/matchmaker-llm-client";
 import {
@@ -15,6 +18,7 @@ import {
     recordMatchmakerFeedback,
     type MatchmakerFeedbackOutcome,
 } from "@/lib/services/matchmaker-memory-service";
+import { getPhotoImprovementTips } from "@/lib/services/photo-intelligence-service";
 import { trackMatchmakerEvent } from "@/lib/services/matchmaker-analytics-service";
 import { presentNextMatchmakerCandidate } from "@/lib/services/matchmaker-session-search-service";
 
@@ -89,58 +93,99 @@ const LIMIT_REFINE_QUICK_REPLIES = [
     "Help me refine my type",
     "What should I improve?",
     "Give me a date idea",
-    "Save this for tomorrow",
 ];
+
+const LIMIT_CHIP_REFINE = "Help me refine my type";
+const LIMIT_CHIP_PROFILE_TIPS = "What should I improve?";
+const LIMIT_CHIP_DATE_IDEA = "Give me a date idea";
+const LIMIT_CHIP_SAVE_TOMORROW = "Save this for tomorrow";
+
+type MatchmakerLimitMode = "idle" | "refine_type" | "date_idea";
+
+type MatchmakerLimitAction =
+    | "entry"
+    | "refine_prompt"
+    | "refine_saved"
+    | "profile_tips"
+    | "date_idea"
+    | "date_idea_followup"
+    | "save_tomorrow";
 
 function getRemainingSearches(session: typeof matchmakerSessions.$inferSelect) {
     return Math.max(0, session.searchLimit - session.dailySearchCount);
 }
 
-async function respondAtSearchLimit(input: {
-    sessionId: string;
-    userId: string;
-    session: typeof matchmakerSessions.$inferSelect;
-    userMessage?: string;
-    recordRefinement?: boolean;
-}) {
-    const recentMessages = await listMessages(input.sessionId);
-    const latestAssistant = [...recentMessages].reverse().find((message) => message.role === "assistant") ?? null;
-    const alreadyAtLimit = latestAssistant?.kind === "limit" || input.session.state === "limit_reached";
-    const memory = await getMatchmakerUserMemory(input.userId);
-    let memorySummary = memory?.memorySummary ?? null;
+function getSessionLimitMode(session: typeof matchmakerSessions.$inferSelect): MatchmakerLimitMode {
+    const mode = readSessionMetadata(session).limitMode;
+    if (mode === "refine_type" || mode === "date_idea") return mode;
+    return "idle";
+}
 
-    if (input.recordRefinement && input.userMessage) {
-        const recorded = await recordMatchmakerFeedback({
-            userId: input.userId,
-            outcome: "refinement",
-            reason: input.userMessage,
+async function setSessionLimitMode(
+    sessionId: string,
+    session: typeof matchmakerSessions.$inferSelect,
+    limitMode: MatchmakerLimitMode,
+) {
+    await db
+        .update(matchmakerSessions)
+        .set({
             metadata: {
-                source: "matchmaker_conversation_limit",
-                sessionId: input.sessionId,
+                ...readSessionMetadata(session),
+                limitMode,
             },
-        });
-        memorySummary = recorded.memorySummary;
-    }
-
-    const voiceContext = {
-        memorySummary,
-        recentMessages: recentMessages.map((message) => ({
-            role: message.role,
-            text: message.text,
-        })),
-    };
-
-    const reply = alreadyAtLimit && input.userMessage
-        ? await generateMatchmakerRefineAckReply({
-            ...voiceContext,
-            userMessage: input.userMessage,
+            updatedAt: new Date(),
         })
-        : await generateMatchmakerLimitReply({
-            ...voiceContext,
-            used: input.session.dailySearchCount,
-            limit: input.session.searchLimit,
-        });
+        .where(eq(matchmakerSessions.id, sessionId));
+}
 
+async function loadProfileSnapshot(userId: string) {
+    const profile = await db.query.profiles.findFirst({
+        where: eq(profiles.userId, userId),
+        columns: {
+            firstName: true,
+            bio: true,
+            aboutMe: true,
+            interests: true,
+            photos: true,
+            profilePhoto: true,
+            lookingFor: true,
+            course: true,
+            university: true,
+        },
+    });
+
+    const photos = Array.isArray(profile?.photos) ? profile.photos : [];
+    return {
+        firstName: profile?.firstName ?? null,
+        bio: profile?.bio || profile?.aboutMe || null,
+        interests: Array.isArray(profile?.interests) ? profile.interests.filter(Boolean).slice(0, 8) : [],
+        photoCount: photos.length + (profile?.profilePhoto ? 1 : 0),
+        lookingFor: profile?.lookingFor ?? null,
+        course: profile?.course ?? null,
+        university: profile?.university ?? null,
+    };
+}
+
+function buildIntentText(session: typeof matchmakerSessions.$inferSelect) {
+    const intent = session.currentIntent ?? {};
+    const lastUserMessage = typeof intent.lastUserMessage === "string" ? intent.lastUserMessage : "";
+    const traits = Array.isArray(intent.traits)
+        ? intent.traits.filter((trait): trait is string => typeof trait === "string")
+        : [];
+    return [lastUserMessage, ...traits].filter(Boolean).join(". ");
+}
+
+async function createLimitAssistantMessage(input: {
+    sessionId: string;
+    session: typeof matchmakerSessions.$inferSelect;
+    text: string;
+    quickReplies?: string[];
+    limitMode: MatchmakerLimitMode;
+    limitAction: MatchmakerLimitAction;
+    provider?: string;
+    model?: string;
+    fallbackUsed?: boolean;
+}) {
     await db
         .update(matchmakerSessions)
         .set({
@@ -153,18 +198,225 @@ async function respondAtSearchLimit(input: {
         sessionId: input.sessionId,
         role: "assistant",
         kind: "limit",
-        text: reply.text,
-        quickReplies: LIMIT_REFINE_QUICK_REPLIES,
+        text: input.text,
+        quickReplies: input.quickReplies ?? LIMIT_REFINE_QUICK_REPLIES,
         metadata: {
             limitReason: "daily_search_limit",
             used: input.session.dailySearchCount,
             limit: input.session.searchLimit,
+            limitMode: input.limitMode,
+            limitAction: input.limitAction,
+            provider: input.provider,
+            model: input.model,
+            fallbackUsed: input.fallbackUsed,
+        },
+    });
+}
+
+async function respondAtSearchLimit(input: {
+    sessionId: string;
+    userId: string;
+    session: typeof matchmakerSessions.$inferSelect;
+}) {
+    const recentMessages = await listMessages(input.sessionId);
+    const memory = await getMatchmakerUserMemory(input.userId);
+    const reply = await generateMatchmakerLimitReply({
+        memorySummary: memory?.memorySummary,
+        recentMessages: recentMessages.map((message) => ({
+            role: message.role,
+            text: message.text,
+        })),
+        used: input.session.dailySearchCount,
+        limit: input.session.searchLimit,
+    });
+
+    await setSessionLimitMode(input.sessionId, input.session, "idle");
+    await createLimitAssistantMessage({
+        sessionId: input.sessionId,
+        session: input.session,
+        text: reply.text,
+        quickReplies: LIMIT_REFINE_QUICK_REPLIES,
+        limitMode: "idle",
+        limitAction: "entry",
+        provider: reply.provider,
+        model: reply.model,
+        fallbackUsed: reply.fallbackUsed,
+    });
+
+    return buildResponse(input.sessionId);
+}
+
+async function handleLimitConversationMessage(input: {
+    sessionId: string;
+    userId: string;
+    session: typeof matchmakerSessions.$inferSelect;
+    userMessage: string;
+}) {
+    const recentMessages = await listMessages(input.sessionId);
+    const memory = await getMatchmakerUserMemory(input.userId);
+    const limitMode = getSessionLimitMode(input.session);
+    const voiceContext = {
+        memorySummary: memory?.memorySummary,
+        recentMessages: recentMessages.map((message) => ({
+            role: message.role,
+            text: message.text,
+        })),
+    };
+    const intentText = buildIntentText(input.session);
+
+    if (input.userMessage === LIMIT_CHIP_REFINE) {
+        const reply = await generateMatchmakerRefinePromptReply(voiceContext);
+        await setSessionLimitMode(input.sessionId, input.session, "refine_type");
+        await createLimitAssistantMessage({
+            sessionId: input.sessionId,
+            session: input.session,
+            text: reply.text,
+            quickReplies: [],
+            limitMode: "refine_type",
+            limitAction: "refine_prompt",
             provider: reply.provider,
             model: reply.model,
             fallbackUsed: reply.fallbackUsed,
-        },
-    });
+        });
+        return buildResponse(input.sessionId);
+    }
 
+    if (input.userMessage === LIMIT_CHIP_PROFILE_TIPS) {
+        const [profile, photoTips] = await Promise.all([
+            loadProfileSnapshot(input.userId),
+            getPhotoImprovementTips(input.userId),
+        ]);
+        const reply = await generateMatchmakerProfileTipsReply({
+            ...voiceContext,
+            profile,
+            photoTips,
+        });
+        await setSessionLimitMode(input.sessionId, input.session, "idle");
+        await createLimitAssistantMessage({
+            sessionId: input.sessionId,
+            session: input.session,
+            text: reply.text,
+            quickReplies: LIMIT_REFINE_QUICK_REPLIES,
+            limitMode: "idle",
+            limitAction: "profile_tips",
+            provider: reply.provider,
+            model: reply.model,
+            fallbackUsed: reply.fallbackUsed,
+        });
+        return buildResponse(input.sessionId);
+    }
+
+    if (input.userMessage === LIMIT_CHIP_DATE_IDEA) {
+        const reply = await generateMatchmakerDateIdeaReply({
+            ...voiceContext,
+            intentText,
+            userMessage: input.userMessage,
+            followUp: false,
+        });
+        await setSessionLimitMode(input.sessionId, input.session, "date_idea");
+        await createLimitAssistantMessage({
+            sessionId: input.sessionId,
+            session: input.session,
+            text: reply.text,
+            quickReplies: [],
+            limitMode: "date_idea",
+            limitAction: "date_idea",
+            provider: reply.provider,
+            model: reply.model,
+            fallbackUsed: reply.fallbackUsed,
+        });
+        return buildResponse(input.sessionId);
+    }
+
+    if (input.userMessage === LIMIT_CHIP_SAVE_TOMORROW) {
+        const reply = await generateMatchmakerRefineSavedReply({
+            ...voiceContext,
+            userMessage: intentText || "today's direction",
+        });
+        await setSessionLimitMode(input.sessionId, input.session, "idle");
+        await createLimitAssistantMessage({
+            sessionId: input.sessionId,
+            session: input.session,
+            text: reply.text,
+            quickReplies: LIMIT_REFINE_QUICK_REPLIES,
+            limitMode: "idle",
+            limitAction: "save_tomorrow",
+            provider: reply.provider,
+            model: reply.model,
+            fallbackUsed: reply.fallbackUsed,
+        });
+        return buildResponse(input.sessionId);
+    }
+
+    if (limitMode === "refine_type") {
+        const recorded = await recordMatchmakerFeedback({
+            userId: input.userId,
+            outcome: "refinement",
+            reason: input.userMessage,
+            metadata: {
+                source: "matchmaker_conversation_limit",
+                sessionId: input.sessionId,
+            },
+        });
+        const reply = await generateMatchmakerRefineSavedReply({
+            memorySummary: recorded.memorySummary,
+            recentMessages: voiceContext.recentMessages,
+            userMessage: input.userMessage,
+        });
+        await setSessionLimitMode(input.sessionId, input.session, "idle");
+        await createLimitAssistantMessage({
+            sessionId: input.sessionId,
+            session: input.session,
+            text: reply.text,
+            quickReplies: LIMIT_REFINE_QUICK_REPLIES,
+            limitMode: "idle",
+            limitAction: "refine_saved",
+            provider: reply.provider,
+            model: reply.model,
+            fallbackUsed: reply.fallbackUsed,
+        });
+        return buildResponse(input.sessionId);
+    }
+
+    if (limitMode === "date_idea") {
+        const reply = await generateMatchmakerDateIdeaReply({
+            ...voiceContext,
+            intentText,
+            userMessage: input.userMessage,
+            followUp: true,
+        });
+        await setSessionLimitMode(input.sessionId, input.session, "date_idea");
+        await createLimitAssistantMessage({
+            sessionId: input.sessionId,
+            session: input.session,
+            text: reply.text,
+            quickReplies: [],
+            limitMode: "date_idea",
+            limitAction: "date_idea_followup",
+            provider: reply.provider,
+            model: reply.model,
+            fallbackUsed: reply.fallbackUsed,
+        });
+        return buildResponse(input.sessionId);
+    }
+
+    const reply = await generateMatchmakerLimitReply({
+        ...voiceContext,
+        used: input.session.dailySearchCount,
+        limit: input.session.searchLimit,
+    });
+    await setSessionLimitMode(input.sessionId, input.session, "idle");
+    await createLimitAssistantMessage({
+        sessionId: input.sessionId,
+        session: input.session,
+        text: reply.text,
+        quickReplies: LIMIT_REFINE_QUICK_REPLIES,
+        limitMode: "idle",
+        limitAction: "entry",
+        provider: reply.provider,
+        model: reply.model,
+        fallbackUsed: reply.fallbackUsed,
+    });
     return buildResponse(input.sessionId);
 }
 
@@ -422,8 +674,6 @@ export async function addMatchmakerConversationMessage(input: {
                 sessionId: session.id,
                 userId: input.userId,
                 session,
-                userMessage: cleaned,
-                recordRefinement: false,
             });
         }
 
@@ -463,12 +713,11 @@ export async function addMatchmakerConversationMessage(input: {
             },
         }).catch(() => undefined);
 
-        return respondAtSearchLimit({
+        return handleLimitConversationMessage({
             sessionId: session.id,
             userId: input.userId,
             session,
             userMessage: cleaned,
-            recordRefinement: true,
         });
     }
 

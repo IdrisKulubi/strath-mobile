@@ -773,6 +773,74 @@ User refinement: ${input.userMessage}`,
     );
 }
 
+export function generateMatchmakerRefinePromptReply(
+    input: MatchmakerVoiceContext,
+): Promise<MatchmakerVoiceReply> {
+    return generateVoiceReply(
+        `The user is out of searches for today and tapped refine my type. Ask them in one or two short sentences what kind of person they want to lean into tomorrow. Mention vibe, energy, or seriousness. Invite them to type it below. Do not offer another search today. Sound warm and human.`,
+        input,
+    );
+}
+
+export interface MatchmakerRefineSavedReplyInput extends MatchmakerVoiceContext {
+    userMessage: string;
+}
+
+export function generateMatchmakerRefineSavedReply(
+    input: MatchmakerRefineSavedReplyInput,
+): Promise<MatchmakerVoiceReply> {
+    return generateVoiceReply(
+        `The user described what they want tomorrow's matches to lean into. Confirm you saved their preference in one or two short sentences. Reflect their words naturally. Say searches resume tomorrow with this sharper. Do not offer another search today. Sound warm and human.
+Saved preference: ${input.userMessage}`,
+        input,
+    );
+}
+
+export interface MatchmakerProfileTipsReplyInput extends MatchmakerVoiceContext {
+    profile: {
+        firstName?: string | null;
+        bio?: string | null;
+        interests?: string[];
+        photoCount?: number;
+        lookingFor?: string | null;
+        course?: string | null;
+        university?: string | null;
+    };
+    photoTips: string[];
+}
+
+export function generateMatchmakerProfileTipsReply(
+    input: MatchmakerProfileTipsReplyInput,
+): Promise<MatchmakerVoiceReply> {
+    return generateVoiceReply(
+        `The user asked for profile tips while out of searches today. Review their profile snapshot and photo tips. Start with one genuine strength, then give 2-3 concrete improvements they can make before tomorrow. Be specific to their data. Do not offer another search today. Sound warm and human.
+Profile snapshot: ${JSON.stringify(input.profile)}
+Photo tips: ${JSON.stringify(input.photoTips)}`,
+        input,
+    );
+}
+
+export interface MatchmakerDateIdeaReplyInput extends MatchmakerVoiceContext {
+    userMessage?: string | null;
+    intentText?: string | null;
+    followUp?: boolean;
+}
+
+export function generateMatchmakerDateIdeaReply(
+    input: MatchmakerDateIdeaReplyInput,
+): Promise<MatchmakerVoiceReply> {
+    const task = input.followUp
+        ? "The user wants another date idea or a different vibe. Offer one fresh campus-friendly date idea in 2-3 short sentences. Invite them to ask for another vibe if they want. Do not offer another search today."
+        : "The user asked for a date idea while out of searches today. Offer one concrete, low-pressure campus-friendly date idea in 2-3 short sentences grounded in their preferences. Invite them to ask for another vibe if they want. Do not offer another search today.";
+
+    return generateVoiceReply(
+        `${task}
+Recent preference: ${input.intentText || "(none)"}
+User message: ${input.userMessage || "(none)"}`,
+        input,
+    );
+}
+
 export function generateMatchmakerSearchStatusReply(
     input: MatchmakerSearchStatusReplyInput,
 ): Promise<MatchmakerVoiceReply> {

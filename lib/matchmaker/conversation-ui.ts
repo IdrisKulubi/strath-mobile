@@ -31,6 +31,17 @@ export type ActiveTurnVariant =
   | 'limit'
   | 'no_result';
 
+export type MatchmakerLimitMode = 'idle' | 'refine_type' | 'date_idea';
+
+export type MatchmakerLimitAction =
+  | 'entry'
+  | 'refine_prompt'
+  | 'refine_saved'
+  | 'profile_tips'
+  | 'date_idea'
+  | 'date_idea_followup'
+  | 'save_tomorrow';
+
 export interface ActiveTurn {
   variant: ActiveTurnVariant;
   promptText: string;
@@ -40,6 +51,8 @@ export interface ActiveTurn {
   showSearchAction: boolean;
   searchActionLabel: string;
   showMessagesAction: boolean;
+  limitMode: MatchmakerLimitMode;
+  limitAction: MatchmakerLimitAction | null;
 }
 
 export type QuickReplyAction =
@@ -88,11 +101,46 @@ export function getMatchmakerVisualState(input: {
 export function shouldShowMatchmakerComposer(
   variant: ActiveTurnVariant,
   remainingSearches = 0,
+  limitMode: MatchmakerLimitMode = 'idle',
 ): boolean {
+  if (variant === 'limit' && remainingSearches <= 0) {
+    return limitMode === 'refine_type' || limitMode === 'date_idea';
+  }
+  if (remainingSearches <= 0) return false;
   if (variant === 'feedback') return false;
-  if (variant === 'limit') return true;
-  if (variant === 'candidate' && remainingSearches <= 0) return false;
   return variant === 'prompt' || variant === 'candidate' || variant === 'no_result';
+}
+
+export function getLimitModeFromMessage(
+  message: MatchmakerConversationMessage | null,
+): MatchmakerLimitMode {
+  const mode = message?.metadata?.limitMode;
+  if (mode === 'refine_type' || mode === 'date_idea') return mode;
+  return 'idle';
+}
+
+export function getLimitActionFromMessage(
+  message: MatchmakerConversationMessage | null,
+): MatchmakerLimitAction | null {
+  const action = message?.metadata?.limitAction;
+  if (
+    action === 'entry'
+    || action === 'refine_prompt'
+    || action === 'refine_saved'
+    || action === 'profile_tips'
+    || action === 'date_idea'
+    || action === 'date_idea_followup'
+    || action === 'save_tomorrow'
+  ) {
+    return action;
+  }
+  return null;
+}
+
+export function shouldShowLimitEmptyState(turn: ActiveTurn): boolean {
+  if (turn.variant !== 'limit') return false;
+  if (turn.limitMode === 'refine_type' || turn.limitMode === 'date_idea') return false;
+  return !turn.limitAction || turn.limitAction === 'entry';
 }
 
 export function humanizeCandidateLead(text: string, firstName?: string | null): string {
@@ -316,6 +364,8 @@ export function selectActiveTurn(
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant') ?? null;
   const state = data?.session.state ?? 'greeting';
   const remainingSearches = data?.session.remainingSearches ?? 0;
+  const limitMode = getLimitModeFromMessage(latestAssistant);
+  const limitAction = getLimitActionFromMessage(latestAssistant);
   const quickReplies = filterMatchmakerQuickReplies(
     data?.quickReplies?.filter(Boolean).slice(0, 6) ?? [],
     remainingSearches,
@@ -324,13 +374,15 @@ export function selectActiveTurn(
   if (latestAssistant?.kind === 'limit' || state === 'limit_reached') {
     return {
       variant: 'limit',
-      promptText: latestAssistant?.text ?? 'I saved what I learned for tomorrow.',
+      promptText: latestAssistant?.text ?? 'Searches resume tomorrow. Fine-tune now if you want.',
       promptMessage: latestAssistant,
       candidate: null,
       quickReplies,
       showSearchAction: false,
       searchActionLabel: 'Find my person',
       showMessagesAction: false,
+      limitMode,
+      limitAction,
     };
   }
 
@@ -344,6 +396,8 @@ export function selectActiveTurn(
       showSearchAction: false,
       searchActionLabel: 'Try again',
       showMessagesAction: false,
+      limitMode: 'idle',
+      limitAction: null,
     };
   }
 
@@ -360,6 +414,8 @@ export function selectActiveTurn(
       showSearchAction: remainingSearches > 0,
       searchActionLabel: 'Find another',
       showMessagesAction: false,
+      limitMode: 'idle',
+      limitAction: null,
     };
   }
 
@@ -373,7 +429,10 @@ export function selectActiveTurn(
       quickReplies,
       showSearchAction: remainingSearches > 0 && !quickReplies.some((reply) => FEEDBACK_REASON_REPLIES.has(reply)),
       searchActionLabel: 'Find another',
-      showMessagesAction: outcome === 'interested',
+      showMessagesAction: outcome === 'interested'
+        && !quickReplies.some((reply) => reply.toLowerCase().includes('message')),
+      limitMode: 'idle',
+      limitAction: null,
     };
   }
 
@@ -387,6 +446,8 @@ export function selectActiveTurn(
       showSearchAction: false,
       searchActionLabel: 'Find my person',
       showMessagesAction: false,
+      limitMode: 'idle',
+      limitAction: 'entry',
     };
   }
 
@@ -399,6 +460,8 @@ export function selectActiveTurn(
     showSearchAction: remainingSearches > 0 && state === 'ready_to_search',
     searchActionLabel: state === 'presenting_candidate' ? 'Find another' : 'Find my person',
     showMessagesAction: false,
+    limitMode: 'idle',
+    limitAction: null,
   };
 }
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 
+import { MatchmakerReplyIcon } from '@/components/matchmaker/matchmaker-reply-icon';
 import { Text } from '@/components/ui/text';
 import { isFeedbackReasonReply } from '@/lib/matchmaker/conversation-ui';
 import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
@@ -76,14 +77,14 @@ export function MatchmakerFeedbackPanel({
                 {busy ? (
                   <ActivityIndicator size="small" color={MATCHMAKER_HOME.primary} />
                 ) : (
-                  <View style={styles.replyMarker} />
+                  <MatchmakerReplyIcon reply={reply} />
                 )}
                 <Text style={[styles.replyText, isSkip && styles.replyTextSkip]}>
                   {displayReply(reply)}
                 </Text>
                 {!busy ? (
                   <View style={styles.replyChevron}>
-                    <ChevronRight size={18} color={MATCHMAKER_HOME.primary} />
+                    <ChevronRight size={16} color={MATCHMAKER_HOME.subtleForeground} />
                   </View>
                 ) : null}
               </View>
@@ -135,17 +136,10 @@ const styles = StyleSheet.create({
   },
   replyContent: {
     width: '100%',
-    minHeight: 46,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.compact,
-  },
-  replyMarker: {
-    width: 7,
-    height: 7,
-    flexShrink: 0,
-    borderRadius: RADIUS.full,
-    backgroundColor: MATCHMAKER_HOME.orbLavender,
   },
   replySkip: {
     backgroundColor: 'transparent',
@@ -162,8 +156,8 @@ const styles = StyleSheet.create({
     color: MATCHMAKER_HOME.mutedForeground,
   },
   replyChevron: {
-    width: 28,
-    height: 40,
+    width: 24,
+    height: 32,
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',

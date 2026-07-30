@@ -15,11 +15,8 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
-  Heart,
   MessageCircle,
   Search,
-  SlidersHorizontal,
-  Zap,
 } from 'lucide-react-native';
 
 import type { UseQueryResult } from '@tanstack/react-query';
@@ -28,6 +25,7 @@ import { MatchmakerCandidateCard } from '@/components/matchmaker/matchmaker-cand
 // Force Metro to rebundle candidate card CTA styles.
 import { MatchmakerFeedbackPanel } from '@/components/matchmaker/matchmaker-feedback-panel';
 import { MatchmakerLimitEmptyState } from '@/components/matchmaker/matchmaker-limit-empty-state';
+import { MatchmakerReplyIcon } from '@/components/matchmaker/matchmaker-reply-icon';
 import { MatchmakerStatePanel } from '@/components/matchmaker/matchmaker-state-panel';
 import { useToast } from '@/components/ui/toast';
 import { MatchmakerVoiceBubble } from '@/components/matchmaker/matchmaker-voice-bubble';
@@ -43,6 +41,7 @@ import {
   partitionConversationMessages,
   resolveQuickReplyAction,
   selectActiveTurn,
+  shouldShowLimitEmptyState,
   shouldShowMatchmakerComposer,
   type ActiveTurn,
 } from '@/lib/matchmaker/conversation-ui';
@@ -83,15 +82,6 @@ function ActivePrompt({ turn }: { turn: ActiveTurn }) {
   );
 }
 
-function QuickReplyIcon({ label }: { label: string }) {
-  const normalized = label.toLowerCase();
-  if (normalized.includes('active')) return <Zap size={20} color={MATCHMAKER_HOME.orbLavender} />;
-  if (normalized.includes('serious') || normalized.includes('calm')) {
-    return <Heart size={20} color={MATCHMAKER_HOME.orbLavender} />;
-  }
-  return <SlidersHorizontal size={20} color={MATCHMAKER_HOME.orbLavender} />;
-}
-
 export function MatchmakerConversation({ conversation }: MatchmakerConversationProps) {
   const router = useRouter();
   const toast = useToast();
@@ -118,12 +108,15 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
     : undefined;
   const retryDraft = draft.trim() || (typeof sendMessage.variables === 'string' ? sendMessage.variables : '');
   const remainingSearches = data?.session.remainingSearches ?? 0;
-  const showComposer = shouldShowMatchmakerComposer(turn.variant, remainingSearches);
-  const composerPlaceholder = turn.variant === 'candidate'
-    ? 'Tell me what to adjust'
-    : turn.variant === 'limit'
-      ? 'Tell me what to sharpen for tomorrow'
-      : 'Say it your way';
+  const showLimitEmptyState = shouldShowLimitEmptyState(turn);
+  const showComposer = shouldShowMatchmakerComposer(turn.variant, remainingSearches, turn.limitMode);
+  const composerPlaceholder = turn.limitMode === 'refine_type'
+    ? 'Describe your type for tomorrow'
+    : turn.limitMode === 'date_idea'
+      ? 'Want a different vibe?'
+      : turn.variant === 'candidate'
+        ? 'Tell me what to adjust'
+        : 'Say it your way';
 
   const findNext = useCallback(async () => {
     if (findCandidate.isPending) return;
@@ -283,12 +276,19 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
               onSelect={handleQuickReply}
             />
           ) : turn.variant === 'limit' ? (
-            <MatchmakerLimitEmptyState
-              voiceText={turn.promptText}
-              replies={turn.quickReplies}
-              busy={isBusy}
-              onReply={handleQuickReply}
-            />
+            showLimitEmptyState ? (
+              <MatchmakerLimitEmptyState
+                voiceText={turn.promptText}
+                replies={turn.quickReplies}
+                busy={isBusy}
+                onReply={handleQuickReply}
+              />
+            ) : (
+              <MatchmakerVoiceBubble
+                text={turn.promptText}
+                compact
+              />
+            )
           ) : turn.variant === 'no_result' ? (
             <MatchmakerStatePanel
               variant="no_result"
@@ -323,7 +323,8 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
           />
         ) : null}
 
-        {turn.variant === 'prompt' && turn.quickReplies.length > 0 ? (
+        {(turn.variant === 'prompt' || (turn.variant === 'limit' && !showLimitEmptyState))
+          && turn.quickReplies.length > 0 ? (
           <Animated.View entering={FadeIn.duration(180)} style={styles.replies}>
             {turn.quickReplies.map((reply) => {
               const label = normalizeQuickReplyLabel(reply);
@@ -341,9 +342,7 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
                   ]}
                 >
                   <View style={styles.replyContent}>
-                    <View style={styles.replyIcon}>
-                      <QuickReplyIcon label={label} />
-                    </View>
+                    <MatchmakerReplyIcon reply={reply} />
                     <Text style={styles.replyText} numberOfLines={2}>
                       {label}
                     </Text>
@@ -401,7 +400,11 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
 
       {showComposer ? (
         <View style={styles.composerDock}>
-          {turn.variant !== 'candidate' && turn.variant !== 'limit' ? (
+          {turn.limitMode === 'refine_type' ? (
+            <Text style={styles.composerLabel}>Your type for tomorrow</Text>
+          ) : turn.limitMode === 'date_idea' ? (
+            <Text style={styles.composerLabel}>Want a different vibe?</Text>
+          ) : turn.variant !== 'candidate' ? (
             <Text style={styles.composerLabel}>Your preference</Text>
           ) : null}
           <View style={[styles.composer, isBusy && styles.composerBusy]}>

@@ -9,6 +9,8 @@ import {
   formatRemainingSearches,
   getAssistantPromptText,
   getDistinctCandidateLabels,
+  getLimitActionFromMessage,
+  getLimitModeFromMessage,
   getMatchmakerVisualState,
   getSessionStatusLabel,
   humanizeCandidateLead,
@@ -19,6 +21,7 @@ import {
   partitionConversationMessages,
   resolveQuickReplyAction,
   selectActiveTurn,
+  shouldShowLimitEmptyState,
   shouldShowMatchmakerComposer,
   shouldEnableMatchmakerQuery,
 } from './conversation-ui.ts';
@@ -61,12 +64,105 @@ test('visual state prioritizes errors, pauses, searches, and success', () => {
 });
 
 test('composer is available for typing and hidden for terminal feedback states', () => {
-  assert.equal(shouldShowMatchmakerComposer('prompt'), true);
+  assert.equal(shouldShowMatchmakerComposer('prompt', 3), true);
   assert.equal(shouldShowMatchmakerComposer('candidate', 2), true);
   assert.equal(shouldShowMatchmakerComposer('candidate', 0), false);
-  assert.equal(shouldShowMatchmakerComposer('no_result'), true);
-  assert.equal(shouldShowMatchmakerComposer('feedback'), false);
-  assert.equal(shouldShowMatchmakerComposer('limit'), true);
+  assert.equal(shouldShowMatchmakerComposer('no_result', 3), true);
+  assert.equal(shouldShowMatchmakerComposer('feedback', 3), false);
+  assert.equal(shouldShowMatchmakerComposer('limit', 3), false);
+  assert.equal(shouldShowMatchmakerComposer('limit', 0, 'idle'), false);
+  assert.equal(shouldShowMatchmakerComposer('limit', 0, 'refine_type'), true);
+  assert.equal(shouldShowMatchmakerComposer('limit', 0, 'date_idea'), true);
+  assert.equal(shouldShowMatchmakerComposer('prompt', 0), false);
+});
+
+test('limit metadata helpers read mode and action from assistant messages', () => {
+  const message = {
+    id: 'm1',
+    role: 'assistant',
+    kind: 'limit',
+    text: 'What should I lean into tomorrow?',
+    quickReplies: [],
+    metadata: { limitMode: 'refine_type', limitAction: 'refine_prompt' },
+    createdAt: '',
+  } as MatchmakerConversationResponse['messages'][number];
+
+  assert.equal(getLimitModeFromMessage(message), 'refine_type');
+  assert.equal(getLimitActionFromMessage(message), 'refine_prompt');
+});
+
+test('shouldShowLimitEmptyState only on idle entry limit', () => {
+  const entryTurn = selectActiveTurn({
+    session: {
+      id: 's1',
+      state: 'limit_reached',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'limit',
+        text: 'Searches resume tomorrow.',
+        quickReplies: ['Help me refine my type'],
+        metadata: { limitMode: 'idle', limitAction: 'entry' },
+        createdAt: '',
+      },
+    ],
+    quickReplies: ['Help me refine my type'],
+  } satisfies MatchmakerConversationResponse);
+
+  const refineTurn = selectActiveTurn({
+    session: {
+      id: 's1',
+      state: 'limit_reached',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm2',
+        role: 'assistant',
+        kind: 'limit',
+        text: 'Tell me what to lean into tomorrow.',
+        quickReplies: [],
+        metadata: { limitMode: 'refine_type', limitAction: 'refine_prompt' },
+        createdAt: '',
+      },
+    ],
+    quickReplies: [],
+  } satisfies MatchmakerConversationResponse);
+
+  assert.equal(shouldShowLimitEmptyState(entryTurn), true);
+  assert.equal(shouldShowLimitEmptyState(refineTurn), false);
+  assert.equal(refineTurn.limitMode, 'refine_type');
 });
 
 test('humanizeCandidateLead strips robotic prefixes', () => {
@@ -255,7 +351,7 @@ test('selectActiveTurn hides search actions after interested feedback with no se
   const turn = selectActiveTurn(data);
   assert.equal(turn.variant, 'feedback');
   assert.equal(turn.showSearchAction, false);
-  assert.equal(turn.showMessagesAction, true);
+  assert.equal(turn.showMessagesAction, false);
   assert.equal(turn.quickReplies.includes('Find another'), false);
   assert.equal(turn.quickReplies.includes('Keep looking'), false);
 });
@@ -358,7 +454,7 @@ test('selectActiveTurn surfaces limit state with refine replies only', () => {
   assert.equal(turn.variant, 'limit');
   assert.equal(turn.showSearchAction, false);
   assert.equal(turn.quickReplies.includes('Find another'), false);
-  assert.equal(shouldShowMatchmakerComposer('limit', 0), true);
+  assert.equal(shouldShowMatchmakerComposer('limit', 0), false);
 });
 
 test('selectActiveTurn forces limit when searches are zero and latest is search_plan', () => {
