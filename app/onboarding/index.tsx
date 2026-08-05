@@ -1,6 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, SafeAreaView, StatusBar, Alert } from 'react-native';
+import { View, StyleSheet, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
+import { useTheme } from '@/hooks/use-theme';
 import { OnboardingData } from '../../components/digital-dna/types';
 import {
     WelcomeSplash,
@@ -50,6 +53,7 @@ const getProfileSetupErrorMessage = (responseData: any, status: number) => {
 
 export default function OnboardingScreen() {
     const router = useRouter();
+    const { isDark } = useTheme();
     const [step, setStep] = useState<OnboardingStep>(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -584,8 +588,11 @@ export default function OnboardingScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" />
+        <SafeAreaView
+            style={styles.container}
+            edges={step === 0 || step === 1 ? ['bottom'] : ['top', 'bottom']}
+        >
+            <StatusBar style={isDark ? 'light' : 'dark'} />
             <View style={styles.content}>
                 {renderStep()}
             </View>
@@ -596,7 +603,7 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0f0d23',
+        backgroundColor: 'transparent',
     },
     content: {
         flex: 1,

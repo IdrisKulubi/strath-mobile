@@ -1,3 +1,8 @@
+export { OnboardingProgressBar } from './onboarding-progress-bar';
+export { OnboardingHeader } from './onboarding-header';
+export { OnboardingSurfaceCard } from './onboarding-surface-card';
+export { OnboardingPrimaryButton } from './onboarding-primary-button';
+export { PhoneNumberStep } from './phone-number-step';
 export { WelcomeSplash } from './WelcomeSplash';
 export { TermsAcceptance } from './TermsAcceptance';
 export { TheEssentials } from './TheEssentials';

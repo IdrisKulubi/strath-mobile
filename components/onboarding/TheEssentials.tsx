@@ -20,11 +20,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
+import { PhoneNumberStep } from './phone-number-step';
 import * as Haptics from 'expo-haptics';
 import { Calendar, User, MagnifyingGlass, CheckCircle, MapPin } from 'phosphor-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Phone } from 'phosphor-react-native';
-import { AsYouType, parsePhoneNumberFromString } from 'libphonenumber-js';
 import * as Location from 'expo-location';
 
 interface TheEssentialsProps {
@@ -149,8 +148,6 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
     const [birthday, setBirthday] = useState<Date | null>(null);
     const [firstName, setFirstName] = useState(data.firstName || '');
     const [lastName, setLastName] = useState(data.lastName || '');
-    const [phoneNumber, setPhoneNumber] = useState(data.phoneNumber || '');
-    const [phoneError, setPhoneError] = useState('');
     const [isRequestingLocation, setIsRequestingLocation] = useState(false);
     const [locationError, setLocationError] = useState('');
 
@@ -188,51 +185,9 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
         }
     };
 
-    const getParsedPhone = (value: string) => {
-        const trimmed = value.trim();
-        if (!trimmed) return null;
-
-        const parsed = trimmed.startsWith('+')
-            ? parsePhoneNumberFromString(trimmed)
-            : parsePhoneNumberFromString(trimmed, 'KE');
-
-        if (!parsed || !parsed.isValid()) {
-            return null;
-        }
-
-        return parsed;
-    };
-
-    const handlePhoneChange = (text: string) => {
-        const hasPlusPrefix = text.trim().startsWith('+');
-        const digits = text.replace(/\D/g, '');
-        const normalizedInput = hasPlusPrefix ? `+${digits}` : digits;
-
-        const formatter = hasPlusPrefix ? new AsYouType() : new AsYouType('KE');
-        const formatted = formatter.input(normalizedInput);
-        setPhoneNumber(formatted);
-
-        if (phoneError) {
-            setPhoneError('');
-        }
-    };
-
-    const isPhoneValid = () => {
-        return !!getParsedPhone(phoneNumber);
-    };
-
-    const handlePhoneContinue = () => {
-        const parsedPhone = getParsedPhone(phoneNumber);
-
-        if (parsedPhone) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onUpdate({ phoneNumber: parsedPhone.number });
-            setStep(2);
-            return;
-        }
-
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        setPhoneError('Enter a valid phone number with country code (or local Kenyan number).');
+    const handlePhoneContinue = (e164PhoneNumber: string) => {
+        onUpdate({ phoneNumber: e164PhoneNumber });
+        setStep(2);
     };
 
     const handleBirthdayChange = (event: any, selectedDate?: Date) => {
@@ -380,6 +335,18 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
     const birthdayAge = birthday ? calculateAge(birthday) : 0;
     const isBirthdayValid = Boolean(birthday && birthdayAge >= 18);
 
+    if (step === 1) {
+        return (
+            <PhoneNumberStep
+                initialPhoneNumber={data.phoneNumber}
+                hasPrefilledName={hasPrefilledName}
+                globalStepIndex={2}
+                onBack={hasPrefilledName ? undefined : () => setStep(0)}
+                onContinue={handlePhoneContinue}
+            />
+        );
+    }
+
     return (
         <KeyboardAvoidingView
             style={styles.container}
@@ -449,54 +416,6 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
                                 style={styles.continueButton}
                             >
                                 <Text style={[styles.continueButtonText, !isNameValid && styles.disabledText]}>
-                                    Continue
-                                </Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                    </Animated.View>
-                )}
-
-                {/* Step 1: Phone Number */}
-                {step === 1 && (
-                    <Animated.View entering={SlideInRight.springify()} style={styles.stepContainer}>
-                        <View style={styles.iconContainer}>
-                            <Phone size={32} color="#ec4899" weight="fill" />
-                        </View>
-                        <Text style={styles.stepTitle}>{"What's your number?"}</Text>
-                        <Text style={styles.stepSubtitle}>
-                            {"We'll use this to help you connect with matches"}
-                        </Text>
-
-                        <View style={styles.inputContainer}>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="+1 202 555 0123"
-                                placeholderTextColor="#64748b"
-                                value={phoneNumber}
-                                onChangeText={handlePhoneChange}
-                                keyboardType="phone-pad"
-                                autoFocus
-                            />
-                        </View>
-
-                        <Text style={[styles.phoneHint, { color: '#64748b' }]}>
-                            Enter any valid international number (local KE numbers also work)
-                        </Text>
-
-                        {!!phoneError && (
-                            <Text style={styles.phoneErrorText}>{phoneError}</Text>
-                        )}
-
-                        <TouchableOpacity
-                            onPress={handlePhoneContinue}
-                            disabled={!isPhoneValid()}
-                            activeOpacity={0.8}
-                        >
-                            <LinearGradient
-                                colors={isPhoneValid() ? ['#ec4899', '#f43f5e'] : ['#374151', '#374151']}
-                                style={styles.continueButton}
-                            >
-                                <Text style={[styles.continueButtonText, !isPhoneValid() && styles.disabledText]}>
                                     Continue
                                 </Text>
                             </LinearGradient>
@@ -813,12 +732,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#f472b6',
         fontWeight: '600',
-    },
-    phoneHint: {
-        fontSize: 14,
-        textAlign: 'center',
-        marginTop: -8,
-        marginBottom: 24,
     },
     phoneErrorText: {
         color: '#f87171',

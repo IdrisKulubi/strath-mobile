@@ -1,25 +1,136 @@
-import React, { useState } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    Platform,
-    Linking,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useMemo, useState } from 'react';
+import { View, StyleSheet, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { Text } from '@/components/ui/text';
+import { MOTION, RADIUS, SPACING } from '@/lib/design-tokens';
+import { useOnboardingTheme, withOnboardingAlpha, type OnboardingSurfaces } from '@/lib/onboarding-theme';
+
+import { OnboardingHeader } from './onboarding-header';
+import { OnboardingPrimaryButton } from './onboarding-primary-button';
+import { OnboardingProgressBar } from './onboarding-progress-bar';
+import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
 
 interface TermsAcceptanceProps {
     onAccept: () => void;
     onDecline?: () => void;
 }
 
-export function TermsAcceptance({ onAccept, onDecline }: TermsAcceptanceProps) {
-    const [accepted, setAccepted] = useState({
+type AcceptanceKey = 'terms' | 'privacy' | 'community';
+
+interface AgreementItem {
+    key: AcceptanceKey;
+    title: string;
+    description: string;
+    viewUrl?: string;
+}
+
+const AGREEMENTS: AgreementItem[] = [
+    {
+        key: 'terms',
+        title: 'Terms of Service',
+        description: 'Rules for using Strathspace',
+        viewUrl: 'https://strathspace.com/terms',
+    },
+    {
+        key: 'privacy',
+        title: 'Privacy Policy',
+        description: 'How your data is used; AI needs separate opt-in',
+        viewUrl: 'https://strathspace.com/privacy',
+    },
+    {
+        key: 'community',
+        title: 'Community Guidelines',
+        description: 'Respect others and report bad behavior',
+    },
+];
+
+interface AgreementRowProps {
+    item: AgreementItem;
+    checked: boolean;
+    onToggle: () => void;
+    theme: OnboardingSurfaces & { isDark: boolean };
+}
+
+function AgreementRow({ item, checked, onToggle, theme }: AgreementRowProps) {
+    const { title, description, viewUrl } = item;
+
+    const handleViewPress = () => {
+        if (!viewUrl) {
+            return;
+        }
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        void Linking.openURL(viewUrl);
+    };
+
+    return (
+        <View
+            style={[
+                styles.agreementRow,
+                {
+                    backgroundColor: checked
+                        ? withOnboardingAlpha(theme.primary, theme.isDark ? 0.14 : 0.08)
+                        : theme.surface,
+                    borderColor: checked ? theme.primary : theme.border,
+                    borderWidth: checked ? 2 : StyleSheet.hairlineWidth,
+                },
+            ]}
+        >
+            <Pressable
+                onPress={onToggle}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked }}
+                accessibilityLabel={`${title}. ${description}`}
+                style={styles.agreementMain}
+            >
+                <View
+                    style={[
+                        styles.checkbox,
+                        {
+                            borderColor: checked ? theme.primary : theme.border,
+                            backgroundColor: checked ? theme.primary : 'transparent',
+                        },
+                    ]}
+                >
+                    {checked ? (
+                        <Ionicons name="checkmark" size={14} color={theme.primaryForeground} />
+                    ) : null}
+                </View>
+
+                <View style={styles.agreementCopy}>
+                    <Text style={[styles.agreementTitle, { color: theme.foreground }]}>{title}</Text>
+                    <Text style={[styles.agreementDescription, { color: theme.mutedForeground }]}>
+                        {description}
+                    </Text>
+                </View>
+            </Pressable>
+
+            {viewUrl ? (
+                <Pressable
+                    onPress={handleViewPress}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View ${title}`}
+                    style={[
+                        styles.viewButton,
+                        { backgroundColor: withOnboardingAlpha(theme.primary, theme.isDark ? 0.2 : 0.1) },
+                    ]}
+                >
+                    <Text style={[styles.viewButtonText, { color: theme.primary }]}>View</Text>
+                </Pressable>
+            ) : null}
+        </View>
+    );
+}
+
+export function TermsAcceptance({ onAccept }: TermsAcceptanceProps) {
+    const theme = useOnboardingTheme();
+    const reducedMotion = useReducedMotion();
+    const insets = useSafeAreaInsets();
+
+    const [accepted, setAccepted] = useState<Record<AcceptanceKey, boolean>>({
         terms: false,
         privacy: false,
         community: false,
@@ -27,172 +138,86 @@ export function TermsAcceptance({ onAccept, onDecline }: TermsAcceptanceProps) {
 
     const allAccepted = accepted.terms && accepted.privacy && accepted.community;
 
-    const toggleAcceptance = (key: keyof typeof accepted) => {
+    const containerStyle = useMemo(
+        () => ({
+            paddingTop: insets.top + SPACING.compact,
+            paddingBottom: Math.max(insets.bottom, SPACING.base),
+        }),
+        [insets.bottom, insets.top],
+    );
+
+    const toggleAcceptance = (key: AcceptanceKey) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        setAccepted(prev => ({ ...prev, [key]: !prev[key] }));
+        setAccepted((prev) => ({ ...prev, [key]: !prev[key] }));
     };
 
     const handleContinue = () => {
-        if (allAccepted) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            onAccept();
+        if (!allAccepted) {
+            return;
         }
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        onAccept();
     };
 
+    const topEntering = reducedMotion ? undefined : FadeInDown.delay(60).duration(MOTION.short);
+    const cardsEntering = reducedMotion ? undefined : FadeInUp.delay(100).duration(MOTION.short);
+    const footerEntering = reducedMotion ? undefined : FadeInUp.delay(160).duration(MOTION.short);
+
     return (
-        <View style={styles.container}>
-            <ScrollView 
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Header */}
-                <Animated.View 
-                    entering={FadeInDown.delay(100).springify()}
-                    style={styles.header}
-                >
-                    <View style={styles.iconContainer}>
-                        <Ionicons name="shield-checkmark" size={48} color="#EC4899" />
+        <View style={[styles.container, containerStyle]}>
+            <OnboardingScreenBackdrop />
+
+            <View style={styles.body}>
+                <Animated.View entering={topEntering} style={styles.topSection}>
+                    <OnboardingProgressBar stepIndex={1} />
+                    <OnboardingHeader stepIndex={1} />
+                </Animated.View>
+
+                <Animated.View entering={cardsEntering} style={styles.main}>
+                    <View style={styles.header}>
+                        <View style={[styles.iconContainer, { backgroundColor: theme.primarySoft }]}>
+                            <Ionicons name="shield-checkmark" size={28} color={theme.primary} />
+                        </View>
+                        <Text style={[styles.title, { color: theme.foreground }]}>
+                            Before We Start
+                        </Text>
+                        <Text style={[styles.subtitle, { color: theme.mutedForeground }]}>
+                            Accept these to keep Strathspace safe for everyone.
+                        </Text>
                     </View>
-                    <Text style={styles.title}>Before We Start</Text>
-                    <Text style={styles.subtitle}>
-                        Please review and accept our community guidelines to keep Strathspace safe and fun for everyone.
+
+                    <View style={styles.agreements}>
+                        {AGREEMENTS.map((item) => (
+                            <AgreementRow
+                                key={item.key}
+                                item={item}
+                                checked={accepted[item.key]}
+                                onToggle={() => toggleAcceptance(item.key)}
+                                theme={theme}
+                            />
+                        ))}
+                    </View>
+
+                    <Text style={[styles.trustLine, { color: theme.mutedForeground }]}>
+                        Zero tolerance for abuse · Report freely · Block anytime · 24h review
                     </Text>
                 </Animated.View>
 
-                {/* Agreement Cards */}
-                <Animated.View 
-                    entering={FadeInUp.delay(200).springify()}
-                    style={styles.cardsContainer}
-                >
-                    {/* Terms of Service */}
-                    <TouchableOpacity 
-                        style={[styles.card, accepted.terms && styles.cardAccepted]}
-                        onPress={() => toggleAcceptance('terms')}
-                        activeOpacity={0.8}
-                    >
-                        <View style={styles.cardContent}>
-                            <View style={[styles.checkbox, accepted.terms && styles.checkboxChecked]}>
-                                {accepted.terms && <Ionicons name="checkmark" size={16} color="#FFF" />}
-                            </View>
-                            <View style={styles.cardText}>
-                                <Text style={styles.cardTitle}>Terms of Service</Text>
-                                <Text style={styles.cardDescription}>
-                                    I agree to the rules and guidelines for using Strathspace
-                                </Text>
-                            </View>
-                            <TouchableOpacity 
-                                style={styles.viewButton}
-                                onPress={() => Linking.openURL('https://strathspace.com/terms')}
-                            >
-                                <Text style={styles.viewButtonText}>View</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Privacy Policy */}
-                    <TouchableOpacity 
-                        style={[styles.card, accepted.privacy && styles.cardAccepted]}
-                        onPress={() => toggleAcceptance('privacy')}
-                        activeOpacity={0.8}
-                    >
-                        <View style={styles.cardContent}>
-                            <View style={[styles.checkbox, accepted.privacy && styles.checkboxChecked]}>
-                                {accepted.privacy && <Ionicons name="checkmark" size={16} color="#FFF" />}
-                            </View>
-                            <View style={styles.cardText}>
-                                <Text style={styles.cardTitle}>Privacy Policy</Text>
-                                <Text style={styles.cardDescription}>
-                                    I understand how my data is collected and used, and that AI features require a separate opt-in
-                                </Text>
-                            </View>
-                            <TouchableOpacity 
-                                style={styles.viewButton}
-                                onPress={() => Linking.openURL('https://strathspace.com/privacy')}
-                            >
-                                <Text style={styles.viewButtonText}>View</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Community Guidelines */}
-                    <TouchableOpacity 
-                        style={[styles.card, accepted.community && styles.cardAccepted]}
-                        onPress={() => toggleAcceptance('community')}
-                        activeOpacity={0.8}
-                    >
-                        <View style={styles.cardContent}>
-                            <View style={[styles.checkbox, accepted.community && styles.checkboxChecked]}>
-                                {accepted.community && <Ionicons name="checkmark" size={16} color="#FFF" />}
-                            </View>
-                            <View style={styles.cardText}>
-                                <Text style={styles.cardTitle}>Community Guidelines</Text>
-                                <Text style={styles.cardDescription}>
-                                    I will treat others with respect and report bad behavior
-                                </Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
+                <Animated.View entering={footerEntering} style={styles.footer}>
+                    <OnboardingPrimaryButton
+                        label={allAccepted ? "I Agree, Let's Go" : 'Accept all to continue'}
+                        onPress={handleContinue}
+                        disabled={!allAccepted}
+                        accessibilityLabel={
+                            allAccepted ? "I Agree, Let's Go" : 'Accept all agreements to continue'
+                        }
+                        icon="checkmark"
+                    />
+                    <Text style={[styles.disclaimer, { color: theme.mutedForeground }]}>
+                        By continuing, you confirm you are at least 18 and a university student.
+                    </Text>
                 </Animated.View>
-
-                {/* Community Standards Summary */}
-                <Animated.View 
-                    entering={FadeInUp.delay(300).springify()}
-                    style={styles.summaryContainer}
-                >
-                    <Text style={styles.summaryTitle}>Our Community Standards</Text>
-                    <View style={styles.summaryItem}>
-                        <Ionicons name="ban" size={20} color="#EF4444" />
-                        <Text style={styles.summaryText}>
-                            <Text style={styles.bold}>Zero tolerance</Text> for harassment, hate speech, or abusive behavior
-                        </Text>
-                    </View>
-                    <View style={styles.summaryItem}>
-                        <Ionicons name="flag" size={20} color="#F59E0B" />
-                        <Text style={styles.summaryText}>
-                            <Text style={styles.bold}>Report</Text> inappropriate content or users who make you uncomfortable
-                        </Text>
-                    </View>
-                    <View style={styles.summaryItem}>
-                        <Ionicons name="shield" size={20} color="#10B981" />
-                        <Text style={styles.summaryText}>
-                            <Text style={styles.bold}>Block</Text> anyone at any time - they will not be notified
-                        </Text>
-                    </View>
-                    <View style={styles.summaryItem}>
-                        <Ionicons name="time" size={20} color="#3B82F6" />
-                        <Text style={styles.summaryText}>
-                            Reports reviewed within <Text style={styles.bold}>24 hours</Text> - violators will be removed
-                        </Text>
-                    </View>
-                </Animated.View>
-            </ScrollView>
-
-            {/* Bottom Action */}
-            <Animated.View 
-                entering={FadeInUp.delay(400).springify()}
-                style={styles.bottomContainer}
-            >
-                <TouchableOpacity
-                    onPress={handleContinue}
-                    disabled={!allAccepted}
-                    activeOpacity={0.8}
-                >
-                    <LinearGradient
-                        colors={allAccepted ? ['#EC4899', '#F43F5E'] : ['#9CA3AF', '#9CA3AF']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={[styles.continueButton, !allAccepted && styles.continueButtonDisabled]}
-                    >
-                        <Text style={styles.continueButtonText}>
-                            {allAccepted ? "I Agree - Let's Go! 🎉" : "Accept all to continue"}
-                        </Text>
-                    </LinearGradient>
-                </TouchableOpacity>
-                
-                <Text style={styles.disclaimer}>
-                    By continuing, you confirm you are at least 18 years old and a  University student.
-                </Text>
-            </Animated.View>
+            </View>
         </View>
     );
 }
@@ -200,156 +225,115 @@ export function TermsAcceptance({ onAccept, onDecline }: TermsAcceptanceProps) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F5F5F5',
+        paddingHorizontal: SPACING.screenX,
     },
-    scrollContent: {
-        paddingHorizontal: 20,
-        paddingTop: 40,
-        paddingBottom: 200,
+    body: {
+        flex: 1,
+        justifyContent: 'space-between',
+    },
+    topSection: {
+        gap: SPACING.base,
+    },
+    main: {
+        gap: SPACING.base,
+        flexShrink: 1,
     },
     header: {
         alignItems: 'center',
-        marginBottom: 32,
+        gap: SPACING.tight,
     },
     iconContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: 'rgba(236, 72, 153, 0.1)',
+        width: 56,
+        height: 56,
+        borderRadius: RADIUS.full,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 16,
     },
     title: {
-        fontSize: 28,
+        fontSize: 24,
+        lineHeight: 30,
         fontWeight: '700',
-        color: '#1a1a1a',
         textAlign: 'center',
-        marginBottom: 8,
     },
     subtitle: {
-        fontSize: 15,
-        color: '#666',
+        fontSize: 14,
+        lineHeight: 20,
         textAlign: 'center',
-        lineHeight: 22,
-        paddingHorizontal: 20,
+        paddingHorizontal: SPACING.tight,
     },
-    cardsContainer: {
-        gap: 12,
-        marginBottom: 24,
+    agreements: {
+        gap: SPACING.tight,
+        width: '100%',
     },
-    card: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 16,
-        borderWidth: 2,
-        borderColor: '#E5E7EB',
-    },
-    cardAccepted: {
-        borderColor: '#EC4899',
-        backgroundColor: 'rgba(236, 72, 153, 0.05)',
-    },
-    cardContent: {
+    agreementRow: {
+        width: '100%',
         flexDirection: 'row',
         alignItems: 'center',
+        borderRadius: RADIUS.md,
+        paddingVertical: SPACING.compact,
+        paddingLeft: SPACING.compact,
+        paddingRight: SPACING.tight,
+        gap: SPACING.tight,
+    },
+    agreementMain: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: SPACING.compact,
+        minHeight: 44,
+        minWidth: 0,
+    },
+    agreementCopy: {
+        flex: 1,
+        minWidth: 0,
+        paddingRight: SPACING.micro,
+    },
+    agreementTitle: {
+        fontSize: 15,
+        lineHeight: 20,
+        fontWeight: '600',
+    },
+    agreementDescription: {
+        fontSize: 12,
+        lineHeight: 16,
+        marginTop: 2,
     },
     checkbox: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
+        width: 22,
+        height: 22,
+        borderRadius: RADIUS.full,
         borderWidth: 2,
-        borderColor: '#D1D5DB',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 12,
-    },
-    checkboxChecked: {
-        backgroundColor: '#EC4899',
-        borderColor: '#EC4899',
-    },
-    cardText: {
-        flex: 1,
-    },
-    cardTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#1a1a1a',
-        marginBottom: 2,
-    },
-    cardDescription: {
-        fontSize: 13,
-        color: '#6B7280',
+        flexShrink: 0,
     },
     viewButton: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        backgroundColor: 'rgba(236, 72, 153, 0.1)',
-        borderRadius: 8,
-    },
-    viewButtonText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#EC4899',
-    },
-    summaryContainer: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 20,
-        marginTop: 8,
-    },
-    summaryTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#1a1a1a',
-        marginBottom: 16,
-    },
-    summaryItem: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        marginBottom: 12,
-        gap: 12,
-    },
-    summaryText: {
-        flex: 1,
-        fontSize: 14,
-        color: '#4B5563',
-        lineHeight: 20,
-    },
-    bold: {
-        fontWeight: '600',
-        color: '#1a1a1a',
-    },
-    bottomContainer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: '#F5F5F5',
-        paddingHorizontal: 20,
-        paddingTop: 16,
-        paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-        borderTopWidth: 1,
-        borderTopColor: '#E5E7EB',
-    },
-    continueButton: {
-        height: 56,
-        borderRadius: 28,
+        height: 36,
+        minWidth: 52,
+        paddingHorizontal: SPACING.compact,
+        borderRadius: RADIUS.sm,
         justifyContent: 'center',
         alignItems: 'center',
+        flexShrink: 0,
     },
-    continueButtonDisabled: {
-        opacity: 0.6,
-    },
-    continueButtonText: {
-        fontSize: 17,
+    viewButtonText: {
+        fontSize: 12,
         fontWeight: '600',
-        color: '#FFF',
+    },
+    trustLine: {
+        fontSize: 12,
+        lineHeight: 16,
+        textAlign: 'center',
+        paddingHorizontal: SPACING.micro,
+    },
+    footer: {
+        width: '100%',
+        gap: SPACING.compact,
+        paddingTop: SPACING.tight,
     },
     disclaimer: {
         fontSize: 12,
-        color: '#9CA3AF',
-        textAlign: 'center',
-        marginTop: 12,
         lineHeight: 16,
+        textAlign: 'center',
     },
 });
