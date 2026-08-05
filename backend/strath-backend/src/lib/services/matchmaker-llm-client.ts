@@ -14,6 +14,15 @@ export class MatchmakerLlmUnavailableError extends Error {
     }
 }
 
+export class MatchmakerForbiddenReplyError extends MatchmakerLlmUnavailableError {
+    readonly isForbiddenReply = true as const;
+
+    constructor() {
+        super();
+        this.name = "MatchmakerForbiddenReplyError";
+    }
+}
+
 export type MatchmakerLlmProvider = "scripted" | "openai" | "gemini";
 
 export interface MatchmakerLlmInput {
@@ -90,6 +99,98 @@ export interface MatchmakerLlmTurn {
     fallbackUsed: boolean;
 }
 
+const ACTIVITY_REQUIREMENT_VALUES = ["active_today", "active_recently", "any"] as const;
+const RELATIONSHIP_INTENT_VALUES = ["serious", "casual", "open", "unknown"] as const;
+const SOCIAL_ENERGY_VALUES = ["quiet", "balanced", "social", "unknown"] as const;
+
+type ActivityRequirement = (typeof ACTIVITY_REQUIREMENT_VALUES)[number];
+type RelationshipIntent = (typeof RELATIONSHIP_INTENT_VALUES)[number];
+type SocialEnergy = (typeof SOCIAL_ENERGY_VALUES)[number];
+
+const ACTIVITY_REQUIREMENT_ALIASES: Record<string, ActivityRequirement> = {
+    active_now: "active_today",
+    active: "active_today",
+    online: "active_today",
+    today: "active_today",
+    recent: "active_recently",
+    recently: "active_recently",
+    active_recent: "active_recently",
+};
+
+const RELATIONSHIP_INTENT_ALIASES: Record<string, RelationshipIntent> = {
+    long_term: "serious",
+    "long-term": "serious",
+    committed: "serious",
+    intentional: "serious",
+    hookup: "casual",
+    chill: "casual",
+    flexible: "open",
+    unsure: "unknown",
+    undecided: "unknown",
+};
+
+const SOCIAL_ENERGY_ALIASES: Record<string, SocialEnergy> = {
+    introvert: "quiet",
+    introverted: "quiet",
+    low_key: "quiet",
+    "low-key": "quiet",
+    calm: "quiet",
+    moderate: "balanced",
+    middle: "balanced",
+    ambivert: "balanced",
+    extrovert: "social",
+    extroverted: "social",
+    outgoing: "social",
+    party: "social",
+    unsure: "unknown",
+};
+
+function coerceEnumValue<T extends string>(
+    value: unknown,
+    allowed: readonly T[],
+    aliases: Record<string, T>,
+    fallback: T,
+): T {
+    if (typeof value !== "string" || !value.trim()) return fallback;
+    const normalized = value.trim().toLowerCase();
+    if ((allowed as readonly string[]).includes(normalized)) {
+        return normalized as T;
+    }
+    return aliases[normalized] ?? fallback;
+}
+
+export function coerceActivityRequirement(value: unknown): ActivityRequirement {
+    return coerceEnumValue(value, ACTIVITY_REQUIREMENT_VALUES, ACTIVITY_REQUIREMENT_ALIASES, "any");
+}
+
+export function coerceRelationshipIntent(value: unknown): RelationshipIntent {
+    return coerceEnumValue(value, RELATIONSHIP_INTENT_VALUES, RELATIONSHIP_INTENT_ALIASES, "unknown");
+}
+
+export function coerceSocialEnergy(value: unknown): SocialEnergy {
+    return coerceEnumValue(value, SOCIAL_ENERGY_VALUES, SOCIAL_ENERGY_ALIASES, "unknown");
+}
+
+function throwMatchmakerLlmUnavailable(detail?: string): never {
+    if (detail) {
+        console.warn("[matchmaker-llm]", detail);
+    }
+    throw new MatchmakerLlmUnavailableError();
+}
+
+function throwForbiddenReply(detail: string): never {
+    console.warn("[matchmaker-llm]", detail);
+    throw new MatchmakerForbiddenReplyError();
+}
+
+export function wrapMatchmakerLlmRetryFailure(retryError: unknown, provider: MatchmakerLlmProvider): MatchmakerLlmUnavailableError {
+    console.warn("[matchmaker-llm] provider failed after retry", {
+        provider,
+        error: retryError instanceof Error ? retryError.message : String(retryError),
+    });
+    return new MatchmakerLlmUnavailableError();
+}
+
 const llmTurnSchema = z.object({
     messageType: z.enum(["intent", "clarifying_question", "search_plan", "small_talk"]).default("intent"),
     shouldClarify: z.boolean().default(false),
@@ -99,9 +200,18 @@ const llmTurnSchema = z.object({
     intent: z.object({
         rawText: z.string().default(""),
         traits: z.array(z.string().min(1).max(40)).max(12).default([]),
-        relationshipIntent: z.enum(["serious", "casual", "open", "unknown"]).default("unknown"),
-        activityRequirement: z.enum(["active_today", "active_recently", "any"]).default("any"),
-        socialEnergy: z.enum(["quiet", "balanced", "social", "unknown"]).default("unknown"),
+        relationshipIntent: z.preprocess(
+            coerceRelationshipIntent,
+            z.enum(RELATIONSHIP_INTENT_VALUES),
+        ).default("unknown"),
+        activityRequirement: z.preprocess(
+            coerceActivityRequirement,
+            z.enum(ACTIVITY_REQUIREMENT_VALUES),
+        ).default("any"),
+        socialEnergy: z.preprocess(
+            coerceSocialEnergy,
+            z.enum(SOCIAL_ENERGY_VALUES),
+        ).default("unknown"),
         dealbreakers: z.array(z.string().min(1).max(80)).max(8).default([]),
     }),
     searchPlan: z.object({
@@ -522,9 +632,13 @@ function normalizeTurn(raw: unknown, provider: MatchmakerLlmProvider, model: str
     };
 }
 
+export function parseMatchmakerLlmTurnRaw(raw: unknown) {
+    return llmTurnSchema.parse(raw);
+}
+
 async function generateWithGemini(input: MatchmakerLlmInput): Promise<MatchmakerLlmTurn> {
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new MatchmakerLlmUnavailableError("Gemini API key is not configured");
+    if (!apiKey) throwMatchmakerLlmUnavailable("Gemini API key is not configured");
 
     const model = process.env.MATCHMAKER_LLM_MODEL || "gemini-2.0-flash";
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -542,7 +656,7 @@ async function generateWithGemini(input: MatchmakerLlmInput): Promise<Matchmaker
     });
     const turn = normalizeTurn(parseJsonObject(result.response.text()), "gemini", model);
     if (containsForbiddenReply(turn.reply)) {
-        throw new MatchmakerLlmUnavailableError("Gemini returned a forbidden template-style reply");
+        throwForbiddenReply("Gemini returned a forbidden template-style reply");
     }
     return turn;
 }
@@ -576,7 +690,7 @@ ${recentMessages || "(none)"}`;
 
 async function callOpenAiVoice(task: string, temperature = 0.82): Promise<MatchmakerVoiceReply> {
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new MatchmakerLlmUnavailableError("OPENAI_API_KEY is not configured");
+    if (!apiKey) throwMatchmakerLlmUnavailable("OPENAI_API_KEY is not configured");
 
     const model = process.env.MATCHMAKER_LLM_MODEL || "gpt-4.1-mini";
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -605,12 +719,12 @@ async function callOpenAiVoice(task: string, temperature = 0.82): Promise<Matchm
     });
     if (!response.ok) {
         const error = await response.text();
-        throw new MatchmakerLlmUnavailableError(`OpenAI Responses API failed (${response.status}): ${error}`);
+        throwMatchmakerLlmUnavailable(`OpenAI Responses API failed (${response.status}): ${error}`);
     }
 
     const text = cleanVoiceReply(extractOpenAiText(await response.json()));
     if (containsForbiddenReply(text)) {
-        throw new MatchmakerLlmUnavailableError("OpenAI returned a forbidden template-style reply");
+        throwForbiddenReply("OpenAI returned a forbidden template-style reply");
     }
 
     return {
@@ -623,7 +737,7 @@ async function callOpenAiVoice(task: string, temperature = 0.82): Promise<Matchm
 
 async function callGeminiVoice(task: string, temperature = 0.82): Promise<MatchmakerVoiceReply> {
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new MatchmakerLlmUnavailableError("Gemini API key is not configured");
+    if (!apiKey) throwMatchmakerLlmUnavailable("Gemini API key is not configured");
 
     const model = process.env.MATCHMAKER_LLM_MODEL || "gemini-2.0-flash";
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -638,7 +752,7 @@ async function callGeminiVoice(task: string, temperature = 0.82): Promise<Matchm
     const result = await geminiModel.generateContent(task);
     const text = cleanVoiceReply(result.response.text());
     if (containsForbiddenReply(text)) {
-        throw new MatchmakerLlmUnavailableError("Gemini returned a forbidden template-style reply");
+        throwForbiddenReply("Gemini returned a forbidden template-style reply");
     }
 
     return {
@@ -660,7 +774,7 @@ ${voiceContextBlock(context)}`;
         try {
             return await callOpenAiVoice(prompt);
         } catch (error) {
-            if (error instanceof MatchmakerLlmUnavailableError && error.message.includes("forbidden")) {
+            if (error instanceof MatchmakerForbiddenReplyError) {
                 return callOpenAiVoice(`${prompt}\nRewrite with completely fresh wording.`, 0.9);
             }
             throw error;
@@ -671,14 +785,14 @@ ${voiceContextBlock(context)}`;
         try {
             return await callGeminiVoice(prompt);
         } catch (error) {
-            if (error instanceof MatchmakerLlmUnavailableError && error.message.includes("forbidden")) {
+            if (error instanceof MatchmakerForbiddenReplyError) {
                 return callGeminiVoice(`${prompt}\nRewrite with completely fresh wording.`, 0.9);
             }
             throw error;
         }
     }
 
-    throw new MatchmakerLlmUnavailableError("Matchmaker LLM provider is not configured for conversational replies");
+    throwMatchmakerLlmUnavailable("Matchmaker LLM provider is not configured for conversational replies");
 }
 
 export function generateMatchmakerGreeting(
@@ -872,7 +986,7 @@ User answer: ${input.userMessage}`,
 
 async function generateWithOpenAi(input: MatchmakerLlmInput): Promise<MatchmakerLlmTurn> {
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new MatchmakerLlmUnavailableError("OPENAI_API_KEY is not configured");
+    if (!apiKey) throwMatchmakerLlmUnavailable("OPENAI_API_KEY is not configured");
 
     const model = process.env.MATCHMAKER_LLM_MODEL || "gpt-4.1-mini";
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -907,12 +1021,12 @@ async function generateWithOpenAi(input: MatchmakerLlmInput): Promise<Matchmaker
 
     if (!response.ok) {
         const error = await response.text();
-        throw new MatchmakerLlmUnavailableError(`OpenAI Responses API failed (${response.status}): ${error}`);
+        throwMatchmakerLlmUnavailable(`OpenAI Responses API failed (${response.status}): ${error}`);
     }
 
     const turn = normalizeTurn(parseJsonObject(extractOpenAiText(await response.json())), "openai", model);
     if (containsForbiddenReply(turn.reply)) {
-        throw new MatchmakerLlmUnavailableError("OpenAI returned a forbidden template-style reply");
+        throwForbiddenReply("OpenAI returned a forbidden template-style reply");
     }
     return turn;
 }
@@ -935,7 +1049,7 @@ export async function generateMatchmakerLlmTurn(input: MatchmakerLlmInput): Prom
     const run = async () => {
         if (provider === "gemini") return preventClarifyingLoop(input, await generateWithGemini(input));
         if (provider === "openai") return preventClarifyingLoop(input, await generateWithOpenAi(input));
-        throw new MatchmakerLlmUnavailableError("Matchmaker LLM provider is not configured for conversational replies");
+        throwMatchmakerLlmUnavailable("Matchmaker LLM provider is not configured for conversational replies");
     };
 
     try {
@@ -951,9 +1065,7 @@ export async function generateMatchmakerLlmTurn(input: MatchmakerLlmInput): Prom
         try {
             return await run();
         } catch (retryError) {
-            throw new MatchmakerLlmUnavailableError(
-                retryError instanceof Error ? retryError.message : "Matchmaker LLM request failed",
-            );
+            throw wrapMatchmakerLlmRetryFailure(retryError, provider);
         }
     }
 }

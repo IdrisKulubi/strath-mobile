@@ -50,6 +50,10 @@ import {
   shouldShowMatchmakerComposer,
   type ActiveTurn,
 } from '@/lib/matchmaker/conversation-ui';
+import {
+  getMatchmakerUserMessage,
+  MATCHMAKER_ERROR_TITLE,
+} from '@/lib/matchmaker/error-copy';
 import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 import type {
   MatchmakerConversationMessage,
@@ -124,9 +128,7 @@ export function MatchmakerConversation({
     || findCandidate.isPending
     || submitFeedback.isPending;
   const sendErrorMessage = sendMessage.isError
-    ? sendMessage.error instanceof Error
-      ? sendMessage.error.message
-      : 'Matchmaker is temporarily unavailable. Try again.'
+    ? getMatchmakerUserMessage(sendMessage.error)
     : undefined;
   const retryDraft = draft.trim() || (typeof sendMessage.variables === 'string' ? sendMessage.variables : '');
   const remainingSearches = data?.session.remainingSearches ?? 0;
@@ -361,7 +363,8 @@ export function MatchmakerConversation({
           <View style={styles.sectionInset}>
             <MatchmakerStatePanel
               variant="inline_error"
-              body={conversation.error instanceof Error ? conversation.error.message : undefined}
+              title={MATCHMAKER_ERROR_TITLE}
+              body={getMatchmakerUserMessage(conversation.error)}
               busy={conversation.isFetching}
               onRetry={() => conversation.refetch()}
             />
@@ -372,7 +375,7 @@ export function MatchmakerConversation({
           <View style={styles.sectionInset}>
             <MatchmakerStatePanel
               variant="inline_error"
-              title="Matchmaker is thinking"
+              title={MATCHMAKER_ERROR_TITLE}
               body={sendErrorMessage}
               busy={sendMessage.isPending}
               onRetry={retryDraft

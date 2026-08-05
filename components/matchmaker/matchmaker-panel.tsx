@@ -11,6 +11,7 @@ import { Search, Sparkles, WandSparkles } from 'lucide-react-native';
 
 import { MatchmakerCandidateCard } from '@/components/matchmaker/matchmaker-candidate-card';
 import { Text } from '@/components/ui/text';
+import { getMatchmakerUserMessage } from '@/lib/matchmaker/error-copy';
 import { useMatchmakerSearch } from '@/hooks/use-matchmaker';
 import { useTheme } from '@/hooks/use-theme';
 import type { MatchmakerCandidate } from '@/types/matchmaker';
@@ -152,7 +153,7 @@ export function MatchmakerPanel({ onOpenProfile }: MatchmakerPanelProps) {
         <View style={[styles.messageBox, { borderColor: colors.border, backgroundColor: colors.secondary }]}>
           <Text style={[styles.messageTitle, { color: colors.foreground }]}>Matchmaker could not search</Text>
           <Text style={[styles.messageBody, { color: colors.mutedForeground }]}>
-            {search.error instanceof Error ? search.error.message : 'Try again in a moment.'}
+            {search.isError ? getMatchmakerUserMessage(search.error) : 'Try again in a moment.'}
           </Text>
         </View>
       ) : null}
