@@ -13,6 +13,7 @@ import Animated, {
     FadeInUp,
     ZoomIn,
     useAnimatedStyle,
+    useReducedMotion,
     useSharedValue,
     withDelay,
     withRepeat,
@@ -21,105 +22,30 @@ import Animated, {
     withTiming,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
 import * as Haptics from 'expo-haptics';
-import { ArrowClockwise, CheckCircle, Heart, Rocket, Sparkle, Star } from 'phosphor-react-native';
+import { ArrowClockwise, CheckCircle, Rocket } from 'phosphor-react-native';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { Palette, RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { useOnboardingTheme, withOnboardingAlpha } from '@/lib/onboarding-theme';
+
+import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const LOADING_STAGES = [
     {
         title: 'Shaping your profile vibe',
-        detail: 'Turning your answers and photos into a profile that feels polished and intentional.',
+        detail: 'Turning your answers and photos into a polished profile.',
     },
     {
         title: 'Polishing your first impression',
-        detail: 'Lining up the details that make people pause, read, and want to know more.',
+        detail: 'Lining up the details that make people want to know more.',
     },
     {
         title: 'Getting discovery ready',
-        detail: 'Warming up your feed so your first connections feel more relevant from the start.',
+        detail: 'Warming up your feed for more relevant first connections.',
     },
 ];
-
-const CONFETTI_COLORS = ['#ec4899', '#f43f5e', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#f472b6'];
-
-const ConfettiPiece = ({ delay, startX, color }: { delay: number; startX: number; color: string }) => {
-    const translateY = useSharedValue(-50);
-    const translateX = useSharedValue(startX);
-    const rotation = useSharedValue(0);
-    const opacity = useSharedValue(1);
-    const scale = useSharedValue(0);
-
-    useEffect(() => {
-        scale.value = withDelay(delay, withSpring(1, { damping: 8 }));
-        translateY.value = withDelay(
-            delay,
-            withTiming(SCREEN_HEIGHT + 100, {
-                duration: 3000 + Math.random() * 2000,
-                easing: Easing.out(Easing.quad),
-            })
-        );
-        translateX.value = withDelay(
-            delay,
-            withSequence(
-                withTiming(startX + (Math.random() - 0.5) * 100, { duration: 1000 }),
-                withTiming(startX + (Math.random() - 0.5) * 150, { duration: 1000 }),
-                withTiming(startX + (Math.random() - 0.5) * 100, { duration: 1000 })
-            )
-        );
-        rotation.value = withDelay(
-            delay,
-            withRepeat(withTiming(360, { duration: 1000 + Math.random() * 1000 }), -1, false)
-        );
-        opacity.value = withDelay(delay + 2500, withTiming(0, { duration: 500 }));
-    }, [delay, opacity, rotation, scale, startX, translateX, translateY]);
-
-    const animatedStyle = useAnimatedStyle(() => ({
-        transform: [
-            { translateX: translateX.value },
-            { translateY: translateY.value },
-            { rotate: `${rotation.value}deg` },
-            { scale: scale.value },
-        ] as any,
-        opacity: opacity.value,
-    }));
-
-    const size = 8 + Math.random() * 8;
-    const isCircle = Math.random() > 0.5;
-
-    return (
-        <Animated.View
-            style={[
-                styles.confettiPiece,
-                animatedStyle,
-                {
-                    width: size,
-                    height: isCircle ? size : size * 2,
-                    backgroundColor: color,
-                    borderRadius: isCircle ? size / 2 : 2,
-                },
-            ]}
-        />
-    );
-};
-
-const CustomConfetti = () => {
-    const pieces = Array.from({ length: 50 }, (_, index) => ({
-        id: index,
-        delay: Math.random() * 500,
-        startX: Math.random() * SCREEN_WIDTH,
-        color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
-    }));
-
-    return (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-            {pieces.map((piece) => (
-                <ConfettiPiece key={piece.id} {...piece} />
-            ))}
-        </View>
-    );
-};
 
 interface LaunchCelebrationProps {
     userName: string;
@@ -131,53 +57,55 @@ interface LaunchCelebrationProps {
     errorMessage?: string;
 }
 
-const FloatingIcon = ({
-    Icon,
-    color,
-    delay,
-    x,
-    size,
+function ProfileAvatar({
+    uri,
+    userName,
+    borderColor,
+    placeholderColors,
+    placeholderTextColor,
 }: {
-    Icon: any;
-    color: string;
-    delay: number;
-    x: number;
-    size: number;
-}) => {
-    const translateY = useSharedValue(SCREEN_HEIGHT);
-    const scale = useSharedValue(0);
-    const rotation = useSharedValue(0);
-    const opacity = useSharedValue(0);
-
-    useEffect(() => {
-        translateY.value = withDelay(delay, withTiming(-100, { duration: 4000, easing: Easing.out(Easing.cubic) }));
-        scale.value = withDelay(delay, withSpring(1, { damping: 8 }));
-        opacity.value = withDelay(
-            delay,
-            withSequence(withTiming(1, { duration: 300 }), withDelay(3000, withTiming(0, { duration: 700 })))
-        );
-        rotation.value = withDelay(
-            delay,
-            withRepeat(withTiming(360, { duration: 3000, easing: Easing.linear }), -1, false)
-        );
-    }, [delay, opacity, rotation, scale, translateY]);
-
-    const animatedStyle = useAnimatedStyle(() => ({
-        transform: [
-            { translateX: x },
-            { translateY: translateY.value },
-            { scale: scale.value },
-            { rotate: `${rotation.value}deg` },
-        ] as any,
-        opacity: opacity.value,
-    }));
+    uri?: string;
+    userName: string;
+    borderColor: string;
+    placeholderColors: [string, string];
+    placeholderTextColor: string;
+}) {
+    const [isLoadingImage, setIsLoadingImage] = useState(Boolean(uri));
+    const [hasImageError, setHasImageError] = useState(false);
+    const showImage = Boolean(uri) && !hasImageError;
 
     return (
-        <Animated.View style={[styles.floatingIcon, animatedStyle]}>
-            <Icon size={size} color={color} weight="fill" />
-        </Animated.View>
+        <View style={[styles.avatarFrame, { borderColor }]}>
+            {showImage ? (
+                <>
+                    <Image
+                        source={{ uri }}
+                        style={styles.avatar}
+                        resizeMode="cover"
+                        onLoadStart={() => setIsLoadingImage(true)}
+                        onLoadEnd={() => setIsLoadingImage(false)}
+                        onError={() => {
+                            setHasImageError(true);
+                            setIsLoadingImage(false);
+                        }}
+                        accessibilityIgnoresInvertColors
+                    />
+                    {isLoadingImage ? (
+                        <View style={styles.avatarLoading}>
+                            <ActivityIndicator color={borderColor} />
+                        </View>
+                    ) : null}
+                </>
+            ) : (
+                <LinearGradient colors={placeholderColors} style={styles.avatarPlaceholder}>
+                    <Text style={[styles.avatarInitial, { color: placeholderTextColor }]}>
+                        {userName.charAt(0).toUpperCase() || 'S'}
+                    </Text>
+                </LinearGradient>
+            )}
+        </View>
     );
-};
+}
 
 export function LaunchCelebration({
     userName,
@@ -188,6 +116,8 @@ export function LaunchCelebration({
     hasError,
     errorMessage,
 }: LaunchCelebrationProps) {
+    const theme = useOnboardingTheme();
+    const reducedMotion = useReducedMotion();
     const mainScale = useSharedValue(0);
     const mainOpacity = useSharedValue(0);
     const textScale = useSharedValue(0.8);
@@ -198,23 +128,28 @@ export function LaunchCelebration({
     const orbitRotation = useSharedValue(0);
     const [loadingStage, setLoadingStage] = useState(0);
 
+    const successColor = theme.isDark ? Palette.dark.success : Palette.light.success;
+    const destructiveColor = theme.isDark ? Palette.dark.destructive : Palette.light.destructive;
+
     useEffect(() => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 200);
-        setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium), 400);
 
-        mainScale.value = withDelay(300, withSpring(1, { damping: 12, stiffness: 100 }));
-        mainOpacity.value = withDelay(300, withTiming(1, { duration: 500 }));
-        textScale.value = withDelay(600, withSpring(1, { damping: 10 }));
-        buttonOpacity.value = withDelay(2500, withTiming(1, { duration: 500 }));
-        pulseScale.value = withDelay(
-            1000,
-            withRepeat(
-                withSequence(withTiming(1.05, { duration: 1000 }), withTiming(1, { duration: 1000 })),
-                -1,
-                true
-            )
-        );
+        mainScale.value = withDelay(200, withSpring(1, { damping: 12, stiffness: 100 }));
+        mainOpacity.value = withDelay(200, withTiming(1, { duration: 400 }));
+        textScale.value = withDelay(400, withSpring(1, { damping: 10 }));
+        buttonOpacity.value = withDelay(1800, withTiming(1, { duration: 400 }));
+
+        if (!reducedMotion) {
+            pulseScale.value = withDelay(
+                800,
+                withRepeat(
+                    withSequence(withTiming(1.04, { duration: 1000 }), withTiming(1, { duration: 1000 })),
+                    -1,
+                    true,
+                ),
+            );
+        }
 
         const timer = setTimeout(() => {
             if (!hasError) {
@@ -223,7 +158,16 @@ export function LaunchCelebration({
         }, 5000);
 
         return () => clearTimeout(timer);
-    }, [buttonOpacity, hasError, mainOpacity, mainScale, onComplete, pulseScale, textScale]);
+    }, [
+        buttonOpacity,
+        hasError,
+        mainOpacity,
+        mainScale,
+        onComplete,
+        pulseScale,
+        reducedMotion,
+        textScale,
+    ]);
 
     useEffect(() => {
         if (!isLoading) {
@@ -234,28 +178,30 @@ export function LaunchCelebration({
             return;
         }
 
-        loadingHaloScale.value = withRepeat(
-            withSequence(withTiming(1.14, { duration: 1300 }), withTiming(1, { duration: 1300 })),
-            -1,
-            true
-        );
-        loadingHaloOpacity.value = withRepeat(
-            withSequence(withTiming(0.8, { duration: 1300 }), withTiming(0.28, { duration: 1300 })),
-            -1,
-            true
-        );
-        orbitRotation.value = withRepeat(
-            withTiming(360, { duration: 4200, easing: Easing.linear }),
-            -1,
-            false
-        );
+        if (!reducedMotion) {
+            loadingHaloScale.value = withRepeat(
+                withSequence(withTiming(1.1, { duration: 1200 }), withTiming(1, { duration: 1200 })),
+                -1,
+                true,
+            );
+            loadingHaloOpacity.value = withRepeat(
+                withSequence(withTiming(0.7, { duration: 1200 }), withTiming(0.25, { duration: 1200 })),
+                -1,
+                true,
+            );
+            orbitRotation.value = withRepeat(
+                withTiming(360, { duration: 4200, easing: Easing.linear }),
+                -1,
+                false,
+            );
+        }
 
         const stageTimer = setInterval(() => {
             setLoadingStage((prev) => (prev + 1) % LOADING_STAGES.length);
-        }, 1700);
+        }, 1600);
 
         return () => clearInterval(stageTimer);
-    }, [isLoading, loadingHaloOpacity, loadingHaloScale, orbitRotation]);
+    }, [isLoading, loadingHaloOpacity, loadingHaloScale, orbitRotation, reducedMotion]);
 
     const mainStyle = useAnimatedStyle(() => ({
         transform: [{ scale: mainScale.value }],
@@ -285,19 +231,8 @@ export function LaunchCelebration({
 
     const currentLoadingStage = useMemo(
         () => LOADING_STAGES[Math.min(loadingStage, LOADING_STAGES.length - 1)],
-        [loadingStage]
+        [loadingStage],
     );
-
-    const floatingIcons = [
-        { Icon: Heart, color: '#ec4899', delay: 0, x: SCREEN_WIDTH * 0.1, size: 24 },
-        { Icon: Star, color: '#f59e0b', delay: 200, x: SCREEN_WIDTH * 0.3, size: 20 },
-        { Icon: Sparkle, color: '#8b5cf6', delay: 400, x: SCREEN_WIDTH * 0.5, size: 28 },
-        { Icon: Heart, color: '#f43f5e', delay: 600, x: SCREEN_WIDTH * 0.7, size: 22 },
-        { Icon: Star, color: '#10b981', delay: 800, x: SCREEN_WIDTH * 0.9, size: 26 },
-        { Icon: Heart, color: '#ec4899', delay: 1000, x: SCREEN_WIDTH * 0.2, size: 20 },
-        { Icon: Sparkle, color: '#3b82f6', delay: 1200, x: SCREEN_WIDTH * 0.6, size: 24 },
-        { Icon: Star, color: '#f472b6', delay: 1400, x: SCREEN_WIDTH * 0.8, size: 22 },
-    ];
 
     const titleText = hasError
         ? `Almost there, ${userName}`
@@ -315,56 +250,123 @@ export function LaunchCelebration({
         <View style={styles.container}>
             <OnboardingScreenBackdrop />
 
-            <CustomConfetti />
-
-            {floatingIcons.map((icon, index) => (
-                <FloatingIcon key={index} {...icon} />
-            ))}
-
             <View style={styles.content}>
                 <Animated.View style={mainStyle}>
                     <Animated.View style={[styles.avatarContainer, pulseStyle]}>
                         {isLoading && !hasError ? (
                             <>
-                                <Animated.View style={[styles.loadingHalo, loadingHaloStyle]} />
+                                <Animated.View
+                                    style={[
+                                        styles.loadingHalo,
+                                        loadingHaloStyle,
+                                        {
+                                            backgroundColor: withOnboardingAlpha(
+                                                theme.primary,
+                                                theme.isDark ? 0.24 : 0.12,
+                                            ),
+                                        },
+                                    ]}
+                                />
                                 <Animated.View style={[styles.loadingOrbit, orbitStyle]}>
-                                    <View style={styles.orbitDotPrimary} />
-                                    <View style={styles.orbitDotSecondary} />
+                                    <View
+                                        style={[
+                                            styles.orbitDotPrimary,
+                                            { backgroundColor: theme.primary },
+                                        ]}
+                                    />
                                 </Animated.View>
                             </>
                         ) : null}
 
-                        {mainPhoto ? (
-                            <Image source={{ uri: mainPhoto }} style={styles.avatar} />
-                        ) : (
-                            <LinearGradient colors={['#ec4899', '#f43f5e']} style={styles.avatarPlaceholder}>
-                                <Text style={styles.avatarInitial}>{userName.charAt(0).toUpperCase()}</Text>
-                            </LinearGradient>
-                        )}
+                        <ProfileAvatar
+                            uri={mainPhoto}
+                            userName={userName}
+                            borderColor={theme.primary}
+                            placeholderColors={[theme.primary, theme.primaryHover]}
+                            placeholderTextColor={theme.primaryForeground}
+                        />
 
-                        <View style={styles.checkBadge}>
-                            <CheckCircle size={32} color="#10b981" weight="fill" />
+                        <View
+                            style={[
+                                styles.checkBadge,
+                                {
+                                    backgroundColor: theme.surface,
+                                    borderColor: theme.border,
+                                },
+                            ]}
+                        >
+                            <CheckCircle size={22} color={successColor} weight="fill" />
                         </View>
                     </Animated.View>
                 </Animated.View>
 
                 <Animated.View style={[styles.textContainer, textStyle]}>
-                    <Animated.Text entering={FadeInUp.delay(800)} style={styles.title}>
-                        {titleText}
-                    </Animated.Text>
-                    <Animated.Text entering={FadeInUp.delay(1000)} style={styles.subtitle}>
-                        {subtitleText}
-                    </Animated.Text>
+                    <Animated.View entering={FadeInUp.delay(400)}>
+                        <Text style={[styles.title, { color: theme.foreground }]}>{titleText}</Text>
+                    </Animated.View>
+                    <Animated.View entering={FadeInUp.delay(520)}>
+                        <Text style={[styles.subtitle, { color: theme.mutedForeground }]}>
+                            {subtitleText}
+                        </Text>
+                    </Animated.View>
                 </Animated.View>
 
                 {isLoading && !hasError ? (
-                    <Animated.View entering={ZoomIn.delay(1500)} style={styles.loadingCard}>
-                        <View style={styles.loadingBadge}>
-                            <Rocket size={18} color="#ffb5da" weight="fill" />
-                            <Text style={styles.loadingBadgeText}>Creating your first impression</Text>
-                        </View>
+                    <Animated.View
+                        entering={ZoomIn.delay(700)}
+                        style={[
+                            styles.loadingCard,
+                            {
+                                backgroundColor: theme.surface,
+                                borderColor: theme.border,
+                            },
+                        ]}
+                    >
+                        {theme.isDark ? (
+                            <View
+                                style={[
+                                    styles.statusBadge,
+                                    styles.statusBadgeDark,
+                                    {
+                                        backgroundColor: theme.surfaceMuted,
+                                        borderColor: theme.border,
+                                    },
+                                ]}
+                            >
+                                <View
+                                    style={[
+                                        styles.statusBadgeIcon,
+                                        { backgroundColor: theme.primary },
+                                    ]}
+                                >
+                                    <Rocket size={16} color={theme.primaryForeground} weight="fill" />
+                                </View>
+                                <Text style={[styles.statusBadgeText, { color: theme.foreground }]}>
+                                    Creating your first impression
+                                </Text>
+                            </View>
+                        ) : (
+                            <LinearGradient
+                                colors={[theme.primary, theme.primaryHover]}
+                                start={{ x: 0, y: 0.5 }}
+                                end={{ x: 1, y: 0.5 }}
+                                style={styles.statusBadge}
+                            >
+                                <Rocket size={16} color={theme.primaryForeground} weight="fill" />
+                                <Text
+                                    style={[
+                                        styles.statusBadgeText,
+                                        { color: theme.primaryForeground },
+                                    ]}
+                                >
+                                    Creating your first impression
+                                </Text>
+                            </LinearGradient>
+                        )}
 
-                        <Text style={styles.loadingStageTitle}>{currentLoadingStage.title}</Text>
+                        <Text style={[styles.loadingStageTitle, { color: theme.foreground }]}>
+                            {currentLoadingStage.title}
+                        </Text>
 
                         <View style={styles.loadingSteps}>
                             {LOADING_STAGES.map((stage, index) => {
@@ -376,21 +378,42 @@ export function LaunchCelebration({
                                         <View
                                             style={[
                                                 styles.loadingStepMarker,
-                                                isComplete && styles.loadingStepMarkerComplete,
-                                                isActive && styles.loadingStepMarkerActive,
+                                                {
+                                                    borderColor: theme.border,
+                                                    backgroundColor: theme.surfaceMuted,
+                                                },
+                                                isComplete && {
+                                                    backgroundColor: successColor,
+                                                    borderColor: successColor,
+                                                },
+                                                isActive && {
+                                                    backgroundColor: theme.primary,
+                                                    borderColor: theme.primary,
+                                                },
                                             ]}
                                         >
                                             {isComplete ? (
-                                                <CheckCircle size={16} color="#fff" weight="fill" />
+                                                <CheckCircle
+                                                    size={12}
+                                                    color={theme.primaryForeground}
+                                                    weight="fill"
+                                                />
                                             ) : isActive ? (
-                                                <ActivityIndicator color="#fff" size="small" />
+                                                <ActivityIndicator
+                                                    color={theme.primaryForeground}
+                                                    size="small"
+                                                />
                                             ) : null}
                                         </View>
                                         <Text
                                             style={[
                                                 styles.loadingStepText,
-                                                isActive && styles.loadingStepTextActive,
-                                                isComplete && styles.loadingStepTextComplete,
+                                                {
+                                                    color: isActive
+                                                        ? theme.foreground
+                                                        : theme.mutedForeground,
+                                                    fontWeight: isActive ? '700' : '600',
+                                                },
                                             ]}
                                         >
                                             {stage.title}
@@ -401,264 +424,262 @@ export function LaunchCelebration({
                         </View>
                     </Animated.View>
                 ) : (
-                    <Animated.View entering={ZoomIn.delay(1500)} style={styles.statsContainer}>
+                    <Animated.View
+                        entering={ZoomIn.delay(700)}
+                        style={[
+                            styles.statsContainer,
+                            {
+                                backgroundColor: theme.surface,
+                                borderColor: theme.border,
+                            },
+                        ]}
+                    >
                         <View style={styles.statItem}>
-                            <Rocket size={24} color="#ec4899" weight="fill" />
-                            <Text style={styles.statText}>{hasError ? 'Profile not saved yet' : 'Profile is live!'}</Text>
+                            <Rocket size={20} color={theme.primary} weight="fill" />
+                            <Text style={[styles.statText, { color: theme.foreground }]}>
+                                {hasError ? 'Profile not saved yet' : 'Profile is live!'}
+                            </Text>
                         </View>
                     </Animated.View>
                 )}
 
                 {hasError ? (
                     <Animated.View style={[styles.errorContainer, buttonStyle]}>
-                        <Text style={styles.errorText}>
+                        <Text style={[styles.errorText, { color: destructiveColor }]}>
                             {errorMessage || 'Something went wrong. Please try again.'}
                         </Text>
-                        <Pressable style={styles.retryButton} onPress={onRetry} disabled={isLoading}>
+                        <Pressable
+                            style={[styles.retryButton, { backgroundColor: theme.primary }]}
+                            onPress={onRetry}
+                            disabled={isLoading}
+                        >
                             {isLoading ? (
-                                <ActivityIndicator color="#fff" size="small" />
+                                <ActivityIndicator color={theme.primaryForeground} size="small" />
                             ) : (
                                 <>
-                                    <ArrowClockwise size={20} color="#fff" weight="bold" />
-                                    <Text style={styles.retryButtonText}>Retry</Text>
+                                    <ArrowClockwise
+                                        size={18}
+                                        color={theme.primaryForeground}
+                                        weight="bold"
+                                    />
+                                    <Text
+                                        style={[
+                                            styles.retryButtonText,
+                                            { color: theme.primaryForeground },
+                                        ]}
+                                    >
+                                        Retry
+                                    </Text>
                                 </>
                             )}
                         </Pressable>
                     </Animated.View>
                 ) : (
-                    <Animated.Text style={[styles.ctaHint, buttonStyle]}>
-                        {isLoading
-                            ? 'Good things are loading. This usually takes just a moment.'
-                            : 'Taking you to discover...'}
-                    </Animated.Text>
+                    <Animated.View style={buttonStyle}>
+                        <Text style={[styles.ctaHint, { color: theme.mutedForeground }]}>
+                            {isLoading
+                                ? 'This usually takes just a moment.'
+                                : 'Taking you to discover...'}
+                        </Text>
+                    </Animated.View>
                 )}
             </View>
         </View>
     );
 }
 
+const AVATAR_SIZE = 96;
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-    },
-    confettiPiece: {
-        position: 'absolute',
-        top: -20,
-    },
-    floatingIcon: {
-        position: 'absolute',
     },
     content: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 32,
+        paddingHorizontal: SPACING.section,
+        gap: SPACING.compact,
     },
     avatarContainer: {
         position: 'relative',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 32,
+        marginBottom: SPACING.tight,
     },
     loadingHalo: {
         position: 'absolute',
-        width: 176,
-        height: 176,
-        borderRadius: 88,
-        backgroundColor: 'rgba(236, 72, 153, 0.22)',
+        width: AVATAR_SIZE + 28,
+        height: AVATAR_SIZE + 28,
+        borderRadius: (AVATAR_SIZE + 28) / 2,
     },
     loadingOrbit: {
         position: 'absolute',
-        width: 188,
-        height: 188,
-        borderRadius: 94,
+        width: AVATAR_SIZE + 36,
+        height: AVATAR_SIZE + 36,
+        borderRadius: (AVATAR_SIZE + 36) / 2,
     },
     orbitDotPrimary: {
         position: 'absolute',
         top: -2,
         left: '50%',
-        marginLeft: -8,
-        width: 16,
-        height: 16,
-        borderRadius: 8,
-        backgroundColor: '#f472b6',
-        shadowColor: '#f472b6',
-        shadowOpacity: 0.45,
-        shadowRadius: 12,
+        marginLeft: -5,
+        width: 10,
+        height: 10,
+        borderRadius: 5,
     },
-    orbitDotSecondary: {
-        position: 'absolute',
-        bottom: 16,
-        right: 8,
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: '#8b5cf6',
-        shadowColor: '#8b5cf6',
-        shadowOpacity: 0.35,
-        shadowRadius: 10,
+    avatarFrame: {
+        width: AVATAR_SIZE,
+        height: AVATAR_SIZE,
+        borderRadius: AVATAR_SIZE / 2,
+        borderWidth: 3,
+        overflow: 'hidden',
+        backgroundColor: '#EDEBF0',
     },
     avatar: {
-        width: 140,
-        height: 140,
-        borderRadius: 70,
-        borderWidth: 4,
-        borderColor: '#ec4899',
+        width: '100%',
+        height: '100%',
+    },
+    avatarLoading: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.35)',
     },
     avatarPlaceholder: {
-        width: 140,
-        height: 140,
-        borderRadius: 70,
+        width: '100%',
+        height: '100%',
         justifyContent: 'center',
         alignItems: 'center',
     },
     avatarInitial: {
-        fontSize: 56,
+        fontSize: 36,
         fontWeight: '800',
-        color: '#fff',
     },
     checkBadge: {
         position: 'absolute',
-        bottom: 4,
-        right: 4,
-        backgroundColor: '#0f0d23',
-        borderRadius: 20,
-        padding: 4,
+        bottom: -2,
+        right: -2,
+        borderRadius: RADIUS.full,
+        padding: 2,
+        borderWidth: StyleSheet.hairlineWidth,
     },
     textContainer: {
         alignItems: 'center',
-        marginBottom: 32,
+        gap: SPACING.micro,
+        marginBottom: SPACING.tight,
     },
     title: {
-        fontSize: 28,
-        fontWeight: '800',
-        color: '#fff',
+        ...TYPOGRAPHY.display,
+        fontSize: 22,
+        lineHeight: 28,
         textAlign: 'center',
-        marginBottom: 12,
+        maxWidth: SCREEN_WIDTH - 64,
     },
     subtitle: {
-        fontSize: 16,
-        color: '#94a3b8',
+        ...TYPOGRAPHY.callout,
         textAlign: 'center',
-        lineHeight: 24,
+        maxWidth: 300,
+    },
+    statusBadge: {
+        width: '100%',
+        minHeight: 48,
+        borderRadius: RADIUS.full,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: SPACING.tight,
+        paddingHorizontal: SPACING.base,
+        marginBottom: SPACING.compact,
+    },
+    statusBadgeDark: {
+        borderWidth: StyleSheet.hairlineWidth,
+        justifyContent: 'flex-start',
+    },
+    statusBadgeIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: RADIUS.full,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    statusBadgeText: {
+        ...TYPOGRAPHY.callout,
+        fontWeight: '700',
+        flexShrink: 1,
     },
     statsContainer: {
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
-        borderRadius: 20,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        marginBottom: 40,
+        borderRadius: RADIUS.lg,
+        padding: SPACING.compact,
+        borderWidth: StyleSheet.hairlineWidth,
+        width: '100%',
     },
     statItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: SPACING.compact,
     },
     statText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#fff',
+        ...TYPOGRAPHY.headline,
     },
     loadingCard: {
         width: '100%',
-        backgroundColor: 'rgba(255, 255, 255, 0.07)',
-        borderRadius: 24,
-        padding: 22,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        marginBottom: 32,
-    },
-    loadingBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        alignSelf: 'flex-start',
-        gap: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 999,
-        backgroundColor: 'rgba(236, 72, 153, 0.14)',
-        marginBottom: 16,
-    },
-    loadingBadgeText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#ffd0ea',
+        borderRadius: RADIUS.lg,
+        padding: SPACING.compact,
+        borderWidth: StyleSheet.hairlineWidth,
     },
     loadingStageTitle: {
-        fontSize: 20,
-        lineHeight: 28,
-        fontWeight: '800',
-        color: '#fff',
-        marginBottom: 18,
+        ...TYPOGRAPHY.headline,
+        marginBottom: SPACING.compact,
     },
     loadingSteps: {
-        gap: 12,
+        gap: SPACING.tight,
     },
     loadingStepRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: SPACING.compact,
+        minHeight: 28,
     },
     loadingStepMarker: {
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.14)',
-        backgroundColor: 'rgba(255,255,255,0.04)',
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    loadingStepMarkerActive: {
-        backgroundColor: '#ec4899',
-        borderColor: '#ec4899',
-    },
-    loadingStepMarkerComplete: {
-        backgroundColor: '#10b981',
-        borderColor: '#10b981',
-    },
     loadingStepText: {
         flex: 1,
-        fontSize: 14,
-        lineHeight: 20,
-        color: '#94a3b8',
-        fontWeight: '600',
-    },
-    loadingStepTextActive: {
-        color: '#fff',
-    },
-    loadingStepTextComplete: {
-        color: '#cbd5e1',
+        ...TYPOGRAPHY.caption,
     },
     ctaHint: {
-        fontSize: 16,
-        color: '#64748b',
+        ...TYPOGRAPHY.caption,
         fontStyle: 'italic',
         textAlign: 'center',
+        marginTop: SPACING.tight,
     },
     errorContainer: {
         alignItems: 'center',
-        gap: 16,
+        gap: SPACING.compact,
+        width: '100%',
     },
     errorText: {
-        fontSize: 14,
-        color: '#f87171',
+        ...TYPOGRAPHY.caption,
+        fontWeight: '600',
         textAlign: 'center',
         maxWidth: 280,
     },
     retryButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        backgroundColor: '#ec4899',
-        paddingHorizontal: 32,
-        paddingVertical: 14,
-        borderRadius: 30,
+        gap: SPACING.tight,
+        paddingHorizontal: SPACING.section,
+        paddingVertical: SPACING.compact,
+        borderRadius: RADIUS.full,
+        minHeight: 48,
     },
     retryButtonText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#fff',
+        ...TYPOGRAPHY.headline,
     },
 });

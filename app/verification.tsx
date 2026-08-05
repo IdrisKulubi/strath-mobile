@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
+import { OnboardingPrimaryButton } from '@/components/onboarding/onboarding-primary-button';
 import { VerificationForm } from '@/components/verification/verification-form';
 import { VerificationProcessingOverlay } from '@/components/verification/verification-processing-overlay';
 import {
@@ -12,8 +13,6 @@ import {
     VerificationSuccessCard,
 } from '@/components/verification/verification-result-card';
 import { VerificationShell } from '@/components/verification/verification-shell';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
 import { useFaceVerification } from '@/hooks/use-face-verification';
 import { useProfile } from '@/hooks/use-profile';
 import { hasVerifiedFace } from '@/lib/profile-access';
@@ -388,18 +387,17 @@ export default function VerificationScreen() {
                 loading={shouldExitToTabs}
                 footer={
                     showForm ? (
-                        <Button
+                        <OnboardingPrimaryButton
+                            label={
+                                isUploadingAndSubmitting || isCreatingSession || isRetryingSession
+                                    ? 'Please wait…'
+                                    : 'Submit verification'
+                            }
                             onPress={handleStartOrRetry}
                             disabled={submitDisabled}
-                            style={{ width: '100%', minHeight: 48 }}
                             accessibilityLabel="Submit face verification"
-                        >
-                            <Text>
-                                {isUploadingAndSubmitting || isCreatingSession || isRetryingSession
-                                    ? 'Please wait…'
-                                    : 'Submit verification'}
-                            </Text>
-                        </Button>
+                            icon="shield-checkmark-outline"
+                        />
                     ) : undefined
                 }
             >

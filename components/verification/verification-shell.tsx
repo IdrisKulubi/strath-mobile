@@ -55,9 +55,10 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         paddingHorizontal: SPACING.screenX,
-        paddingTop: SPACING.section,
-        paddingBottom: SPACING.large,
-        gap: SPACING.comfortable,
+        paddingTop: SPACING.base,
+        paddingBottom: SPACING.base,
+        gap: SPACING.compact,
+        flexGrow: 1,
     },
     footer: {
         paddingHorizontal: SPACING.screenX,

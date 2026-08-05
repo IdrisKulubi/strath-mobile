@@ -9,14 +9,10 @@ import {
     WelcomeSplash,
     TermsAcceptance,
     TheEssentials,
+    CoreProfileStep,
+    CampusBasicsStep,
     PhotoMoment,
-    VibeCheckGame,
-    BubblePicker,
-    QuickFire,
-    PersonalityStep,
-    LifestyleStep,
-    OpeningLine,
-    ProfileDetailsStep,
+    ProfilePromptStep,
     LaunchCelebration,
 } from '../../components/onboarding';
 import { useImageUpload } from '@/hooks/use-image-upload';
@@ -24,8 +20,8 @@ import { getAuthToken, clearSession, getCurrentUser } from '@/lib/auth-helpers';
 import { setCachedProfile } from '@/lib/session-cache';
 import { devError, devLog } from '@/lib/dev-log';
 
-// Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=Personality, 8=Lifestyle, 9=OpeningLine, 10=ProfileDetails, 11=Celebration
-type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+// Steps: 0=Splash, 1=Terms, 2=Essentials, 3=CoreProfile, 4=CampusBasics, 5=Photos, 6=Prompt, 7=Celebration
+type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 const PROMPT_RESPONSE_MAX_LENGTH = 150;
 
 const getProfileSetupErrorMessage = (responseData: any, status: number) => {
@@ -60,7 +56,6 @@ export default function OnboardingScreen() {
     const { uploadImage } = useImageUpload();
 
     const [formData, setFormData] = useState<OnboardingData>({
-        // Essentials
         firstName: '',
         lastName: '',
         phoneNumber: '',
@@ -75,9 +70,7 @@ export default function OnboardingScreen() {
         gender: '',
         lookingFor: '',
         zodiacSign: '',
-        // Photos
         photos: [],
-        // Vibe Check results
         personalityType: '',
         loveLanguage: '',
         sleepingHabits: '',
@@ -85,24 +78,18 @@ export default function OnboardingScreen() {
         workoutFrequency: '',
         socialMediaUsage: '',
         communicationStyle: '',
-        // Interests
         interests: [],
-        // Quick Fire
         height: '',
         education: '',
         smoking: '',
         politics: '',
         religion: '',
         languages: [],
-        // Personality step
         personalityAnswers: {},
-        // Lifestyle step
         lifestyleAnswers: {},
-        // Opening Line
         prompts: [],
         aboutMe: '',
         bio: '',
-        // Others
         qualities: [],
         instagram: '',
         spotify: '',
@@ -111,7 +98,6 @@ export default function OnboardingScreen() {
         showActiveStatus: true,
     });
 
-    // Pre-populate name from auth user info (Apple/Google), with email fallback
     useEffect(() => {
         const normalizeToken = (token: string) =>
             token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
@@ -138,8 +124,6 @@ export default function OnboardingScreen() {
             const localPart = localPartRaw.trim();
             const domain = domainRaw.trim();
 
-            // Apple private relay addresses are anonymous aliases (e.g. random strings)
-            // and should not be used to infer names.
             if (domain === 'privaterelay.appleid.com') {
                 return { firstName: '', lastName: '' };
             }
@@ -147,7 +131,6 @@ export default function OnboardingScreen() {
             const hasSeparator = /[._-]/.test(localPart);
             const hasDigits = /\d/.test(localPart);
 
-            // Heuristic: likely alias/random handle, avoid generating garbage names.
             if (!hasSeparator && hasDigits && localPart.length >= 8) {
                 return { firstName: '', lastName: '' };
             }
@@ -163,7 +146,6 @@ export default function OnboardingScreen() {
                 return { firstName: '', lastName: '' };
             }
 
-            // If what's left is mostly short fragments, don't treat it as a real name.
             if (tokens.every((token) => token.length <= 2)) {
                 return { firstName: '', lastName: '' };
             }
@@ -224,7 +206,7 @@ export default function OnboardingScreen() {
                 devLog('[Onboarding] Could not load user data:', error);
             }
         };
-        
+
         loadUserData();
     }, []);
 
@@ -236,9 +218,8 @@ export default function OnboardingScreen() {
         setIsSubmitting(true);
         setSubmitError(null);
         devLog('[Onboarding] Starting profile submission...');
-        
+
         try {
-            // Get auth token (works with both Better Auth and Apple Sign In)
             const token = await getAuthToken();
             devLog('[Onboarding] Token retrieved:', token ? `${token.substring(0, 20)}...` : 'null');
 
@@ -246,7 +227,6 @@ export default function OnboardingScreen() {
                 throw new Error('Not authenticated. Please log in again.');
             }
 
-            // Upload photos first
             devLog('[Onboarding] Photos to upload:', formData.photos.length);
             let uploadedPhotos = [...formData.photos];
             if (uploadedPhotos.length > 0) {
@@ -262,7 +242,6 @@ export default function OnboardingScreen() {
             }
             devLog('[Onboarding] Photos after upload:', uploadedPhotos);
 
-            // Convert lookingFor to interestedIn array for matching algorithm
             const getInterestedIn = (lookingFor: string): string[] => {
                 switch (lookingFor) {
                     case 'women':
@@ -276,17 +255,6 @@ export default function OnboardingScreen() {
                 }
             };
 
-            // Prepare data for API - convert string fields to proper types
-            devLog('[Onboarding] formData BEFORE creating payload:', {
-                loveLanguage: formData.loveLanguage,
-                communicationStyle: formData.communicationStyle,
-                sleepingHabits: formData.sleepingHabits,
-                workoutFrequency: formData.workoutFrequency,
-                socialMediaUsage: formData.socialMediaUsage,
-                drinkingPreference: formData.drinkingPreference,
-                personalityType: formData.personalityType,
-            });
-            
             const sanitizedPrompts = (formData.prompts || [])
                 .filter((prompt) => prompt.promptId && prompt.response)
                 .map((prompt) => ({
@@ -296,31 +264,21 @@ export default function OnboardingScreen() {
 
             const payload = {
                 ...formData,
+                lifestyleAnswers: {
+                    ...formData.lifestyleAnswers,
+                    relationshipGoal: formData.lifestyleAnswers.relationshipGoal,
+                },
                 prompts: sanitizedPrompts,
                 photos: uploadedPhotos,
                 profilePhoto: uploadedPhotos[0] ?? undefined,
                 age: formData.age ? parseInt(String(formData.age)) : undefined,
                 yearOfStudy: formData.yearOfStudy ? parseInt(String(formData.yearOfStudy)) : undefined,
-                interestedIn: getInterestedIn(formData.lookingFor), // Set interestedIn from lookingFor selection
+                interestedIn: getInterestedIn(formData.lookingFor),
                 isComplete: true,
                 profileCompleted: true,
             };
 
             devLog('[Onboarding] Payload keys:', Object.keys(payload));
-            devLog('[Onboarding] Vibe check fields in payload:', {
-                loveLanguage: payload.loveLanguage,
-                communicationStyle: payload.communicationStyle,
-                sleepingHabits: payload.sleepingHabits,
-                workoutFrequency: payload.workoutFrequency,
-                socialMediaUsage: payload.socialMediaUsage,
-                drinkingPreference: payload.drinkingPreference,
-                personalityType: payload.personalityType,
-                qualities: payload.qualities,
-                prompts: payload.prompts,
-                height: payload.height,
-                smoking: payload.smoking,
-                religion: payload.religion,
-            });
             devLog('[Onboarding] API URL:', `${process.env.EXPO_PUBLIC_API_URL}/api/user/me`);
 
             const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/user/me`, {
@@ -333,21 +291,20 @@ export default function OnboardingScreen() {
             });
 
             devLog('[Onboarding] Response status:', response.status);
-            
+
             const responseText = await response.text();
             devLog('[Onboarding] Response text:', responseText.substring(0, 500));
-            
+
             let responseData: any = {};
             try {
                 responseData = JSON.parse(responseText);
             } catch {
                 devError('[Onboarding] Failed to parse response as JSON');
             }
-            
+
             if (!response.ok) {
                 devError('[Onboarding] Profile update failed:', response.status, responseData);
-                
-                // Handle 401 Unauthorized - session expired or invalid
+
                 if (response.status === 401) {
                     devLog('[Onboarding] Session expired - redirecting to login');
                     await clearSession();
@@ -358,7 +315,7 @@ export default function OnboardingScreen() {
                     );
                     return;
                 }
-                
+
                 throw new Error(getProfileSetupErrorMessage(responseData, response.status));
             }
 
@@ -367,16 +324,12 @@ export default function OnboardingScreen() {
                 await setCachedProfile(responseData.data.userId, responseData.data);
             }
 
-            // Soft-launch gating: if the backend placed this user on the waitlist,
-            // skip verification and drop them on the waitlist screen immediately.
-            // They'll finish verification later when they're admitted.
             const admission = responseData?.data?.admission;
             if (admission?.status === 'waitlisted') {
                 router.replace('/waitlist' as any);
                 return;
             }
 
-            // Continue into the face verification checkpoint before matchmaking access.
             router.replace('/verification' as any);
         } catch (error: any) {
             devError('[Onboarding] Error:', error.message || error);
@@ -392,7 +345,6 @@ export default function OnboardingScreen() {
 
     const renderStep = () => {
         switch (step) {
-            // Step 0: Welcome Splash
             case 0:
                 return (
                     <WelcomeSplash
@@ -404,7 +356,6 @@ export default function OnboardingScreen() {
                     />
                 );
 
-            // Step 1: Terms & Privacy Acceptance (Required by Apple Guideline 1.2)
             case 1:
                 return (
                     <TermsAcceptance
@@ -412,7 +363,6 @@ export default function OnboardingScreen() {
                     />
                 );
 
-            // Step 2: The Essentials (Name, Phone, Birthday/Zodiac, Gender, Looking For)
             case 2:
                 return (
                     <TheEssentials
@@ -420,156 +370,83 @@ export default function OnboardingScreen() {
                             firstName: formData.firstName,
                             lastName: formData.lastName,
                             phoneNumber: formData.phoneNumber,
-                            currentLocation: formData.currentLocation,
-                            locationLatitude: formData.locationLatitude,
-                            locationLongitude: formData.locationLongitude,
-                            locationPermissionStatus: formData.locationPermissionStatus,
-                            age: typeof formData.age === 'string' ? parseInt(formData.age) || 0 : formData.age || 0,
-                            zodiacSign: formData.zodiacSign,
-                            gender: formData.gender,
-                            lookingFor: formData.lookingFor,
                         }}
                         onUpdate={(data) => updateData(data as Partial<OnboardingData>)}
                         onNext={() => setStep(3)}
                     />
                 );
 
-            // Step 3: Photo Moment
             case 3:
                 return (
-                    <PhotoMoment
-                        photos={formData.photos}
-                        onUpdate={(photos) => updateData({ photos })}
-                        onNext={() => setStep(4)}
+                    <CoreProfileStep
+                        globalStepIndex={3}
+                        data={{
+                            age: formData.age,
+                            zodiacSign: formData.zodiacSign,
+                            gender: formData.gender,
+                            lookingFor: formData.lookingFor,
+                            relationshipGoal: formData.lifestyleAnswers.relationshipGoal || '',
+                        }}
+                        onUpdate={(updates) => {
+                            const nextUpdates: Partial<OnboardingData> = {};
+                            if (updates.age !== undefined) nextUpdates.age = String(updates.age);
+                            if (updates.zodiacSign !== undefined) nextUpdates.zodiacSign = updates.zodiacSign;
+                            if (updates.gender !== undefined) nextUpdates.gender = updates.gender as OnboardingData['gender'];
+                            if (updates.lookingFor !== undefined) nextUpdates.lookingFor = updates.lookingFor;
+                            if (updates.relationshipGoal !== undefined) {
+                                nextUpdates.lifestyleAnswers = {
+                                    ...formData.lifestyleAnswers,
+                                    relationshipGoal: updates.relationshipGoal,
+                                };
+                            }
+                            updateData(nextUpdates);
+                        }}
+                        onComplete={() => setStep(4)}
+                        onBackToEssentials={() => setStep(2)}
                     />
                 );
 
-            // Step 4: Vibe Check Game (This or That)
             case 4:
                 return (
-                    <VibeCheckGame
-                        onComplete={(results) => {
-                            updateData({
-                                personalityType: results.personalityType,
-                                communicationStyle: results.communicationStyle,
-                                sleepingHabits: results.sleepingHabits,
-                                workoutFrequency: results.workoutFrequency,
-                                socialMediaUsage: results.socialMediaUsage,
-                                drinkingPreference: results.drinkingPreference,
-                                loveLanguage: results.loveLanguage,
-                            });
-                            setStep(5);
+                    <CampusBasicsStep
+                        globalStepIndex={4}
+                        data={{
+                            yearOfStudy: formData.yearOfStudy,
+                            interests: formData.interests,
+                            currentLocation: formData.currentLocation,
+                            locationLatitude: formData.locationLatitude,
+                            locationLongitude: formData.locationLongitude,
+                            locationPermissionStatus: formData.locationPermissionStatus,
                         }}
+                        onUpdate={(updates) => updateData(updates as Partial<OnboardingData>)}
+                        onComplete={() => setStep(5)}
+                        onBackToCoreProfile={() => setStep(3)}
                     />
                 );
 
-            // Step 5: Bubble Picker for Interests
             case 5:
                 return (
-                    <BubblePicker
-                        interests={formData.interests}
-                        onComplete={(interests) => {
-                            updateData({ interests });
-                            setStep(6);
-                        }}
-                        minSelection={3}
-                        maxSelection={10}
+                    <PhotoMoment
+                        globalStepIndex={5}
+                        photos={formData.photos}
+                        onUpdate={(photos) => updateData({ photos })}
+                        onNext={() => setStep(6)}
+                        onBack={() => setStep(4)}
                     />
                 );
 
-            // Step 6: Quick Fire (Height, Year, Drinking, Smoking, Religion)
             case 6:
                 return (
-                    <QuickFire
-                        data={{
-                            height: formData.height,
-                            course: formData.course,
-                            yearOfStudy: typeof formData.yearOfStudy === 'string' 
-                                ? parseInt(formData.yearOfStudy) || undefined 
-                                : formData.yearOfStudy,
-                            drinkingPreference: formData.drinkingPreference,
-                            smoking: formData.smoking,
-                            religion: formData.religion,
-                            education: formData.education,
-                        }}
-                        onUpdate={(data) => {
-                            const updates: Partial<OnboardingData> = {};
-                            if (data.height !== undefined) updates.height = data.height;
-                            if (data.course !== undefined) updates.course = data.course;
-                            if (data.yearOfStudy !== undefined) updates.yearOfStudy = String(data.yearOfStudy);
-                            if (data.drinkingPreference !== undefined) updates.drinkingPreference = data.drinkingPreference;
-                            if (data.smoking !== undefined) updates.smoking = data.smoking;
-                            if (data.religion !== undefined) updates.religion = data.religion;
-                            if (data.education !== undefined) updates.education = data.education;
-                            updateData(updates);
-                        }}
-                        onComplete={() => setStep(7)}
-                    />
-                );
-
-            // Step 7: Personality questions
-            case 7:
-                return (
-                    <PersonalityStep
-                        data={formData.personalityAnswers}
-                        onComplete={(answers) => {
-                            updateData({ personalityAnswers: answers });
-                            setStep(8);
-                        }}
-                        onBack={() => setStep(6)}
-                    />
-                );
-
-            // Step 8: Lifestyle questions
-            case 8:
-                return (
-                    <LifestyleStep
-                        data={formData.lifestyleAnswers}
-                        onComplete={(answers) => {
-                            updateData({ lifestyleAnswers: answers });
-                            setStep(9);
-                        }}
-                        onBack={() => setStep(7)}
-                    />
-                );
-
-            // Step 9: Opening Line (Prompts + Bio)
-            case 9:
-                return (
-                    <OpeningLine
+                    <ProfilePromptStep
+                        globalStepIndex={6}
                         prompts={formData.prompts}
-                        aboutMe={formData.aboutMe}
-                        onUpdate={(data) => {
-                            if (data.prompts) updateData({ prompts: data.prompts });
-                            if (data.aboutMe) updateData({ aboutMe: data.aboutMe, bio: data.aboutMe });
-                        }}
-                        onComplete={() => setStep(10)}
+                        onUpdate={(prompts) => updateData({ prompts })}
+                        onComplete={() => setStep(7)}
+                        onBack={() => setStep(5)}
                     />
                 );
 
-            // Step 10: Remaining profile details
-            case 10:
-                return (
-                    <ProfileDetailsStep
-                        data={{
-                            university: formData.university,
-                            course: formData.course,
-                            education: formData.education,
-                            politics: formData.politics,
-                            languages: formData.languages,
-                            qualities: formData.qualities,
-                            instagram: formData.instagram,
-                            spotify: formData.spotify,
-                            snapchat: formData.snapchat,
-                        }}
-                        onUpdate={(data) => updateData(data as Partial<OnboardingData>)}
-                        onComplete={() => setStep(11)}
-                        onBack={() => setStep(9)}
-                    />
-                );
-
-            // Step 11: Launch Celebration
-            case 11:
+            case 7:
                 return (
                     <LaunchCelebration
                         userName={formData.firstName}

@@ -1,162 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    View,
-    Text,
-    StyleSheet,
-    TextInput,
-    TouchableOpacity,
     KeyboardAvoidingView,
     Platform,
-    ActivityIndicator,
+    StyleSheet,
+    TextInput,
+    View,
 } from 'react-native';
-import { ScrollView } from 'react-native-gesture-handler';
-import Animated, {
-    useSharedValue,
-    useAnimatedStyle,
-    withSpring,
-    FadeIn,
-    FadeInDown,
-    SlideInRight,
-} from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { Text } from '@/components/ui/text';
+import { essentialsStepLabel } from '@/constants/onboarding';
+import { MOTION, RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { useOnboardingTheme } from '@/lib/onboarding-theme';
+
+
+import { OnboardingHeader } from './onboarding-header';
+import { OnboardingPrimaryButton } from './onboarding-primary-button';
+import { OnboardingProgressBar } from './onboarding-progress-bar';
 import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
 import { PhoneNumberStep } from './phone-number-step';
-import * as Haptics from 'expo-haptics';
-import { Calendar, User, MagnifyingGlass, CheckCircle, MapPin } from 'phosphor-react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import * as Location from 'expo-location';
 
 interface TheEssentialsProps {
     data: {
         firstName: string;
         lastName: string;
         phoneNumber: string;
-        currentLocation: string;
-        locationLatitude: string;
-        locationLongitude: string;
-        locationPermissionStatus: 'granted' | 'denied' | 'undetermined' | 'unknown';
-        age: number;
-        zodiacSign: string;
-        gender: string;
-        lookingFor: string;
     };
     onUpdate: (data: Partial<TheEssentialsProps['data']>) => void;
     onNext: () => void;
 }
 
-// Calculate zodiac sign from birthday
-const getZodiacSign = (month: number, day: number): string => {
-    const signs = [
-        { name: 'Capricorn', emoji: '♑', start: [12, 22], end: [1, 19] },
-        { name: 'Aquarius', emoji: '♒', start: [1, 20], end: [2, 18] },
-        { name: 'Pisces', emoji: '♓', start: [2, 19], end: [3, 20] },
-        { name: 'Aries', emoji: '♈', start: [3, 21], end: [4, 19] },
-        { name: 'Taurus', emoji: '♉', start: [4, 20], end: [5, 20] },
-        { name: 'Gemini', emoji: '♊', start: [5, 21], end: [6, 20] },
-        { name: 'Cancer', emoji: '♋', start: [6, 21], end: [7, 22] },
-        { name: 'Leo', emoji: '♌', start: [7, 23], end: [8, 22] },
-        { name: 'Virgo', emoji: '♍', start: [8, 23], end: [9, 22] },
-        { name: 'Libra', emoji: '♎', start: [9, 23], end: [10, 22] },
-        { name: 'Scorpio', emoji: '♏', start: [10, 23], end: [11, 21] },
-        { name: 'Sagittarius', emoji: '♐', start: [11, 22], end: [12, 21] },
-    ];
-
-    for (const sign of signs) {
-        if (
-            (month === sign.start[0] && day >= sign.start[1]) ||
-            (month === sign.end[0] && day <= sign.end[1])
-        ) {
-            return sign.name;
-        }
-    }
-    return 'Capricorn';
-};
-
-const calculateAge = (birthday: Date): number => {
-    const today = new Date();
-    let age = today.getFullYear() - birthday.getFullYear();
-    const m = today.getMonth() - birthday.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthday.getDate())) {
-        age--;
-    }
-    return age;
-};
-
-const getZodiacEmoji = (sign: string): string => {
-    const emojis: Record<string, string> = {
-        'Aries': '♈', 'Taurus': '♉', 'Gemini': '♊', 'Cancer': '♋',
-        'Leo': '♌', 'Virgo': '♍', 'Libra': '♎', 'Scorpio': '♏',
-        'Sagittarius': '♐', 'Capricorn': '♑', 'Aquarius': '♒', 'Pisces': '♓',
-    };
-    return emojis[sign] || '✨';
-};
-
-// Chip selector component
-const ChipSelector = ({
-    options,
-    selected,
-    onSelect,
-    multiSelect = false,
-}: {
-    options: { value: string; label: string; emoji?: string }[];
-    selected: string | string[];
-    onSelect: (value: string) => void;
-    multiSelect?: boolean;
-}) => {
-    return (
-        <View style={styles.chipContainer}>
-            {options.map((option, index) => {
-                const isSelected = multiSelect
-                    ? (selected as string[]).includes(option.value)
-                    : selected === option.value;
-
-                return (
-                    <Animated.View
-                        key={option.value}
-                        entering={FadeInDown.delay(index * 50).springify()}
-                    >
-                        <TouchableOpacity
-                            onPress={() => {
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                onSelect(option.value);
-                            }}
-                            activeOpacity={0.7}
-                        >
-                            <View style={[styles.chip, isSelected && styles.chipSelected]}>
-                                {option.emoji && (
-                                    <Text style={styles.chipEmoji}>{option.emoji}</Text>
-                                )}
-                                <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                                    {option.label}
-                                </Text>
-                                {isSelected && (
-                                    <CheckCircle size={16} color="#fff" weight="fill" />
-                                )}
-                            </View>
-                        </TouchableOpacity>
-                    </Animated.View>
-                );
-            })}
-        </View>
-    );
-};
-
 export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
-    const hasPrefilledName = (data.firstName || '').trim().length >= 2 && (data.lastName || '').trim().length >= 2;
-    const [step, setStep] = useState(hasPrefilledName ? 1 : 0); // 0: name, 1: phone, 2: birthday, 3: gender, 4: looking for, 5: location
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [birthday, setBirthday] = useState<Date | null>(null);
+    const theme = useOnboardingTheme();
+    const reducedMotion = useReducedMotion();
+    const insets = useSafeAreaInsets();
+
+    const hasPrefilledName =
+        (data.firstName || '').trim().length >= 2 && (data.lastName || '').trim().length >= 2;
+    const [step, setStep] = useState(hasPrefilledName ? 1 : 0);
     const [firstName, setFirstName] = useState(data.firstName || '');
     const [lastName, setLastName] = useState(data.lastName || '');
-    const [isRequestingLocation, setIsRequestingLocation] = useState(false);
-    const [locationError, setLocationError] = useState('');
-
-    const progressWidth = useSharedValue(0);
-
-    useEffect(() => {
-        progressWidth.value = withSpring(((step + 1) / 6) * 100, { damping: 15 });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [step]);
 
     useEffect(() => {
         const nextFirstName = data.firstName || '';
@@ -170,170 +55,26 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
             onUpdate({ firstName: nextFirstName.trim(), lastName: nextLastName.trim() });
             setStep(1);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data.firstName, data.lastName, onUpdate]);
+    }, [data.firstName, data.lastName, onUpdate, step]);
 
-    const progressStyle = useAnimatedStyle(() => ({
-        width: `${progressWidth.value}%`,
-    }));
+    const isNameValid = firstName.trim().length >= 2 && lastName.trim().length >= 2;
+    const mainEntering = reducedMotion ? undefined : FadeInUp.delay(100).duration(MOTION.short);
+    const footerEntering = reducedMotion ? undefined : FadeInUp.delay(160).duration(MOTION.short);
 
     const handleNameContinue = () => {
-        if (firstName.trim() && lastName.trim()) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onUpdate({ firstName: firstName.trim(), lastName: lastName.trim() });
-            setStep(1);
+        if (!isNameValid) {
+            return;
         }
+
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onUpdate({ firstName: firstName.trim(), lastName: lastName.trim() });
+        setStep(1);
     };
 
     const handlePhoneContinue = (e164PhoneNumber: string) => {
         onUpdate({ phoneNumber: e164PhoneNumber });
-        setStep(2);
-    };
-
-    const handleBirthdayChange = (event: any, selectedDate?: Date) => {
-        if (Platform.OS === 'android') {
-            setShowDatePicker(false);
-        } else {
-            setShowDatePicker(true);
-        }
-        if (event?.type === 'dismissed' && Platform.OS === 'android') {
-            return;
-        }
-        if (selectedDate) {
-            setBirthday(selectedDate);
-            const age = calculateAge(selectedDate);
-            const zodiac = getZodiacSign(
-                selectedDate.getMonth() + 1,
-                selectedDate.getDate()
-            );
-            onUpdate({ age, zodiacSign: zodiac });
-        }
-    };
-
-    const handleBirthdayContinue = () => {
-        if (!birthday) {
-            return;
-        }
-        const ageYears = calculateAge(birthday);
-        if (ageYears < 18) {
-            return;
-        }
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-        setStep(3);
-    };
-
-    const handleGenderSelect = (gender: string) => {
-        onUpdate({ gender });
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setTimeout(() => setStep(4), 300);
-    };
-
-    const handleLookingForSelect = (lookingFor: string) => {
-        onUpdate({ lookingFor });
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        setTimeout(() => setStep(5), 300);
-    };
-
-    const formatLocationLabel = (placemark?: Location.LocationGeocodedAddress | null) => {
-        if (!placemark) {
-            return '';
-        }
-
-        const parts = [
-            placemark.name,
-            placemark.street,
-            placemark.district,
-            placemark.city,
-            placemark.region,
-            placemark.country,
-        ]
-            .map((value) => value?.trim())
-            .filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index);
-
-        return parts.join(', ');
-    };
-
-    const handleLocationPermission = async () => {
-        setIsRequestingLocation(true);
-        setLocationError('');
-
-        try {
-            const permission = await Location.requestForegroundPermissionsAsync();
-
-            if (permission.status !== 'granted') {
-                onUpdate({
-                    currentLocation: '',
-                    locationLatitude: '',
-                    locationLongitude: '',
-                    locationPermissionStatus: permission.status,
-                });
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                setLocationError('Location access was skipped. You can still continue and add it later from your profile.');
-                return;
-            }
-
-            const currentPosition = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.Balanced,
-            });
-            const reverseResults = await Location.reverseGeocodeAsync({
-                latitude: currentPosition.coords.latitude,
-                longitude: currentPosition.coords.longitude,
-            });
-
-            const readableLocation =
-                formatLocationLabel(reverseResults[0]) ||
-                `${currentPosition.coords.latitude.toFixed(5)}, ${currentPosition.coords.longitude.toFixed(5)}`;
-
-            onUpdate({
-                currentLocation: readableLocation,
-                locationLatitude: String(currentPosition.coords.latitude),
-                locationLongitude: String(currentPosition.coords.longitude),
-                locationPermissionStatus: permission.status,
-            });
-
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setTimeout(onNext, 250);
-        } catch (error) {
-            console.error('[TheEssentials] Failed to capture location:', error);
-            onUpdate({
-                currentLocation: '',
-                locationLatitude: '',
-                locationLongitude: '',
-                locationPermissionStatus: 'denied',
-            });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            setLocationError('We could not fetch your location right now. You can continue and update it later from your profile.');
-        } finally {
-            setIsRequestingLocation(false);
-        }
-    };
-
-    const handleSkipLocation = () => {
-        onUpdate({
-            currentLocation: '',
-            locationLatitude: '',
-            locationLongitude: '',
-            locationPermissionStatus: data.locationPermissionStatus === 'granted' ? 'granted' : 'denied',
-        });
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onNext();
     };
-
-    const genderOptions = [
-        { value: 'male', label: 'Man', emoji: '👨' },
-        { value: 'female', label: 'Woman', emoji: '👩' },
-        { value: 'other', label: 'Other', emoji: '✨' },
-    ];
-
-    const lookingForOptions = [
-        { value: 'women', label: 'Women', emoji: '👩' },
-        { value: 'men', label: 'Men', emoji: '👨' },
-        { value: 'everyone', label: 'Everyone', emoji: '💕' },
-    ];
-
-    const isNameValid = firstName.trim().length >= 2 && lastName.trim().length >= 2;
-    const birthdayAge = birthday ? calculateAge(birthday) : 0;
-    const isBirthdayValid = Boolean(birthday && birthdayAge >= 18);
 
     if (step === 1) {
         return (
@@ -349,255 +90,78 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
 
     return (
         <KeyboardAvoidingView
-            style={styles.container}
+            style={[
+                styles.container,
+                {
+                    paddingTop: insets.top + SPACING.compact,
+                    paddingBottom: Math.max(insets.bottom, SPACING.base),
+                },
+            ]}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
             <OnboardingScreenBackdrop />
 
-            {/* Progress bar */}
-            <View style={styles.progressBarContainer}>
-                <View style={styles.progressBarBg}>
-                    <Animated.View style={[styles.progressBarFill, progressStyle]}>
-                        <LinearGradient
-                            colors={['#ec4899', '#f43f5e']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={StyleSheet.absoluteFill}
-                        />
-                    </Animated.View>
+            <View style={styles.layout}>
+                <View style={styles.topSection}>
+                    <OnboardingProgressBar stepIndex={2} />
+                    <OnboardingHeader
+                        stepIndex={2}
+                        stepLabel={essentialsStepLabel(0, hasPrefilledName)}
+                    />
                 </View>
-            </View>
 
-            <View style={styles.scrollRegion}>
-            <ScrollView
-                style={styles.scrollFill}
-                contentContainerStyle={[styles.content, step === 2 && styles.contentWithBirthdayFooter]}
-                keyboardShouldPersistTaps="always"
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Step 0: Name */}
-                {step === 0 && (
-                    <Animated.View entering={SlideInRight.springify()} style={styles.stepContainer}>
-                        <View style={styles.iconContainer}>
-                            <User size={32} color="#ec4899" weight="fill" />
-                        </View>
-                        <Text style={styles.stepTitle}>{"What's your name?"}</Text>
-                        <Text style={styles.stepSubtitle}>
-                            {"This is how you'll appear to others"}
-                        </Text>
+                <Animated.View entering={mainEntering} style={styles.main}>
+                    <Text style={[styles.title, { color: theme.foreground }]}>
+                        {"What's your name?"}
+                    </Text>
+                    <Text style={[styles.subtitle, { color: theme.mutedForeground }]}>
+                        This is how you will appear to others on campus.
+                    </Text>
 
-                        <View style={styles.inputGroup}>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="First name"
-                                placeholderTextColor="#64748b"
-                                value={firstName}
-                                onChangeText={setFirstName}
-                                autoFocus
-                                autoCapitalize="words"
-                            />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Last name"
-                                placeholderTextColor="#64748b"
-                                value={lastName}
-                                onChangeText={setLastName}
-                                autoCapitalize="words"
-                            />
-                        </View>
-
-                        <TouchableOpacity
-                            onPress={handleNameContinue}
-                            disabled={!isNameValid}
-                            activeOpacity={0.8}
-                        >
-                            <LinearGradient
-                                colors={isNameValid ? ['#ec4899', '#f43f5e'] : ['#374151', '#374151']}
-                                style={styles.continueButton}
-                            >
-                                <Text style={[styles.continueButtonText, !isNameValid && styles.disabledText]}>
-                                    Continue
-                                </Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                    </Animated.View>
-                )}
-
-                {/* Step 2: Birthday — plain View (no Reanimated entering) so Android touches work after the native date dialog */}
-                {step === 2 && (
-                    <View style={styles.stepContainer} collapsable={false}>
-                        <View style={styles.iconContainer}>
-                            <Calendar size={32} color="#ec4899" weight="fill" />
-                        </View>
-                        <Text style={styles.stepTitle}>{"When's your birthday?"}</Text>
-                        <Text style={styles.stepSubtitle}>
-                            {"We'll use this to verify your age & find your zodiac"}
-                        </Text>
-
-                        <TouchableOpacity
-                            onPress={() => setShowDatePicker(true)}
-                            style={styles.dateButton}
-                        >
-                            <Text style={styles.dateButtonText}>
-                                {birthday
-                                    ? birthday.toLocaleDateString('en-US', {
-                                          month: 'long',
-                                          day: 'numeric',
-                                          year: 'numeric',
-                                      })
-                                    : 'Tap to select your birthday'}
-                            </Text>
-                        </TouchableOpacity>
-
-                        {showDatePicker && (
-                            <DateTimePicker
-                                value={birthday || new Date(2000, 0, 1)}
-                                mode="date"
-                                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                                onChange={handleBirthdayChange}
-                                maximumDate={new Date(new Date().getFullYear() - 18, new Date().getMonth(), new Date().getDate())}
-                                minimumDate={new Date(1950, 0, 1)}
-                                themeVariant="dark"
-                            />
-                        )}
-
-                        {birthday && !!data.zodiacSign && (
-                            <Animated.View entering={FadeIn} style={styles.zodiacReveal}>
-                                <Text style={styles.zodiacEmoji}>{getZodiacEmoji(data.zodiacSign)}</Text>
-                                <Text style={styles.zodiacText}>
-                                    {`You're ${birthdayAge} years old and a ${data.zodiacSign}!`}
-                                </Text>
-                            </Animated.View>
-                        )}
-
-                        {birthday && birthdayAge > 0 && birthdayAge < 18 && (
-                            <Animated.View entering={FadeIn} style={styles.errorBanner}>
-                                <Text style={styles.errorText}>
-                                    You must be 18+ to use Strathspace
-                                </Text>
-                            </Animated.View>
-                        )}
+                    <View style={styles.inputGroup}>
+                        <TextInput
+                            style={[
+                                styles.input,
+                                {
+                                    color: theme.foreground,
+                                    backgroundColor: theme.surface,
+                                    borderColor: theme.border,
+                                },
+                            ]}
+                            placeholder="First name"
+                            placeholderTextColor={theme.mutedForeground}
+                            value={firstName}
+                            onChangeText={setFirstName}
+                            autoFocus
+                            autoCapitalize="words"
+                            accessibilityLabel="First name"
+                        />
+                        <TextInput
+                            style={[
+                                styles.input,
+                                {
+                                    color: theme.foreground,
+                                    backgroundColor: theme.surface,
+                                    borderColor: theme.border,
+                                },
+                            ]}
+                            placeholder="Last name"
+                            placeholderTextColor={theme.mutedForeground}
+                            value={lastName}
+                            onChangeText={setLastName}
+                            autoCapitalize="words"
+                            accessibilityLabel="Last name"
+                        />
                     </View>
-                )}
+                </Animated.View>
 
-                {/* Step 3: Gender */}
-                {step === 3 && (
-                    <Animated.View entering={SlideInRight.springify()} style={styles.stepContainer}>
-                        <View style={styles.iconContainer}>
-                            <User size={32} color="#ec4899" weight="fill" />
-                        </View>
-                        <Text style={styles.stepTitle}>I am a...</Text>
-                        <Text style={styles.stepSubtitle}>
-                            Select what best describes you
-                        </Text>
-
-                        <ChipSelector
-                            options={genderOptions}
-                            selected={data.gender}
-                            onSelect={handleGenderSelect}
-                        />
-                    </Animated.View>
-                )}
-
-                {/* Step 4: Looking For */}
-                {step === 4 && (
-                    <Animated.View entering={SlideInRight.springify()} style={styles.stepContainer}>
-                        <View style={styles.iconContainer}>
-                            <MagnifyingGlass size={32} color="#ec4899" weight="fill" />
-                        </View>
-                        <Text style={styles.stepTitle}>{"I'm interested in..."}</Text>
-                        <Text style={styles.stepSubtitle}>
-                            Who would you like to meet?
-                        </Text>
-
-                        <ChipSelector
-                            options={lookingForOptions}
-                            selected={data.lookingFor}
-                            onSelect={handleLookingForSelect}
-                        />
-                    </Animated.View>
-                )}
-
-                {step === 5 && (
-                    <Animated.View entering={SlideInRight.springify()} style={styles.stepContainer}>
-                        <View style={styles.iconContainer}>
-                            <MapPin size={32} color="#ec4899" weight="fill" />
-                        </View>
-                        <Text style={styles.stepTitle}>Use your current location?</Text>
-                        <Text style={styles.stepSubtitle}>
-                            We use your phone location to place you more accurately and help the app show the right people and date context near you.
-                        </Text>
-
-                        <View style={styles.locationCard}>
-                            <Text style={styles.locationCardTitle}>Why we ask</Text>
-                            <Text style={styles.locationCardText}>
-                                Allowing location gives us your real area from the phone instead of relying on a manual text field.
-                            </Text>
-                            <Text style={styles.locationCardText}>
-                                If you do not want to share it now, you can continue and update it later in your profile.
-                            </Text>
-                            {!!data.currentLocation && (
-                                <Text style={styles.locationPreview}>
-                                    Current pick: {data.currentLocation}
-                                </Text>
-                            )}
-                        </View>
-
-                        {!!locationError && (
-                            <Text style={styles.phoneErrorText}>{locationError}</Text>
-                        )}
-
-                        <TouchableOpacity
-                            onPress={handleLocationPermission}
-                            disabled={isRequestingLocation}
-                            activeOpacity={0.8}
-                        >
-                            <LinearGradient
-                                colors={['#ec4899', '#f43f5e']}
-                                style={styles.continueButton}
-                            >
-                                {isRequestingLocation ? (
-                                    <ActivityIndicator color="#fff" />
-                                ) : (
-                                    <Text style={styles.continueButtonText}>
-                                        Allow location access
-                                    </Text>
-                                )}
-                            </LinearGradient>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={handleSkipLocation}
-                            disabled={isRequestingLocation}
-                            style={styles.secondaryButton}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.secondaryButtonText}>Continue without location</Text>
-                        </TouchableOpacity>
-                    </Animated.View>
-                )}
-            </ScrollView>
-
-            {step === 2 && (
-                <View style={styles.birthdayFooter} collapsable={false}>
-                    <TouchableOpacity
-                        onPress={handleBirthdayContinue}
-                        disabled={!isBirthdayValid}
-                        activeOpacity={0.85}
-                        style={styles.birthdayFooterTouchable}
-                    >
-                        <LinearGradient
-                            pointerEvents="none"
-                            colors={isBirthdayValid ? ['#ec4899', '#f43f5e'] : ['#374151', '#374151']}
-                            style={styles.continueButton}
-                        >
-                            <Text style={[styles.continueButtonText, !isBirthdayValid && styles.disabledText]}>
-                                Continue
-                            </Text>
-                        </LinearGradient>
-                    </TouchableOpacity>
-                </View>
-            )}
+                <Animated.View entering={footerEntering} style={styles.footer}>
+                    <OnboardingPrimaryButton
+                        label="Continue"
+                        onPress={handleNameContinue}
+                        disabled={!isNameValid}
+                    />
+                </Animated.View>
             </View>
         </KeyboardAvoidingView>
     );
@@ -606,218 +170,41 @@ export function TheEssentials({ data, onUpdate, onNext }: TheEssentialsProps) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        paddingHorizontal: SPACING.screenX,
     },
-    scrollRegion: {
+    layout: {
         flex: 1,
+        justifyContent: 'space-between',
     },
-    scrollFill: {
+    topSection: {
+        gap: SPACING.base,
+    },
+    main: {
         flex: 1,
-    },
-    progressBarContainer: {
-        paddingHorizontal: 24,
-        paddingTop: 60,
-        paddingBottom: 16,
-    },
-    progressBarBg: {
-        height: 6,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        borderRadius: 3,
-        overflow: 'hidden',
-    },
-    progressBarFill: {
-        height: '100%',
-        borderRadius: 3,
-    },
-    content: {
-        flexGrow: 1,
-        paddingHorizontal: 24,
-        paddingBottom: 40,
-    },
-    contentWithBirthdayFooter: {
-        paddingBottom: 120,
-    },
-    birthdayFooter: {
-        paddingHorizontal: 24,
-        paddingTop: 8,
-        paddingBottom: 28,
-        backgroundColor: '#0f0d23',
-        borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: 'rgba(255,255,255,0.08)',
-        zIndex: 50,
-        elevation: 50,
-    },
-    birthdayFooterTouchable: {
-        width: '100%',
-    },
-    stepContainer: {
-        flex: 1,
-        paddingTop: 40,
-    },
-    iconContainer: {
-        width: 64,
-        height: 64,
-        borderRadius: 20,
-        backgroundColor: 'rgba(236, 72, 153, 0.15)',
         justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 24,
+        gap: SPACING.base,
     },
-    stepTitle: {
-        fontSize: 28,
-        fontWeight: '800',
-        color: '#fff',
-        marginBottom: 8,
+    title: {
+        ...TYPOGRAPHY.display,
+        fontSize: 24,
+        lineHeight: 30,
     },
-    stepSubtitle: {
-        fontSize: 16,
-        color: '#94a3b8',
-        marginBottom: 32,
-        lineHeight: 24,
+    subtitle: {
+        ...TYPOGRAPHY.callout,
     },
     inputGroup: {
-        gap: 16,
-        marginBottom: 32,
+        gap: SPACING.compact,
+        marginTop: SPACING.compact,
     },
     input: {
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        borderRadius: 16,
-        paddingHorizontal: 20,
-        paddingVertical: 18,
-        fontSize: 18,
-        color: '#fff',
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    continueButton: {
-        paddingVertical: 18,
-        borderRadius: 30,
-        alignItems: 'center',
-    },
-    continueButtonText: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#fff',
-    },
-    disabledText: {
-        color: '#6b7280',
-    },
-    dateButton: {
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        borderRadius: 16,
-        paddingHorizontal: 20,
-        paddingVertical: 18,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        marginBottom: 24,
-    },
-    dateButtonText: {
-        fontSize: 18,
-        color: '#fff',
-        textAlign: 'center',
-    },
-    zodiacReveal: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 12,
-        backgroundColor: 'rgba(236, 72, 153, 0.15)',
-        padding: 16,
-        borderRadius: 16,
-        marginBottom: 24,
-    },
-    zodiacEmoji: {
-        fontSize: 32,
-    },
-    zodiacText: {
-        fontSize: 16,
-        color: '#f472b6',
-        fontWeight: '600',
-    },
-    phoneErrorText: {
-        color: '#f87171',
-        fontSize: 13,
-        textAlign: 'center',
-        marginTop: -16,
-        marginBottom: 18,
-    },
-    inputContainer: {
-        marginBottom: 16,
-    },
-    locationCard: {
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        borderRadius: 20,
-        padding: 20,
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.12)',
-        gap: 10,
-    },
-    locationCardTitle: {
-        color: '#fff',
+        borderRadius: RADIUS.lg,
+        borderWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: SPACING.base,
+        paddingVertical: SPACING.base,
         fontSize: 17,
-        fontWeight: '700',
+        minHeight: 56,
     },
-    locationCardText: {
-        color: '#cbd5e1',
-        fontSize: 15,
-        lineHeight: 22,
-    },
-    locationPreview: {
-        color: '#f9a8d4',
-        fontSize: 14,
-        lineHeight: 20,
-        marginTop: 4,
-    },
-    errorBanner: {
-        backgroundColor: 'rgba(239, 68, 68, 0.15)',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 24,
-    },
-    errorText: {
-        color: '#f87171',
-        fontSize: 14,
-        textAlign: 'center',
-    },
-    chipContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-    },
-    chip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        paddingVertical: 16,
-        paddingHorizontal: 24,
-        borderRadius: 50,
-        borderWidth: 2,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    chipSelected: {
-        backgroundColor: 'rgba(236, 72, 153, 0.2)',
-        borderColor: '#ec4899',
-    },
-    chipEmoji: {
-        fontSize: 20,
-    },
-    chipText: {
-        fontSize: 16,
-        color: '#94a3b8',
-        fontWeight: '600',
-    },
-    chipTextSelected: {
-        color: '#fff',
-    },
-    secondaryButton: {
-        alignItems: 'center',
-        paddingVertical: 16,
-        marginTop: 12,
-    },
-    secondaryButtonText: {
-        color: '#cbd5e1',
-        fontSize: 15,
-        fontWeight: '600',
+    footer: {
+        width: '100%',
     },
 });

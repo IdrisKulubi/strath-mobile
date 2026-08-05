@@ -149,20 +149,21 @@ export function VerificationForm({
 
 const styles = StyleSheet.create({
     hero: {
-        gap: SPACING.compact,
+        gap: SPACING.tight,
     },
     photoRow: {
         flexDirection: 'row',
         gap: SPACING.tight,
     },
     profileThumb: {
-        width: 64,
-        height: 82,
+        width: 56,
+        height: 72,
         borderRadius: RADIUS.md,
+        backgroundColor: '#EDEBF0',
     },
     selfiePreview: {
         width: '100%',
-        height: 280,
+        height: 160,
         borderRadius: RADIUS.lg,
     },
     statusHeader: {

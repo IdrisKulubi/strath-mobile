@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui/text';
 import { MOTION, RADIUS, SPACING } from '@/lib/design-tokens';
-import { useOnboardingTheme, withOnboardingAlpha, type OnboardingSurfaces } from '@/lib/onboarding-theme';
+import { useOnboardingTheme, withOnboardingAlpha, type OnboardingTheme } from '@/lib/onboarding-theme';
 
 import { OnboardingHeader } from './onboarding-header';
 import { OnboardingPrimaryButton } from './onboarding-primary-button';
@@ -52,7 +52,7 @@ interface AgreementRowProps {
     item: AgreementItem;
     checked: boolean;
     onToggle: () => void;
-    theme: OnboardingSurfaces & { isDark: boolean };
+    theme: OnboardingTheme;
 }
 
 function AgreementRow({ item, checked, onToggle, theme }: AgreementRowProps) {

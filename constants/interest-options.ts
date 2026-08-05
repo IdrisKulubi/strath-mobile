@@ -29,6 +29,18 @@ export const INTEREST_OPTIONS: InterestOption[] = [
     { id: '22', label: 'Netflix', emoji: '📺' },
     { id: '23', label: 'Coffee', emoji: '☕' },
     { id: '24', label: 'Astrology', emoji: '🔮' },
+    { id: '25', label: 'Live Music', emoji: '🎤' },
+    { id: '26', label: 'Podcasts', emoji: '🎧' },
+    { id: '27', label: 'Board Games', emoji: '🎲' },
+    { id: '28', label: 'Basketball', emoji: '🏀' },
+    { id: '29', label: 'Running', emoji: '🏃' },
+    { id: '30', label: 'Thrifting', emoji: '🛍️' },
+    { id: '31', label: 'Volunteering', emoji: '🤝' },
+    { id: '32', label: 'Karaoke', emoji: '🎙️' },
+    { id: '33', label: 'Nature', emoji: '🌿' },
+    { id: '34', label: 'Museums', emoji: '🏛️' },
+    { id: '35', label: 'Comedy', emoji: '😂' },
+    { id: '36', label: 'Road Trips', emoji: '🚗' },
 ];
 
 export const INTEREST_MIN_SELECTION = 3;

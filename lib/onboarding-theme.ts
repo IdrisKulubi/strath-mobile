@@ -5,11 +5,11 @@ import { Palette } from '@/lib/design-tokens';
 
 export const ONBOARDING_PHASE_COUNT = 4;
 
-/** Macro phases for segmented progress (steps 0–11). */
+/** Macro phases for segmented progress (steps 0–7). */
 export function getOnboardingPhase(stepIndex: number): number {
     if (stepIndex <= 2) return 0;
-    if (stepIndex <= 5) return 1;
-    if (stepIndex <= 8) return 2;
+    if (stepIndex === 3) return 1;
+    if (stepIndex === 4) return 2;
     return 3;
 }
 
@@ -44,7 +44,16 @@ export const OnboardingSurfaces = {
     },
 } as const;
 
+export type OnboardingSurfaceTokens =
+    | (typeof OnboardingSurfaces)['light']
+    | (typeof OnboardingSurfaces)['dark'];
+
+/** @deprecated Use OnboardingSurfaceTokens */
 export type OnboardingSurfaces = (typeof OnboardingSurfaces)['light'];
+
+export type OnboardingTheme = OnboardingSurfaceTokens & {
+    isDark: boolean;
+};
 
 export function withOnboardingAlpha(hex: string, alpha: number): string {
     const normalized = hex.replace('#', '');
@@ -58,13 +67,13 @@ export function withOnboardingAlpha(hex: string, alpha: number): string {
 }
 
 export function useOnboardingTheme() {
-    const { theme } = useTheme();
+    const { colorScheme } = useTheme();
 
     return useMemo(
         () => ({
-            ...(theme === 'dark' ? OnboardingSurfaces.dark : OnboardingSurfaces.light),
-            isDark: theme === 'dark',
+            ...(colorScheme === 'dark' ? OnboardingSurfaces.dark : OnboardingSurfaces.light),
+            isDark: colorScheme === 'dark',
         }),
-        [theme],
+        [colorScheme],
     );
 }
