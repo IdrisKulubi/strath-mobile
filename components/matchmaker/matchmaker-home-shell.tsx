@@ -1,11 +1,12 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsMutating } from '@tanstack/react-query';
 
 import { MatchmakerConversation } from '@/components/matchmaker/matchmaker-conversation';
 import {
   MatchmakerHeader,
-  MATCHMAKER_FLOATING_HEADER_HEIGHT,
+  getMatchmakerFloatingHeaderHeight,
 } from '@/components/matchmaker/matchmaker-header';
 import { useMatchmakerConversation } from '@/hooks/use-matchmaker';
 import { getMatchmakerVisualState, getCandidateFromMessage } from '@/lib/matchmaker/conversation-ui';
@@ -16,6 +17,7 @@ interface MatchmakerHomeShellProps {
 }
 
 export function MatchmakerHomeShell({ conversationEnabled = true }: MatchmakerHomeShellProps) {
+  const insets = useSafeAreaInsets();
   const conversation = useMatchmakerConversation(conversationEnabled);
   const mutationCount = useIsMutating({ mutationKey: ['matchmaker', 'conversation'] });
   const visualState = getMatchmakerVisualState({
@@ -35,7 +37,7 @@ export function MatchmakerHomeShell({ conversationEnabled = true }: MatchmakerHo
     <View style={styles.wrap}>
       <MatchmakerConversation
         conversation={conversation}
-        topInset={MATCHMAKER_FLOATING_HEADER_HEIGHT + SPACING.compact}
+        topInset={getMatchmakerFloatingHeaderHeight(insets.top)}
       />
       <View pointerEvents="box-none" style={styles.headerHost}>
         <MatchmakerHeader

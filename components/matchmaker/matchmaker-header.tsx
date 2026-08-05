@@ -2,6 +2,7 @@ import React from 'react';
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MatchmakerOrb } from '@/components/matchmaker/matchmaker-orb';
 import { Text } from '@/components/ui/text';
@@ -10,8 +11,13 @@ import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 import type { MatchmakerVisualState } from '@/lib/matchmaker/conversation-ui';
 import type { MatchmakerConversationSession } from '@/types/matchmaker';
 
-/** Floating header footprint reserved above conversation scroll. */
+/** Floating header row height (excluding status-bar inset). */
 export const MATCHMAKER_FLOATING_HEADER_HEIGHT = 56;
+
+/** Total floating header footprint including status bar. */
+export function getMatchmakerFloatingHeaderHeight(topInset: number): number {
+  return topInset + MATCHMAKER_FLOATING_HEADER_HEIGHT;
+}
 
 const GLASS_TINT = 'rgba(30, 21, 43, 0.38)';
 const GLASS_FALLBACK_OVERLAY = 'rgba(30, 21, 43, 0.52)';
@@ -77,17 +83,18 @@ export function MatchmakerHeader({
   visualState,
   candidateFirstName,
 }: MatchmakerHeaderProps) {
+  const insets = useSafeAreaInsets();
   const remaining = session?.remainingSearches ?? 0;
   const quotaLabel = session ? formatRemainingSearches(remaining) : null;
   const quotaExhausted = remaining <= 0;
 
   return (
-    <View pointerEvents="box-none" style={styles.wrap}>
+    <View pointerEvents="box-none" style={[styles.wrap, { paddingTop: insets.top }]}>
       <FloatingGlassPill style={styles.identityPill}>
         <MatchmakerOrb state={visualState} size={32} />
         <View style={styles.copy}>
           <Text style={styles.title}>Matchmaker</Text>
-          <Text style={styles.status} numberOfLines={1}>
+          <Text style={styles.status}>
             {getVisualStatusLabel(visualState, candidateFirstName)}
           </Text>
         </View>
@@ -113,6 +120,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: SPACING.tight,
     minHeight: MATCHMAKER_FLOATING_HEADER_HEIGHT,
+    paddingHorizontal: 12,
   },
   pillHost: {
     borderRadius: PILL_RADIUS,
@@ -161,7 +169,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   quotaPill: {
-    maxWidth: 140,
+    flexShrink: 0,
     justifyContent: 'center',
   },
   quotaPillExhausted: {

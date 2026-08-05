@@ -100,8 +100,12 @@ export default function HomeScreen() {
 
     return (
         <TabSwipeView route="/(tabs)">
-            <SafeAreaView style={styles.matchmakerScreen} edges={['top']}>
-                <StatusBar barStyle="light-content" backgroundColor={MATCHMAKER_HOME.background} />
+            <View style={styles.matchmakerScreen}>
+                <StatusBar
+                    barStyle="light-content"
+                    translucent
+                    backgroundColor="transparent"
+                />
                 <KeyboardAvoidingView
                     style={styles.keyboardAvoider}
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -144,7 +148,7 @@ export default function HomeScreen() {
                         )}
                     </View>
                 </KeyboardAvoidingView>
-            </SafeAreaView>
+            </View>
         </TabSwipeView>
     );
 }
@@ -471,17 +475,17 @@ const styles = StyleSheet.create({
     matchmakerHost: {
         flex: 1,
         minHeight: 0,
-        paddingHorizontal: SPACING.screenX,
-        paddingTop: SPACING.tight,
     },
     centeredState: {
         flex: 1,
         justifyContent: 'center',
+        paddingHorizontal: SPACING.screenX,
         paddingBottom: SPACING.xl,
     },
     consentContent: {
         flexGrow: 1,
         justifyContent: 'center',
+        paddingHorizontal: SPACING.screenX,
         paddingTop: SPACING.large,
     },
     contentCarousel: {

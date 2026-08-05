@@ -249,8 +249,15 @@ export function MatchmakerConversation({
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: SPACING.tight + topInset, paddingBottom: composerScrollInset },
+          { paddingBottom: composerScrollInset },
         ]}
+        {...(Platform.OS === 'ios' && topInset > 0
+          ? {
+              contentInset: { top: topInset },
+              contentOffset: { x: 0, y: -topInset },
+              automaticallyAdjustContentInsets: false,
+            }
+          : {})}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -307,65 +314,77 @@ export function MatchmakerConversation({
               ) : null}
             </View>
           ) : turn.variant === 'feedback' ? (
-            <MatchmakerFeedbackPanel
-              message={turn.promptMessage!}
-              replies={turn.quickReplies}
-              outcome={turn.promptMessage?.metadata?.outcome}
-              remainingSearches={remainingSearches}
-              busy={isBusy}
-              onSelect={handleQuickReply}
-            />
+            <View style={styles.sectionInset}>
+              <MatchmakerFeedbackPanel
+                message={turn.promptMessage!}
+                replies={turn.quickReplies}
+                outcome={turn.promptMessage?.metadata?.outcome}
+                remainingSearches={remainingSearches}
+                busy={isBusy}
+                onSelect={handleQuickReply}
+              />
+            </View>
           ) : turn.variant === 'limit' ? (
             showLimitEmptyState ? (
-              <MatchmakerLimitEmptyState
-                voiceText={turn.promptText}
+              <View style={styles.sectionInset}>
+                <MatchmakerLimitEmptyState
+                  voiceText={turn.promptText}
+                  replies={turn.quickReplies}
+                  busy={isBusy}
+                  onReply={handleQuickReply}
+                />
+              </View>
+            ) : (
+              <View style={styles.sectionInset}>
+                <MatchmakerVoiceBubble
+                  text={turn.promptText}
+                  compact
+                />
+              </View>
+            )
+          ) : turn.variant === 'no_result' ? (
+            <View style={styles.sectionInset}>
+              <MatchmakerStatePanel
+                variant="no_result"
+                body={turn.promptText}
                 replies={turn.quickReplies}
                 busy={isBusy}
                 onReply={handleQuickReply}
               />
-            ) : (
-              <MatchmakerVoiceBubble
-                text={turn.promptText}
-                compact
-              />
-            )
-          ) : turn.variant === 'no_result' ? (
-            <MatchmakerStatePanel
-              variant="no_result"
-              body={turn.promptText}
-              replies={turn.quickReplies}
-              busy={isBusy}
-              onReply={handleQuickReply}
-            />
+            </View>
           ) : (
             <ActivePrompt turn={turn} />
           )}
         </View>
 
         {conversation.isError ? (
-          <MatchmakerStatePanel
-            variant="inline_error"
-            body={conversation.error instanceof Error ? conversation.error.message : undefined}
-            busy={conversation.isFetching}
-            onRetry={() => conversation.refetch()}
-          />
+          <View style={styles.sectionInset}>
+            <MatchmakerStatePanel
+              variant="inline_error"
+              body={conversation.error instanceof Error ? conversation.error.message : undefined}
+              busy={conversation.isFetching}
+              onRetry={() => conversation.refetch()}
+            />
+          </View>
         ) : null}
 
         {sendErrorMessage ? (
-          <MatchmakerStatePanel
-            variant="inline_error"
-            title="Matchmaker is thinking"
-            body={sendErrorMessage}
-            busy={sendMessage.isPending}
-            onRetry={retryDraft
-              ? () => submit(retryDraft).catch(() => undefined)
-              : undefined}
-          />
+          <View style={styles.sectionInset}>
+            <MatchmakerStatePanel
+              variant="inline_error"
+              title="Matchmaker is thinking"
+              body={sendErrorMessage}
+              busy={sendMessage.isPending}
+              onRetry={retryDraft
+                ? () => submit(retryDraft).catch(() => undefined)
+                : undefined}
+            />
+          </View>
         ) : null}
 
         {(turn.variant === 'prompt' || (turn.variant === 'limit' && !showLimitEmptyState))
           && turn.quickReplies.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(180)} style={styles.replies}>
+          <Animated.View entering={FadeIn.duration(180)} style={[styles.replies, styles.sectionInset]}>
             {turn.quickReplies.map((reply) => {
               const label = normalizeQuickReplyLabel(reply);
               return (
@@ -397,7 +416,7 @@ export function MatchmakerConversation({
         ) : null}
 
         {turn.showSearchAction ? (
-          <View style={styles.searchAction}>
+          <View style={[styles.searchAction, styles.sectionInset]}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={turn.searchActionLabel}
@@ -428,7 +447,7 @@ export function MatchmakerConversation({
             accessibilityRole="button"
             accessibilityLabel="Open Messages"
             onPress={() => router.push('/(tabs)/chats')}
-            style={({ pressed }) => [styles.messagesButton, pressed && styles.pressedNeutral]}
+            style={({ pressed }) => [styles.messagesButton, styles.sectionInset, pressed && styles.pressedNeutral]}
           >
             <View style={styles.actionButtonContent}>
               <MessageCircle size={18} color={MATCHMAKER_HOME.primary} />
@@ -527,8 +546,12 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     gap: SPACING.comfortable,
   },
+  sectionInset: {
+    paddingHorizontal: SPACING.screenX,
+  },
   historySection: {
     gap: SPACING.tight,
+    paddingHorizontal: SPACING.screenX,
   },
   historyToggle: {
     minHeight: 44,
@@ -578,6 +601,7 @@ const styles = StyleSheet.create({
   },
   candidateSection: {
     gap: SPACING.compact,
+    paddingHorizontal: SPACING.screenX,
   },
   limitNote: {
     color: MATCHMAKER_HOME.subtleForeground,
@@ -589,7 +613,7 @@ const styles = StyleSheet.create({
   },
   promptBlock: {
     gap: SPACING.compact,
-    paddingTop: SPACING.comfortable,
+    paddingHorizontal: 12,
     paddingBottom: SPACING.tight,
   },
   promptEyebrow: {
@@ -602,7 +626,7 @@ const styles = StyleSheet.create({
   },
   promptText: {
     color: MATCHMAKER_HOME.foreground,
-    maxWidth: 340,
+    width: '100%',
     fontSize: 28,
     lineHeight: 35,
     fontWeight: '600',
