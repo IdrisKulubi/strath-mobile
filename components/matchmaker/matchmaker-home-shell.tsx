@@ -3,7 +3,10 @@ import { StyleSheet, View } from 'react-native';
 import { useIsMutating } from '@tanstack/react-query';
 
 import { MatchmakerConversation } from '@/components/matchmaker/matchmaker-conversation';
-import { MatchmakerHeader } from '@/components/matchmaker/matchmaker-header';
+import {
+  MatchmakerHeader,
+  MATCHMAKER_FLOATING_HEADER_HEIGHT,
+} from '@/components/matchmaker/matchmaker-header';
 import { useMatchmakerConversation } from '@/hooks/use-matchmaker';
 import { getMatchmakerVisualState, getCandidateFromMessage } from '@/lib/matchmaker/conversation-ui';
 import { MATCHMAKER_HOME, SPACING } from '@/lib/design-tokens';
@@ -30,12 +33,17 @@ export function MatchmakerHomeShell({ conversationEnabled = true }: MatchmakerHo
 
   return (
     <View style={styles.wrap}>
-      <MatchmakerHeader
-        session={conversation.data?.session ?? null}
-        visualState={visualState}
-        candidateFirstName={candidateFirstName}
+      <MatchmakerConversation
+        conversation={conversation}
+        topInset={MATCHMAKER_FLOATING_HEADER_HEIGHT + SPACING.compact}
       />
-      <MatchmakerConversation conversation={conversation} />
+      <View pointerEvents="box-none" style={styles.headerHost}>
+        <MatchmakerHeader
+          session={conversation.data?.session ?? null}
+          visualState={visualState}
+          candidateFirstName={candidateFirstName}
+        />
+      </View>
     </View>
   );
 }
@@ -44,7 +52,13 @@ const styles = StyleSheet.create({
   wrap: {
     flex: 1,
     minHeight: 0,
-    gap: SPACING.base,
     backgroundColor: MATCHMAKER_HOME.background,
+  },
+  headerHost: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
   },
 });

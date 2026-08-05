@@ -106,11 +106,11 @@ export default function HomeScreen() {
                     style={styles.keyboardAvoider}
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 >
-                    <View style={[styles.matchmakerHost, { paddingBottom: tabBarHeight + SPACING.tight }]}>
+                    <View style={styles.matchmakerHost}>
                         {isAiConsentLoading ? (
                             <>
                                 <MatchmakerHeader session={null} visualState="thinking" />
-                                <View style={styles.centeredState}>
+                                <View style={[styles.centeredState, { paddingBottom: tabBarHeight }]}>
                                     <MatchmakerStatePanel variant="loading" />
                                 </View>
                             </>
@@ -120,7 +120,10 @@ export default function HomeScreen() {
                                 <Animated.ScrollView
                                     onScroll={onScroll}
                                     scrollEventThrottle={16}
-                                    contentContainerStyle={styles.consentContent}
+                                    contentContainerStyle={[
+                                        styles.consentContent,
+                                        { paddingBottom: tabBarHeight + SPACING.xl },
+                                    ]}
                                     keyboardShouldPersistTaps="handled"
                                     showsVerticalScrollIndicator={false}
                                 >
@@ -480,7 +483,6 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         justifyContent: 'center',
         paddingTop: SPACING.large,
-        paddingBottom: SPACING.xl,
     },
     contentCarousel: {
         flexGrow: 1,

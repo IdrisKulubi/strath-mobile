@@ -1,23 +1,27 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useMinimizeOnScroll } from 'expo-glass-tabs';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  ArrowUp,
   ChevronDown,
   ChevronRight,
   ChevronUp,
   MessageCircle,
   Search,
 } from 'lucide-react-native';
+import { PaperPlaneTilt } from 'phosphor-react-native';
 
 import type { UseQueryResult } from '@tanstack/react-query';
 
@@ -27,6 +31,7 @@ import { MatchmakerFeedbackPanel } from '@/components/matchmaker/matchmaker-feed
 import { MatchmakerLimitEmptyState } from '@/components/matchmaker/matchmaker-limit-empty-state';
 import { MatchmakerReplyIcon } from '@/components/matchmaker/matchmaker-reply-icon';
 import { MatchmakerStatePanel } from '@/components/matchmaker/matchmaker-state-panel';
+import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
 import { useToast } from '@/components/ui/toast';
 import { MatchmakerVoiceBubble } from '@/components/matchmaker/matchmaker-voice-bubble';
 import { Text } from '@/components/ui/text';
@@ -51,8 +56,20 @@ import type {
   MatchmakerConversationResponse,
 } from '@/types/matchmaker';
 
+/** Floating glass composer pill height (input row). */
+export const MATCHMAKER_FLOATING_COMPOSER_HEIGHT = 50;
+
+const COMPOSER_SIDE_INSET = 12;
+const COMPOSER_MODE_LABEL_HEIGHT = 18;
+const COMPOSER_STATUS_HEIGHT = 18;
+const COMPOSER_GLASS_TINT = 'rgba(30, 21, 43, 0.38)';
+const COMPOSER_GLASS_FALLBACK = 'rgba(30, 21, 43, 0.52)';
+const COMPOSER_PILL_RADIUS = MATCHMAKER_FLOATING_COMPOSER_HEIGHT / 2;
+
 interface MatchmakerConversationProps {
   conversation: UseQueryResult<MatchmakerConversationResponse, Error>;
+  /** Extra top padding so content clears the floating glass header. */
+  topInset?: number;
 }
 
 function HistoryBubble({ message }: { message: MatchmakerConversationMessage }) {
@@ -82,9 +99,14 @@ function ActivePrompt({ turn }: { turn: ActiveTurn }) {
   );
 }
 
-export function MatchmakerConversation({ conversation }: MatchmakerConversationProps) {
+export function MatchmakerConversation({
+  conversation,
+  topInset = 0,
+}: MatchmakerConversationProps) {
   const router = useRouter();
   const toast = useToast();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = getGlassTabBarHeight(insets.bottom);
   const onScroll = useMinimizeOnScroll();
   const sendMessage = useSendMatchmakerMessage();
   const findCandidate = useFindNextMatchmakerCandidate();
@@ -117,6 +139,21 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
       : turn.variant === 'candidate'
         ? 'Tell me what to adjust'
         : 'Say it your way';
+  const showComposerModeLabel = showComposer
+    && (turn.limitMode === 'refine_type' || turn.limitMode === 'date_idea');
+  const useLiquidGlass = isLiquidGlassAvailable();
+  const composerScrollInset = useMemo(() => {
+    // Let content flow under the floating tab bar; pad enough to clear composer + bar.
+    let inset = tabBarHeight + SPACING.compact;
+    if (showComposer) {
+      inset += MATCHMAKER_FLOATING_COMPOSER_HEIGHT + SPACING.tight;
+      if (showComposerModeLabel) inset += COMPOSER_MODE_LABEL_HEIGHT;
+      if (isBusy) inset += COMPOSER_STATUS_HEIGHT;
+    } else {
+      inset += SPACING.section;
+    }
+    return inset;
+  }, [isBusy, showComposer, showComposerModeLabel, tabBarHeight]);
 
   const findNext = useCallback(async () => {
     if (findCandidate.isPending) return;
@@ -210,7 +247,10 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
         onScroll={onScroll}
         scrollEventThrottle={16}
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: SPACING.tight + topInset, paddingBottom: composerScrollInset },
+        ]}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -399,52 +439,76 @@ export function MatchmakerConversation({ conversation }: MatchmakerConversationP
       </Animated.ScrollView>
 
       {showComposer ? (
-        <View style={styles.composerDock}>
-          {turn.limitMode === 'refine_type' ? (
-            <Text style={styles.composerLabel}>Your type for tomorrow</Text>
-          ) : turn.limitMode === 'date_idea' ? (
-            <Text style={styles.composerLabel}>Want a different vibe?</Text>
-          ) : turn.variant !== 'candidate' ? (
-            <Text style={styles.composerLabel}>Your preference</Text>
-          ) : null}
-          <View style={[styles.composer, isBusy && styles.composerBusy]}>
-            <TextInput
-              accessibilityLabel="Tell the matchmaker what you want"
-              accessibilityState={{ disabled: isBusy }}
-              value={draft}
-              onChangeText={setDraft}
-              placeholder={composerPlaceholder}
-              placeholderTextColor={MATCHMAKER_HOME.mutedForeground}
-              style={styles.input}
-              multiline
-              textAlignVertical="center"
-              editable={!isBusy}
-              maxLength={500}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Send preference to matchmaker"
-              accessibilityState={{ disabled: !draft.trim() || isBusy, busy: sendMessage.isPending }}
-              disabled={!draft.trim() || isBusy}
-              onPress={() => submit(draft).catch(() => undefined)}
-              style={({ pressed }) => [
-                styles.sendButton,
-                pressed && draft.trim() && !isBusy && styles.pressedPrimary,
-                (!draft.trim() || isBusy) && styles.disabled,
-              ]}
-            >
-              {sendMessage.isPending ? (
-                <ActivityIndicator size="small" color={MATCHMAKER_HOME.primaryForeground} />
-              ) : (
-                <ArrowUp size={19} color={MATCHMAKER_HOME.primaryForeground} />
-              )}
-            </Pressable>
-          </View>
+        <View
+          pointerEvents="box-none"
+          style={[styles.composerHost, { bottom: tabBarHeight }]}
+        >
           {isBusy ? (
             <Text accessibilityLiveRegion="polite" style={styles.composerStatus}>
               {findCandidate.isPending ? 'Searching for a thoughtful match…' : 'Matchmaker is thinking…'}
             </Text>
           ) : null}
+          {showComposerModeLabel ? (
+            <Text style={styles.composerLabel}>
+              {turn.limitMode === 'refine_type' ? 'Your type for tomorrow' : 'Want a different vibe?'}
+            </Text>
+          ) : null}
+          <View style={[styles.composerPill, isBusy && styles.composerPillBusy]}>
+            {useLiquidGlass ? (
+              <GlassView
+                glassEffectStyle="regular"
+                tintColor={COMPOSER_GLASS_TINT}
+                colorScheme="dark"
+                style={[StyleSheet.absoluteFill, styles.glassSurface]}
+              />
+            ) : (
+              <>
+                <BlurView
+                  intensity={Platform.OS === 'ios' ? 55 : 40}
+                  tint="dark"
+                  style={[StyleSheet.absoluteFill, styles.glassSurface]}
+                />
+                <View style={[StyleSheet.absoluteFill, styles.glassFallbackOverlay]} />
+              </>
+            )}
+            <View style={styles.composerRow}>
+              <TextInput
+                accessibilityLabel="Tell the matchmaker what you want"
+                accessibilityState={{ disabled: isBusy }}
+                value={draft}
+                onChangeText={setDraft}
+                placeholder={composerPlaceholder}
+                placeholderTextColor={MATCHMAKER_HOME.mutedForeground}
+                style={styles.input}
+                multiline
+                textAlignVertical="center"
+                editable={!isBusy}
+                maxLength={500}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Send preference to matchmaker"
+                accessibilityState={{ disabled: !draft.trim() || isBusy, busy: sendMessage.isPending }}
+                disabled={!draft.trim() || isBusy}
+                onPress={() => submit(draft).catch(() => undefined)}
+                style={({ pressed }) => [
+                  styles.sendButton,
+                  pressed && draft.trim() && !isBusy && styles.pressedPrimary,
+                  (!draft.trim() || isBusy) && styles.disabled,
+                ]}
+              >
+                {sendMessage.isPending ? (
+                  <ActivityIndicator size="small" color={MATCHMAKER_HOME.primaryForeground} />
+                ) : (
+                  <PaperPlaneTilt
+                    size={18}
+                    color={MATCHMAKER_HOME.primaryForeground}
+                    weight="fill"
+                  />
+                )}
+              </Pressable>
+            </View>
+          </View>
         </View>
       ) : null}
     </View>
@@ -462,8 +526,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     gap: SPACING.comfortable,
-    paddingTop: SPACING.tight,
-    paddingBottom: SPACING.section,
   },
   historySection: {
     gap: SPACING.tight,
@@ -636,55 +698,71 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '700',
   },
-  composerDock: {
-    paddingTop: SPACING.compact,
-    paddingBottom: SPACING.tight,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: MATCHMAKER_HOME.border,
-    backgroundColor: MATCHMAKER_HOME.background,
+  composerHost: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     gap: SPACING.tight,
+    paddingHorizontal: COMPOSER_SIDE_INSET,
+    paddingBottom: SPACING.tight,
   },
   composerLabel: {
     color: MATCHMAKER_HOME.mutedForeground,
     fontSize: 12,
     lineHeight: 16,
     fontWeight: '600',
+    textAlign: 'center',
   },
-  composer: {
-    minHeight: 58,
-    borderWidth: 1,
-    borderColor: MATCHMAKER_HOME.borderStrong,
-    backgroundColor: MATCHMAKER_HOME.surface,
-    borderRadius: RADIUS.lg,
+  composerPill: {
+    minHeight: MATCHMAKER_FLOATING_COMPOSER_HEIGHT,
+    borderRadius: COMPOSER_PILL_RADIUS,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: MATCHMAKER_HOME.navBorder,
+    // Avoid overflow:hidden — it kills liquid glass on iOS.
+  },
+  composerPillBusy: {
+    borderColor: MATCHMAKER_HOME.border,
+  },
+  glassSurface: {
+    borderRadius: COMPOSER_PILL_RADIUS,
+    borderCurve: 'continuous',
+  },
+  glassFallbackOverlay: {
+    borderRadius: COMPOSER_PILL_RADIUS,
+    backgroundColor: COMPOSER_GLASS_FALLBACK,
+    borderCurve: 'continuous',
+  },
+  composerRow: {
+    minHeight: MATCHMAKER_FLOATING_COMPOSER_HEIGHT,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     gap: SPACING.tight,
     paddingLeft: SPACING.base,
-    paddingRight: 7,
-    paddingVertical: 7,
-  },
-  composerBusy: {
-    borderColor: MATCHMAKER_HOME.border,
+    paddingRight: 14,
+    paddingVertical: 6,
+    zIndex: 1,
   },
   input: {
     flex: 1,
-    minHeight: 44,
-    maxHeight: 96,
+    minHeight: 36,
+    maxHeight: 88,
     color: MATCHMAKER_HOME.foreground,
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 21,
     fontWeight: '500',
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   composerStatus: {
     color: MATCHMAKER_HOME.mutedForeground,
     fontSize: 12,
     lineHeight: 16,
     fontWeight: '500',
+    textAlign: 'center',
   },
   sendButton: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
+    marginRight: 2,
     backgroundColor: MATCHMAKER_HOME.primary,
     borderRadius: RADIUS.full,
     alignItems: 'center',
