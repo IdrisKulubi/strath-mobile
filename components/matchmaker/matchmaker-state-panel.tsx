@@ -96,26 +96,28 @@ export function MatchmakerStatePanel({
       ) : null}
 
       {canRetry ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Try again"
-          accessibilityHint="Retries loading the matchmaker conversation."
-          disabled={busy}
-          onPress={onRetry}
-          style={({ pressed }) => [
+        <View style={styles.retryRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            accessibilityHint="Retries loading the matchmaker conversation."
+            disabled={busy}
+            onPress={onRetry}
+            style={({ pressed }) => [
               styles.retry,
               styles.retrySurface,
               pressed && !busy && styles.pressed,
               busy && styles.disabled,
             ]}
-        >
-          {busy ? (
-            <ActivityIndicator size="small" color={MATCHMAKER_HOME.primary} />
-          ) : (
-            <RefreshCw size={15} color={MATCHMAKER_HOME.primary} />
-          )}
-          <Text style={styles.retryText}>Try again</Text>
-        </Pressable>
+          >
+            {busy ? (
+              <ActivityIndicator size="small" color={MATCHMAKER_HOME.primary} />
+            ) : (
+              <RefreshCw size={15} color={MATCHMAKER_HOME.primary} />
+            )}
+            <Text style={styles.retryText}>Try again</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       {replies.length > 0 ? (
@@ -193,15 +195,21 @@ const styles = StyleSheet.create({
   skeletonLineShort: {
     width: '64%',
   },
+  retryRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 2,
+  },
   retry: {
     minHeight: 44,
-    alignSelf: 'flex-start',
+    minWidth: 168,
     borderWidth: 1,
     borderRadius: RADIUS.full,
-    paddingHorizontal: 14,
+    paddingHorizontal: 22,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.tight,
+    justifyContent: 'center',
+    gap: 8,
   },
   retrySurface: {
     backgroundColor: MATCHMAKER_HOME.surface,
@@ -209,9 +217,10 @@ const styles = StyleSheet.create({
   },
   retryText: {
     color: MATCHMAKER_HOME.foreground,
-    fontSize: 13,
+    fontSize: 14,
     lineHeight: 18,
     fontWeight: '800',
+    textAlign: 'center',
   },
   replies: {
     gap: SPACING.tight,
