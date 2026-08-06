@@ -21,6 +21,73 @@ export interface MatchmakerSearchMeta {
   embeddingUsed: boolean;
 }
 
+export type MatchmakerPreferenceCategory =
+  | 'relationship_intent'
+  | 'values'
+  | 'lifestyle'
+  | 'communication'
+  | 'social_energy'
+  | 'practical'
+  | 'attraction'
+  | 'interests'
+  | 'activity'
+  | 'personality'
+  | 'other';
+
+export type MatchmakerPreferenceSentiment = 'prefer' | 'avoid';
+export type MatchmakerPreferenceImportance = 'must_have' | 'prefer' | 'flexible';
+export type MatchmakerPreferenceCertainty = 'confirmed' | 'inferred';
+export type MatchmakerPreferenceSource = 'direct' | 'feedback' | 'migrated_memory' | 'system';
+
+export interface MatchmakerBriefPreference {
+  id: string;
+  category: MatchmakerPreferenceCategory;
+  value: string;
+  sentiment: MatchmakerPreferenceSentiment;
+  importance: MatchmakerPreferenceImportance;
+  certainty: MatchmakerPreferenceCertainty;
+  source: MatchmakerPreferenceSource;
+  status: 'active' | 'removed';
+  version: number;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MatchmakerBrief {
+  version: number;
+  latestChangeId: string | null;
+  preferences: MatchmakerBriefPreference[];
+  updatedAt: string | null;
+}
+
+export type MatchmakerBriefOperation =
+  | {
+      type: 'add';
+      category: MatchmakerPreferenceCategory;
+      value: string;
+      sentiment?: MatchmakerPreferenceSentiment;
+      importance?: MatchmakerPreferenceImportance;
+      certainty?: MatchmakerPreferenceCertainty;
+      source?: MatchmakerPreferenceSource;
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      type: 'update';
+      preferenceId: string;
+      value?: string;
+      sentiment?: MatchmakerPreferenceSentiment;
+      metadata?: Record<string, unknown>;
+    }
+  | { type: 'confirm'; preferenceId: string }
+  | { type: 'reclassify'; preferenceId: string; importance: MatchmakerPreferenceImportance }
+  | { type: 'remove'; preferenceId: string };
+
+export interface MatchmakerBriefMutationInput {
+  baseVersion: number;
+  operations: MatchmakerBriefOperation[];
+}
+
 export interface MatchmakerSearchResponse {
   summary: string;
   candidates: MatchmakerCandidate[];

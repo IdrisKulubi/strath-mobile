@@ -4,6 +4,18 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
 
 import type { MatchmakerConversationState } from "@/lib/services/matchmaker-session-service";
+import { MATCHMAKER_PREFERENCE_CATEGORIES, type MatchmakerPreferenceCategory } from "@/lib/matchmaker/preference-domain";
+
+export interface MatchmakerActiveQuestion {
+    key: string;
+    category: MatchmakerPreferenceCategory;
+    question: string;
+    context?: {
+        type: "contradiction";
+        preferPreferenceId: string;
+        avoidPreferenceId: string;
+    };
+}
 
 export class MatchmakerLlmUnavailableError extends Error {
     readonly code = "MATCHMAKER_LLM_UNAVAILABLE";
@@ -31,6 +43,7 @@ export interface MatchmakerLlmInput {
     currentIntent?: Record<string, unknown>;
     recentMessages?: Array<{ role: "user" | "assistant" | "system"; text: string }>;
     memorySummary?: string | null;
+    activeQuestion?: MatchmakerActiveQuestion | null;
 }
 
 export interface MatchmakerVoiceContext {
@@ -94,6 +107,14 @@ export interface MatchmakerLlmTurn {
         priorities: string[];
         avoid: string[];
     };
+    preferenceProposals?: Array<{
+        category: MatchmakerPreferenceCategory;
+        value: string;
+        sentiment: "prefer" | "avoid";
+        importance: "must_have" | "prefer" | "flexible";
+        evidence: "explicit" | "inferred";
+    }>;
+    unresolvedQuestion?: MatchmakerActiveQuestion | null;
     provider: MatchmakerLlmProvider;
     model: string;
     fallbackUsed: boolean;
@@ -218,6 +239,18 @@ const llmTurnSchema = z.object({
         priorities: z.array(z.string().min(1).max(120)).max(8).default([]),
         avoid: z.array(z.string().min(1).max(120)).max(8).default([]),
     }),
+    preferenceProposals: z.array(z.object({
+        category: z.enum(MATCHMAKER_PREFERENCE_CATEGORIES),
+        value: z.string().trim().min(1).max(120),
+        sentiment: z.enum(["prefer", "avoid"]).default("prefer"),
+        importance: z.enum(["must_have", "prefer", "flexible"]).default("prefer"),
+        evidence: z.enum(["explicit", "inferred"]).default("inferred"),
+    })).max(8).default([]),
+    unresolvedQuestion: z.object({
+        key: z.string().trim().min(1).max(80),
+        category: z.enum(MATCHMAKER_PREFERENCE_CATEGORIES),
+        question: z.string().trim().min(1).max(300),
+    }).nullable().optional(),
 });
 
 const READY_REPLIES = [
@@ -553,6 +586,9 @@ function buildPrompt(input: MatchmakerLlmInput) {
         ? `What you have learned about this user: ${input.memorySummary.trim()}`
         : "";
     const variation = buildVariationContext(input);
+    const activeQuestionLine = input.activeQuestion
+        ? `Unresolved question: ${JSON.stringify(input.activeQuestion)}`
+        : "Unresolved question: none";
 
     return `${MATCHMAKER_VOICE_SYSTEM}
 
@@ -562,7 +598,11 @@ Rules:
 - Do not invent candidate profiles.
 - Do not promise a match.
 - If the user's request is vague, ask one useful clarifying question in your own words.
-- If the current state is clarifying, treat the user message as the answer to your previous question and return a search_plan.
+- Ask at most one high-value preference question per turn.
+- If there is an unresolved question, decide whether the new message actually answers it. If it does not, acknowledge any useful new information, keep that uncertainty unresolved, and ask the unresolved question again in fresh words.
+- Never mark an unanswered question as resolved or convert it into a preference.
+- Extract directly stated preferences separately from reasonable inferences. Use evidence "explicit" only when the user's own message clearly states it.
+- Inferred preferences must never be described as confirmed facts.
 - Never repeat the same clarifying question twice in a row.
 - If the user's intent is clear, produce a search plan the backend can use.
 - For a search_plan reply, summarize the direction in one short message and ask if they want you to search now. Do not say you are already searching. Do not produce acknowledgment loops like "you're welcome" or "keep going".
@@ -574,6 +614,7 @@ ${variation}
 
 Current state: ${input.state}
 Current intent: ${JSON.stringify(input.currentIntent ?? {})}
+${activeQuestionLine}
 ${memoryLine}
 Recent conversation:
 ${recentMessages || "(none)"}
@@ -598,7 +639,15 @@ Return this JSON shape:
   "searchPlan": {
     "priorities": ["backend-safe search priorities"],
     "avoid": ["backend-safe exclusions"]
-  }
+  },
+  "preferenceProposals": [{
+    "category": ${MATCHMAKER_PREFERENCE_CATEGORIES.map((value) => `"${value}"`).join(" | ")},
+    "value": "one concise preference",
+    "sentiment": "prefer" | "avoid",
+    "importance": "must_have" | "prefer" | "flexible",
+    "evidence": "explicit" | "inferred"
+  }],
+  "unresolvedQuestion": { "key": "stable_key", "category": "one category", "question": "the one open question" } | null
 }`;
 }
 
@@ -1034,6 +1083,7 @@ async function generateWithOpenAi(input: MatchmakerLlmInput): Promise<Matchmaker
 async function preventClarifyingLoop(input: MatchmakerLlmInput, turn: MatchmakerLlmTurn): Promise<MatchmakerLlmTurn> {
     if (!turn.shouldClarify) return turn;
     if (input.state !== "clarifying" && !latestAssistantAskedClarifier(input)) return turn;
+    if (input.activeQuestion && !answerAddressesActiveQuestion(input, turn)) return turn;
 
     const merged = buildClarifiedSearchPlanTurn(input, turn);
     const reply = await generateSearchConfirmationReply(input, merged);
@@ -1041,6 +1091,16 @@ async function preventClarifyingLoop(input: MatchmakerLlmInput, turn: Matchmaker
         ...merged,
         reply,
     };
+}
+
+export function answerAddressesActiveQuestion(input: MatchmakerLlmInput, turn: MatchmakerLlmTurn) {
+    if (!input.activeQuestion) return true;
+    if (/\b(any|either|flexible|doesn'?t matter|no preference|not important)\b/i.test(input.userMessage)) {
+        return true;
+    }
+    return (turn.preferenceProposals ?? []).some((proposal) =>
+        proposal.category === input.activeQuestion?.category && proposal.evidence === "explicit",
+    );
 }
 
 export async function generateMatchmakerLlmTurn(input: MatchmakerLlmInput): Promise<MatchmakerLlmTurn> {

@@ -9,6 +9,7 @@ export const APP_FEATURE_KEYS = {
     adminMatchPreviewEnabled: "admin_match_preview_enabled",
     paymentsEnabled: "payments_enabled",
     rescheduleEnabled: "reschedule_enabled",
+    matchmakerPersonalizationV2: "matchmaker_personalization_v2",
 } as const;
 
 // Default caps applied when the flag row is missing config or for any
@@ -70,9 +71,12 @@ export async function getSignupCapFlag() {
 }
 
 export async function getPublicFeatureFlags() {
-    const demoLoginEnabled = await isFeatureEnabled(APP_FEATURE_KEYS.demoLoginEnabled, false);
-    const signupCapEnabled = await isFeatureEnabled(APP_FEATURE_KEYS.signupCapEnabled, false);
-    const paymentsEnabled = await isFeatureEnabled(APP_FEATURE_KEYS.paymentsEnabled, false);
+    const [demoLoginEnabled, signupCapEnabled, paymentsEnabled, matchmakerPersonalizationV2] = await Promise.all([
+        isFeatureEnabled(APP_FEATURE_KEYS.demoLoginEnabled, false),
+        isFeatureEnabled(APP_FEATURE_KEYS.signupCapEnabled, false),
+        isFeatureEnabled(APP_FEATURE_KEYS.paymentsEnabled, false),
+        isFeatureEnabled(APP_FEATURE_KEYS.matchmakerPersonalizationV2, false),
+    ]);
 
     return {
         demoLoginEnabled,
@@ -80,5 +84,6 @@ export async function getPublicFeatureFlags() {
         // messaging during onboarding. Numbers are intentionally not exposed.
         signupCapEnabled,
         paymentsEnabled,
+        matchmakerPersonalizationV2,
     };
 }

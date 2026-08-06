@@ -24,6 +24,11 @@ export const EVENT_TYPES = {
     MATCHMAKER_QUOTA_REACHED: "matchmaker_quota_reached",
     MATCHMAKER_SEARCH_BLOCKED_LIMIT: "matchmaker_search_blocked_limit",
     MATCHMAKER_LIMIT_REFINEMENT_SUBMITTED: "matchmaker_limit_refinement_submitted",
+    MATCHMAKER_BRIEF_MUTATED: "matchmaker_brief_mutated",
+    MATCHMAKER_BRIEF_VIEWED: "matchmaker_brief_viewed",
+    MATCHMAKER_BRIEF_VERSION_CONFLICT: "matchmaker_brief_version_conflict",
+    MATCHMAKER_BRIEF_UNDONE: "matchmaker_brief_undone",
+    MATCHMAKER_CLARIFICATION_RESOLVED: "matchmaker_clarification_resolved",
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];

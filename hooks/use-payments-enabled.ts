@@ -2,11 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-type PublicFeatureFlags = {
+export type PublicFeatureFlags = {
     paymentsEnabled?: boolean;
+    matchmakerPersonalizationV2?: boolean;
 };
 
-async function fetchPublicFeatureFlags(): Promise<PublicFeatureFlags> {
+export async function fetchPublicFeatureFlags(): Promise<PublicFeatureFlags> {
     const res = await fetch(`${API_URL}/api/public/feature-flags`);
     if (!res.ok) {
         return { paymentsEnabled: false };
@@ -15,12 +16,16 @@ async function fetchPublicFeatureFlags(): Promise<PublicFeatureFlags> {
     return json?.data ?? json ?? { paymentsEnabled: false };
 }
 
-export function usePaymentsEnabled() {
-    const query = useQuery({
+export function usePublicFeatureFlags() {
+    return useQuery({
         queryKey: ['publicFeatureFlags'],
         queryFn: fetchPublicFeatureFlags,
         staleTime: 60_000,
     });
+}
+
+export function usePaymentsEnabled() {
+    const query = usePublicFeatureFlags();
 
     return {
         paymentsEnabled: Boolean(query.data?.paymentsEnabled),

@@ -6,6 +6,12 @@ import {
     profileIntelligence,
     profiles,
 } from "@/db/schema";
+import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
+import {
+    buildFeedbackLearningPlan,
+    type MatchmakerFeedbackLearningScope,
+} from "@/lib/matchmaker/preference-domain";
+import { syncConfirmedFeedbackPreferences } from "@/lib/services/matchmaker-preference-service";
 
 export type MatchmakerFeedbackOutcome = "interested" | "passed" | "not_this_one" | "refinement";
 
@@ -13,15 +19,6 @@ type MemoryRow = typeof matchmakerUserMemory.$inferSelect;
 
 const MAX_HISTORY = 50;
 const MAX_SIGNALS = 30;
-
-const REASON_SIGNALS: Record<string, string[]> = {
-    "not my vibe": ["avoid:vibe_mismatch"],
-    "too social": ["avoid:very_social", "prefer:calm"],
-    "too quiet": ["avoid:too_quiet", "prefer:expressive"],
-    "not serious enough": ["avoid:casual", "prefer:serious"],
-    "not active enough": ["avoid:low_activity", "prefer:active_recently"],
-    "different lifestyle": ["avoid:lifestyle_mismatch"],
-};
 
 function normalizeSignal(value: string) {
     return value
@@ -185,12 +182,6 @@ async function extractCandidateSignals(candidateUserId?: string | null) {
     return [...signals].slice(0, 24);
 }
 
-function reasonSignals(reason?: string | null) {
-    if (!reason) return [];
-    const normalized = reason.trim().toLowerCase();
-    return REASON_SIGNALS[normalized] ?? [reason];
-}
-
 export async function getMatchmakerUserMemory(userId: string) {
     return db.query.matchmakerUserMemory.findFirst({
         where: eq(matchmakerUserMemory.userId, userId),
@@ -213,23 +204,31 @@ export async function recordMatchmakerFeedback(input: {
     candidateUserId?: string | null;
     outcome: MatchmakerFeedbackOutcome;
     reason?: string | null;
+    learningScope?: MatchmakerFeedbackLearningScope;
     metadata?: Record<string, unknown>;
 }) {
     const existing = await getMatchmakerUserMemory(input.userId);
     const positiveSignals = { ...(existing?.positiveSignals ?? {}) };
     const negativeSignals = { ...(existing?.negativeSignals ?? {}) };
     const candidateSignals = await extractCandidateSignals(input.candidateUserId);
-    const explicitSignals = reasonSignals(input.reason);
-    const allSignals = [...new Set([...candidateSignals, ...explicitSignals])];
+    const learningPlan = buildFeedbackLearningPlan({
+        outcome: input.outcome,
+        reason: input.reason,
+        candidateSignals,
+        learningScope: input.learningScope,
+    });
+    const positiveDelta = input.outcome === "interested"
+        ? 1
+        : input.outcome === "refinement"
+            ? 0.25
+            : 0.5;
+    const negativeDelta = input.outcome === "passed" ? 0.75 : 0.5;
 
-    const positiveDelta = input.outcome === "interested" ? 1 : input.outcome === "refinement" ? 0.25 : 0;
-    const negativeDelta = input.outcome === "passed" ? 0.75 : input.outcome === "not_this_one" ? 0.5 : 0;
-
-    if (positiveDelta > 0) {
-        for (const signal of allSignals) addSignal(positiveSignals, signal, positiveDelta);
+    for (const signal of learningPlan.positiveSignals) {
+        addSignal(positiveSignals, signal, positiveDelta);
     }
-    if (negativeDelta > 0) {
-        for (const signal of allSignals) addSignal(negativeSignals, signal, negativeDelta);
+    for (const signal of learningPlan.negativeSignals) {
+        addSignal(negativeSignals, signal, negativeDelta);
     }
 
     const nextPositiveSignals = pruneSignals(positiveSignals);
@@ -238,7 +237,8 @@ export async function recordMatchmakerFeedback(input: {
         candidateUserId: input.candidateUserId ?? undefined,
         outcome: input.outcome,
         reason: input.reason ?? undefined,
-        signals: allSignals.map(normalizeSignal).filter(Boolean).slice(0, 16),
+        learningScope: input.learningScope ?? "candidate_only",
+        signals: learningPlan.historySignals.map(normalizeSignal).filter(Boolean).slice(0, 16),
         createdAt: new Date().toISOString(),
     };
     const feedbackHistory = [
@@ -270,9 +270,29 @@ export async function recordMatchmakerFeedback(input: {
             },
         });
 
+    if ((input.learningScope ?? "candidate_only") === "future_matches") {
+        const v2Enabled = await isFeatureEnabled(
+            APP_FEATURE_KEYS.matchmakerPersonalizationV2,
+            false,
+        );
+        if (v2Enabled) {
+            await syncConfirmedFeedbackPreferences({
+                userId: input.userId,
+                positiveSignals: learningPlan.positiveSignals,
+                negativeSignals: learningPlan.negativeSignals,
+                metadata: {
+                    source: "matchmaker_feedback_compatibility_write",
+                    outcome: input.outcome,
+                    ...(input.metadata ?? {}),
+                },
+            });
+        }
+    }
+
     return {
         memorySummary,
         positiveSignals: nextPositiveSignals,
         negativeSignals: nextNegativeSignals,
+        learningScope: input.learningScope ?? "candidate_only",
     };
 }

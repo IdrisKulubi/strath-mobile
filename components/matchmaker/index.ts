@@ -1,4 +1,5 @@
 export { MatchmakerConversation } from './matchmaker-conversation';
+export { MatchmakerBriefCard } from './matchmaker-brief';
 export { MatchmakerFeedbackPanel } from './matchmaker-feedback-panel';
 export { MatchmakerHeader } from './matchmaker-header';
 export { MatchmakerHomeShell } from './matchmaker-home-shell';

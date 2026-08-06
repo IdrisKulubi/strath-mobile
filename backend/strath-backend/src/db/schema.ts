@@ -662,6 +662,7 @@ export const matchmakerUserMemory = pgTable(
             candidateUserId?: string;
             outcome: "interested" | "passed" | "not_this_one" | "refinement";
             reason?: string;
+            learningScope?: "candidate_only" | "future_matches";
             signals: string[];
             createdAt: string;
         }[]>().default([]).notNull(),
@@ -673,6 +674,90 @@ export const matchmakerUserMemory = pgTable(
     (table) => ({
         updatedAtIdx: index("matchmaker_user_memory_updated_at_idx").on(table.updatedAt),
         lastFeedbackIdx: index("matchmaker_user_memory_last_feedback_idx").on(table.lastFeedbackAt),
+    }),
+);
+
+export const matchmakerUserBriefs = pgTable(
+    "matchmaker_user_briefs",
+    {
+        userId: text("user_id")
+            .primaryKey()
+            .references(() => user.id, { onDelete: "cascade" }),
+        version: integer("version").default(0).notNull(),
+        latestChangeId: uuid("latest_change_id"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        updatedAtIdx: index("matchmaker_user_briefs_updated_at_idx").on(table.updatedAt),
+    }),
+);
+
+export const matchmakerUserPreferences = pgTable(
+    "matchmaker_user_preferences",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        category: text("category").notNull(),
+        value: text("value").notNull(),
+        normalizedValue: text("normalized_value").notNull(),
+        sentiment: text("sentiment")
+            .$type<"prefer" | "avoid">()
+            .default("prefer")
+            .notNull(),
+        importance: text("importance")
+            .$type<"must_have" | "prefer" | "flexible">()
+            .default("flexible")
+            .notNull(),
+        certainty: text("certainty")
+            .$type<"confirmed" | "inferred">()
+            .default("inferred")
+            .notNull(),
+        source: text("source")
+            .$type<"direct" | "feedback" | "migrated_memory" | "system">()
+            .default("system")
+            .notNull(),
+        status: text("status")
+            .$type<"active" | "removed">()
+            .default("active")
+            .notNull(),
+        version: integer("version").default(1).notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userIdx: index("matchmaker_user_preferences_user_idx").on(table.userId),
+        activeIdx: index("matchmaker_user_preferences_active_idx").on(table.userId, table.status),
+        userValueUniqueIdx: uniqueIndex("matchmaker_user_preferences_user_value_unique_idx")
+            .on(table.userId, table.category, table.normalizedValue, table.sentiment),
+    }),
+);
+
+export const matchmakerPreferenceChanges = pgTable(
+    "matchmaker_preference_changes",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        operation: text("operation")
+            .$type<"add" | "update" | "confirm" | "reclassify" | "remove" | "undo" | "migration">()
+            .notNull(),
+        briefVersionBefore: integer("brief_version_before").notNull(),
+        briefVersionAfter: integer("brief_version_after").notNull(),
+        beforeSnapshot: jsonb("before_snapshot").$type<Record<string, unknown>[]>().default([]).notNull(),
+        afterSnapshot: jsonb("after_snapshot").$type<Record<string, unknown>[]>().default([]).notNull(),
+        reversible: boolean("reversible").default(true).notNull(),
+        revertedByChangeId: uuid("reverted_by_change_id"),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userCreatedIdx: index("matchmaker_preference_changes_user_created_idx").on(table.userId, table.createdAt),
+        revertedIdx: index("matchmaker_preference_changes_reverted_idx").on(table.revertedByChangeId),
     }),
 );
 
@@ -1715,6 +1800,37 @@ export const matchmakerUserMemoryRelations = relations(matchmakerUserMemory, ({ 
     }),
 }));
 
+export const matchmakerUserBriefsRelations = relations(matchmakerUserBriefs, ({ one, many }) => ({
+    user: one(user, {
+        fields: [matchmakerUserBriefs.userId],
+        references: [user.id],
+    }),
+    preferences: many(matchmakerUserPreferences),
+    changes: many(matchmakerPreferenceChanges),
+}));
+
+export const matchmakerUserPreferencesRelations = relations(matchmakerUserPreferences, ({ one }) => ({
+    user: one(user, {
+        fields: [matchmakerUserPreferences.userId],
+        references: [user.id],
+    }),
+    brief: one(matchmakerUserBriefs, {
+        fields: [matchmakerUserPreferences.userId],
+        references: [matchmakerUserBriefs.userId],
+    }),
+}));
+
+export const matchmakerPreferenceChangesRelations = relations(matchmakerPreferenceChanges, ({ one }) => ({
+    user: one(user, {
+        fields: [matchmakerPreferenceChanges.userId],
+        references: [user.id],
+    }),
+    brief: one(matchmakerUserBriefs, {
+        fields: [matchmakerPreferenceChanges.userId],
+        references: [matchmakerUserBriefs.userId],
+    }),
+}));
+
 export const faceVerificationJobsRelations = relations(faceVerificationJobs, ({ one }) => ({
     user: one(user, {
         fields: [faceVerificationJobs.userId],
@@ -2645,6 +2761,12 @@ export type MatchmakerSessionResult = typeof matchmakerSessionResults.$inferSele
 export type NewMatchmakerSessionResult = typeof matchmakerSessionResults.$inferInsert;
 export type MatchmakerUserMemory = typeof matchmakerUserMemory.$inferSelect;
 export type NewMatchmakerUserMemory = typeof matchmakerUserMemory.$inferInsert;
+export type MatchmakerUserBrief = typeof matchmakerUserBriefs.$inferSelect;
+export type NewMatchmakerUserBrief = typeof matchmakerUserBriefs.$inferInsert;
+export type MatchmakerUserPreference = typeof matchmakerUserPreferences.$inferSelect;
+export type NewMatchmakerUserPreference = typeof matchmakerUserPreferences.$inferInsert;
+export type MatchmakerPreferenceChange = typeof matchmakerPreferenceChanges.$inferSelect;
+export type NewMatchmakerPreferenceChange = typeof matchmakerPreferenceChanges.$inferInsert;
 export type FaceVerificationJob = typeof faceVerificationJobs.$inferSelect;
 export type NewFaceVerificationJob = typeof faceVerificationJobs.$inferInsert;
 export type FaceVerificationAssistance = typeof faceVerificationAssistance.$inferSelect;

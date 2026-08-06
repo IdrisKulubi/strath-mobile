@@ -3,6 +3,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import db from "@/db/drizzle";
 import { matchmakerMessages, matchmakerSessions, profiles } from "@/db/schema";
 import {
+    answerAddressesActiveQuestion,
     generateMatchmakerFeedbackReply,
     generateMatchmakerGreeting,
     generateMatchmakerDateIdeaReply,
@@ -12,7 +13,9 @@ import {
     generateMatchmakerRefinePromptReply,
     generateMatchmakerRefineSavedReply,
     isMatchmakerSearchConfirmation,
+    type MatchmakerActiveQuestion,
 } from "@/lib/services/matchmaker-llm-client";
+import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
 import {
     getMatchmakerUserMemory,
     recordMatchmakerFeedback,
@@ -21,6 +24,15 @@ import {
 import { getPhotoImprovementTips } from "@/lib/services/photo-intelligence-service";
 import { trackMatchmakerEvent } from "@/lib/services/matchmaker-analytics-service";
 import { presentNextMatchmakerCandidate } from "@/lib/services/matchmaker-session-search-service";
+import {
+    applyMatchmakerPreferenceProposals,
+    buildMatchmakerBriefSearchPlan,
+    buildMatchmakerBriefSummary,
+    buildMatchmakerSearchConfirmation,
+    findMatchmakerBriefContradictions,
+    getMatchmakerBrief,
+    resolveMatchmakerBriefContradiction,
+} from "@/lib/services/matchmaker-preference-service";
 
 export type MatchmakerConversationState =
     | "greeting"
@@ -353,6 +365,7 @@ async function handleLimitConversationMessage(input: {
             userId: input.userId,
             outcome: "refinement",
             reason: input.userMessage,
+            learningScope: "future_matches",
             metadata: {
                 source: "matchmaker_conversation_limit",
                 sessionId: input.sessionId,
@@ -541,6 +554,14 @@ function readSessionMetadata(row: typeof matchmakerSessions.$inferSelect) {
         : {};
 }
 
+function readActiveQuestion(row: typeof matchmakerSessions.$inferSelect): MatchmakerActiveQuestion | null {
+    const value = readSessionMetadata(row).activeQuestion;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const record = value as Record<string, unknown>;
+    if (typeof record.key !== "string" || typeof record.category !== "string" || typeof record.question !== "string") return null;
+    return record as unknown as MatchmakerActiveQuestion;
+}
+
 function hasCurrentVoiceVersion(row: typeof matchmakerSessions.$inferSelect) {
     return readSessionMetadata(row).voiceVersion === MATCHMAKER_VOICE_VERSION;
 }
@@ -721,17 +742,96 @@ export async function addMatchmakerConversationMessage(input: {
         });
     }
 
-    const memory = await getMatchmakerUserMemory(input.userId);
+    const personalizationV2 = await isFeatureEnabled(APP_FEATURE_KEYS.matchmakerPersonalizationV2, false);
+    const [memory, loadedBrief] = await Promise.all([
+        getMatchmakerUserMemory(input.userId),
+        personalizationV2 ? getMatchmakerBrief(input.userId) : Promise.resolve(null),
+    ]);
+    const activeQuestionAtTurnStart = personalizationV2 ? readActiveQuestion(session) : null;
+    let activeQuestion = activeQuestionAtTurnStart;
+    let briefBeforeTurn = loadedBrief;
+    const contradictionChoice = /\bi want this\b/i.test(cleaned)
+        ? "prefer" as const
+        : /\bavoid this\b/i.test(cleaned)
+            ? "avoid" as const
+            : /\bkeep it flexible\b/i.test(cleaned)
+                ? "flexible" as const
+                : null;
+    const resolvedContradiction = Boolean(
+        personalizationV2 && activeQuestion?.context?.type === "contradiction" && contradictionChoice,
+    );
+    if (resolvedContradiction && activeQuestion?.context && contradictionChoice) {
+        briefBeforeTurn = await resolveMatchmakerBriefContradiction({
+            userId: input.userId,
+            preferPreferenceId: activeQuestion.context.preferPreferenceId,
+            avoidPreferenceId: activeQuestion.context.avoidPreferenceId,
+            choice: contradictionChoice,
+        });
+        activeQuestion = null;
+    }
+    const structuredBriefSummary = briefBeforeTurn ? buildMatchmakerBriefSummary(briefBeforeTurn) : null;
+    const memorySummary = [memory?.memorySummary, structuredBriefSummary].filter(Boolean).join(". ") || null;
     const llmTurn = await generateMatchmakerLlmTurn({
         userMessage: cleaned,
         state: session.state,
         currentIntent: session.currentIntent ?? {},
-        memorySummary: memory?.memorySummary,
+        memorySummary,
+        activeQuestion,
         recentMessages: existingMessages.map((message) => ({
             role: message.role,
             text: message.text,
         })),
     });
+
+    let nextActiveQuestion: MatchmakerActiveQuestion | null = null;
+    let persistedBrief = briefBeforeTurn;
+    let shouldClarify = llmTurn.shouldClarify;
+    let assistantReply = llmTurn.reply;
+    let assistantQuickReplies = llmTurn.quickReplies;
+    if (personalizationV2) {
+        const briefAfterTurn = await applyMatchmakerPreferenceProposals({
+            userId: input.userId,
+            sessionId: session.id,
+            proposals: resolvedContradiction ? [] : llmTurn.preferenceProposals ?? [],
+        });
+        persistedBrief = briefAfterTurn;
+        const contradiction = findMatchmakerBriefContradictions(briefAfterTurn)[0];
+        if (contradiction) {
+            shouldClarify = true;
+            assistantReply = `I have “${contradiction.value}” both as something you want and something to avoid. Which one should guide future matches?`;
+            assistantQuickReplies = ["I want this", "Avoid this", "Keep it flexible"];
+            nextActiveQuestion = {
+                key: `contradiction:${contradiction.category}:${contradiction.value.toLowerCase()}`,
+                category: contradiction.category as MatchmakerActiveQuestion["category"],
+                question: assistantReply,
+                context: {
+                    type: "contradiction",
+                    preferPreferenceId: briefAfterTurn.preferences.find((preference) => contradiction.preferenceIds.includes(preference.id) && preference.sentiment === "prefer")!.id,
+                    avoidPreferenceId: briefAfterTurn.preferences.find((preference) => contradiction.preferenceIds.includes(preference.id) && preference.sentiment === "avoid")!.id,
+                },
+            };
+        } else if (resolvedContradiction) {
+            shouldClarify = false;
+            assistantReply = buildMatchmakerSearchConfirmation(briefAfterTurn);
+            assistantQuickReplies = ["Go ahead and search", "Change something"];
+        } else if (llmTurn.shouldClarify) {
+            const answeredPrevious = answerAddressesActiveQuestion({
+                userMessage: cleaned,
+                state: session.state,
+                activeQuestion,
+            }, llmTurn);
+            nextActiveQuestion = !answeredPrevious && activeQuestion
+                ? activeQuestion
+                : llmTurn.unresolvedQuestion ?? {
+                    key: `question:${llmTurn.intent.socialEnergy ?? "other"}`,
+                    category: llmTurn.intent.socialEnergy && llmTurn.intent.socialEnergy !== "unknown" ? "social_energy" : "other",
+                    question: llmTurn.clarifyingQuestion ?? llmTurn.reply,
+                };
+        } else {
+            assistantReply = buildMatchmakerSearchConfirmation(briefAfterTurn);
+            assistantQuickReplies = ["Go ahead and search", "Change something"];
+        }
+    }
 
     await createMessage({
         sessionId: session.id,
@@ -748,7 +848,7 @@ export async function addMatchmakerConversationMessage(input: {
             messageLength: cleaned.length,
         },
     }).catch(() => undefined);
-    const nextState: MatchmakerConversationState = llmTurn.shouldClarify
+    const nextState: MatchmakerConversationState = shouldClarify
         ? "clarifying"
         : "ready_to_search";
     const currentIntent = {
@@ -757,10 +857,10 @@ export async function addMatchmakerConversationMessage(input: {
         provider: llmTurn.provider,
         model: llmTurn.model,
     };
-    const plan = {
-        ...llmTurn.searchPlan,
-        intent: llmTurn.intent,
-    };
+    const persistedPlan = persistedBrief ? buildMatchmakerBriefSearchPlan(persistedBrief) : null;
+    const plan = personalizationV2 && persistedPlan
+        ? { ...persistedPlan, intent: llmTurn.intent, briefVersion: persistedBrief?.version ?? 0 }
+        : { ...llmTurn.searchPlan, intent: llmTurn.intent };
 
     await db
         .update(matchmakerSessions)
@@ -768,6 +868,11 @@ export async function addMatchmakerConversationMessage(input: {
             state: nextState,
             currentIntent,
             currentPlan: plan,
+            metadata: {
+                ...readSessionMetadata(session),
+                activeQuestion: nextActiveQuestion,
+                briefVersion: persistedBrief?.version ?? null,
+            },
             updatedAt: new Date(),
         })
         .where(eq(matchmakerSessions.id, session.id));
@@ -775,9 +880,9 @@ export async function addMatchmakerConversationMessage(input: {
     await createMessage({
         sessionId: session.id,
         role: "assistant",
-        kind: llmTurn.shouldClarify ? "clarifying_question" : "search_plan",
-        text: llmTurn.reply,
-        quickReplies: llmTurn.quickReplies,
+        kind: shouldClarify ? "clarifying_question" : "search_plan",
+        text: assistantReply,
+        quickReplies: assistantQuickReplies,
         metadata: {
             intent: currentIntent,
             plan,
@@ -785,10 +890,12 @@ export async function addMatchmakerConversationMessage(input: {
             model: llmTurn.model,
             fallbackUsed: llmTurn.fallbackUsed,
             messageType: llmTurn.messageType,
+            activeQuestion: nextActiveQuestion,
+            preferenceProposalCount: llmTurn.preferenceProposals?.length ?? 0,
         },
     });
     trackMatchmakerEvent({
-        event: llmTurn.shouldClarify ? "clarification_asked" : "search_plan_confirmed",
+        event: shouldClarify ? "clarification_asked" : "search_plan_confirmed",
         userId: input.userId,
         sessionId: session.id,
         metadata: {
@@ -796,9 +903,18 @@ export async function addMatchmakerConversationMessage(input: {
             model: llmTurn.model,
             fallbackUsed: llmTurn.fallbackUsed,
             messageType: llmTurn.messageType,
-            quickReplyCount: llmTurn.quickReplies.length,
+            quickReplyCount: assistantQuickReplies.length,
+            briefVersion: persistedBrief?.version,
         },
     }).catch(() => undefined);
+    if (personalizationV2 && activeQuestionAtTurnStart && !nextActiveQuestion) {
+        trackMatchmakerEvent({
+            event: "clarification_resolved",
+            userId: input.userId,
+            sessionId: session.id,
+            metadata: { questionKey: activeQuestionAtTurnStart.key, category: activeQuestionAtTurnStart.category },
+        }).catch(() => undefined);
+    }
 
     return buildResponse(session.id);
 }

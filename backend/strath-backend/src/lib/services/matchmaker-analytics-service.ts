@@ -12,7 +12,12 @@ export type MatchmakerAnalyticsEvent =
     | "feedback_reason_selected"
     | "quota_reached"
     | "search_blocked_limit"
-    | "limit_refinement_submitted";
+    | "limit_refinement_submitted"
+    | "brief_mutated"
+    | "brief_viewed"
+    | "brief_version_conflict"
+    | "brief_undone"
+    | "clarification_resolved";
 
 const EVENT_TYPE_BY_NAME: Record<MatchmakerAnalyticsEvent, string> = {
     session_started: EVENT_TYPES.MATCHMAKER_SESSION_STARTED,
@@ -27,6 +32,11 @@ const EVENT_TYPE_BY_NAME: Record<MatchmakerAnalyticsEvent, string> = {
     quota_reached: EVENT_TYPES.MATCHMAKER_QUOTA_REACHED,
     search_blocked_limit: EVENT_TYPES.MATCHMAKER_SEARCH_BLOCKED_LIMIT,
     limit_refinement_submitted: EVENT_TYPES.MATCHMAKER_LIMIT_REFINEMENT_SUBMITTED,
+    brief_mutated: EVENT_TYPES.MATCHMAKER_BRIEF_MUTATED,
+    brief_viewed: EVENT_TYPES.MATCHMAKER_BRIEF_VIEWED,
+    brief_version_conflict: EVENT_TYPES.MATCHMAKER_BRIEF_VERSION_CONFLICT,
+    brief_undone: EVENT_TYPES.MATCHMAKER_BRIEF_UNDONE,
+    clarification_resolved: EVENT_TYPES.MATCHMAKER_CLARIFICATION_RESOLVED,
 };
 
 export function trackMatchmakerEvent(input: {

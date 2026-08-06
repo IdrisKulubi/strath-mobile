@@ -26,6 +26,7 @@ import { PaperPlaneTilt } from 'phosphor-react-native';
 import type { UseQueryResult } from '@tanstack/react-query';
 
 import { MatchmakerCandidateCard } from '@/components/matchmaker/matchmaker-candidate-card';
+import { MatchmakerBriefCard } from '@/components/matchmaker/matchmaker-brief';
 // Force Metro to rebundle candidate card CTA styles.
 import { MatchmakerFeedbackPanel } from '@/components/matchmaker/matchmaker-feedback-panel';
 import { MatchmakerLimitEmptyState } from '@/components/matchmaker/matchmaker-limit-empty-state';
@@ -37,9 +38,13 @@ import { MatchmakerVoiceBubble } from '@/components/matchmaker/matchmaker-voice-
 import { Text } from '@/components/ui/text';
 import {
   useFindNextMatchmakerCandidate,
+  useMatchmakerBrief,
   useSendMatchmakerMessage,
   useSubmitMatchmakerFeedback,
+  useUndoMatchmakerBriefChange,
+  useUpdateMatchmakerBrief,
 } from '@/hooks/use-matchmaker';
+import { usePublicFeatureFlags } from '@/hooks/use-payments-enabled';
 import {
   isMatchmakerSearchConfirmation,
   normalizeQuickReplyLabel,
@@ -58,6 +63,7 @@ import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 import type {
   MatchmakerConversationMessage,
   MatchmakerConversationResponse,
+  MatchmakerBriefOperation,
 } from '@/types/matchmaker';
 
 /** Floating glass composer pill height (input row). */
@@ -115,6 +121,11 @@ export function MatchmakerConversation({
   const sendMessage = useSendMatchmakerMessage();
   const findCandidate = useFindNextMatchmakerCandidate();
   const submitFeedback = useSubmitMatchmakerFeedback();
+  const featureFlags = usePublicFeatureFlags();
+  const personalizationV2Enabled = Boolean(featureFlags.data?.matchmakerPersonalizationV2);
+  const briefQuery = useMatchmakerBrief(personalizationV2Enabled);
+  const updateBrief = useUpdateMatchmakerBrief();
+  const undoBrief = useUndoMatchmakerBriefChange();
   const [draft, setDraft] = useState('');
   const [historyExpanded, setHistoryExpanded] = useState(false);
 
@@ -127,6 +138,7 @@ export function MatchmakerConversation({
     || sendMessage.isPending
     || findCandidate.isPending
     || submitFeedback.isPending;
+  const briefBusy = updateBrief.isPending || undoBrief.isPending;
   const sendErrorMessage = sendMessage.isError
     ? getMatchmakerUserMessage(sendMessage.error)
     : undefined;
@@ -144,6 +156,36 @@ export function MatchmakerConversation({
   const showComposerModeLabel = showComposer
     && (turn.limitMode === 'refine_type' || turn.limitMode === 'date_idea');
   const useLiquidGlass = isLiquidGlassAvailable();
+
+  const handleBriefUpdate = useCallback(async (operations: MatchmakerBriefOperation[]) => {
+    const brief = briefQuery.data;
+    if (!brief) return;
+    try {
+      await updateBrief.mutateAsync({ baseVersion: brief.version, operations });
+      toast.show({ message: 'Your match brief is updated.', variant: 'success', position: 'bottom' });
+    } catch (error) {
+      toast.show({
+        message: error instanceof Error ? error.message : 'Could not update your match brief.',
+        variant: 'warning',
+        position: 'bottom',
+      });
+      throw error;
+    }
+  }, [briefQuery.data, toast, updateBrief]);
+
+  const handleBriefUndo = useCallback(async (changeId: string) => {
+    try {
+      await undoBrief.mutateAsync(changeId);
+      toast.show({ message: 'Last match brief change undone.', variant: 'success', position: 'bottom' });
+    } catch (error) {
+      toast.show({
+        message: error instanceof Error ? error.message : 'Could not undo that change.',
+        variant: 'warning',
+        position: 'bottom',
+      });
+      throw error;
+    }
+  }, [toast, undoBrief]);
   const composerScrollInset = useMemo(() => {
     // Let content flow under the floating tab bar; pad enough to clear composer + bar.
     let inset = tabBarHeight + SPACING.compact;
@@ -293,6 +335,17 @@ export function MatchmakerConversation({
           </View>
         ) : null}
 
+        {personalizationV2Enabled ? (
+          <MatchmakerBriefCard
+            brief={briefQuery.data}
+            loading={briefQuery.isLoading}
+            busy={briefBusy}
+            error={briefQuery.isError ? getMatchmakerUserMessage(briefQuery.error) : undefined}
+            onUpdate={handleBriefUpdate}
+            onUndo={handleBriefUndo}
+          />
+        ) : null}
+
         <View style={styles.activeSection}>
           {active.map((message) => (
             message.role === 'user' ? <HistoryBubble key={message.id} message={message} /> : null
@@ -320,7 +373,9 @@ export function MatchmakerConversation({
               <MatchmakerFeedbackPanel
                 message={turn.promptMessage!}
                 replies={turn.quickReplies}
-                outcome={turn.promptMessage?.metadata?.outcome}
+                outcome={typeof turn.promptMessage?.metadata?.outcome === 'string'
+                  ? turn.promptMessage.metadata.outcome
+                  : undefined}
                 remainingSearches={remainingSearches}
                 busy={isBusy}
                 onSelect={handleQuickReply}

@@ -1149,6 +1149,8 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
         "Let admin accounts receive daily discovery results for QA while keeping admins out of normal users' candidate pools.",
     [APP_FEATURE_KEYS.paymentsEnabled]:
         "Require KES 499 Date Setup Fee (Paystack) before slot confirmation. Default off.",
+    [APP_FEATURE_KEYS.matchmakerPersonalizationV2]:
+        "Enable structured matchmaker preferences and the phased V2 experience. Default off.",
 };
 
 const FLAG_LABELS: Record<string, string> = {
@@ -1156,6 +1158,7 @@ const FLAG_LABELS: Record<string, string> = {
     [APP_FEATURE_KEYS.signupCapEnabled]: "Signup Cap (Soft Launch)",
     [APP_FEATURE_KEYS.adminMatchPreviewEnabled]: "Admin Match Preview",
     [APP_FEATURE_KEYS.paymentsEnabled]: "Date Setup Fee (Payments)",
+    [APP_FEATURE_KEYS.matchmakerPersonalizationV2]: "Matchmaker Personalization V2",
 };
 
 const SUPPORTED_FLAG_KEYS = new Set<string>(Object.values(APP_FEATURE_KEYS));

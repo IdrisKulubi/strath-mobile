@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { apiFetch } from '@/lib/api-client';
+import { apiFetch, isApiError } from '@/lib/api-client';
 import type {
+  MatchmakerBrief,
+  MatchmakerBriefMutationInput,
   MatchmakerConversationResponse,
   MatchmakerSearchResponse,
 } from '@/types/matchmaker';
@@ -54,6 +56,75 @@ export function useMatchmakerConversation(enabled = true) {
   });
 }
 
+/**
+ * Phase 1 data hook. Keep disabled until the Phase 2 brief routes and UI are enabled.
+ */
+export function useMatchmakerBrief(enabled = false) {
+  return useQuery({
+    queryKey: ['matchmaker', 'brief'],
+    queryFn: async () => {
+      const response = await apiFetch<{ data: MatchmakerBrief } | MatchmakerBrief>(
+        '/api/matchmaker/brief',
+      );
+      return unwrapData(response);
+    },
+    staleTime: 30_000,
+    enabled,
+  });
+}
+
+export function useUpdateMatchmakerBrief() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: ['matchmaker', 'brief', 'update'],
+    mutationFn: async (payload: MatchmakerBriefMutationInput) => {
+      const response = await apiFetch<{ data: MatchmakerBrief } | MatchmakerBrief>(
+        '/api/matchmaker/brief',
+        {
+          method: 'PATCH',
+          body: {
+            baseVersion: payload.baseVersion,
+            operations: payload.operations,
+          },
+          timeoutMs: 20_000,
+        },
+      );
+      return unwrapData(response);
+    },
+    onSuccess: (brief) => {
+      queryClient.setQueryData(['matchmaker', 'brief'], brief);
+    },
+    onError: (error) => {
+      if (!isApiError(error) || error.status !== 409 || !error.body || typeof error.body !== 'object') return;
+      const latest = (error.body as { data?: MatchmakerBrief }).data;
+      if (latest) queryClient.setQueryData(['matchmaker', 'brief'], latest);
+    },
+  });
+}
+
+export function useUndoMatchmakerBriefChange() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: ['matchmaker', 'brief', 'undo'],
+    mutationFn: async (changeId: string) => {
+      const response = await apiFetch<{ data: MatchmakerBrief } | MatchmakerBrief>(
+        '/api/matchmaker/brief/undo',
+        {
+          method: 'POST',
+          body: { changeId },
+          timeoutMs: 20_000,
+        },
+      );
+      return unwrapData(response);
+    },
+    onSuccess: (brief) => {
+      queryClient.setQueryData(['matchmaker', 'brief'], brief);
+    },
+  });
+}
+
 export function useSendMatchmakerMessage() {
   const queryClient = useQueryClient();
 
@@ -72,6 +143,7 @@ export function useSendMatchmakerMessage() {
     },
     onSuccess: (conversation) => {
       queryClient.setQueryData(['matchmaker', 'conversation'], conversation);
+      queryClient.invalidateQueries({ queryKey: ['matchmaker', 'brief'] });
     },
   });
 }

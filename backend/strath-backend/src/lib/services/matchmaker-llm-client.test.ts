@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+    answerAddressesActiveQuestion,
     buildClarifiedSearchPlanTurn,
     coerceActivityRequirement,
     coerceRelationshipIntent,
@@ -14,6 +15,71 @@ import {
     parseMatchmakerLlmTurnRaw,
     wrapMatchmakerLlmRetryFailure,
 } from "@/lib/services/matchmaker-llm-client";
+
+const baseTurn = {
+    messageType: "clarifying_question" as const,
+    shouldClarify: true,
+    reply: "Which social energy feels right?",
+    clarifyingQuestion: "Which social energy feels right?",
+    quickReplies: [],
+    intent: {
+        rawText: "",
+        traits: [],
+        relationshipIntent: "unknown" as const,
+        activityRequirement: "any" as const,
+        socialEnergy: "unknown" as const,
+        dealbreakers: [],
+    },
+    searchPlan: { priorities: [], avoid: [] },
+    provider: "openai" as const,
+    model: "gpt-4.1-mini",
+    fallbackUsed: false,
+};
+
+test("an unrelated answer does not resolve the active question", () => {
+    const input = {
+        userMessage: "Emotional maturity matters a lot",
+        state: "clarifying" as const,
+        activeQuestion: {
+            key: "social-energy",
+            category: "social_energy" as const,
+            question: "Do you prefer quiet, balanced, or social energy?",
+        },
+    };
+    assert.equal(answerAddressesActiveQuestion(input, {
+        ...baseTurn,
+        preferenceProposals: [{
+            category: "values",
+            value: "emotionally mature",
+            sentiment: "prefer",
+            importance: "must_have",
+            evidence: "explicit",
+        }],
+    }), false);
+});
+
+test("an explicit category answer or flexible answer resolves the active question", () => {
+    const input = {
+        userMessage: "Balanced social energy",
+        state: "clarifying" as const,
+        activeQuestion: {
+            key: "social-energy",
+            category: "social_energy" as const,
+            question: "Do you prefer quiet, balanced, or social energy?",
+        },
+    };
+    assert.equal(answerAddressesActiveQuestion(input, {
+        ...baseTurn,
+        preferenceProposals: [{
+            category: "social_energy",
+            value: "balanced",
+            sentiment: "prefer",
+            importance: "prefer",
+            evidence: "explicit",
+        }],
+    }), true);
+    assert.equal(answerAddressesActiveQuestion({ ...input, userMessage: "Either is fine" }, baseTurn), true);
+});
 
 test("inferStructuredIntent extracts traits without canned prose", () => {
     const structured = inferStructuredIntent({

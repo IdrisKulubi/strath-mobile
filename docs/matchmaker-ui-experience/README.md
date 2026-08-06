@@ -1,5 +1,7 @@
 # Matchmaker UI Experience
 
+> Historical V1 implementation record. The current personalization, editable memory, and multi-candidate shortlist roadmap is in [`../matchmaker-personalization-v2/README.md`](../matchmaker-personalization-v2/README.md). V2 supersedes V1's one-candidate presentation and opaque feedback-memory decisions; the completed V1 phase notes remain unchanged for implementation history.
+
 This folder breaks the homepage matchmaker redesign into implementation phases.
 
 The backend is now capable of:
