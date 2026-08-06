@@ -58,7 +58,15 @@ export default async function AdminFeatureFlagsPage() {
                                     </p>
                                 </div>
 
-                                <FeatureFlagToggle flagKey={flag.key} enabled={flag.enabled} />
+                                <FeatureFlagToggle
+                                    flagKey={flag.key}
+                                    enabled={flag.enabled}
+                                    enableBlockedReason={
+                                        isMatchmakerV2 && !flag.enabled && flag.config.rollbackReady !== true
+                                            ? "Save rollback readiness below before enabling V2."
+                                            : undefined
+                                    }
+                                />
                             </div>
 
                             {isSignupCap && (

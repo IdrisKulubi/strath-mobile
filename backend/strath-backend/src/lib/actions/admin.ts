@@ -1191,7 +1191,10 @@ export async function setAdminFeatureFlag(key: string, enabled: boolean) {
     if (key === APP_FEATURE_KEYS.matchmakerPersonalizationV2 && enabled) {
         const current = await db.query.appFeatureFlags.findFirst({ where: eq(appFeatureFlags.key, key) });
         if (!parseMatchmakerV2RolloutConfig(current?.config).rollbackReady) {
-            throw new Error("Verify rollback readiness before enabling Matchmaker Personalization V2");
+            return {
+                ok: false as const,
+                message: "Save rollback readiness before enabling Matchmaker Personalization V2.",
+            };
         }
     }
 
@@ -1213,6 +1216,10 @@ export async function setAdminFeatureFlag(key: string, enabled: boolean) {
         });
 
     revalidatePath("/admin/feature-flags");
+    return {
+        ok: true as const,
+        message: enabled ? "Feature enabled." : "Feature disabled.",
+    };
 }
 
 export async function updateAdminMatchmakerV2Rollout(formData: FormData) {
@@ -1227,7 +1234,10 @@ export async function updateAdminMatchmakerV2Rollout(formData: FormData) {
     if (requested.percentage > currentConfig.percentage && currentConfig.percentage >= 5 && currentConfig.percentage < 100) {
         const stageStartedAt = currentConfig.stageStartedAt ? new Date(currentConfig.stageStartedAt).getTime() : current?.updatedAt.getTime() ?? Date.now();
         if (Date.now() - stageStartedAt < 24 * 60 * 60 * 1000) {
-            throw new Error("Hold the current external rollout stage for one complete Nairobi quota-reset cycle before advancing");
+            return {
+                ok: false as const,
+                message: "Hold the current external rollout stage for one complete Nairobi quota-reset cycle before advancing.",
+            };
         }
     }
     const config = {
@@ -1245,6 +1255,10 @@ export async function updateAdminMatchmakerV2Rollout(formData: FormData) {
         set: { config: { ...config }, updatedByUserId: session.user.id, updatedAt: new Date() },
     });
     revalidatePath("/admin/feature-flags");
+    return {
+        ok: true as const,
+        message: "Rollout controls saved. You can now use the master toggle above.",
+    };
 }
 
 // ─── Signup cap (soft launch) ────────────────────────────────────────────────

@@ -15,46 +15,105 @@ import {
 import type { AdmissionStats, GenderBucket } from "@/lib/services/admission-service";
 
 type WaitlistedProfile = Awaited<ReturnType<typeof import("@/lib/actions/admin").getAdminWaitlistedProfiles>>[number];
+type ActionResult = { kind: "success" | "error"; message: string } | null;
 
 export function FeatureFlagToggle({
     flagKey,
     enabled,
+    enableBlockedReason,
 }: {
     flagKey: string;
     enabled: boolean;
+    enableBlockedReason?: string;
 }) {
     const [isPending, startTransition] = useTransition();
+    const [result, setResult] = useState<ActionResult>(null);
+    const isEnableBlocked = !enabled && Boolean(enableBlockedReason);
+
+    const handleToggle = () => {
+        startTransition(async () => {
+            setResult(null);
+            try {
+                const response = await setAdminFeatureFlag(flagKey, !enabled);
+                setResult({
+                    kind: response.ok ? "success" : "error",
+                    message: response.message,
+                });
+            } catch (error) {
+                setResult({
+                    kind: "error",
+                    message: error instanceof Error ? error.message : "The feature flag could not be updated.",
+                });
+            }
+        });
+    };
 
     return (
-        <button
-            type="button"
-            onClick={() => startTransition(() => setAdminFeatureFlag(flagKey, !enabled))}
-            disabled={isPending}
-            className={`inline-flex min-w-[132px] items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                enabled
-                    ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
-                    : "bg-white/10 text-gray-300 hover:bg-white/15"
-            } ${isPending ? "opacity-60" : ""}`}
-        >
-            {isPending ? "Saving..." : enabled ? "Disable" : "Enable"}
-        </button>
+        <div className="max-w-64 text-right">
+            <button
+                type="button"
+                onClick={handleToggle}
+                disabled={isPending || isEnableBlocked}
+                aria-describedby={enableBlockedReason ? `${flagKey}-toggle-status` : undefined}
+                className={`inline-flex min-h-11 min-w-[132px] items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                    enabled
+                        ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                        : "bg-white/10 text-gray-300 hover:bg-white/15"
+                } disabled:cursor-not-allowed disabled:opacity-50`}
+            >
+                {isPending ? "Saving..." : enabled ? "Disable" : "Enable"}
+            </button>
+            {(enableBlockedReason || result) && (
+                <p
+                    id={`${flagKey}-toggle-status`}
+                    role={result?.kind === "error" ? "alert" : "status"}
+                    aria-live="polite"
+                    className={`mt-2 text-xs leading-5 ${result?.kind === "error" ? "text-rose-300" : result?.kind === "success" ? "text-emerald-300" : "text-amber-200"}`}
+                >
+                    {result?.message ?? enableBlockedReason}
+                </p>
+            )}
+        </div>
     );
 }
 
 export function MatchmakerV2RolloutPanel({ config }: { config: Record<string, unknown> }) {
     const [isPending, startTransition] = useTransition();
+    const [result, setResult] = useState<ActionResult>(null);
     const router = useRouter();
     const percentage = [0, 5, 25, 50, 100].includes(Number(config.percentage)) ? Number(config.percentage) : 100;
     const internalUserIds = Array.isArray(config.internalUserIds) ? config.internalUserIds.filter((value): value is string => typeof value === "string").join(", ") : "";
+    const rollbackReady = config.rollbackReady === true;
+
+    const handleSubmit = (formData: FormData) => {
+        startTransition(async () => {
+            setResult(null);
+            try {
+                const response = await updateAdminMatchmakerV2Rollout(formData);
+                setResult({ kind: response.ok ? "success" : "error", message: response.message });
+                router.refresh();
+            } catch (error) {
+                setResult({
+                    kind: "error",
+                    message: error instanceof Error ? error.message : "The rollout controls could not be saved.",
+                });
+            }
+        });
+    };
+
     return (
-        <form action={(formData) => startTransition(async () => { await updateAdminMatchmakerV2Rollout(formData); router.refresh(); })} className="space-y-4 rounded-lg border border-white/10 bg-white/5 p-4">
-            <div><p className="text-sm font-semibold text-white">Staged rollout</p><p className="mt-1 text-xs text-gray-400">Hold each external stage for one complete Nairobi quota-reset cycle. The master toggle remains the emergency rollback.</p></div>
+        <form action={handleSubmit} className="space-y-4 rounded-lg border border-white/10 bg-white/5 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div><p className="text-sm font-semibold text-white">Staged rollout</p><p className="mt-1 max-w-2xl text-xs leading-5 text-gray-400">Save these controls before enabling V2. Hold each external stage for one complete Nairobi quota-reset cycle. The master toggle remains the emergency rollback.</p></div>
+                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${rollbackReady ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-200"}`}>{rollbackReady ? "Rollback ready" : "Readiness required"}</span>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
                 <label className="flex flex-col gap-1"><span className="text-xs font-medium text-gray-400">Eligible users</span><select name="percentage" defaultValue={percentage} className="rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white">{[0, 5, 25, 50, 100].map((stage) => <option key={stage} value={stage}>{stage === 0 ? "Internal users only" : `${stage}%`}</option>)}</select></label>
                 <label className="flex flex-col gap-1"><span className="text-xs font-medium text-gray-400">Internal user IDs</span><input name="internalUserIds" defaultValue={internalUserIds} placeholder="id-1, id-2" className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" /></label>
             </div>
-            <label className="flex min-h-11 items-center gap-3 text-sm text-gray-300"><input type="checkbox" name="rollbackReady" defaultChecked={config.rollbackReady === true} className="h-5 w-5" /><span>Production verification and rollback switch have been exercised</span></label>
+            <label className="flex min-h-11 items-center gap-3 text-sm text-gray-300"><input type="checkbox" name="rollbackReady" defaultChecked={rollbackReady} className="h-5 w-5" /><span>Production verification and the rollback switch have both been exercised</span></label>
             <button type="submit" disabled={isPending} className="min-h-11 rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50">{isPending ? "Saving..." : "Save rollout controls"}</button>
+            {result && <p role={result.kind === "error" ? "alert" : "status"} aria-live="polite" className={`text-xs leading-5 ${result.kind === "success" ? "text-emerald-300" : "text-rose-300"}`}>{result.message}</p>}
         </form>
     );
 }
