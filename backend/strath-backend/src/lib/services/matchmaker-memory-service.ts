@@ -11,6 +11,7 @@ import {
     buildFeedbackLearningPlan,
     type MatchmakerFeedbackLearningScope,
 } from "@/lib/matchmaker/preference-domain";
+import { sanitizeMatchmakerMemoryLabel } from "@/lib/matchmaker/feedback-domain";
 import { syncConfirmedFeedbackPreferences } from "@/lib/services/matchmaker-preference-service";
 
 export type MatchmakerFeedbackOutcome = "interested" | "passed" | "not_this_one" | "refinement";
@@ -52,16 +53,17 @@ function topKeys(signals: Record<string, number>, limit = 5) {
 }
 
 function displaySignal(key: string) {
-    return key
+    const display = key
         .replace(/^(avoid|prefer|interest|quality)\s+/, "")
         .replace(/\s+/g, " ")
         .trim();
+    return sanitizeMatchmakerMemoryLabel(display);
 }
 
 function topDisplayLabels(signals: Record<string, number>, limit = 5) {
     return topKeys(signals, limit)
         .map(displaySignal)
-        .filter(Boolean);
+        .filter((value): value is string => Boolean(value));
 }
 
 function summarizeMemory(positiveSignals: Record<string, number>, negativeSignals: Record<string, number>) {
@@ -190,8 +192,8 @@ export async function getMatchmakerUserMemory(userId: string) {
 
 export function buildMatchmakerMemoryHint(memory: MemoryRow | null | undefined) {
     if (!memory) return "";
-    const likes = topKeys(memory.positiveSignals ?? {}, 6);
-    const avoids = topKeys(memory.negativeSignals ?? {}, 6);
+    const likes = topDisplayLabels(memory.positiveSignals ?? {}, 6);
+    const avoids = topDisplayLabels(memory.negativeSignals ?? {}, 6);
 
     return [
         likes.length > 0 ? `Prioritize user's learned likes: ${likes.join(", ")}` : "",
@@ -205,6 +207,10 @@ export async function recordMatchmakerFeedback(input: {
     outcome: MatchmakerFeedbackOutcome;
     reason?: string | null;
     learningScope?: MatchmakerFeedbackLearningScope;
+    reasonCode?: string | null;
+    shortlistId?: string | null;
+    submissionId?: string | null;
+    syncPreferences?: boolean;
     metadata?: Record<string, unknown>;
 }) {
     const existing = await getMatchmakerUserMemory(input.userId);
@@ -237,6 +243,9 @@ export async function recordMatchmakerFeedback(input: {
         candidateUserId: input.candidateUserId ?? undefined,
         outcome: input.outcome,
         reason: input.reason ?? undefined,
+        reasonCode: input.reasonCode ?? undefined,
+        shortlistId: input.shortlistId ?? undefined,
+        submissionId: input.submissionId ?? undefined,
         learningScope: input.learningScope ?? "candidate_only",
         signals: learningPlan.historySignals.map(normalizeSignal).filter(Boolean).slice(0, 16),
         createdAt: new Date().toISOString(),
@@ -270,7 +279,7 @@ export async function recordMatchmakerFeedback(input: {
             },
         });
 
-    if ((input.learningScope ?? "candidate_only") === "future_matches") {
+    if ((input.learningScope ?? "candidate_only") === "future_matches" && input.syncPreferences !== false) {
         const v2Enabled = await isFeatureEnabled(
             APP_FEATURE_KEYS.matchmakerPersonalizationV2,
             false,

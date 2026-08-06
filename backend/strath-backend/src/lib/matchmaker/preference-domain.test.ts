@@ -46,7 +46,7 @@ test("candidate-only rejection produces no global signals", () => {
     assert.ok(plan.historySignals.includes("music"));
 });
 
-test("explicit future feedback separates prefer and avoid signals", () => {
+test("explicit future feedback never promotes candidate traits", () => {
     const plan = buildFeedbackLearningPlan({
         outcome: "not_this_one",
         reason: "Too social",
@@ -55,7 +55,8 @@ test("explicit future feedback separates prefer and avoid signals", () => {
     });
 
     assert.deepEqual(plan.positiveSignals, ["calm"]);
-    assert.deepEqual(plan.negativeSignals.sort(), ["music", "very_social"].sort());
+    assert.deepEqual(plan.negativeSignals, ["very_social"]);
+    assert.ok(plan.historySignals.includes("music"));
 });
 
 test("normalization and category inference are stable", () => {

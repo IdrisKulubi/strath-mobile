@@ -1,5 +1,19 @@
 # Phase 3: Curated Shortlist Backend
 
+## Implementation Status
+
+Implemented behind `matchmaker_personalization_v2` on 2026-08-06. Migration `0034_matchmaker_curated_shortlists.sql` must be applied after the Phase 1 preference migration before enabling the flag. The final Phase 3 gate still requires integration testing against a migrated PostgreSQL environment, including concurrent real requests and forced transaction failures.
+
+Implemented modules include:
+
+- Persisted shortlist records linked to session, viewer, brief version, intent snapshot, request key, status, and credit state.
+- Additive shortlist linkage and structured explanation evidence on historical-compatible session results.
+- Up-to-three selection with a quality floor, stable order, deduplication, and previously-shown exclusion.
+- Grounded fit reasons linked to stored candidate fields and confirmed preference identifiers, with unsupported claims omitted.
+- Atomic shortlist, result, message, state, and one-credit persistence with stable retry keys.
+- Empty, partial, failed, generated, credit, and per-candidate analytics without preference text.
+- Mobile parsing adapters for one, two, and three candidates while retaining the V1 candidate fallback.
+
 ## Goal
 
 Make one daily search produce one persisted shortlist containing up to three qualified, non-repeating candidates with grounded explanations.

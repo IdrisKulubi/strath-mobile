@@ -1,7 +1,15 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import db from "@/db/drizzle";
-import { matchmakerMessages, matchmakerSessions, profiles } from "@/db/schema";
+import { blocks, matchmakerMessages, matchmakerSessionResults, matchmakerSessions, matchmakerShortlists, profiles } from "@/db/schema";
+import { hasCompletedInitialFaceVerification } from "@/lib/matchmaking-pool-eligibility";
+import { applyShortlistAvailability, shortlistCandidateIds } from "@/lib/matchmaker/shortlist-availability";
+import {
+    buildMatchmakerFeedbackProposal,
+    hasRecordedFeedbackSubmission,
+    type MatchmakerFeedbackReasonCode,
+} from "@/lib/matchmaker/feedback-domain";
+import type { MatchmakerFeedbackLearningScope } from "@/lib/matchmaker/preference-domain";
 import {
     answerAddressesActiveQuestion,
     generateMatchmakerFeedbackReply,
@@ -31,6 +39,7 @@ import {
     buildMatchmakerSearchConfirmation,
     findMatchmakerBriefContradictions,
     getMatchmakerBrief,
+    mutateMatchmakerBrief,
     resolveMatchmakerBriefContradiction,
 } from "@/lib/services/matchmaker-preference-service";
 
@@ -40,6 +49,7 @@ export type MatchmakerConversationState =
     | "clarifying"
     | "ready_to_search"
     | "presenting_candidate"
+    | "presenting_shortlist"
     | "collecting_feedback"
     | "limit_reached";
 
@@ -633,7 +643,32 @@ async function buildResponse(sessionId: string): Promise<MatchmakerConversationR
     });
     if (!session) throw new Error("Matchmaker session not found");
 
-    const messages = await listMessages(session.id);
+    const storedMessages = await listMessages(session.id);
+    const candidateIds = shortlistCandidateIds(storedMessages);
+    let messages = storedMessages;
+    if (candidateIds.length > 0) {
+        const [candidateProfiles, blockedByViewer, blockedViewer] = await Promise.all([
+            db.query.profiles.findMany({ where: inArray(profiles.userId, candidateIds) }),
+            db.select({ id: blocks.blockedId }).from(blocks).where(and(eq(blocks.blockerId, session.userId), inArray(blocks.blockedId, candidateIds))),
+            db.select({ id: blocks.blockerId }).from(blocks).where(and(eq(blocks.blockedId, session.userId), inArray(blocks.blockerId, candidateIds))),
+        ]);
+        const eligibleIds = new Set(candidateProfiles.filter((profile) =>
+            (profile.profileCompleted || profile.isComplete)
+            && profile.isVisible !== false
+            && profile.discoveryPaused !== true
+            && hasCompletedInitialFaceVerification(profile),
+        ).map((profile) => profile.userId));
+        const blockedIds = new Set([...blockedByViewer, ...blockedViewer].map((row) => row.id));
+        const unavailableIds = new Set(candidateIds.filter((id) => !eligibleIds.has(id) || blockedIds.has(id)));
+        if (unavailableIds.size > 0) {
+            const availability = applyShortlistAvailability(storedMessages, unavailableIds);
+            messages = availability.messages;
+            const staleShortlistIds = availability.staleShortlistIds;
+            if (staleShortlistIds.length > 0) {
+                await db.update(matchmakerShortlists).set({ status: "stale", updatedAt: new Date() }).where(inArray(matchmakerShortlists.id, staleShortlistIds));
+            }
+        }
+    }
     const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant");
 
     return {
@@ -976,23 +1011,94 @@ export async function addMatchmakerConversationFeedback(input: {
     outcome: MatchmakerFeedbackOutcome;
     reason?: string | null;
     candidateUserId?: string | null;
+    shortlistId?: string | null;
+    reasonCode?: MatchmakerFeedbackReasonCode | null;
+    detail?: string | null;
+    learningScope?: MatchmakerFeedbackLearningScope;
+    confirmLearning?: boolean;
+    baseVersion?: number;
+    submissionId?: string | null;
 }) {
     const session = await getOrCreateRawSession(input.userId);
     const candidateUserId = input.candidateUserId ?? session.lastCandidateUserId ?? null;
+    const learningScope = input.learningScope ?? "candidate_only";
+    if (input.submissionId) {
+        const existingMemory = await getMatchmakerUserMemory(input.userId);
+        const alreadyRecorded = hasRecordedFeedbackSubmission(existingMemory?.feedbackHistory, input.submissionId);
+        if (alreadyRecorded) return buildResponse(session.id);
+    }
+
+    if (input.shortlistId && candidateUserId) {
+        const shortlistCandidate = await db.query.matchmakerSessionResults.findFirst({
+            where: and(
+                eq(matchmakerSessionResults.shortlistId, input.shortlistId),
+                eq(matchmakerSessionResults.viewerUserId, input.userId),
+                eq(matchmakerSessionResults.candidateUserId, candidateUserId),
+            ),
+            columns: { id: true },
+        });
+        if (!shortlistCandidate) throw new Error("This candidate is not part of your shortlist");
+    }
+
+    const proposal = input.reasonCode
+        ? buildMatchmakerFeedbackProposal({ reasonCode: input.reasonCode, detail: input.detail })
+        : null;
+    if (learningScope === "future_matches") {
+        const personalizationV2 = await isFeatureEnabled(APP_FEATURE_KEYS.matchmakerPersonalizationV2, false);
+        if (!personalizationV2) throw new Error("Future-match learning is not available yet");
+        if (!input.reasonCode) throw new Error("A feedback reason is required for future learning");
+        if (!proposal) throw new Error("Add one specific detail before updating future matches");
+        if (!input.confirmLearning || input.baseVersion === undefined) {
+            throw new Error("Preview and confirm the latest match brief before saving future learning");
+        }
+    }
+
+    const updatedBrief = proposal && learningScope === "future_matches"
+        ? await mutateMatchmakerBrief({
+            userId: input.userId,
+            baseVersion: input.baseVersion!,
+            operations: [proposal.operation],
+            metadata: {
+                source: "confirmed_matchmaker_feedback",
+                reasonCode: input.reasonCode,
+                shortlistId: input.shortlistId ?? undefined,
+                candidateUserId: candidateUserId ?? undefined,
+            },
+        })
+        : null;
     const memory = await recordMatchmakerFeedback({
         userId: input.userId,
         candidateUserId,
         outcome: input.outcome,
-        reason: input.reason,
+        reason: input.detail ?? input.reason,
+        reasonCode: input.reasonCode,
+        shortlistId: input.shortlistId,
+        submissionId: input.submissionId,
+        learningScope,
+        syncPreferences: !updatedBrief,
         metadata: {
             source: "matchmaker_conversation",
             sessionId: session.id,
         },
     });
 
-    const wantsReason = input.outcome === "not_this_one" && !input.reason;
+    if (input.reasonCode) {
+        const event = learningScope === "future_matches" ? "feedback_learning_confirmed" : "feedback_candidate_only";
+        trackMatchmakerEvent({
+            event,
+            userId: input.userId,
+            sessionId: session.id,
+            candidateUserId,
+            metadata: {
+                reasonCode: input.reasonCode,
+                shortlistId: input.shortlistId ?? null,
+            },
+        }).catch(() => undefined);
+    }
+
+    const wantsReason = input.outcome === "not_this_one" && !input.reason && !input.reasonCode;
     const remainingSearches = Math.max(0, session.searchLimit - session.dailySearchCount);
-    if (input.reason) {
+    if (input.reason || input.reasonCode) {
         trackMatchmakerEvent({
             event: "feedback_reason_selected",
             userId: input.userId,
@@ -1000,13 +1106,19 @@ export async function addMatchmakerConversationFeedback(input: {
             candidateUserId,
             metadata: {
                 outcome: input.outcome,
-                reason: input.reason,
-                memorySummary: memory.memorySummary,
+                reasonCode: input.reasonCode ?? "legacy_reason",
             },
         }).catch(() => undefined);
     }
     const recentMessages = await listMessages(session.id);
-    const reply = await generateMatchmakerFeedbackReply({
+    const reply = input.reasonCode ? {
+        text: updatedBrief && proposal
+            ? `Saved. I will use "${proposal.summary}" for future matches. You can undo this change.`
+            : "Thanks. I will keep that feedback about this person only. Your match brief has not changed.",
+        provider: "system" as const,
+        model: null,
+        fallbackUsed: false,
+    } : await generateMatchmakerFeedbackReply({
         outcome: input.outcome,
         reason: input.reason,
         asksForReason: wantsReason,
@@ -1029,9 +1141,20 @@ export async function addMatchmakerConversationFeedback(input: {
         }),
         metadata: {
             outcome: input.outcome,
-            reason: input.reason,
+            reason: input.reasonCode ? undefined : input.reason,
+            reasonCode: input.reasonCode,
+            shortlistId: input.shortlistId,
+            learningScope,
             candidateUserId,
-            memorySummary: memory.memorySummary,
+            ...(updatedBrief && proposal ? {
+                learningUpdate: {
+                    summary: proposal.summary,
+                    briefVersion: updatedBrief.version,
+                    changeId: updatedBrief.latestChangeId,
+                    canUndo: Boolean(updatedBrief.latestChangeId),
+                },
+            } : {}),
+            ...(!input.reasonCode ? { memorySummary: memory.memorySummary } : {}),
             provider: reply.provider,
             model: reply.model,
             fallbackUsed: reply.fallbackUsed,

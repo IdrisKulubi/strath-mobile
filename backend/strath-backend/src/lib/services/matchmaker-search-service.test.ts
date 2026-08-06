@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { parseMatchmakerIntent } from "@/lib/services/matchmaker-intent-service";
 import {
+    buildGroundedMatchmakerExplanation,
     buildMatchmakerLabels,
     rankMatchmakerCandidates,
     type MatchmakerCandidateInput,
@@ -97,4 +98,43 @@ test("buildMatchmakerLabels returns safe user-facing labels", () => {
     assert.ok(labels.includes("Active today"));
     assert.ok(labels.includes("Responsive"));
     assert.equal(labels.some((label) => label.toLowerCase().includes("score")), false);
+});
+
+test("rankMatchmakerCandidates never pads below the requested quality threshold", () => {
+    const results = rankMatchmakerCandidates({
+        intent: parseMatchmakerIntent("someone kind"),
+        candidates: [candidate({ candidateUserId: "weak" })],
+        limit: 3,
+        minimumInternalScore: 101,
+    });
+    assert.deepEqual(results, []);
+});
+
+test("confirmed avoid evidence excludes a candidate", () => {
+    const results = rankMatchmakerCandidates({
+        intent: parseMatchmakerIntent("someone calm"),
+        candidates: [candidate({ candidateUserId: "nightlife", lifestyleTags: ["nightlife"] })],
+        confirmedPreferences: [{ id: "avoid-nightlife", value: "nightlife", sentiment: "avoid", importance: "must_have" }],
+    });
+    assert.deepEqual(results, []);
+});
+
+test("grounded explanations retain the exact candidate field used as evidence", () => {
+    const grounded = buildGroundedMatchmakerExplanation({
+        candidate: candidate({ traitTags: ["calm"], datingIntentTags: ["intentional"] }),
+        labels: ["Calm vibe", "Intentional", "Active today"],
+        confirmedPreferences: [
+            { id: "calm-pref", value: "calm", sentiment: "prefer", importance: "prefer" },
+            { id: "maturity-pref", value: "emotionally mature", sentiment: "prefer", importance: "must_have" },
+        ],
+    });
+    assert.deepEqual(grounded.explanation.matchedPreferenceIds, ["calm-pref"]);
+    assert.match(grounded.explanation.fitReasons[0], /calm/i);
+    assert.deepEqual(grounded.matchingEvidence.matchedPreferences, [{
+        preferenceId: "calm-pref",
+        candidateField: "traitTags",
+        candidateValue: "calm",
+    }]);
+    assert.match(grounded.explanation.unknown ?? "", /emotionally mature/i);
+    assert.equal(grounded.explanation.fitReasons.some((reason) => /active|complete/i.test(reason)), false);
 });

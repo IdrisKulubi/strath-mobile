@@ -1,5 +1,7 @@
 # Phase 5: Specific Feedback and Visible Learning
 
+> Implementation status: implemented behind `matchmaker_personalization_v2` on 2026-08-06. Rollout remains blocked on Phase 6.
+
 ## Goal
 
 Turn candidate feedback into precise, user-approved learning while preserving the rest of the shortlist and preventing accidental global exclusions.
@@ -85,3 +87,19 @@ Turn candidate feedback into precise, user-approved learning while preserving th
 ## Rollback
 
 Disable V2 global-learning confirmation and retain candidate-level feedback only. Existing confirmed preference events remain available and reversible through the brief service.
+
+## Implementation Notes
+
+- Structured reason codes are shared as stable API values while all visible labels remain plain language.
+- Candidate traits are retained only as candidate feedback history. They are never promoted into future-search rules.
+- Future learning uses the existing optimistic brief version, append-only change history, and Undo endpoint.
+- The mobile flow is inline beneath the shortlist, stores unfinished drafts locally, and never sends free text to analytics.
+- Legacy feedback payloads remain candidate-only during the feature-flagged migration.
+
+## Verification Record
+
+- Backend TypeScript: pass.
+- Focused backend feedback, preference-integrity, shortlist-availability, and shortlist-search tests: pass.
+- Mobile conversation, shortlist, and structured-feedback tests: pass.
+- Focused backend and mobile lint: pass.
+- Full mobile TypeScript still reports pre-existing Discovery recommendation-state, verification-style, and test-import configuration errors. No production Matchmaker V2 TypeScript error remains.

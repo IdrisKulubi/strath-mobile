@@ -1,11 +1,13 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, lt, sql } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import {
     matchmakerMessages,
     matchmakerSessionResults,
     matchmakerSessions,
+    matchmakerShortlists,
 } from "@/db/schema";
+import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
 import {
     buildMatchmakerMemoryHint,
     getMatchmakerUserMemory,
@@ -17,6 +19,7 @@ import {
 } from "@/lib/services/matchmaker-llm-client";
 import { trackMatchmakerEvent } from "@/lib/services/matchmaker-analytics-service";
 import { searchMatchmakerCandidates } from "@/lib/services/matchmaker-search-service";
+import { getMatchmakerBrief } from "@/lib/services/matchmaker-preference-service";
 
 type MatchmakerSessionRow = typeof matchmakerSessions.$inferSelect;
 
@@ -116,7 +119,7 @@ async function createAssistantMessage(input: {
     });
 }
 
-export async function presentNextMatchmakerCandidate(session: MatchmakerSessionRow) {
+async function presentNextMatchmakerCandidateV1(session: MatchmakerSessionRow) {
     if (session.dailySearchCount >= session.searchLimit) {
         const [memory, recentMessages] = await Promise.all([
             getMatchmakerUserMemory(session.userId),
@@ -308,4 +311,237 @@ export async function presentNextMatchmakerCandidate(session: MatchmakerSessionR
             memoryUsed: Boolean(memory?.memorySummary),
         },
     }).catch(() => undefined);
+}
+
+const SHORTLIST_SIZE = 3;
+const SHORTLIST_MINIMUM_INTERNAL_SCORE = 45;
+
+export function buildMatchmakerShortlistRequestKey(input: {
+    sessionId: string;
+    dailySearchCount: number;
+    briefVersion: number;
+}) {
+    return `matchmaker-v2:${input.sessionId}:${input.dailySearchCount}:${input.briefVersion}`;
+}
+
+export function curateUniqueShortlist<T extends { candidateUserId: string }>(
+    candidates: T[],
+    excludedCandidateIds: string[],
+    limit = SHORTLIST_SIZE,
+) {
+    const excluded = new Set(excludedCandidateIds);
+    const unique = new Map<string, T>();
+    for (const candidate of candidates) {
+        if (!unique.has(candidate.candidateUserId)) unique.set(candidate.candidateUserId, candidate);
+    }
+    return [...unique.values()]
+        .filter((candidate) => !excluded.has(candidate.candidateUserId))
+        .slice(0, Math.max(0, Math.min(limit, SHORTLIST_SIZE)));
+}
+
+async function presentCuratedMatchmakerShortlist(session: MatchmakerSessionRow) {
+    if (session.state === "presenting_shortlist") return;
+    if (session.dailySearchCount >= session.searchLimit) {
+        return presentNextMatchmakerCandidateV1(session);
+    }
+
+    const [memory, shownCandidateIds, brief] = await Promise.all([
+        getMatchmakerUserMemory(session.userId),
+        listShownCandidateIds(session.id),
+        getMatchmakerBrief(session.userId),
+    ]);
+    const memoryHint = buildMatchmakerMemoryHint(memory);
+    const intentText = [buildSessionSearchText(session), memoryHint].filter(Boolean).join(". ");
+    if (!intentText.trim()) return presentNextMatchmakerCandidateV1(session);
+
+    trackMatchmakerEvent({
+        event: "shortlist_requested",
+        userId: session.userId,
+        sessionId: session.id,
+        metadata: { excludedCandidateCount: shownCandidateIds.length, briefVersion: brief.version },
+    }).catch(() => undefined);
+
+    let result: Awaited<ReturnType<typeof searchMatchmakerCandidates>>;
+    try {
+        result = await searchMatchmakerCandidates({
+            viewerUserId: session.userId,
+            intentText,
+            limit: SHORTLIST_SIZE,
+            minimumInternalScore: SHORTLIST_MINIMUM_INTERNAL_SCORE,
+            excludeUserIds: shownCandidateIds,
+            confirmedPreferences: brief.preferences
+                .filter((preference) => preference.status === "active" && preference.certainty === "confirmed")
+                .map((preference) => ({
+                    id: preference.id,
+                    value: preference.value,
+                    sentiment: preference.sentiment,
+                    importance: preference.importance,
+                })),
+        });
+    } catch (error) {
+        trackMatchmakerEvent({
+            event: "shortlist_failed",
+            userId: session.userId,
+            sessionId: session.id,
+            metadata: { excludedCandidateCount: shownCandidateIds.length },
+        }).catch(() => undefined);
+        throw error;
+    }
+
+    const uniqueCandidates = curateUniqueShortlist(result.candidates, shownCandidateIds);
+    if (uniqueCandidates.length === 0) {
+        const statusReply = await generateMatchmakerSearchStatusReply({
+            status: "no_result",
+            intentText,
+            memorySummary: memory?.memorySummary,
+            recentMessages: await listRecentMessages(session.id),
+        });
+        await db.update(matchmakerSessions).set({ state: "ready_to_search", updatedAt: new Date() }).where(eq(matchmakerSessions.id, session.id));
+        await createAssistantMessage({
+            sessionId: session.id,
+            kind: "text",
+            text: statusReply.text,
+            quickReplies: ["Broaden it", "More active today", "More serious"],
+            metadata: {
+                intentText,
+                searchedCachedCandidates: result.meta.searchedCachedCandidates,
+                excludedAlreadyShown: shownCandidateIds.length,
+                provider: statusReply.provider,
+                model: statusReply.model,
+                fallbackUsed: statusReply.fallbackUsed,
+                shortlistEmpty: true,
+            },
+        });
+        trackMatchmakerEvent({
+            event: "shortlist_empty",
+            userId: session.userId,
+            sessionId: session.id,
+            metadata: { excludedCandidateCount: shownCandidateIds.length, searchedCachedCandidates: result.meta.searchedCachedCandidates },
+        }).catch(() => undefined);
+        return;
+    }
+
+    const startingPosition = shownCandidateIds.length + 1;
+    const requestKey = buildMatchmakerShortlistRequestKey({
+        sessionId: session.id,
+        dailySearchCount: session.dailySearchCount,
+        briefVersion: brief.version,
+    });
+    const publicCandidates = uniqueCandidates.map((candidate, index) => {
+        const { matchingEvidence, ...publicCandidate } = candidate;
+        void matchingEvidence;
+        const fitCopy = candidate.explanation.fitReasons.join(" ");
+        return {
+            ...publicCandidate,
+            shortlistPosition: index + 1,
+            reason: fitCopy || "This is a qualified profile, though some compatibility details are still unclear.",
+        };
+    });
+
+    const persisted = await db.transaction(async (tx) => {
+        const [created] = await tx.insert(matchmakerShortlists).values({
+            sessionId: session.id,
+            viewerUserId: session.userId,
+            requestKey,
+            briefVersion: brief.version,
+            intentSnapshot: { intentText, sessionIntent: session.currentIntent, sessionPlan: session.currentPlan },
+            metadata: {
+                requestedSize: SHORTLIST_SIZE,
+                resultSize: uniqueCandidates.length,
+                searchedCachedCandidates: result.meta.searchedCachedCandidates,
+                embeddingUsed: result.meta.embeddingUsed,
+                excludedCandidateCount: shownCandidateIds.length,
+            },
+        }).onConflictDoNothing({ target: matchmakerShortlists.requestKey }).returning();
+        if (!created) return { created: false as const, shortlistId: null };
+
+        await tx.insert(matchmakerSessionResults).values(uniqueCandidates.map((candidate, index) => ({
+            shortlistId: created.id,
+            sessionId: session.id,
+            viewerUserId: session.userId,
+            candidateUserId: candidate.candidateUserId,
+            position: startingPosition + index,
+            reason: publicCandidates[index].reason,
+            labels: candidate.labels,
+            fitReasons: candidate.explanation.fitReasons,
+            matchedPreferenceIds: candidate.explanation.matchedPreferenceIds,
+            reciprocalFitEvidence: candidate.explanation.reciprocalFitEvidence,
+            tradeoff: candidate.explanation.tradeoff,
+            unknown: candidate.explanation.unknown,
+            matchingEvidence: candidate.matchingEvidence,
+            intentSnapshot: { intentText, sessionIntent: session.currentIntent, sessionPlan: session.currentPlan, briefVersion: brief.version },
+            metadata: { source: "matchmaker_shortlist_v2", rankingReason: candidate.reason },
+        })));
+
+        const updated = await tx.update(matchmakerSessions).set({
+            state: "presenting_shortlist",
+            dailySearchCount: sql`${matchmakerSessions.dailySearchCount} + 1`,
+            lastCandidateUserId: uniqueCandidates[0].candidateUserId,
+            metadata: sql`${matchmakerSessions.metadata} || ${JSON.stringify({ lastShortlistId: created.id })}::jsonb`,
+            updatedAt: new Date(),
+        }).where(and(
+            eq(matchmakerSessions.id, session.id),
+            eq(matchmakerSessions.dailySearchCount, session.dailySearchCount),
+            lt(matchmakerSessions.dailySearchCount, matchmakerSessions.searchLimit),
+        )).returning({ id: matchmakerSessions.id });
+        if (updated.length !== 1) throw new Error("Matchmaker search quota changed while creating the shortlist");
+
+        const messageText = `I found ${publicCandidates.length} ${publicCandidates.length === 1 ? "person" : "people"} worth considering.`;
+        await tx.insert(matchmakerMessages).values({
+            sessionId: session.id,
+            role: "assistant",
+            kind: "candidate",
+            text: messageText,
+            quickReplies: SEARCH_QUICK_REPLIES,
+            metadata: {
+                shortlist: {
+                    id: created.id,
+                    briefVersion: brief.version,
+                    candidates: publicCandidates,
+                },
+                candidate: publicCandidates[0],
+                source: "matchmaker_shortlist_v2",
+                intentText,
+            },
+        });
+        await tx.update(matchmakerShortlists).set({ status: "presented", creditConsumed: true, updatedAt: new Date() }).where(eq(matchmakerShortlists.id, created.id));
+        return { created: true as const, shortlistId: created.id };
+    });
+
+    if (!persisted.created) return;
+    const shortlistEvent = uniqueCandidates.length < SHORTLIST_SIZE ? "shortlist_partial" : "shortlist_generated";
+    trackMatchmakerEvent({
+        event: shortlistEvent,
+        userId: session.userId,
+        sessionId: session.id,
+        metadata: {
+            shortlistId: persisted.shortlistId,
+            shortlistSize: uniqueCandidates.length,
+            excludedCandidateCount: shownCandidateIds.length,
+            evidenceCandidateCount: uniqueCandidates.filter((candidate) => candidate.explanation.fitReasons.length > 0).length,
+            providerFallback: !result.meta.embeddingUsed,
+        },
+    }).catch(() => undefined);
+    trackMatchmakerEvent({
+        event: "shortlist_credit_consumed",
+        userId: session.userId,
+        sessionId: session.id,
+        metadata: { shortlistId: persisted.shortlistId, shortlistSize: uniqueCandidates.length },
+    }).catch(() => undefined);
+    uniqueCandidates.forEach((candidate, index) => {
+        trackMatchmakerEvent({
+            event: "candidate_shown",
+            userId: session.userId,
+            sessionId: session.id,
+            candidateUserId: candidate.candidateUserId,
+            metadata: { shortlistId: persisted.shortlistId, shortlistPosition: index + 1, shortlistSize: uniqueCandidates.length },
+        }).catch(() => undefined);
+    });
+}
+
+export async function presentNextMatchmakerCandidate(session: MatchmakerSessionRow) {
+    const personalizationV2 = await isFeatureEnabled(APP_FEATURE_KEYS.matchmakerPersonalizationV2, false);
+    return personalizationV2
+        ? presentCuratedMatchmakerShortlist(session)
+        : presentNextMatchmakerCandidateV1(session);
 }

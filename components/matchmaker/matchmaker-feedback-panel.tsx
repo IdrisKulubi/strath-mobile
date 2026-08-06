@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 
@@ -15,15 +15,19 @@ interface MatchmakerFeedbackPanelProps {
   onSelect: (reply: string) => void;
   outcome?: string | null;
   remainingSearches?: number;
+  onUndo?: (changeId: string) => Promise<void>;
 }
 
 function displayReply(reply: string) {
   return reply === 'Skip feedback' ? 'Skip' : reply;
 }
 
-function memorySummary(message: MatchmakerConversationMessage) {
-  const value = message.metadata?.memorySummary;
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+function learningUpdate(message: MatchmakerConversationMessage) {
+  const value = message.metadata?.learningUpdate;
+  if (!value || typeof value !== 'object') return null;
+  const update = value as Record<string, unknown>;
+  if (typeof update.summary !== 'string' || typeof update.changeId !== 'string') return null;
+  return { summary: update.summary, changeId: update.changeId };
 }
 
 export function MatchmakerFeedbackPanel({
@@ -33,9 +37,11 @@ export function MatchmakerFeedbackPanel({
   onSelect,
   outcome,
   remainingSearches = 0,
+  onUndo,
 }: MatchmakerFeedbackPanelProps) {
+  const [undone, setUndone] = useState(false);
   const awaitingReason = replies.some((reply) => isFeedbackReasonReply(reply));
-  const summary = memorySummary(message);
+  const update = learningUpdate(message);
   const isInterested = outcome === 'interested';
   const hasSearchesLeft = remainingSearches > 0;
 
@@ -49,8 +55,11 @@ export function MatchmakerFeedbackPanel({
             : "They're deciding. You can wait for their response or fine-tune for tomorrow."}
         </Text>
       ) : null}
-      {!awaitingReason && summary ? (
-        <Text style={styles.summary}>{summary}</Text>
+      {update ? (
+        <View style={styles.updateRow}>
+          <View style={styles.updateCopy}><Text style={styles.updateLabel}>Match brief updated</Text><Text style={styles.summary}>{undone ? 'Change undone.' : update.summary}</Text></View>
+          {onUndo && !undone ? <Pressable accessibilityRole="button" disabled={busy} onPress={async () => { await onUndo(update.changeId); setUndone(true); }} style={({ pressed }) => [styles.undoButton, pressed && styles.pressed]}><Text style={styles.undoText}>Undo</Text></Pressable> : null}
+        </View>
       ) : null}
       {awaitingReason ? (
         <Text style={styles.hint}>Optional. This does not use a search.</Text>
@@ -114,6 +123,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '500',
   },
+  updateRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: SPACING.compact, padding: SPACING.compact, borderRadius: RADIUS.md, backgroundColor: MATCHMAKER_HOME.surface },
+  updateCopy: { flex: 1, gap: 2 },
+  updateLabel: { color: MATCHMAKER_HOME.success, fontSize: 11, lineHeight: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
+  undoButton: { minWidth: 52, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  undoText: { color: MATCHMAKER_HOME.primary, fontSize: 14, lineHeight: 18, fontWeight: '800' },
   hint: {
     color: MATCHMAKER_HOME.mutedForeground,
     fontSize: 13,

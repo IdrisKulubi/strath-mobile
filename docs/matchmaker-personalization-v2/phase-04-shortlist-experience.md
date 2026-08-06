@@ -1,5 +1,20 @@
 # Phase 4: Mobile Shortlist and Comparison Experience
 
+## Implementation Status
+
+Implemented behind `matchmaker_personalization_v2` on 2026-08-06. The Phase 4 rollout gate remains pending device QA for 200 percent text scaling, VoiceOver and TalkBack order, reduced motion, small Android screens, and iOS bottom safe areas against a migrated Phase 3 environment.
+
+Implemented modules include:
+
+- Full-width native paging for two or three candidates with text position, restrained dots, screen-reader adjustable actions, and no ranking language.
+- A single-candidate path with no paging or comparison controls.
+- Expandable grounded fit reasons, honest tradeoffs and unknowns, profile navigation, and candidate-specific “Not for me.”
+- Inline comparison rows built only from active confirmed positive preferences and stored matched-preference evidence.
+- Shortlist position persistence in memory and device storage before profile navigation, including restoration after remount.
+- Active-shortlist preservation alongside candidate feedback so the remaining people stay inspectable.
+- Server-side availability refresh that marks only stale candidates and preserves the rest of the shortlist.
+- User-safe interaction analytics for shortlist views, page changes, explanations, comparison, profile opens, and unavailable candidates.
+
 ## Goal
 
 Turn a persisted shortlist into a calm, decision-ready introduction to up to three people without recreating an endless swipe stack.

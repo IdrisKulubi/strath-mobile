@@ -27,8 +27,10 @@ import type { UseQueryResult } from '@tanstack/react-query';
 
 import { MatchmakerCandidateCard } from '@/components/matchmaker/matchmaker-candidate-card';
 import { MatchmakerBriefCard } from '@/components/matchmaker/matchmaker-brief';
+import { MatchmakerShortlistView } from '@/components/matchmaker/matchmaker-shortlist';
 // Force Metro to rebundle candidate card CTA styles.
 import { MatchmakerFeedbackPanel } from '@/components/matchmaker/matchmaker-feedback-panel';
+import { MatchmakerFeedbackFlow } from '@/components/matchmaker/matchmaker-feedback-flow';
 import { MatchmakerLimitEmptyState } from '@/components/matchmaker/matchmaker-limit-empty-state';
 import { MatchmakerReplyIcon } from '@/components/matchmaker/matchmaker-reply-icon';
 import { MatchmakerStatePanel } from '@/components/matchmaker/matchmaker-state-panel';
@@ -41,6 +43,8 @@ import {
   useMatchmakerBrief,
   useSendMatchmakerMessage,
   useSubmitMatchmakerFeedback,
+  useTrackMatchmakerShortlistEvent,
+  useTrackMatchmakerFeedbackEvent,
   useUndoMatchmakerBriefChange,
   useUpdateMatchmakerBrief,
 } from '@/hooks/use-matchmaker';
@@ -59,11 +63,13 @@ import {
   getMatchmakerUserMessage,
   MATCHMAKER_ERROR_TITLE,
 } from '@/lib/matchmaker/error-copy';
+import { readMatchmakerShortlist } from '@/lib/matchmaker/shortlist';
 import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 import type {
   MatchmakerConversationMessage,
   MatchmakerConversationResponse,
   MatchmakerBriefOperation,
+  MatchmakerFeedbackReasonCode,
 } from '@/types/matchmaker';
 
 /** Floating glass composer pill height (input row). */
@@ -121,6 +127,8 @@ export function MatchmakerConversation({
   const sendMessage = useSendMatchmakerMessage();
   const findCandidate = useFindNextMatchmakerCandidate();
   const submitFeedback = useSubmitMatchmakerFeedback();
+  const { mutate: trackShortlistEvent } = useTrackMatchmakerShortlistEvent();
+  const { mutate: trackFeedbackEvent } = useTrackMatchmakerFeedbackEvent();
   const featureFlags = usePublicFeatureFlags();
   const personalizationV2Enabled = Boolean(featureFlags.data?.matchmakerPersonalizationV2);
   const briefQuery = useMatchmakerBrief(personalizationV2Enabled);
@@ -128,10 +136,17 @@ export function MatchmakerConversation({
   const undoBrief = useUndoMatchmakerBriefChange();
   const [draft, setDraft] = useState('');
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [feedbackCandidateUserId, setFeedbackCandidateUserId] = useState<string | null>(null);
 
   const data = conversation.data;
   const messages = useMemo(() => data?.messages ?? [], [data?.messages]);
   const turn = useMemo(() => selectActiveTurn(data), [data]);
+  const shortlistMessage = useMemo(() => [...messages].reverse().find((message) => readMatchmakerShortlist(message)) ?? null, [messages]);
+  const activeShortlist = useMemo(() => {
+    const stateAllowsShortlist = data?.session.state === 'presenting_shortlist' || data?.session.state === 'collecting_feedback';
+    return personalizationV2Enabled && stateAllowsShortlist ? readMatchmakerShortlist(shortlistMessage) : null;
+  }, [data?.session.state, personalizationV2Enabled, shortlistMessage]);
+  const feedbackCandidate = useMemo(() => activeShortlist?.candidates.find((candidate) => candidate.candidateUserId === feedbackCandidateUserId) ?? null, [activeShortlist, feedbackCandidateUserId]);
   const { history, active } = useMemo(() => partitionConversationMessages(messages), [messages]);
   const isBusy = conversation.isLoading
     || conversation.isFetching
@@ -186,6 +201,25 @@ export function MatchmakerConversation({
       throw error;
     }
   }, [toast, undoBrief]);
+  const handleShortlistEvent = useCallback((event: Parameters<typeof trackShortlistEvent>[0]['event'], position?: number) => {
+    if (!activeShortlist) return;
+    trackShortlistEvent({
+      event,
+      shortlistId: activeShortlist.id,
+      shortlistSize: activeShortlist.candidates.length,
+      position,
+    });
+  }, [activeShortlist, trackShortlistEvent]);
+  const handleFeedbackEvent = useCallback((event: 'feedback_reason_selected' | 'feedback_follow_up_requested' | 'feedback_follow_up_completed' | 'feedback_learning_previewed' | 'feedback_learning_cancelled', reasonCode: MatchmakerFeedbackReasonCode) => {
+    if (!activeShortlist || !feedbackCandidateUserId) return;
+    trackFeedbackEvent({
+      event,
+      shortlistId: activeShortlist.id,
+      shortlistSize: activeShortlist.candidates.length,
+      candidateUserId: feedbackCandidateUserId,
+      reasonCode,
+    });
+  }, [activeShortlist, feedbackCandidateUserId, trackFeedbackEvent]);
   const composerScrollInset = useMemo(() => {
     // Let content flow under the floating tab bar; pad enough to clear composer + bar.
     let inset = tabBarHeight + SPACING.compact;
@@ -234,13 +268,15 @@ export function MatchmakerConversation({
     }
   }, [data?.session.remainingSearches, data?.session.state, findNext, sendMessage]);
 
-  const openCandidate = useCallback((candidateUserId: string) => {
+  const openCandidate = useCallback((candidateUserId: string, shortlistId?: string, shortlistPosition?: number) => {
     router.push({
       pathname: '/profile/[userId]',
       params: {
         userId: candidateUserId,
         source: 'matchmaker',
         matchType: 'discovery',
+        ...(shortlistId ? { shortlistId } : {}),
+        ...(shortlistPosition !== undefined ? { shortlistPosition: String(shortlistPosition) } : {}),
       },
     });
   }, [router]);
@@ -351,7 +387,32 @@ export function MatchmakerConversation({
             message.role === 'user' ? <HistoryBubble key={message.id} message={message} /> : null
           ))}
 
-          {turn.variant === 'candidate' && turn.candidate ? (
+          {activeShortlist ? (
+            <View style={styles.candidateSection}>
+              <MatchmakerVoiceBubble text={shortlistMessage?.text || `I found ${activeShortlist.candidates.length} people worth considering.`} compact />
+              <MatchmakerShortlistView
+                shortlist={activeShortlist}
+                brief={briefQuery.data}
+                busy={isBusy}
+                onOpenCandidate={(candidate, position) => openCandidate(candidate.candidateUserId, activeShortlist.id, position)}
+                onNotForMe={(candidate) => setFeedbackCandidateUserId(candidate.candidateUserId)}
+                onEvent={handleShortlistEvent}
+              />
+              {feedbackCandidate ? (
+                <MatchmakerFeedbackFlow
+                  shortlistId={activeShortlist.id}
+                  candidateUserId={feedbackCandidate.candidateUserId}
+                  candidateName={feedbackCandidate.firstName}
+                  briefVersion={briefQuery.data?.version ?? activeShortlist.briefVersion}
+                  busy={submitFeedback.isPending}
+                  onCancel={() => setFeedbackCandidateUserId(null)}
+                  onSubmit={(input) => submitFeedback.mutateAsync(input)}
+                  onEvent={handleFeedbackEvent}
+                />
+              ) : null}
+              {remainingSearches <= 0 ? <Text style={styles.limitNote}>No searches left today. You can still review every person in this shortlist.</Text> : null}
+            </View>
+          ) : turn.variant === 'candidate' && turn.candidate ? (
             <View style={styles.candidateSection}>
               <MatchmakerVoiceBubble
                 text={turn.promptText}
@@ -379,6 +440,7 @@ export function MatchmakerConversation({
                 remainingSearches={remainingSearches}
                 busy={isBusy}
                 onSelect={handleQuickReply}
+                onUndo={handleBriefUndo}
               />
             </View>
           ) : turn.variant === 'limit' ? (
@@ -412,6 +474,20 @@ export function MatchmakerConversation({
           ) : (
             <ActivePrompt turn={turn} />
           )}
+
+          {activeShortlist && turn.variant === 'feedback' ? (
+            <View style={styles.sectionInset}>
+              <MatchmakerFeedbackPanel
+                message={turn.promptMessage!}
+                replies={turn.quickReplies}
+                outcome={typeof turn.promptMessage?.metadata?.outcome === 'string' ? turn.promptMessage.metadata.outcome : undefined}
+                remainingSearches={remainingSearches}
+                busy={isBusy}
+                onSelect={handleQuickReply}
+                onUndo={handleBriefUndo}
+              />
+            </View>
+          ) : null}
         </View>
 
         {conversation.isError ? (

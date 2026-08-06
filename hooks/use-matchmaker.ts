@@ -5,6 +5,7 @@ import type {
   MatchmakerBrief,
   MatchmakerBriefMutationInput,
   MatchmakerConversationResponse,
+  MatchmakerFeedbackInput,
   MatchmakerSearchResponse,
 } from '@/types/matchmaker';
 
@@ -125,6 +126,31 @@ export function useUndoMatchmakerBriefChange() {
   });
 }
 
+export function useTrackMatchmakerShortlistEvent() {
+  return useMutation({
+    mutationKey: ['matchmaker', 'shortlist', 'event'],
+    mutationFn: async (payload: {
+      event: 'shortlist_viewed' | 'shortlist_page_changed' | 'explanation_expanded' | 'compare_opened' | 'comparison_row_viewed' | 'shortlist_profile_opened' | 'candidate_unavailable';
+      shortlistId: string;
+      shortlistSize: number;
+      position?: number;
+    }) => apiFetch('/api/matchmaker/events', { method: 'POST', body: payload }),
+  });
+}
+
+export function useTrackMatchmakerFeedbackEvent() {
+  return useMutation({
+    mutationKey: ['matchmaker', 'feedback', 'event'],
+    mutationFn: async (payload: {
+      event: 'feedback_reason_selected' | 'feedback_follow_up_requested' | 'feedback_follow_up_completed' | 'feedback_learning_previewed' | 'feedback_learning_cancelled';
+      shortlistId: string;
+      shortlistSize: number;
+      candidateUserId: string;
+      reasonCode: import('@/types/matchmaker').MatchmakerFeedbackReasonCode;
+    }) => apiFetch('/api/matchmaker/events', { method: 'POST', body: payload }),
+  });
+}
+
 export function useSendMatchmakerMessage() {
   const queryClient = useQueryClient();
 
@@ -174,16 +200,12 @@ export function useSubmitMatchmakerFeedback() {
 
   return useMutation({
     mutationKey: ['matchmaker', 'conversation', 'feedback'],
-    mutationFn: async (payload: {
-      outcome?: 'interested' | 'passed' | 'not_this_one' | 'refinement';
-      reason?: string;
-      candidateUserId?: string;
-    }) => {
+    mutationFn: async (payload: MatchmakerFeedbackInput) => {
       const response = await apiFetch<{ data: MatchmakerConversationResponse } | MatchmakerConversationResponse>(
         '/api/matchmaker/session/feedback',
         {
           method: 'POST',
-          body: payload,
+          body: { ...payload },
           timeoutMs: 20_000,
         },
       );
@@ -191,6 +213,7 @@ export function useSubmitMatchmakerFeedback() {
     },
     onSuccess: (conversation) => {
       queryClient.setQueryData(['matchmaker', 'conversation'], conversation);
+      queryClient.invalidateQueries({ queryKey: ['matchmaker', 'brief'] });
     },
   });
 }

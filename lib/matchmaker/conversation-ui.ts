@@ -91,6 +91,7 @@ export function getMatchmakerVisualState(input: {
   if (input.isLoading || input.isMutating) return 'thinking';
   if (
     input.sessionState === 'presenting_candidate'
+    || input.sessionState === 'presenting_shortlist'
     || input.sessionState === 'collecting_feedback'
   ) {
     return 'success';
@@ -179,6 +180,8 @@ export function getSessionStatusLabel(state: MatchmakerConversationState): strin
       return 'Ready to search';
     case 'presenting_candidate':
       return 'Showing a match';
+    case 'presenting_shortlist':
+      return 'Showing your shortlist';
     case 'collecting_feedback':
       return 'Adjusting for next time';
     case 'limit_reached':
@@ -411,7 +414,7 @@ export function selectActiveTurn(
       promptMessage: latestAssistant,
       candidate: candidate ? { ...candidate, reason: insight } : null,
       quickReplies,
-      showSearchAction: remainingSearches > 0,
+      showSearchAction: remainingSearches > 0 && state !== 'presenting_shortlist',
       searchActionLabel: 'Find another',
       showMessagesAction: false,
       limitMode: 'idle',

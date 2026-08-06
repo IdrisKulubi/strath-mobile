@@ -171,10 +171,8 @@ export function buildFeedbackLearningPlan(input: {
         else negativeSignals.push(signal);
     }
 
-    for (const signal of candidateSignals) {
-        if (input.outcome === "interested") positiveSignals.push(signal);
-        else if (input.outcome === "passed" || input.outcome === "not_this_one") negativeSignals.push(signal);
-    }
+    // Candidate traits are evidence about that person, not global preferences.
+    // Only the user's explicit, confirmed feedback may affect future searches.
 
     return {
         historySignals,

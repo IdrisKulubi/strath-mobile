@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronRight } from 'lucide-react-native';
+import { AlertCircle, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react-native';
 
-import { Button } from '@/components/ui/button';
 import { CachedImage } from '@/components/ui/cached-image';
 import { Text } from '@/components/ui/text';
 import { getDistinctCandidateLabels } from '@/lib/matchmaker/conversation-ui';
@@ -14,6 +13,9 @@ interface MatchmakerCandidateCardProps {
   candidate: MatchmakerCandidate;
   onPress: (candidate: MatchmakerCandidate) => void;
   onNotThisOne?: () => void;
+  notForMeLabel?: string;
+  onExplanationToggle?: (expanded: boolean) => void;
+  disabled?: boolean;
 }
 
 function getInitial(name: string | null) {
@@ -29,16 +31,32 @@ export function MatchmakerCandidateCard({
   candidate,
   onPress,
   onNotThisOne,
+  notForMeLabel = 'Not this one',
+  onExplanationToggle,
+  disabled = false,
 }: MatchmakerCandidateCardProps) {
+  const [explanationExpanded, setExplanationExpanded] = useState(false);
   const photo = candidate.profilePhoto ?? candidate.photos?.[0] ?? null;
   const labels = getDistinctCandidateLabels(candidate.labels, candidate.reason);
   const subtitle = buildSubtitle(candidate);
+  const unavailable = candidate.availability === 'unavailable';
+  const explanation = candidate.explanation;
+  const hasExplanation = Boolean(explanation && (
+    explanation.fitReasons.length > 0 || explanation.tradeoff || explanation.unknown
+  ));
+
+  const toggleExplanation = () => {
+    const next = !explanationExpanded;
+    setExplanationExpanded(next);
+    onExplanationToggle?.(next);
+  };
 
   return (
     <View style={styles.card}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Open profile for ${candidate.firstName || 'this match'}`}
+        disabled={unavailable || disabled}
         onPress={() => onPress(candidate)}
         style={({ pressed }) => [styles.photoPressable, pressed && styles.pressedPhoto]}
       >
@@ -51,7 +69,7 @@ export function MatchmakerCandidateCard({
             </View>
           )}
           <LinearGradient
-            colors={['transparent', 'rgba(19, 13, 29, 0.35)', 'rgba(19, 13, 29, 0.92)']}
+            colors={['transparent', MATCHMAKER_HOME.photoGradientMid, MATCHMAKER_HOME.photoGradientBottom]}
             style={styles.photoGradient}
           />
           <View style={styles.photoOverlay}>
@@ -65,6 +83,12 @@ export function MatchmakerCandidateCard({
       </Pressable>
 
       <View style={styles.body}>
+        {unavailable ? (
+          <View accessibilityLiveRegion="polite" style={styles.unavailableRow}>
+            <AlertCircle size={17} color={MATCHMAKER_HOME.warning} />
+            <Text style={styles.unavailableText}>This profile is no longer available. The rest of your shortlist is unchanged.</Text>
+          </View>
+        ) : null}
         <Text style={styles.reason}>{candidate.reason}</Text>
 
         {labels.length > 0 ? (
@@ -77,24 +101,54 @@ export function MatchmakerCandidateCard({
           </View>
         ) : null}
 
+        {hasExplanation ? (
+          <View style={styles.explanationSection}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: explanationExpanded }}
+              accessibilityLabel={`${explanationExpanded ? 'Hide' : 'Show'} why ${candidate.firstName || 'this person'} was suggested`}
+              onPress={toggleExplanation}
+              style={({ pressed }) => [styles.explanationToggle, pressed && styles.pressedSecondary]}
+            >
+              <Text style={styles.explanationToggleText}>Why this person?</Text>
+              {explanationExpanded ? <ChevronUp size={18} color={MATCHMAKER_HOME.primary} /> : <ChevronDown size={18} color={MATCHMAKER_HOME.primary} />}
+            </Pressable>
+            {explanationExpanded ? (
+              <View style={styles.explanationBody}>
+                {explanation?.fitReasons.map((reason) => (
+                  <View key={reason} style={styles.reasonRow}>
+                    <View style={styles.reasonDot} />
+                    <Text style={styles.explanationText}>{reason}</Text>
+                  </View>
+                ))}
+                {explanation?.tradeoff ? <View style={styles.contextRow}><Text style={styles.contextLabel}>Worth noting</Text><Text style={styles.contextText}>{explanation.tradeoff}</Text></View> : null}
+                {explanation?.unknown ? <View style={styles.contextRow}><Text style={styles.contextLabel}>Still unclear</Text><Text style={styles.contextText}>{explanation.unknown}</Text></View> : null}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         <View style={styles.actions}>
-          <Button
+          <Pressable
+            accessibilityRole="button"
             accessibilityLabel={`View profile for ${candidate.firstName || 'this match'}`}
+            disabled={unavailable || disabled}
             onPress={() => onPress(candidate)}
-            className="h-[52px] w-full rounded-xl bg-[#D94A8F] active:bg-[#BD3778]"
+            style={({ pressed }) => [styles.primaryAction, (unavailable || disabled) && styles.disabled, pressed && styles.primaryActionPressed]}
           >
-            <Text className="text-[15px] font-extrabold text-[#FFF8FC]">View profile</Text>
-            <ChevronRight size={18} color="#FFF8FC" />
-          </Button>
+            <Text style={styles.primaryActionText}>View profile</Text>
+            <ChevronRight size={18} color={MATCHMAKER_HOME.primaryForeground} />
+          </Pressable>
 
           {onNotThisOne ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Not this one"
+              accessibilityLabel={`${notForMeLabel}: ${candidate.firstName || 'this person'}`}
+              disabled={unavailable || disabled}
               onPress={onNotThisOne}
-              style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressedSecondary]}
+              style={({ pressed }) => [styles.secondaryAction, (unavailable || disabled) && styles.disabled, pressed && styles.pressedSecondary]}
             >
-              <Text style={styles.secondaryActionText}>Not this one</Text>
+              <Text style={styles.secondaryActionText}>{notForMeLabel}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -154,7 +208,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   subtitle: {
-    color: 'rgba(248, 244, 251, 0.82)',
+    color: MATCHMAKER_HOME.photoTextMuted,
     fontSize: 14,
     lineHeight: 18,
     fontWeight: '600',
@@ -191,6 +245,100 @@ const styles = StyleSheet.create({
     gap: SPACING.tight,
     marginTop: SPACING.tight,
   },
+  primaryAction: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.tight,
+    paddingHorizontal: SPACING.base,
+    borderRadius: RADIUS.md,
+    backgroundColor: MATCHMAKER_HOME.primary,
+  },
+  primaryActionPressed: {
+    backgroundColor: MATCHMAKER_HOME.primaryPressed,
+    opacity: 0.96,
+  },
+  primaryActionText: {
+    color: MATCHMAKER_HOME.primaryForeground,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '800',
+  },
+  unavailableRow: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.tight,
+    padding: SPACING.compact,
+    borderRadius: RADIUS.md,
+    backgroundColor: MATCHMAKER_HOME.surface,
+  },
+  unavailableText: {
+    flex: 1,
+    color: MATCHMAKER_HOME.warning,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  explanationSection: {
+    borderTopWidth: 1,
+    borderTopColor: MATCHMAKER_HOME.border,
+  },
+  explanationToggle: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.tight,
+  },
+  explanationToggleText: {
+    color: MATCHMAKER_HOME.primary,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '700',
+  },
+  explanationBody: {
+    gap: SPACING.compact,
+    paddingBottom: SPACING.tight,
+  },
+  reasonRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.tight,
+  },
+  reasonDot: {
+    width: 5,
+    height: 5,
+    marginTop: 8,
+    borderRadius: RADIUS.full,
+    backgroundColor: MATCHMAKER_HOME.primary,
+  },
+  explanationText: {
+    flex: 1,
+    color: MATCHMAKER_HOME.foreground,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  contextRow: {
+    gap: 3,
+    padding: SPACING.compact,
+    borderRadius: RADIUS.md,
+    backgroundColor: MATCHMAKER_HOME.surface,
+  },
+  contextLabel: {
+    color: MATCHMAKER_HOME.subtleForeground,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  contextText: {
+    color: MATCHMAKER_HOME.mutedForeground,
+    fontSize: 13,
+    lineHeight: 19,
+  },
   secondaryAction: {
     minHeight: 44,
     alignItems: 'center',
@@ -208,5 +356,8 @@ const styles = StyleSheet.create({
   },
   pressedSecondary: {
     opacity: 0.8,
+  },
+  disabled: {
+    opacity: 0.48,
   },
 });

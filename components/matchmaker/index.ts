@@ -1,6 +1,8 @@
 export { MatchmakerConversation } from './matchmaker-conversation';
 export { MatchmakerBriefCard } from './matchmaker-brief';
+export { MatchmakerShortlistView } from './matchmaker-shortlist';
 export { MatchmakerFeedbackPanel } from './matchmaker-feedback-panel';
+export { MatchmakerFeedbackFlow } from './matchmaker-feedback-flow';
 export { MatchmakerHeader } from './matchmaker-header';
 export { MatchmakerHomeShell } from './matchmaker-home-shell';
 export { MatchmakerLimitEmptyState } from './matchmaker-limit-empty-state';

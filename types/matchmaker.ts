@@ -14,6 +14,23 @@ export interface MatchmakerCandidate {
   photos?: string[];
   reason: string;
   labels: string[];
+  explanation?: MatchmakerCandidateExplanation;
+  shortlistPosition?: number;
+  availability?: 'available' | 'unavailable';
+}
+
+export interface MatchmakerCandidateExplanation {
+  fitReasons: string[];
+  matchedPreferenceIds: string[];
+  reciprocalFitEvidence: string[];
+  tradeoff: string | null;
+  unknown: string | null;
+}
+
+export interface MatchmakerShortlist {
+  id: string;
+  briefVersion: number;
+  candidates: MatchmakerCandidate[];
 }
 
 export interface MatchmakerSearchMeta {
@@ -38,6 +55,27 @@ export type MatchmakerPreferenceSentiment = 'prefer' | 'avoid';
 export type MatchmakerPreferenceImportance = 'must_have' | 'prefer' | 'flexible';
 export type MatchmakerPreferenceCertainty = 'confirmed' | 'inferred';
 export type MatchmakerPreferenceSource = 'direct' | 'feedback' | 'migrated_memory' | 'system';
+export type MatchmakerFeedbackReasonCode =
+  | 'lifestyle_mismatch'
+  | 'relationship_goals'
+  | 'communication_style'
+  | 'attraction'
+  | 'practical_mismatch'
+  | 'something_else';
+export type MatchmakerFeedbackLearningScope = 'candidate_only' | 'future_matches';
+
+export interface MatchmakerFeedbackInput {
+  outcome?: 'interested' | 'passed' | 'not_this_one' | 'refinement';
+  reason?: string;
+  candidateUserId?: string;
+  shortlistId?: string;
+  reasonCode?: MatchmakerFeedbackReasonCode;
+  detail?: string;
+  learningScope?: MatchmakerFeedbackLearningScope;
+  confirmLearning?: boolean;
+  baseVersion?: number;
+  submissionId?: string;
+}
 
 export interface MatchmakerBriefPreference {
   id: string;
@@ -101,6 +139,7 @@ export type MatchmakerConversationState =
   | 'clarifying'
   | 'ready_to_search'
   | 'presenting_candidate'
+  | 'presenting_shortlist'
   | 'collecting_feedback'
   | 'limit_reached';
 

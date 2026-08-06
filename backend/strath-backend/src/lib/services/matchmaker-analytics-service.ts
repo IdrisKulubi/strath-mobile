@@ -17,7 +17,26 @@ export type MatchmakerAnalyticsEvent =
     | "brief_viewed"
     | "brief_version_conflict"
     | "brief_undone"
-    | "clarification_resolved";
+    | "clarification_resolved"
+    | "shortlist_requested"
+    | "shortlist_generated"
+    | "shortlist_partial"
+    | "shortlist_empty"
+    | "shortlist_failed"
+    | "shortlist_credit_consumed"
+    | "shortlist_viewed"
+    | "shortlist_page_changed"
+    | "explanation_expanded"
+    | "compare_opened"
+    | "comparison_row_viewed"
+    | "shortlist_profile_opened"
+    | "candidate_unavailable"
+    | "feedback_candidate_only"
+    | "feedback_follow_up_requested"
+    | "feedback_follow_up_completed"
+    | "feedback_learning_previewed"
+    | "feedback_learning_confirmed"
+    | "feedback_learning_cancelled";
 
 const EVENT_TYPE_BY_NAME: Record<MatchmakerAnalyticsEvent, string> = {
     session_started: EVENT_TYPES.MATCHMAKER_SESSION_STARTED,
@@ -37,6 +56,25 @@ const EVENT_TYPE_BY_NAME: Record<MatchmakerAnalyticsEvent, string> = {
     brief_version_conflict: EVENT_TYPES.MATCHMAKER_BRIEF_VERSION_CONFLICT,
     brief_undone: EVENT_TYPES.MATCHMAKER_BRIEF_UNDONE,
     clarification_resolved: EVENT_TYPES.MATCHMAKER_CLARIFICATION_RESOLVED,
+    shortlist_requested: EVENT_TYPES.MATCHMAKER_SHORTLIST_REQUESTED,
+    shortlist_generated: EVENT_TYPES.MATCHMAKER_SHORTLIST_GENERATED,
+    shortlist_partial: EVENT_TYPES.MATCHMAKER_SHORTLIST_PARTIAL,
+    shortlist_empty: EVENT_TYPES.MATCHMAKER_SHORTLIST_EMPTY,
+    shortlist_failed: EVENT_TYPES.MATCHMAKER_SHORTLIST_FAILED,
+    shortlist_credit_consumed: EVENT_TYPES.MATCHMAKER_SHORTLIST_CREDIT_CONSUMED,
+    shortlist_viewed: EVENT_TYPES.MATCHMAKER_SHORTLIST_VIEWED,
+    shortlist_page_changed: EVENT_TYPES.MATCHMAKER_SHORTLIST_PAGE_CHANGED,
+    explanation_expanded: EVENT_TYPES.MATCHMAKER_EXPLANATION_EXPANDED,
+    compare_opened: EVENT_TYPES.MATCHMAKER_COMPARE_OPENED,
+    comparison_row_viewed: EVENT_TYPES.MATCHMAKER_COMPARISON_ROW_VIEWED,
+    shortlist_profile_opened: EVENT_TYPES.MATCHMAKER_SHORTLIST_PROFILE_OPENED,
+    candidate_unavailable: EVENT_TYPES.MATCHMAKER_CANDIDATE_UNAVAILABLE,
+    feedback_candidate_only: EVENT_TYPES.MATCHMAKER_FEEDBACK_CANDIDATE_ONLY,
+    feedback_follow_up_requested: EVENT_TYPES.MATCHMAKER_FEEDBACK_FOLLOW_UP_REQUESTED,
+    feedback_follow_up_completed: EVENT_TYPES.MATCHMAKER_FEEDBACK_FOLLOW_UP_COMPLETED,
+    feedback_learning_previewed: EVENT_TYPES.MATCHMAKER_FEEDBACK_LEARNING_PREVIEWED,
+    feedback_learning_confirmed: EVENT_TYPES.MATCHMAKER_FEEDBACK_LEARNING_CONFIRMED,
+    feedback_learning_cancelled: EVENT_TYPES.MATCHMAKER_FEEDBACK_LEARNING_CANCELLED,
 };
 
 export function trackMatchmakerEvent(input: {

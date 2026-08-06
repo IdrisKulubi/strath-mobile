@@ -35,6 +35,7 @@ test('formatRemainingSearches handles singular and zero', () => {
 test('getSessionStatusLabel maps session states', () => {
   assert.equal(getSessionStatusLabel('ready_to_search'), 'Ready to search');
   assert.equal(getSessionStatusLabel('limit_reached'), 'Paused for today');
+  assert.equal(getSessionStatusLabel('presenting_shortlist'), 'Showing your shortlist');
 });
 
 test('greeting messages preserve the conversational backend copy', () => {
@@ -273,6 +274,27 @@ test('selectActiveTurn surfaces candidate introduction state', () => {
   assert.equal(turn.promptText, "I'd start with Alex. Calm and active feels close to your direction.");
   assert.equal(turn.showSearchAction, true);
   assert.equal(turn.searchActionLabel, 'Find another');
+});
+
+test('historical candidate renderer safely presents the first V2 shortlist candidate without another-search action', () => {
+  const data = {
+    session: {
+      id: 's1', state: 'presenting_shortlist', status: 'active', sessionDay: '2026-08-06', dailySearchCount: 1, searchLimit: 3, remainingSearches: 2, currentIntent: {}, currentPlan: {},
+      quota: { used: 1, limit: 3, remaining: 2, resetsAt: '', timezone: 'Africa/Nairobi', limitReason: null },
+    },
+    messages: [{
+      id: 'm1', role: 'assistant', kind: 'candidate', text: 'I found three people worth considering.', quickReplies: [], createdAt: '',
+      metadata: {
+        candidate: { candidateUserId: 'u1', firstName: 'Alex', reason: 'Their profile reflects calm.', labels: [] },
+        shortlist: { id: 'list', briefVersion: 2, candidates: [] },
+      },
+    }],
+    quickReplies: [],
+  } satisfies MatchmakerConversationResponse;
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'candidate');
+  assert.equal(turn.candidate?.candidateUserId, 'u1');
+  assert.equal(turn.showSearchAction, false);
 });
 
 test('shouldEnableMatchmakerQuery respects consent', () => {

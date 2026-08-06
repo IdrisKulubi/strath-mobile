@@ -70,6 +70,9 @@ export const MATCHMAKER_HOME = {
   navFill: 'rgba(30, 21, 43, 0.94)',
   navBorder: 'rgba(196, 169, 214, 0.20)',
   navActive: '#30233F',
+  photoGradientMid: 'rgba(19, 13, 29, 0.35)',
+  photoGradientBottom: 'rgba(19, 13, 29, 0.92)',
+  photoTextMuted: 'rgba(248, 244, 251, 0.82)',
 } as const;
 
 /** Restrained palette — tinted neutrals + single accent (see DESIGN.md) */
