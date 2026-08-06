@@ -1,7 +1,7 @@
 import { getAdminFeatureFlags, getAdminSignupCapStats, getAdminWaitlistedProfiles } from "@/lib/actions/admin";
 import { APP_FEATURE_KEYS } from "@/lib/feature-flags";
 
-import { FeatureFlagToggle, SignupCapPanel } from "./_actions";
+import { FeatureFlagToggle, MatchmakerV2RolloutPanel, SignupCapPanel } from "./_actions";
 
 export default async function AdminFeatureFlagsPage() {
     const [flags, stats, waitlistedProfiles] = await Promise.all([
@@ -22,6 +22,7 @@ export default async function AdminFeatureFlagsPage() {
             <div className="space-y-6">
                 {flags.map((flag) => {
                     const isSignupCap = flag.key === APP_FEATURE_KEYS.signupCapEnabled;
+                    const isMatchmakerV2 = flag.key === APP_FEATURE_KEYS.matchmakerPersonalizationV2;
 
                     return (
                         <div
@@ -65,6 +66,7 @@ export default async function AdminFeatureFlagsPage() {
                                     <SignupCapPanel stats={stats} enabled={flag.enabled} waitlistedProfiles={waitlistedProfiles} />
                                 </div>
                             )}
+                            {isMatchmakerV2 && <div className="mt-6 border-t border-white/10 pt-6"><MatchmakerV2RolloutPanel config={flag.config} /></div>}
                         </div>
                     );
                 })}

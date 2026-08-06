@@ -23,7 +23,7 @@ import {
     isMatchmakerSearchConfirmation,
     type MatchmakerActiveQuestion,
 } from "@/lib/services/matchmaker-llm-client";
-import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
+import { isMatchmakerPersonalizationV2EnabledForUser } from "@/lib/feature-flags";
 import {
     getMatchmakerUserMemory,
     recordMatchmakerFeedback,
@@ -777,7 +777,7 @@ export async function addMatchmakerConversationMessage(input: {
         });
     }
 
-    const personalizationV2 = await isFeatureEnabled(APP_FEATURE_KEYS.matchmakerPersonalizationV2, false);
+    const personalizationV2 = await isMatchmakerPersonalizationV2EnabledForUser(input.userId);
     const [memory, loadedBrief] = await Promise.all([
         getMatchmakerUserMemory(input.userId),
         personalizationV2 ? getMatchmakerBrief(input.userId) : Promise.resolve(null),
@@ -1044,7 +1044,7 @@ export async function addMatchmakerConversationFeedback(input: {
         ? buildMatchmakerFeedbackProposal({ reasonCode: input.reasonCode, detail: input.detail })
         : null;
     if (learningScope === "future_matches") {
-        const personalizationV2 = await isFeatureEnabled(APP_FEATURE_KEYS.matchmakerPersonalizationV2, false);
+        const personalizationV2 = await isMatchmakerPersonalizationV2EnabledForUser(input.userId);
         if (!personalizationV2) throw new Error("Future-match learning is not available yet");
         if (!input.reasonCode) throw new Error("A feedback reason is required for future learning");
         if (!proposal) throw new Error("Add one specific detail before updating future matches");
@@ -1064,6 +1064,7 @@ export async function addMatchmakerConversationFeedback(input: {
                 shortlistId: input.shortlistId ?? undefined,
                 candidateUserId: candidateUserId ?? undefined,
             },
+            requestKey: input.submissionId ? `feedback:${input.submissionId}` : undefined,
         })
         : null;
     const memory = await recordMatchmakerFeedback({

@@ -8,13 +8,15 @@
 
 import { config } from "dotenv";
 import { resolve } from "path";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, gte, sql } from "drizzle-orm";
 
 config({ path: resolve(process.cwd(), ".env") });
 config({ path: resolve(process.cwd(), ".env.local"), override: true });
 
 import { db } from "@/lib/db";
-import { matchmakerMessages, matchmakerSessions } from "@/db/schema";
+import { analyticsEvents, matchmakerMessages, matchmakerSessionResults, matchmakerSessions, matchmakerShortlists } from "@/db/schema";
+import { getMatchmakerV2Rollout } from "@/lib/feature-flags";
+import { evaluateMatchmakerRolloutGuardrails } from "@/lib/matchmaker/rollout-guardrails";
 import { MATCHMAKER_VOICE_VERSION } from "@/lib/services/matchmaker-session-service";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || process.env.NEXT_PUBLIC_APP_URL || "https://www.strathspace.com";
@@ -112,13 +114,76 @@ async function inspectRecentProductionMessages() {
     return { activeVoiceVersions, assistantSamples };
 }
 
+async function inspectV2Readiness() {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [rollout, shortlistRows, repeatRows, eventRows] = await Promise.all([
+        getMatchmakerV2Rollout(),
+        db.select({
+            shortlists: sql<number>`count(*)::int`,
+            creditMismatches: sql<number>`count(*) filter (where ${matchmakerShortlists.status} = 'presented' and ${matchmakerShortlists.creditConsumed} = false)::int`,
+            sizeOne: sql<number>`count(*) filter (where (${matchmakerShortlists.metadata}->>'resultSize')::int = 1)::int`,
+            sizeTwo: sql<number>`count(*) filter (where (${matchmakerShortlists.metadata}->>'resultSize')::int = 2)::int`,
+            sizeThree: sql<number>`count(*) filter (where (${matchmakerShortlists.metadata}->>'resultSize')::int = 3)::int`,
+        }).from(matchmakerShortlists).where(gte(matchmakerShortlists.createdAt, since)),
+        db.select({
+            repeatedRows: sql<number>`coalesce(sum(greatest(repeats.shown_count - 1, 0)), 0)::int`,
+            totalRows: sql<number>`coalesce(sum(repeats.shown_count), 0)::int`,
+            explanationFailures: sql<number>`coalesce(sum(repeats.explanation_failures), 0)::int`,
+        }).from(sql`(
+            select ${matchmakerSessionResults.sessionId} as session_id,
+                   ${matchmakerSessionResults.candidateUserId} as candidate_user_id,
+                   count(*)::int as shown_count,
+                   count(*) filter (where jsonb_array_length(${matchmakerSessionResults.fitReasons}) = 0)::int as explanation_failures
+            from ${matchmakerSessionResults}
+            where ${matchmakerSessionResults.createdAt} >= ${since}
+              and ${matchmakerSessionResults.shortlistId} is not null
+            group by ${matchmakerSessionResults.sessionId}, ${matchmakerSessionResults.candidateUserId}
+        ) as repeats`),
+        db.select({
+            requests: sql<number>`count(*) filter (where ${analyticsEvents.eventType} = 'matchmaker_shortlist_requested')::int`,
+            failures: sql<number>`count(*) filter (where ${analyticsEvents.eventType} = 'matchmaker_shortlist_failed')::int`,
+            providerFallbacks: sql<number>`count(*) filter (where ${analyticsEvents.eventType} in ('matchmaker_shortlist_generated', 'matchmaker_shortlist_partial') and ${analyticsEvents.metadata}->>'providerFallback' = 'true')::int`,
+        }).from(analyticsEvents).where(gte(analyticsEvents.createdAt, since)),
+    ]);
+    const shortlist = shortlistRows[0];
+    const repeats = repeatRows[0];
+    const events = eventRows[0];
+    const totalRows = Number(repeats?.totalRows ?? 0);
+    const repeatedCandidateRatePct = totalRows > 0 ? Number(repeats?.repeatedRows ?? 0) / totalRows * 100 : 0;
+    const requests = Number(events?.requests ?? 0);
+    const currentApiErrorRatePct = requests > 0 ? Number(events?.failures ?? 0) / requests * 100 : 0;
+    const guardrails = evaluateMatchmakerRolloutGuardrails({
+        baselineApiErrorRatePct: Number(process.env.MATCHMAKER_V1_API_ERROR_BASELINE_PCT ?? 0),
+        currentApiErrorRatePct,
+        repeatedCandidateRatePct,
+        creditMismatchCount: Number(shortlist?.creditMismatches ?? 0),
+        unrecoverableStateCount: Number(process.env.MATCHMAKER_V2_UNRECOVERABLE_STATE_COUNT ?? 0),
+        privacyOrSafetyRegression: process.env.MATCHMAKER_V2_SAFETY_REGRESSION === "true",
+    });
+    return {
+        migrationTablesReadable: true,
+        rollout,
+        last24Hours: {
+            shortlists: Number(shortlist?.shortlists ?? 0),
+            sizeDistribution: { one: Number(shortlist?.sizeOne ?? 0), two: Number(shortlist?.sizeTwo ?? 0), three: Number(shortlist?.sizeThree ?? 0) },
+            creditMismatches: Number(shortlist?.creditMismatches ?? 0),
+            repeatedCandidateRatePct: Math.round(repeatedCandidateRatePct * 100) / 100,
+            explanationFailures: Number(repeats?.explanationFailures ?? 0),
+            shortlistErrorRatePct: Math.round(currentApiErrorRatePct * 100) / 100,
+            providerFallbacks: Number(events?.providerFallbacks ?? 0),
+        },
+        guardrails,
+    };
+}
+
 async function main() {
     console.log(`Verifying production matchmaker at ${API_URL}...`);
 
-    const [publicApi, authProbe, recent] = await Promise.all([
+    const [publicApi, authProbe, recent, v2Readiness] = await Promise.all([
         probePublicApi(),
         probeMatchmakerAuth(),
         inspectRecentProductionMessages(),
+        inspectV2Readiness(),
     ]);
 
     console.log(JSON.stringify({
@@ -126,10 +191,17 @@ async function main() {
         authProbe,
         expectedVoiceVersion: MATCHMAKER_VOICE_VERSION,
         recent,
+        v2Readiness,
     }, null, 2));
 
     if (authProbe.status !== 401) {
         throw new Error(`Expected unauthenticated matchmaker probe to return 401, got ${authProbe.status}`);
+    }
+    if (v2Readiness.rollout.masterEnabled && !v2Readiness.rollout.config.rollbackReady) {
+        throw new Error("V2 master flag is enabled without a verified rollback-ready configuration");
+    }
+    if (v2Readiness.guardrails.shouldPause) {
+        throw new Error(`V2 rollout must pause: ${v2Readiness.guardrails.reasons.join("; ")}`);
     }
 
     const token = process.env.MATCHMAKER_TEST_TOKEN?.trim();

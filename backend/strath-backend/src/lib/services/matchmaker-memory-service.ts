@@ -6,7 +6,7 @@ import {
     profileIntelligence,
     profiles,
 } from "@/db/schema";
-import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
+import { isMatchmakerPersonalizationV2EnabledForUser } from "@/lib/feature-flags";
 import {
     buildFeedbackLearningPlan,
     type MatchmakerFeedbackLearningScope,
@@ -280,10 +280,7 @@ export async function recordMatchmakerFeedback(input: {
         });
 
     if ((input.learningScope ?? "candidate_only") === "future_matches" && input.syncPreferences !== false) {
-        const v2Enabled = await isFeatureEnabled(
-            APP_FEATURE_KEYS.matchmakerPersonalizationV2,
-            false,
-        );
+        const v2Enabled = await isMatchmakerPersonalizationV2EnabledForUser(input.userId);
         if (v2Enabled) {
             await syncConfirmedFeedbackPreferences({
                 userId: input.userId,

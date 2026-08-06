@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
+  AccessibilityInfo,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -9,6 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { Columns3, X } from 'lucide-react-native';
 
 import { MatchmakerCandidateCard } from '@/components/matchmaker/matchmaker-candidate-card';
@@ -46,6 +48,7 @@ function candidateName(candidate: MatchmakerCandidate, index: number) {
 
 export function MatchmakerShortlistView({ shortlist, brief, onOpenCandidate, onNotForMe, onEvent, busy = false }: Props) {
   const { width: windowWidth } = useWindowDimensions();
+  const reduceMotion = useReducedMotion();
   const pageWidth = Math.max(260, windowWidth - (SPACING.screenX * 2));
   const listRef = useRef<FlatList<MatchmakerCandidate>>(null);
   const [position, setPosition] = useState(() => getCachedShortlistPosition(shortlist.id, shortlist.candidates.length));
@@ -69,6 +72,7 @@ export function MatchmakerShortlistView({ shortlist, brief, onOpenCandidate, onN
       if (!active) return;
       setPosition(restored);
       requestAnimationFrame(() => listRef.current?.scrollToIndex({ index: restored, animated: false }));
+      if (restored > 0) AccessibilityInfo.announceForAccessibility(`Returned to candidate ${restored + 1} of ${shortlist.candidates.length}.`);
     });
     return () => { active = false; };
   }, [shortlist.candidates.length, shortlist.id]);
@@ -88,10 +92,10 @@ export function MatchmakerShortlistView({ shortlist, brief, onOpenCandidate, onN
   const moveToPosition = useCallback((nextPosition: number) => {
     const next = Math.max(0, Math.min(nextPosition, shortlist.candidates.length - 1));
     if (next === position) return;
-    listRef.current?.scrollToIndex({ index: next, animated: true });
+    listRef.current?.scrollToIndex({ index: next, animated: !reduceMotion });
     savePosition(next);
     onEvent?.('shortlist_page_changed', next);
-  }, [onEvent, position, savePosition, shortlist.candidates.length]);
+  }, [onEvent, position, reduceMotion, savePosition, shortlist.candidates.length]);
 
   const openCandidate = useCallback((candidate: MatchmakerCandidate, index: number) => {
     savePosition(index);

@@ -786,6 +786,7 @@ export const matchmakerPreferenceChanges = pgTable(
         userId: text("user_id")
             .notNull()
             .references(() => user.id, { onDelete: "cascade" }),
+        requestKey: text("request_key"),
         operation: text("operation")
             .$type<"add" | "update" | "confirm" | "reclassify" | "remove" | "undo" | "migration">()
             .notNull(),
@@ -801,6 +802,7 @@ export const matchmakerPreferenceChanges = pgTable(
     (table) => ({
         userCreatedIdx: index("matchmaker_preference_changes_user_created_idx").on(table.userId, table.createdAt),
         revertedIdx: index("matchmaker_preference_changes_reverted_idx").on(table.revertedByChangeId),
+        userRequestKeyUnique: uniqueIndex("matchmaker_preference_changes_user_request_key_unique").on(table.userId, table.requestKey),
     }),
 );
 

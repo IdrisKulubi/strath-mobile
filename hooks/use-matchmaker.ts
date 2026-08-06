@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch, isApiError } from '@/lib/api-client';
+import { buildMatchmakerBriefMutationId } from '@/lib/matchmaker/brief-mutation-id';
 import type {
   MatchmakerBrief,
   MatchmakerBriefMutationInput,
@@ -87,6 +88,7 @@ export function useUpdateMatchmakerBrief() {
           body: {
             baseVersion: payload.baseVersion,
             operations: payload.operations,
+            mutationId: buildMatchmakerBriefMutationId(payload),
           },
           timeoutMs: 20_000,
         },

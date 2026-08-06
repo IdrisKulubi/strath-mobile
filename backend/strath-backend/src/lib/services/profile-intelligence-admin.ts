@@ -9,6 +9,7 @@ import {
     matchmakerMessages,
     matchmakerSessionResults,
     matchmakerSessions,
+    matchmakerShortlists,
     mutualMatches,
     profiles,
     profileIntelligence,
@@ -77,6 +78,17 @@ export type ProfileIntelligenceAdminOverview = {
         llmFallbackRatePct: number;
         feedbackReasons7d: number;
         quotaReached7d: number;
+        shortlists7d: number;
+        partialShortlists7d: number;
+        shortlistSize1Count7d: number;
+        shortlistSize2Count7d: number;
+        shortlistSize3Count7d: number;
+        creditMismatchCount7d: number;
+        shortlistErrors7d: number;
+        explanationCoveragePct: number;
+        candidateOnlyFeedback7d: number;
+        confirmedFutureLearning7d: number;
+        undo7d: number;
     };
     tuning: {
         profileIntelligenceWeightEnabled: boolean;
@@ -190,6 +202,8 @@ export async function getProfileIntelligenceAdminOverview(): Promise<ProfileInte
         matchmakerDecisionRows,
         matchmakerMessageRows,
         matchmakerAnalyticsRows,
+        matchmakerShortlistRows,
+        matchmakerRepeatRows,
     ] = await Promise.all([
         getEligibleProfileCount(),
         db.select({
@@ -271,9 +285,35 @@ export async function getProfileIntelligenceAdminOverview(): Promise<ProfileInte
         db.select({
             feedbackReasons7d: sql<number>`count(*) filter (where ${analyticsEvents.eventType} = 'matchmaker_feedback_reason_selected')::int`,
             quotaReached7d: sql<number>`count(*) filter (where ${analyticsEvents.eventType} = 'matchmaker_quota_reached')::int`,
+            shortlistErrors7d: sql<number>`count(*) filter (where ${analyticsEvents.eventType} = 'matchmaker_shortlist_failed')::int`,
+            candidateOnlyFeedback7d: sql<number>`count(*) filter (where ${analyticsEvents.eventType} = 'matchmaker_feedback_candidate_only')::int`,
+            confirmedFutureLearning7d: sql<number>`count(*) filter (where ${analyticsEvents.eventType} = 'matchmaker_feedback_learning_confirmed')::int`,
+            undo7d: sql<number>`count(*) filter (where ${analyticsEvents.eventType} = 'matchmaker_brief_undone')::int`,
         })
             .from(analyticsEvents)
             .where(gte(analyticsEvents.createdAt, sevenDaysAgo)),
+        db.select({
+            shortlists7d: sql<number>`count(*)::int`,
+            partialShortlists7d: sql<number>`count(*) filter (where coalesce((${matchmakerShortlists.metadata}->>'resultSize')::int, 0) < 3)::int`,
+            shortlistSize1Count7d: sql<number>`count(*) filter (where (${matchmakerShortlists.metadata}->>'resultSize')::int = 1)::int`,
+            shortlistSize2Count7d: sql<number>`count(*) filter (where (${matchmakerShortlists.metadata}->>'resultSize')::int = 2)::int`,
+            shortlistSize3Count7d: sql<number>`count(*) filter (where (${matchmakerShortlists.metadata}->>'resultSize')::int = 3)::int`,
+            creditMismatchCount7d: sql<number>`count(*) filter (where ${matchmakerShortlists.status} = 'presented' and ${matchmakerShortlists.creditConsumed} = false)::int`,
+        }).from(matchmakerShortlists).where(gte(matchmakerShortlists.createdAt, sevenDaysAgo)),
+        db.select({
+            repeatedRows: sql<number>`coalesce(sum(greatest(repeat_rows.shown_count - 1, 0)), 0)::int`,
+            totalRows: sql<number>`coalesce(sum(repeat_rows.shown_count), 0)::int`,
+            explainedRows: sql<number>`coalesce(sum(repeat_rows.explained_count), 0)::int`,
+        }).from(sql`(
+            select ${matchmakerSessionResults.sessionId} as session_id,
+                   ${matchmakerSessionResults.candidateUserId} as candidate_user_id,
+                   count(*)::int as shown_count,
+                   count(*) filter (where jsonb_array_length(${matchmakerSessionResults.fitReasons}) > 0)::int as explained_count
+            from ${matchmakerSessionResults}
+            where ${matchmakerSessionResults.createdAt} >= ${sevenDaysAgo}
+              and ${matchmakerSessionResults.shortlistId} is not null
+            group by ${matchmakerSessionResults.sessionId}, ${matchmakerSessionResults.candidateUserId}
+        ) as repeat_rows`),
     ]);
 
     const coverage = coverageRows[0];
@@ -289,6 +329,8 @@ export async function getProfileIntelligenceAdminOverview(): Promise<ProfileInte
     const matchmakerDecisionMetrics = matchmakerDecisionRows[0];
     const matchmakerMessageMetrics = matchmakerMessageRows[0];
     const matchmakerAnalyticsMetrics = matchmakerAnalyticsRows[0];
+    const matchmakerShortlistMetrics = matchmakerShortlistRows[0];
+    const matchmakerRepeatMetrics = matchmakerRepeatRows[0];
 
     const intelligenceRecords = num(coverage?.intelligenceRecords);
     const staleRecords = num(coverage?.staleRecords);
@@ -315,7 +357,6 @@ export async function getProfileIntelligenceAdminOverview(): Promise<ProfileInte
     const matchmakerSessions7d = num(matchmakerSessionMetrics?.sessions7d);
     const matchmakerSearches7d = num(matchmakerResultMetrics?.searches7d);
     const matchmakerCandidatesShown7d = num(matchmakerResultMetrics?.candidatesShown7d);
-    const matchmakerDistinctCandidates7d = num(matchmakerResultMetrics?.distinctCandidates7d);
     const matchmakerDecisions7d = num(matchmakerDecisionMetrics?.decisions7d);
     const matchmakerInterested7d = num(matchmakerDecisionMetrics?.interestedCount7d);
     const matchmakerPass7d = num(matchmakerDecisionMetrics?.passCount7d);
@@ -369,7 +410,7 @@ export async function getProfileIntelligenceAdminOverview(): Promise<ProfileInte
             sessions7d: matchmakerSessions7d,
             searches7d: matchmakerSearches7d,
             candidatesShown7d: matchmakerCandidatesShown7d,
-            repeatedCandidateRatePct: pct(Math.max(0, matchmakerCandidatesShown7d - matchmakerDistinctCandidates7d), matchmakerCandidatesShown7d),
+            repeatedCandidateRatePct: pct(num(matchmakerRepeatMetrics?.repeatedRows), num(matchmakerRepeatMetrics?.totalRows)),
             interestedCount7d: matchmakerInterested7d,
             interestedRatePct: pct(matchmakerInterested7d, matchmakerDecisions7d),
             passCount7d: matchmakerPass7d,
@@ -381,6 +422,17 @@ export async function getProfileIntelligenceAdminOverview(): Promise<ProfileInte
             llmFallbackRatePct: pct(llmFallbacks7d, llmTurns7d),
             feedbackReasons7d: num(matchmakerAnalyticsMetrics?.feedbackReasons7d),
             quotaReached7d: num(matchmakerAnalyticsMetrics?.quotaReached7d),
+            shortlists7d: num(matchmakerShortlistMetrics?.shortlists7d),
+            partialShortlists7d: num(matchmakerShortlistMetrics?.partialShortlists7d),
+            shortlistSize1Count7d: num(matchmakerShortlistMetrics?.shortlistSize1Count7d),
+            shortlistSize2Count7d: num(matchmakerShortlistMetrics?.shortlistSize2Count7d),
+            shortlistSize3Count7d: num(matchmakerShortlistMetrics?.shortlistSize3Count7d),
+            creditMismatchCount7d: num(matchmakerShortlistMetrics?.creditMismatchCount7d),
+            shortlistErrors7d: num(matchmakerAnalyticsMetrics?.shortlistErrors7d),
+            explanationCoveragePct: pct(num(matchmakerRepeatMetrics?.explainedRows), num(matchmakerRepeatMetrics?.totalRows)),
+            candidateOnlyFeedback7d: num(matchmakerAnalyticsMetrics?.candidateOnlyFeedback7d),
+            confirmedFutureLearning7d: num(matchmakerAnalyticsMetrics?.confirmedFutureLearning7d),
+            undo7d: num(matchmakerAnalyticsMetrics?.undo7d),
         },
         tuning: {
             profileIntelligenceWeightEnabled: profileIntelligenceWeightEnabled(),

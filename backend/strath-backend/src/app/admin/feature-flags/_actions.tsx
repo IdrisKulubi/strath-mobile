@@ -10,6 +10,7 @@ import {
     admitSpecificUserFromWaitlist,
     openAppToEveryone,
     resetUserAdmission,
+    updateAdminMatchmakerV2Rollout,
 } from "@/lib/actions/admin";
 import type { AdmissionStats, GenderBucket } from "@/lib/services/admission-service";
 
@@ -37,6 +38,24 @@ export function FeatureFlagToggle({
         >
             {isPending ? "Saving..." : enabled ? "Disable" : "Enable"}
         </button>
+    );
+}
+
+export function MatchmakerV2RolloutPanel({ config }: { config: Record<string, unknown> }) {
+    const [isPending, startTransition] = useTransition();
+    const router = useRouter();
+    const percentage = [0, 5, 25, 50, 100].includes(Number(config.percentage)) ? Number(config.percentage) : 100;
+    const internalUserIds = Array.isArray(config.internalUserIds) ? config.internalUserIds.filter((value): value is string => typeof value === "string").join(", ") : "";
+    return (
+        <form action={(formData) => startTransition(async () => { await updateAdminMatchmakerV2Rollout(formData); router.refresh(); })} className="space-y-4 rounded-lg border border-white/10 bg-white/5 p-4">
+            <div><p className="text-sm font-semibold text-white">Staged rollout</p><p className="mt-1 text-xs text-gray-400">Hold each external stage for one complete Nairobi quota-reset cycle. The master toggle remains the emergency rollback.</p></div>
+            <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1"><span className="text-xs font-medium text-gray-400">Eligible users</span><select name="percentage" defaultValue={percentage} className="rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white">{[0, 5, 25, 50, 100].map((stage) => <option key={stage} value={stage}>{stage === 0 ? "Internal users only" : `${stage}%`}</option>)}</select></label>
+                <label className="flex flex-col gap-1"><span className="text-xs font-medium text-gray-400">Internal user IDs</span><input name="internalUserIds" defaultValue={internalUserIds} placeholder="id-1, id-2" className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" /></label>
+            </div>
+            <label className="flex min-h-11 items-center gap-3 text-sm text-gray-300"><input type="checkbox" name="rollbackReady" defaultChecked={config.rollbackReady === true} className="h-5 w-5" /><span>Production verification and rollback switch have been exercised</span></label>
+            <button type="submit" disabled={isPending} className="min-h-11 rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50">{isPending ? "Saving..." : "Save rollout controls"}</button>
+        </form>
     );
 }
 
@@ -469,10 +488,10 @@ function ResetAdmissionForm() {
             onSubmit={handleSubmit}
             className="rounded-lg border border-white/10 bg-white/5 p-4"
         >
-            <p className="text-sm font-semibold text-white">Reset a user's admission</p>
+            <p className="text-sm font-semibold text-white">Reset a user&apos;s admission</p>
             <p className="mt-1 text-xs text-gray-400">
-                Dev helper for testing the waitlist flow. Clears the user's waitlist status and
-                re-runs the gate with current caps. Safe to run on yourself — you can use this to
+                Dev helper for testing the waitlist flow. Clears the user&apos;s waitlist status and
+                re-runs the gate with current caps. Safe to run on yourself, so you can use this to
                 bounce between admitted and waitlisted as you tune caps.
             </p>
 

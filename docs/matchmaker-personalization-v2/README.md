@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned. Implement the phases in order and do not begin a phase until the previous phase's acceptance gate passes.
+Implementation complete behind `matchmaker_personalization_v2`. Production device QA and the staged rollout remain pending. V1 stays authoritative for users outside the assigned rollout cohort.
 
 This roadmap supersedes the V1 decisions to present one candidate per search and to expose a generated memory summary without direct user control. The completed V1 documentation remains the historical record of the current implementation.
 
@@ -117,6 +117,8 @@ Each presented candidate contains existing profile-summary fields plus:
 4. [Mobile shortlist experience](phase-04-shortlist-experience.md)
 5. [Specific feedback and visible learning](phase-05-feedback-learning.md)
 6. [Hardening and rollout](phase-06-hardening-rollout.md)
+
+Operational rollout steps are defined in the [V2 rollout runbook](rollout-runbook.md).
 
 ## Shared Delivery Rules
 

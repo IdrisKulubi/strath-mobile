@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Platform,
   Pressable,
@@ -12,7 +13,7 @@ import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useMinimizeOnScroll } from 'expo-glass-tabs';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronDown,
@@ -49,6 +50,7 @@ import {
   useUpdateMatchmakerBrief,
 } from '@/hooks/use-matchmaker';
 import { usePublicFeatureFlags } from '@/hooks/use-payments-enabled';
+import { useNetwork } from '@/hooks/use-network';
 import {
   isMatchmakerSearchConfirmation,
   normalizeQuickReplyLabel,
@@ -64,6 +66,7 @@ import {
   MATCHMAKER_ERROR_TITLE,
 } from '@/lib/matchmaker/error-copy';
 import { readMatchmakerShortlist } from '@/lib/matchmaker/shortlist';
+import { loadMatchmakerUiDraft, saveMatchmakerUiDraft } from '@/lib/matchmaker/ui-draft-storage';
 import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 import type {
   MatchmakerConversationMessage,
@@ -107,8 +110,9 @@ function HistoryBubble({ message }: { message: MatchmakerConversationMessage }) 
 }
 
 function ActivePrompt({ turn }: { turn: ActiveTurn }) {
+  const reduceMotion = useReducedMotion();
   return (
-    <Animated.View entering={FadeInDown.duration(200)} style={styles.promptBlock}>
+    <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(200)} style={styles.promptBlock}>
       <Text style={styles.promptEyebrow}>Today&apos;s direction</Text>
       <Text style={styles.promptText}>{turn.promptText}</Text>
     </Animated.View>
@@ -130,6 +134,8 @@ export function MatchmakerConversation({
   const { mutate: trackShortlistEvent } = useTrackMatchmakerShortlistEvent();
   const { mutate: trackFeedbackEvent } = useTrackMatchmakerFeedbackEvent();
   const featureFlags = usePublicFeatureFlags();
+  const network = useNetwork();
+  const reduceMotion = useReducedMotion();
   const personalizationV2Enabled = Boolean(featureFlags.data?.matchmakerPersonalizationV2);
   const briefQuery = useMatchmakerBrief(personalizationV2Enabled);
   const updateBrief = useUpdateMatchmakerBrief();
@@ -137,6 +143,8 @@ export function MatchmakerConversation({
   const [draft, setDraft] = useState('');
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [feedbackCandidateUserId, setFeedbackCandidateUserId] = useState<string | null>(null);
+  const lastAnnouncement = useRef<string | null>(null);
+  const wasOffline = useRef(false);
 
   const data = conversation.data;
   const messages = useMemo(() => data?.messages ?? [], [data?.messages]);
@@ -153,7 +161,7 @@ export function MatchmakerConversation({
     || sendMessage.isPending
     || findCandidate.isPending
     || submitFeedback.isPending;
-  const briefBusy = updateBrief.isPending || undoBrief.isPending;
+  const briefBusy = updateBrief.isPending || undoBrief.isPending || network.isOffline;
   const sendErrorMessage = sendMessage.isError
     ? getMatchmakerUserMessage(sendMessage.error)
     : undefined;
@@ -172,11 +180,53 @@ export function MatchmakerConversation({
     && (turn.limitMode === 'refine_type' || turn.limitMode === 'date_idea');
   const useLiquidGlass = isLiquidGlassAvailable();
 
+  useEffect(() => {
+    const sessionId = data?.session.id;
+    if (!sessionId) return;
+    let active = true;
+    loadMatchmakerUiDraft(`composer:${sessionId}`).then((saved) => {
+      if (active && saved) setDraft((current) => current || saved);
+    });
+    return () => { active = false; };
+  }, [data?.session.id]);
+
+  useEffect(() => {
+    const sessionId = data?.session.id;
+    if (!sessionId) return;
+    saveMatchmakerUiDraft(`composer:${sessionId}`, draft).catch(() => undefined);
+  }, [data?.session.id, draft]);
+
+  useEffect(() => {
+    if (wasOffline.current && !network.isOffline) {
+      conversation.refetch().catch(() => undefined);
+      if (personalizationV2Enabled) briefQuery.refetch().catch(() => undefined);
+    }
+    wasOffline.current = network.isOffline;
+  }, [briefQuery, conversation, network.isOffline, personalizationV2Enabled]);
+
+  useEffect(() => {
+    let announcement: string | null = null;
+    if (network.isOffline) announcement = 'You are offline. Your matchmaker conversation and drafts are safe.';
+    else if (findCandidate.isPending) announcement = 'Searching for your shortlist.';
+    else if (sendMessage.isPending) announcement = 'Your matchmaker is thinking.';
+    else if (submitFeedback.isError || sendMessage.isError || findCandidate.isError || conversation.isError) announcement = 'The matchmaker hit a problem. Your work is safe and you can retry.';
+    else {
+      const latestLearning = messages.at(-1)?.metadata?.learningUpdate;
+      if (latestLearning && typeof latestLearning === 'object' && typeof (latestLearning as Record<string, unknown>).summary === 'string') announcement = 'Your match brief update was saved. Undo is available.';
+      else if (activeShortlist) announcement = `Shortlist ready with ${activeShortlist.candidates.length} ${activeShortlist.candidates.length === 1 ? 'person' : 'people'}.`;
+    }
+    if (announcement && announcement !== lastAnnouncement.current) {
+      lastAnnouncement.current = announcement;
+      AccessibilityInfo.announceForAccessibility(announcement);
+    }
+  }, [activeShortlist, conversation.isError, findCandidate.isError, findCandidate.isPending, messages, network.isOffline, sendMessage.isError, sendMessage.isPending, submitFeedback.isError]);
+
   const handleBriefUpdate = useCallback(async (operations: MatchmakerBriefOperation[]) => {
     const brief = briefQuery.data;
     if (!brief) return;
     try {
       await updateBrief.mutateAsync({ baseVersion: brief.version, operations });
+      AccessibilityInfo.announceForAccessibility('Your match brief was updated.');
       toast.show({ message: 'Your match brief is updated.', variant: 'success', position: 'bottom' });
     } catch (error) {
       toast.show({
@@ -191,6 +241,7 @@ export function MatchmakerConversation({
   const handleBriefUndo = useCallback(async (changeId: string) => {
     try {
       await undoBrief.mutateAsync(changeId);
+      AccessibilityInfo.announceForAccessibility('The match brief change was undone.');
       toast.show({ message: 'Last match brief change undone.', variant: 'success', position: 'bottom' });
     } catch (error) {
       toast.show({
@@ -235,6 +286,10 @@ export function MatchmakerConversation({
 
   const findNext = useCallback(async () => {
     if (findCandidate.isPending) return;
+    if (network.isOffline) {
+      toast.show({ message: 'You are offline. Your search is safe to retry after reconnecting.', variant: 'warning', position: 'bottom' });
+      return;
+    }
     if ((data?.session.remainingSearches ?? 0) <= 0) {
       toast.show({
         message: 'No searches left today — refine what you want for tomorrow.',
@@ -245,11 +300,15 @@ export function MatchmakerConversation({
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await findCandidate.mutateAsync();
-  }, [data?.session.remainingSearches, findCandidate, toast]);
+  }, [data?.session.remainingSearches, findCandidate, network.isOffline, toast]);
 
   const submit = useCallback(async (text: string) => {
     const cleaned = text.trim();
     if (!cleaned || sendMessage.isPending) return;
+    if (network.isOffline) {
+      toast.show({ message: 'You are offline. Your draft is saved on this device.', variant: 'warning', position: 'bottom' });
+      return;
+    }
     if (
       (data?.session.remainingSearches ?? 0) > 0
       && data?.session.state === 'ready_to_search'
@@ -266,7 +325,7 @@ export function MatchmakerConversation({
     } catch {
       setDraft(pendingText);
     }
-  }, [data?.session.remainingSearches, data?.session.state, findNext, sendMessage]);
+  }, [data?.session.remainingSearches, data?.session.state, findNext, network.isOffline, sendMessage, toast]);
 
   const openCandidate = useCallback((candidateUserId: string, shortlistId?: string, shortlistPosition?: number) => {
     router.push({
@@ -362,12 +421,22 @@ export function MatchmakerConversation({
               </View>
             </Pressable>
             {historyExpanded ? (
-              <Animated.View entering={FadeIn.duration(180)} style={styles.historyList}>
+              <Animated.View entering={reduceMotion ? undefined : FadeIn.duration(180)} style={styles.historyList}>
                 {history.map((message) => (
                   <HistoryBubble key={message.id} message={message} />
                 ))}
               </Animated.View>
             ) : null}
+          </View>
+        ) : null}
+
+        {network.isOffline ? (
+          <View style={styles.sectionInset}>
+            <MatchmakerStatePanel
+              variant="offline"
+              busy={network.isLoading}
+              onRetry={() => network.refresh().then(() => conversation.refetch()).catch(() => undefined)}
+            />
           </View>
         ) : null}
 
@@ -379,6 +448,7 @@ export function MatchmakerConversation({
             error={briefQuery.isError ? getMatchmakerUserMessage(briefQuery.error) : undefined}
             onUpdate={handleBriefUpdate}
             onUndo={handleBriefUndo}
+            onRetry={() => briefQuery.refetch().catch(() => undefined)}
           />
         ) : null}
 
@@ -404,7 +474,7 @@ export function MatchmakerConversation({
                   candidateUserId={feedbackCandidate.candidateUserId}
                   candidateName={feedbackCandidate.firstName}
                   briefVersion={briefQuery.data?.version ?? activeShortlist.briefVersion}
-                  busy={submitFeedback.isPending}
+                  busy={submitFeedback.isPending || network.isOffline}
                   onCancel={() => setFeedbackCandidateUserId(null)}
                   onSubmit={(input) => submitFeedback.mutateAsync(input)}
                   onEvent={handleFeedbackEvent}
@@ -518,7 +588,7 @@ export function MatchmakerConversation({
 
         {(turn.variant === 'prompt' || (turn.variant === 'limit' && !showLimitEmptyState))
           && turn.quickReplies.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(180)} style={[styles.replies, styles.sectionInset]}>
+          <Animated.View entering={reduceMotion ? undefined : FadeIn.duration(180)} style={[styles.replies, styles.sectionInset]}>
             {turn.quickReplies.map((reply) => {
               const label = normalizeQuickReplyLabel(reply);
               return (

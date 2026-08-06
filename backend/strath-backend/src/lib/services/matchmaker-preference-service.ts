@@ -44,7 +44,7 @@ export interface MatchmakerBrief {
 export class MatchmakerBriefVersionConflictError extends Error {
     readonly code = "MATCHMAKER_BRIEF_VERSION_CONFLICT";
 
-    constructor(readonly latestBrief: MatchmakerBrief) {
+    constructor(readonly latestBrief: MatchmakerBrief, readonly pendingOperations: MatchmakerBriefOperation[] = []) {
         super("The match brief changed. Review the latest version and try again.");
         this.name = "MatchmakerBriefVersionConflictError";
     }
@@ -292,8 +292,17 @@ export async function mutateMatchmakerBrief(input: {
     baseVersion: number;
     operations: MatchmakerBriefOperation[];
     metadata?: Record<string, unknown>;
+    requestKey?: string;
 }) {
     assertValidBriefOperations(input.operations);
+
+    if (input.requestKey) {
+        const existing = await db.query.matchmakerPreferenceChanges.findFirst({
+            where: and(eq(matchmakerPreferenceChanges.userId, input.userId), eq(matchmakerPreferenceChanges.requestKey, input.requestKey)),
+            columns: { id: true },
+        });
+        if (existing) return getMatchmakerBrief(input.userId);
+    }
 
     try {
         const result = await db.transaction(async (tx) => {
@@ -307,7 +316,7 @@ export async function mutateMatchmakerBrief(input: {
         });
         if (!brief) throw new Error("Matchmaker brief could not be created");
         if (brief.version !== input.baseVersion) {
-            throw new MatchmakerBriefVersionConflictError(await readBrief(tx, input.userId));
+            throw new MatchmakerBriefVersionConflictError(await readBrief(tx, input.userId), input.operations);
         }
 
         const beforeRows = await tx.query.matchmakerUserPreferences.findMany({
@@ -397,6 +406,7 @@ export async function mutateMatchmakerBrief(input: {
         const operation = input.operations.length === 1 ? input.operations[0].type : "update";
         const [change] = await tx.insert(matchmakerPreferenceChanges).values({
             userId: input.userId,
+            requestKey: input.requestKey,
             operation,
             briefVersionBefore: brief.version,
             briefVersionAfter: nextVersion,
@@ -430,9 +440,13 @@ export async function mutateMatchmakerBrief(input: {
         }).catch(() => undefined);
         return result;
     } catch (error) {
+        if (input.requestKey && error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === "23505") {
+            return getMatchmakerBrief(input.userId);
+        }
         if (error instanceof ConcurrentBriefMutationError) {
             const conflict = new MatchmakerBriefVersionConflictError(
                 await getMatchmakerBrief(input.userId),
+                input.operations,
             );
             trackMatchmakerEvent({
                 event: "brief_version_conflict",

@@ -47,6 +47,7 @@ const operationSchema = z.discriminatedUnion("type", [
 const patchSchema = z.object({
     baseVersion: z.number().int().nonnegative(),
     operations: z.array(operationSchema).min(1).max(20),
+    mutationId: z.string().trim().min(8).max(100).optional(),
 });
 
 async function authenticatedUserId(req: NextRequest) {
@@ -81,6 +82,7 @@ export async function PATCH(req: NextRequest) {
             baseVersion: body.baseVersion,
             operations: body.operations,
             metadata: { source: "brief_editor" },
+            requestKey: body.mutationId,
         }));
     } catch (error) {
         console.error("[matchmaker/brief] PATCH error:", error);

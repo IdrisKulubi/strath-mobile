@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+import { apiFetch } from '@/lib/api-client';
 
 export type PublicFeatureFlags = {
     paymentsEnabled?: boolean;
@@ -8,12 +7,10 @@ export type PublicFeatureFlags = {
 };
 
 export async function fetchPublicFeatureFlags(): Promise<PublicFeatureFlags> {
-    const res = await fetch(`${API_URL}/api/public/feature-flags`);
-    if (!res.ok) {
-        return { paymentsEnabled: false };
-    }
-    const json = await res.json();
-    return json?.data ?? json ?? { paymentsEnabled: false };
+    const json = await apiFetch<{ data?: PublicFeatureFlags } | PublicFeatureFlags>('/api/public/feature-flags');
+    return json && typeof json === 'object' && 'data' in json
+        ? json.data ?? { paymentsEnabled: false }
+        : (json as PublicFeatureFlags | null) ?? { paymentsEnabled: false };
 }
 
 export function usePublicFeatureFlags() {
@@ -21,6 +18,7 @@ export function usePublicFeatureFlags() {
         queryKey: ['publicFeatureFlags'],
         queryFn: fetchPublicFeatureFlags,
         staleTime: 60_000,
+        refetchOnMount: 'always',
     });
 }
 

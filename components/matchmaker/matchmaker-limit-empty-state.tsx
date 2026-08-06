@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { ChevronRight } from 'lucide-react-native';
 
 import { MatchmakerOrb } from '@/components/matchmaker/matchmaker-orb';
@@ -60,10 +60,11 @@ export function MatchmakerLimitEmptyState({
 }: MatchmakerLimitEmptyStateProps) {
   const actions = resolveActions(replies);
   const showVoice = shouldShowVoice(voiceText, actions);
+  const reduceMotion = useReducedMotion();
 
   return (
     <Animated.View
-      entering={FadeIn.duration(220)}
+      entering={reduceMotion ? undefined : FadeIn.duration(220)}
       accessibilityRole="summary"
       accessibilityLabel="Searches resume tomorrow. Fine-tune now if you want."
       style={styles.wrap}
@@ -75,7 +76,7 @@ export function MatchmakerLimitEmptyState({
       </View>
 
       {showVoice ? (
-        <Animated.View entering={FadeInDown.delay(50).duration(200)} style={styles.voiceRow}>
+        <Animated.View entering={reduceMotion ? undefined : FadeInDown.delay(50).duration(200)} style={styles.voiceRow}>
           <Text style={styles.voiceText}>{voiceText?.trim()}</Text>
         </Animated.View>
       ) : null}
@@ -84,7 +85,7 @@ export function MatchmakerLimitEmptyState({
         {actions.map((action, index) => (
           <Animated.View
             key={action.reply}
-            entering={FadeInDown.delay(70 + index * 35).duration(200)}
+            entering={reduceMotion ? undefined : FadeInDown.delay(70 + index * 35).duration(200)}
           >
             <Pressable
               accessibilityRole="button"

@@ -22,7 +22,7 @@ import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 import { revalidatePath } from "next/cache";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
-import { APP_FEATURE_KEYS, parseSignupCapConfig, type SignupCapConfig } from "@/lib/feature-flags";
+import { APP_FEATURE_KEYS, parseMatchmakerV2RolloutConfig, parseSignupCapConfig, type SignupCapConfig } from "@/lib/feature-flags";
 import {
     admitEveryoneFromWaitlist,
     admitOrWaitlist,
@@ -1188,6 +1188,12 @@ export async function setAdminFeatureFlag(key: string, enabled: boolean) {
     if (!SUPPORTED_FLAG_KEYS.has(key)) {
         throw new Error("Unsupported feature flag");
     }
+    if (key === APP_FEATURE_KEYS.matchmakerPersonalizationV2 && enabled) {
+        const current = await db.query.appFeatureFlags.findFirst({ where: eq(appFeatureFlags.key, key) });
+        if (!parseMatchmakerV2RolloutConfig(current?.config).rollbackReady) {
+            throw new Error("Verify rollback readiness before enabling Matchmaker Personalization V2");
+        }
+    }
 
     await db
         .insert(appFeatureFlags)
@@ -1206,6 +1212,38 @@ export async function setAdminFeatureFlag(key: string, enabled: boolean) {
             },
         });
 
+    revalidatePath("/admin/feature-flags");
+}
+
+export async function updateAdminMatchmakerV2Rollout(formData: FormData) {
+    const session = await requireAdmin();
+    const current = await db.query.appFeatureFlags.findFirst({ where: eq(appFeatureFlags.key, APP_FEATURE_KEYS.matchmakerPersonalizationV2) });
+    const currentConfig = parseMatchmakerV2RolloutConfig(current?.config);
+    const requested = parseMatchmakerV2RolloutConfig({
+        percentage: Number(formData.get("percentage")),
+        rollbackReady: formData.get("rollbackReady") === "on",
+        internalUserIds: String(formData.get("internalUserIds") ?? "").split(","),
+    });
+    if (requested.percentage > currentConfig.percentage && currentConfig.percentage >= 5 && currentConfig.percentage < 100) {
+        const stageStartedAt = currentConfig.stageStartedAt ? new Date(currentConfig.stageStartedAt).getTime() : current?.updatedAt.getTime() ?? Date.now();
+        if (Date.now() - stageStartedAt < 24 * 60 * 60 * 1000) {
+            throw new Error("Hold the current external rollout stage for one complete Nairobi quota-reset cycle before advancing");
+        }
+    }
+    const config = {
+        ...requested,
+        stageStartedAt: requested.percentage === currentConfig.percentage ? currentConfig.stageStartedAt : new Date().toISOString(),
+    };
+    await db.insert(appFeatureFlags).values({
+        key: APP_FEATURE_KEYS.matchmakerPersonalizationV2,
+        enabled: false,
+        description: FLAG_DESCRIPTIONS[APP_FEATURE_KEYS.matchmakerPersonalizationV2],
+        config: { ...config },
+        updatedByUserId: session.user.id,
+    }).onConflictDoUpdate({
+        target: appFeatureFlags.key,
+        set: { config: { ...config }, updatedByUserId: session.user.id, updatedAt: new Date() },
+    });
     revalidatePath("/admin/feature-flags");
 }
 

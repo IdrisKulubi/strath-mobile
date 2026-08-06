@@ -7,7 +7,7 @@ import {
     matchmakerSessions,
     matchmakerShortlists,
 } from "@/db/schema";
-import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
+import { isMatchmakerPersonalizationV2EnabledForUser } from "@/lib/feature-flags";
 import {
     buildMatchmakerMemoryHint,
     getMatchmakerUserMemory,
@@ -540,7 +540,7 @@ async function presentCuratedMatchmakerShortlist(session: MatchmakerSessionRow) 
 }
 
 export async function presentNextMatchmakerCandidate(session: MatchmakerSessionRow) {
-    const personalizationV2 = await isFeatureEnabled(APP_FEATURE_KEYS.matchmakerPersonalizationV2, false);
+    const personalizationV2 = await isMatchmakerPersonalizationV2EnabledForUser(session.userId);
     return personalizationV2
         ? presentCuratedMatchmakerShortlist(session)
         : presentNextMatchmakerCandidateV1(session);

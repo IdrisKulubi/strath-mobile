@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 
 import { MatchmakerOrb } from '@/components/matchmaker/matchmaker-orb';
 import { Text } from '@/components/ui/text';
@@ -12,9 +12,10 @@ interface MatchmakerVoiceBubbleProps {
 }
 
 export function MatchmakerVoiceBubble({ text, compact = false }: MatchmakerVoiceBubbleProps) {
+  const reduceMotion = useReducedMotion();
   return (
     <Animated.View
-      entering={FadeInDown.duration(220)}
+      entering={reduceMotion ? undefined : FadeInDown.duration(220)}
       style={[styles.wrap, compact && styles.wrapCompact]}
     >
       <MatchmakerOrb state="success" size={compact ? 28 : 32} />

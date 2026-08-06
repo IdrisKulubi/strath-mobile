@@ -27,6 +27,16 @@ export interface SignupCapConfig {
     maxOther: number;
 }
 
+export const MATCHMAKER_V2_ROLLOUT_PERCENTAGES = [0, 5, 25, 50, 100] as const;
+export type MatchmakerV2RolloutPercentage = typeof MATCHMAKER_V2_ROLLOUT_PERCENTAGES[number];
+
+export interface MatchmakerV2RolloutConfig {
+    percentage: MatchmakerV2RolloutPercentage;
+    internalUserIds: string[];
+    rollbackReady: boolean;
+    stageStartedAt: string | null;
+}
+
 export async function isFeatureEnabled(key: string, fallback = false) {
     const flag = await db.query.appFeatureFlags.findFirst({
         where: eq(appFeatureFlags.key, key),
@@ -39,6 +49,50 @@ export async function getFeatureFlag(key: string) {
     return db.query.appFeatureFlags.findFirst({
         where: eq(appFeatureFlags.key, key),
     });
+}
+
+export function parseMatchmakerV2RolloutConfig(config: unknown): MatchmakerV2RolloutConfig {
+    const raw = config && typeof config === "object" && !Array.isArray(config) ? config as Record<string, unknown> : {};
+    const requestedPercentage = Number(raw.percentage ?? 100);
+    const percentage = MATCHMAKER_V2_ROLLOUT_PERCENTAGES.includes(requestedPercentage as MatchmakerV2RolloutPercentage)
+        ? requestedPercentage as MatchmakerV2RolloutPercentage
+        : 0;
+    const internalUserIds = Array.isArray(raw.internalUserIds)
+        ? [...new Set(raw.internalUserIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim()))].slice(0, 500)
+        : [];
+    const stageStartedAt = typeof raw.stageStartedAt === "string" && !Number.isNaN(Date.parse(raw.stageStartedAt)) ? raw.stageStartedAt : null;
+    return { percentage, internalUserIds, rollbackReady: raw.rollbackReady === true, stageStartedAt };
+}
+
+export function stableRolloutBucket(userId: string) {
+    let hash = 2166136261;
+    for (let index = 0; index < userId.length; index += 1) {
+        hash ^= userId.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0) % 100;
+}
+
+export function isUserInMatchmakerV2Rollout(input: { masterEnabled: boolean; config: MatchmakerV2RolloutConfig; userId?: string | null }) {
+    if (!input.masterEnabled) return false;
+    if (input.userId && input.config.internalUserIds.includes(input.userId)) return true;
+    if (!input.userId) return input.config.percentage === 100;
+    return stableRolloutBucket(input.userId) < input.config.percentage;
+}
+
+export async function getMatchmakerV2Rollout(userId?: string | null) {
+    const flag = await getFeatureFlag(APP_FEATURE_KEYS.matchmakerPersonalizationV2);
+    const config = parseMatchmakerV2RolloutConfig(flag?.config);
+    return {
+        enabled: isUserInMatchmakerV2Rollout({ masterEnabled: flag?.enabled ?? false, config, userId }),
+        masterEnabled: flag?.enabled ?? false,
+        config,
+        updatedAt: flag?.updatedAt ?? null,
+    };
+}
+
+export async function isMatchmakerPersonalizationV2EnabledForUser(userId: string) {
+    return (await getMatchmakerV2Rollout(userId)).enabled;
 }
 
 function parseNonNegativeInt(value: unknown, fallback: number) {
@@ -70,12 +124,12 @@ export async function getSignupCapFlag() {
     };
 }
 
-export async function getPublicFeatureFlags() {
-    const [demoLoginEnabled, signupCapEnabled, paymentsEnabled, matchmakerPersonalizationV2] = await Promise.all([
+export async function getPublicFeatureFlags(userId?: string | null) {
+    const [demoLoginEnabled, signupCapEnabled, paymentsEnabled, matchmakerV2Rollout] = await Promise.all([
         isFeatureEnabled(APP_FEATURE_KEYS.demoLoginEnabled, false),
         isFeatureEnabled(APP_FEATURE_KEYS.signupCapEnabled, false),
         isFeatureEnabled(APP_FEATURE_KEYS.paymentsEnabled, false),
-        isFeatureEnabled(APP_FEATURE_KEYS.matchmakerPersonalizationV2, false),
+        getMatchmakerV2Rollout(userId),
     ]);
 
     return {
@@ -84,6 +138,6 @@ export async function getPublicFeatureFlags() {
         // messaging during onboarding. Numbers are intentionally not exposed.
         signupCapEnabled,
         paymentsEnabled,
-        matchmakerPersonalizationV2,
+        matchmakerPersonalizationV2: matchmakerV2Rollout.enabled,
     };
 }

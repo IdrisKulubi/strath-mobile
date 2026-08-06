@@ -12,6 +12,7 @@ export function matchmakerRouteErrorResponse(error: unknown) {
                 error: error.message,
                 code: error.code,
                 data: error.latestBrief,
+                pendingOperations: error.pendingOperations,
             },
             { status: 409 },
         );

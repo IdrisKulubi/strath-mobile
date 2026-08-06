@@ -50,6 +50,7 @@ import {
     recordProfilePass,
 } from "@/lib/services/profile-interaction-service";
 import { recordMatchmakerFeedback } from "@/lib/services/matchmaker-memory-service";
+import { trackMatchmakerEvent } from "@/lib/services/matchmaker-analytics-service";
 import {
     calculateActivityScore,
     calculateResponseScore as calculateBehaviorResponseScore,
@@ -1550,6 +1551,12 @@ export async function handleRecommendationDecision(input: {
     }
 
     if (input.source === "matchmaker") {
+        trackMatchmakerEvent({
+            event: input.decision === "open_to_meet" ? "interested" : "pass",
+            userId: input.viewerUserId,
+            candidateUserId: input.candidateUserId,
+            metadata: { matchType: input.matchType ?? null },
+        }).catch(() => undefined);
         await recordMatchmakerFeedback({
             userId: input.viewerUserId,
             candidateUserId: input.candidateUserId,
@@ -1623,6 +1630,9 @@ export async function handleRecommendationDecision(input: {
             candidateUserId: input.candidateUserId,
         });
         const mutualMatchCreated = Boolean(mutual);
+        if (mutualMatchCreated && input.source === "matchmaker") {
+            trackMatchmakerEvent({ event: "mutual_created", userId: input.viewerUserId, candidateUserId: input.candidateUserId, metadata: { pairId: pair?.id ?? null } }).catch(() => undefined);
+        }
         if (!mutualMatchCreated) {
             await recordOneSidedIncomingLike(input.viewerUserId, input.candidateUserId);
         }
@@ -1651,6 +1661,9 @@ export async function handleRecommendationDecision(input: {
     });
 
     const mutualMatchCreated = Boolean(result.mutual);
+    if (mutualMatchCreated && input.source === "matchmaker") {
+        trackMatchmakerEvent({ event: "mutual_created", userId: input.viewerUserId, candidateUserId: input.candidateUserId, metadata: { pairId: result.pair.id } }).catch(() => undefined);
+    }
     if (!mutualMatchCreated) {
         await recordOneSidedIncomingLike(input.viewerUserId, input.candidateUserId);
     }

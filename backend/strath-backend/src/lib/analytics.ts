@@ -13,6 +13,7 @@ export const EVENT_TYPES = {
     PUSH_TOKEN_REGISTERED: "push_token_registered",
     PUSH_PRE_PROMPT: "push_pre_prompt",
     MATCHMAKER_SESSION_STARTED: "matchmaker_session_started",
+    MATCHMAKER_SESSION_OPENED: "matchmaker_session_opened",
     MATCHMAKER_INTENT_SUBMITTED: "matchmaker_intent_submitted",
     MATCHMAKER_CLARIFICATION_ASKED: "matchmaker_clarification_asked",
     MATCHMAKER_SEARCH_PLAN_CONFIRMED: "matchmaker_search_plan_confirmed",
@@ -48,6 +49,7 @@ export const EVENT_TYPES = {
     MATCHMAKER_FEEDBACK_LEARNING_PREVIEWED: "matchmaker_feedback_learning_previewed",
     MATCHMAKER_FEEDBACK_LEARNING_CONFIRMED: "matchmaker_feedback_learning_confirmed",
     MATCHMAKER_FEEDBACK_LEARNING_CANCELLED: "matchmaker_feedback_learning_cancelled",
+    MATCHMAKER_MUTUAL_CREATED: "matchmaker_mutual_created",
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];

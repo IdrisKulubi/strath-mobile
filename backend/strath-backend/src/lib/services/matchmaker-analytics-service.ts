@@ -2,6 +2,7 @@ import { EVENT_TYPES, logEvent } from "@/lib/analytics";
 
 export type MatchmakerAnalyticsEvent =
     | "session_started"
+    | "session_opened"
     | "intent_submitted"
     | "clarification_asked"
     | "search_plan_confirmed"
@@ -36,10 +37,12 @@ export type MatchmakerAnalyticsEvent =
     | "feedback_follow_up_completed"
     | "feedback_learning_previewed"
     | "feedback_learning_confirmed"
-    | "feedback_learning_cancelled";
+    | "feedback_learning_cancelled"
+    | "mutual_created";
 
 const EVENT_TYPE_BY_NAME: Record<MatchmakerAnalyticsEvent, string> = {
     session_started: EVENT_TYPES.MATCHMAKER_SESSION_STARTED,
+    session_opened: EVENT_TYPES.MATCHMAKER_SESSION_OPENED,
     intent_submitted: EVENT_TYPES.MATCHMAKER_INTENT_SUBMITTED,
     clarification_asked: EVENT_TYPES.MATCHMAKER_CLARIFICATION_ASKED,
     search_plan_confirmed: EVENT_TYPES.MATCHMAKER_SEARCH_PLAN_CONFIRMED,
@@ -75,6 +78,7 @@ const EVENT_TYPE_BY_NAME: Record<MatchmakerAnalyticsEvent, string> = {
     feedback_learning_previewed: EVENT_TYPES.MATCHMAKER_FEEDBACK_LEARNING_PREVIEWED,
     feedback_learning_confirmed: EVENT_TYPES.MATCHMAKER_FEEDBACK_LEARNING_CONFIRMED,
     feedback_learning_cancelled: EVENT_TYPES.MATCHMAKER_FEEDBACK_LEARNING_CANCELLED,
+    mutual_created: EVENT_TYPES.MATCHMAKER_MUTUAL_CREATED,
 };
 
 export function trackMatchmakerEvent(input: {

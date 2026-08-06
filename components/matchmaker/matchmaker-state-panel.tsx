@@ -5,7 +5,7 @@ import { Clock3, RefreshCw, SearchX, WifiOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 
-type MatchmakerStateVariant = 'loading' | 'error' | 'inline_error' | 'limit' | 'no_result';
+type MatchmakerStateVariant = 'loading' | 'error' | 'inline_error' | 'offline' | 'limit' | 'no_result';
 
 interface MatchmakerStatePanelProps {
   variant: MatchmakerStateVariant;
@@ -39,6 +39,13 @@ function defaultCopy(variant: MatchmakerStateVariant) {
     };
   }
 
+  if (variant === 'offline') {
+    return {
+      title: 'You are offline',
+      body: 'Your conversation and drafts are safe. Reconnect, then try again.',
+    };
+  }
+
   return {
     title: 'Connection problem',
     body: 'Your conversation is still here. Try again when the network settles.',
@@ -62,7 +69,7 @@ export function MatchmakerStatePanel({
   onReply,
 }: MatchmakerStatePanelProps) {
   const copy = defaultCopy(variant);
-  const canRetry = Boolean(onRetry) && (variant === 'error' || variant === 'inline_error');
+  const canRetry = Boolean(onRetry) && (variant === 'error' || variant === 'inline_error' || variant === 'offline');
 
   return (
     <View

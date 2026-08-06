@@ -1,5 +1,7 @@
 # Phase 6: Resilience, Accessibility, Analytics, and Rollout
 
+> Implementation status: code-complete behind `matchmaker_personalization_v2` on 2026-08-06. External-device accessibility QA, production rollback rehearsal, baseline capture, and staged rollout are operational gates and remain pending.
+
 ## Goal
 
 Harden the complete V2 experience and replace V1 gradually without compromising quota integrity, accessibility, privacy, safety, or recovery.
@@ -94,3 +96,24 @@ Harden the complete V2 experience and replace V1 gradually without compromising 
 ## Rollback
 
 Disable `matchmaker_personalization_v2` and restore V1 rendering and search routing. Preserve V2 preferences, history, shortlists, feedback, and analytics for diagnosis. Do not drop additive schema until a separate cleanup plan is approved after full stability.
+
+## Implementation Notes
+
+- Rollout assignment is deterministic per user and accepts only 0, 5, 25, 50, or 100 percent stages. Internal user IDs can participate at stage zero.
+- The master flag is the rollback switch. Admins cannot enable it until rollback readiness is explicitly recorded.
+- Backend search routing, brief access, feedback learning, compatibility writes, and authenticated mobile rendering use the same user-level assignment.
+- Composer drafts, brief edits, feedback drafts, and shortlist position persist locally. Conversation and shortlist records remain server-persisted.
+- Offline state is inline and recoverable. Reconnection refreshes conversation and brief state without automatically spending a search.
+- Screen readers receive bounded announcements for offline state, thinking, searching, shortlist readiness, saved learning, restored position, and errors.
+- Matchmaker motion respects reduced-motion preferences.
+- Version conflicts return the latest brief and the pending operations without discarding the local draft.
+- Admin metrics now expose shortlist size distribution, repeated candidates per session, credit mismatches, shortlist failures, explanation coverage, feedback scope, fallback usage, and Undo.
+- Production verification checks API authentication, feature-flag state, V2 table readability, rollback readiness, recent quota reconciliation, repeated candidates, explanation failures, provider fallback, and rollout guardrails.
+
+## Verification Record
+
+- Backend TypeScript and focused lint: pass.
+- Rollout assignment, guardrail, feedback privacy, preference integrity, shortlist deduplication, and retry tests: pass.
+- Mobile Matchmaker-focused tests and lint: pass.
+- Full mobile TypeScript continues to report pre-existing Discovery recommendation-state, verification-style, and test-import configuration errors. No production Matchmaker V2 error remains.
+- VoiceOver, TalkBack, large-text, contrast, keyboard/switch, offline-device, small-screen, and production rollback rehearsal require real target devices or production access and must be signed off in the rollout runbook.
