@@ -49,5 +49,5 @@ export function summarizeMatchmakerBrief(brief?: MatchmakerBrief | null) {
   const learning = groups.stillLearning.length;
   if (confirmed === 0 && learning === 0) return 'Start with what matters most; you can change it anytime.';
   if (learning === 0) return `${confirmed} ${confirmed === 1 ? 'detail' : 'details'} guiding your matches.`;
-  return `${confirmed} confirmed · ${learning} still ${learning === 1 ? 'needs' : 'need'} your say.`;
+  return `${confirmed} confirmed · ${learning} ${learning === 1 ? 'suggestion' : 'suggestions'} to review.`;
 }

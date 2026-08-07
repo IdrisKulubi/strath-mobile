@@ -21,6 +21,7 @@ import {
     generateMatchmakerRefinePromptReply,
     generateMatchmakerRefineSavedReply,
     isMatchmakerSearchConfirmation,
+    resolveMatchmakerClarifyingQuickReplies,
     type MatchmakerActiveQuestion,
 } from "@/lib/services/matchmaker-llm-client";
 import { isMatchmakerPersonalizationV2EnabledForUser } from "@/lib/feature-flags";
@@ -670,11 +671,22 @@ async function buildResponse(sessionId: string): Promise<MatchmakerConversationR
         }
     }
     const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant");
+    const activeQuestion = latestAssistant?.metadata.activeQuestion;
+    const activeQuestionCategory = activeQuestion && typeof activeQuestion === "object" && !Array.isArray(activeQuestion)
+        ? String((activeQuestion as Record<string, unknown>).category ?? "")
+        : null;
+    const quickReplies = latestAssistant?.kind === "clarifying_question"
+        ? resolveMatchmakerClarifyingQuickReplies({
+            question: latestAssistant.text,
+            category: activeQuestionCategory,
+            suggestedReplies: latestAssistant.quickReplies,
+        })
+        : latestAssistant?.quickReplies ?? [];
 
     return {
         session: serializeSession(session),
         messages,
-        quickReplies: latestAssistant?.quickReplies ?? [],
+        quickReplies,
     };
 }
 
@@ -862,6 +874,11 @@ export async function addMatchmakerConversationMessage(input: {
                     category: llmTurn.intent.socialEnergy && llmTurn.intent.socialEnergy !== "unknown" ? "social_energy" : "other",
                     question: llmTurn.clarifyingQuestion ?? llmTurn.reply,
                 };
+            assistantQuickReplies = resolveMatchmakerClarifyingQuickReplies({
+                question: assistantReply,
+                category: nextActiveQuestion.category,
+                suggestedReplies: llmTurn.quickReplies,
+            });
         } else {
             assistantReply = buildMatchmakerSearchConfirmation(briefAfterTurn);
             assistantQuickReplies = ["Go ahead and search", "Change something"];

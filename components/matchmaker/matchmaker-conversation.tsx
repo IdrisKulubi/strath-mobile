@@ -446,6 +446,7 @@ export function MatchmakerConversation({
             loading={briefQuery.isLoading}
             busy={briefBusy}
             error={briefQuery.isError ? getMatchmakerUserMessage(briefQuery.error) : undefined}
+            bottomInset={composerScrollInset}
             onUpdate={handleBriefUpdate}
             onUndo={handleBriefUndo}
             onRetry={() => briefQuery.refetch().catch(() => undefined)}

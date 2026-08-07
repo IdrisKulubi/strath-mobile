@@ -41,3 +41,13 @@ test('groups confirmed avoids separately from positive priorities', () => {
   assert.equal(groups.mustHaves.length, 1);
   assert.equal(summarizeMatchmakerBrief(brief), '2 details guiding your matches.');
 });
+
+test('summarizes inferred preferences as suggestions requiring review', () => {
+  const brief = { version: 1, latestChangeId: null, updatedAt: null, preferences: [
+    preference({ value: 'Serious relationship' }),
+    preference({ value: 'Calm energy', certainty: 'inferred', source: 'system' }),
+    preference({ value: 'Shared routines', certainty: 'inferred', source: 'system' }),
+  ] };
+
+  assert.equal(summarizeMatchmakerBrief(brief), '1 confirmed · 2 suggestions to review.');
+});

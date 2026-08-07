@@ -13,6 +13,7 @@ import {
     isMatchmakerSearchRefinement,
     MatchmakerLlmUnavailableError,
     parseMatchmakerLlmTurnRaw,
+    resolveMatchmakerClarifyingQuickReplies,
     wrapMatchmakerLlmRetryFailure,
 } from "@/lib/services/matchmaker-llm-client";
 
@@ -79,6 +80,37 @@ test("an explicit category answer or flexible answer resolves the active questio
         }],
     }), true);
     assert.equal(answerAddressesActiveQuestion({ ...input, userMessage: "Either is fine" }, baseTurn), true);
+    assert.equal(answerAddressesActiveQuestion({ ...input, userMessage: "I'm not sure yet" }, baseTurn), true);
+});
+
+test("clarifying quick replies answer the relationship question instead of stale personality options", () => {
+    const replies = resolveMatchmakerClarifyingQuickReplies({
+        question: "Do you prefer a serious, casual, or open kind of relationship?",
+        category: "relationship_intent",
+        suggestedReplies: [
+            "Emotionally mature",
+            "Quiet and calm",
+            "Low-drama and consistent",
+            "A mix of all three",
+        ],
+    });
+
+    assert.deepEqual(replies, [
+        "Serious relationship",
+        "Something casual",
+        "Open relationship",
+        "I'm not sure yet",
+    ]);
+});
+
+test("clarifying quick replies preserve model suggestions for an open-ended category", () => {
+    const replies = resolveMatchmakerClarifyingQuickReplies({
+        question: "Which shared interest would matter most?",
+        category: "interests",
+        suggestedReplies: ["Sports", "Music", "Studying together", "Something else"],
+    });
+
+    assert.deepEqual(replies, ["Sports", "Music", "Studying together", "Something else"]);
 });
 
 test("inferStructuredIntent extracts traits without canned prose", () => {

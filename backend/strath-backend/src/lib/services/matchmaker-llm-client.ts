@@ -330,7 +330,27 @@ export function isMatchmakerSearchConfirmation(text: string) {
     return SEARCH_CONFIRMATION_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
-const CLARIFY_REPLIES = [
+const RELATIONSHIP_INTENT_REPLIES = [
+    "Serious relationship",
+    "Something casual",
+    "Open relationship",
+    "I'm not sure yet",
+];
+
+const SOCIAL_ENERGY_REPLIES = [
+    "Quiet and low-key",
+    "Balanced",
+    "Social and outgoing",
+    "I'm flexible",
+];
+
+const ACTIVITY_REPLIES = [
+    "Active today",
+    "Recently active",
+    "Activity doesn't matter",
+];
+
+const EMOTIONAL_STYLE_REPLIES = [
     "Emotionally mature",
     "Quiet and calm",
     "Low-drama and consistent",
@@ -370,6 +390,43 @@ const FORBIDDEN_REPLY_PATTERNS = [
 
 function uniqueStrings(values: string[]) {
     return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+export function resolveMatchmakerClarifyingQuickReplies(input: {
+    question: string;
+    category?: string | null;
+    suggestedReplies?: string[];
+}) {
+    const question = input.question.trim().toLowerCase();
+    const relationshipTerms = ["serious", "casual", "open"]
+        .filter((term) => question.includes(term)).length;
+
+    if (input.category === "relationship_intent" || (question.includes("relationship") && relationshipTerms >= 2)) {
+        return RELATIONSHIP_INTENT_REPLIES;
+    }
+    if (
+        input.category === "social_energy"
+        || question.includes("social energy")
+        || (question.includes("quiet") && (question.includes("balanced") || question.includes("social")))
+    ) {
+        return SOCIAL_ENERGY_REPLIES;
+    }
+    if (
+        input.category === "activity"
+        || (question.includes("active") && (question.includes("today") || question.includes("recent")))
+    ) {
+        return ACTIVITY_REPLIES;
+    }
+    if (
+        question.includes("matur")
+        && (question.includes("quiet") || question.includes("calm"))
+        && question.includes("drama")
+    ) {
+        return EMOTIONAL_STYLE_REPLIES;
+    }
+
+    const suggestedReplies = uniqueStrings(input.suggestedReplies ?? []).slice(0, 4);
+    return suggestedReplies.length >= 2 ? suggestedReplies : [];
 }
 
 function asStringArray(value: unknown) {
@@ -599,6 +656,7 @@ Rules:
 - Do not promise a match.
 - If the user's request is vague, ask one useful clarifying question in your own words.
 - Ask at most one high-value preference question per turn.
+- Every quick reply must directly answer the exact clarifyingQuestion in the same response. Never reuse options from another preference category.
 - If there is an unresolved question, decide whether the new message actually answers it. If it does not, acknowledge any useful new information, keep that uncertainty unresolved, and ask the unresolved question again in fresh words.
 - Never mark an unanswered question as resolved or convert it into a preference.
 - Extract directly stated preferences separately from reasonable inferences. Use evidence "explicit" only when the user's own message clearly states it.
@@ -674,7 +732,13 @@ function normalizeTurn(raw: unknown, provider: MatchmakerLlmProvider, model: str
     return {
         ...parsed,
         reply,
-        quickReplies: parsed.shouldClarify ? CLARIFY_REPLIES : READY_REPLIES,
+        quickReplies: parsed.shouldClarify
+            ? resolveMatchmakerClarifyingQuickReplies({
+                question: reply,
+                category: parsed.unresolvedQuestion?.category,
+                suggestedReplies: parsed.quickReplies,
+            })
+            : READY_REPLIES,
         provider,
         model,
         fallbackUsed: false,
@@ -1095,7 +1159,7 @@ async function preventClarifyingLoop(input: MatchmakerLlmInput, turn: Matchmaker
 
 export function answerAddressesActiveQuestion(input: MatchmakerLlmInput, turn: MatchmakerLlmTurn) {
     if (!input.activeQuestion) return true;
-    if (/\b(any|either|flexible|doesn'?t matter|no preference|not important)\b/i.test(input.userMessage)) {
+    if (/\b(any|either|flexible|doesn'?t matter|no preference|not important|not sure|unsure|undecided)\b/i.test(input.userMessage)) {
         return true;
     }
     return (turn.preferenceProposals ?? []).some((proposal) =>
