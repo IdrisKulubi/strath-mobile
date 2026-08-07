@@ -522,18 +522,3 @@ export function getMessageEyebrow(
       return null;
   }
 }
-
-export type MatchmakerConversationStyle = 'minimal' | 'voice' | 'bubble';
-
-export const MATCHMAKER_CONVERSATION_STYLES: MatchmakerConversationStyle[] = ['minimal', 'voice', 'bubble'];
-
-export const MATCHMAKER_CONVERSATION_STYLE_LABELS: Record<MatchmakerConversationStyle, string> = {
-  minimal: 'Minimal Editorial',
-  voice: 'Voice Guide',
-  bubble: 'Bubble Chat',
-};
-
-export function parseMatchmakerConversationStyle(value: string | null | undefined): MatchmakerConversationStyle {
-  if (value === 'voice' || value === 'bubble') return value;
-  return 'minimal';
-}

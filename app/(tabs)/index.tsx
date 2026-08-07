@@ -19,6 +19,7 @@ import { AiConsentCard } from '@/components/ai/ai-consent-card';
 import { HomeHeader } from '@/components/home/home-header';
 import { HomeMatchmakerEntry } from '@/components/home/home-matchmaker-entry';
 import { MatchmakerHomeShell } from '@/components/matchmaker';
+import { MatchmakerHomeBackground } from '@/components/matchmaker/matchmaker-home-background';
 import { MatchmakerHeader } from '@/components/matchmaker/matchmaker-header';
 import { MatchmakerStatePanel } from '@/components/matchmaker/matchmaker-state-panel';
 import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
@@ -101,6 +102,7 @@ export default function HomeScreen() {
     return (
         <TabSwipeView route="/(tabs)">
             <View style={styles.matchmakerScreen}>
+                <MatchmakerHomeBackground />
                 <StatusBar
                     barStyle="light-content"
                     translucent
@@ -468,13 +470,16 @@ const styles = StyleSheet.create({
     matchmakerScreen: {
         flex: 1,
         backgroundColor: MATCHMAKER_HOME.background,
+        overflow: 'hidden',
     },
     keyboardAvoider: {
         flex: 1,
+        backgroundColor: 'transparent',
     },
     matchmakerHost: {
         flex: 1,
         minHeight: 0,
+        backgroundColor: 'transparent',
     },
     centeredState: {
         flex: 1,

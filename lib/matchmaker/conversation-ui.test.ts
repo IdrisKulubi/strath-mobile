@@ -26,7 +26,6 @@ import {
   shouldEnableMatchmakerQuery,
   getMessageDisplayVariant,
   getMessageEyebrow,
-  parseMatchmakerConversationStyle,
 } from './conversation-ui.ts';
 
 test('formatRemainingSearches handles singular and zero', () => {
@@ -360,13 +359,6 @@ test('getMessageEyebrow returns contextual labels for assistant messages', () =>
   assert.equal(getMessageEyebrow(greeting), "Today's direction");
   assert.equal(getMessageEyebrow(searchPlan), 'Search plan');
   assert.equal(getMessageEyebrow(null), null);
-});
-
-test('parseMatchmakerConversationStyle falls back to minimal', () => {
-  assert.equal(parseMatchmakerConversationStyle('voice'), 'voice');
-  assert.equal(parseMatchmakerConversationStyle('bubble'), 'bubble');
-  assert.equal(parseMatchmakerConversationStyle('unknown'), 'minimal');
-  assert.equal(parseMatchmakerConversationStyle(null), 'minimal');
 });
 
 test('shouldEnableMatchmakerQuery respects consent', () => {

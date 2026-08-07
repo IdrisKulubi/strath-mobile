@@ -4,6 +4,7 @@ export { MatchmakerShortlistView } from './matchmaker-shortlist';
 export { MatchmakerFeedbackPanel } from './matchmaker-feedback-panel';
 export { MatchmakerFeedbackFlow } from './matchmaker-feedback-flow';
 export { MatchmakerHeader } from './matchmaker-header';
+export { MatchmakerHomeBackground } from './matchmaker-home-background';
 export { MatchmakerHomeShell } from './matchmaker-home-shell';
 export { MatchmakerLimitEmptyState } from './matchmaker-limit-empty-state';
 export { MatchmakerOrb } from './matchmaker-orb';

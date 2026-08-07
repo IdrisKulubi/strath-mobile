@@ -73,6 +73,14 @@ export const MATCHMAKER_HOME = {
   photoGradientMid: 'rgba(19, 13, 29, 0.35)',
   photoGradientBottom: 'rgba(19, 13, 29, 0.92)',
   photoTextMuted: 'rgba(248, 244, 251, 0.82)',
+  gradientBaseTop: '#2A1430',
+  gradientBaseMid: '#3A1840',
+  gradientBaseBottom: '#160C1F',
+  gradientGlowRose: 'rgba(242, 120, 177, 0.55)',
+  gradientGlowMagenta: 'rgba(217, 74, 143, 0.48)',
+  gradientGlowLavender: 'rgba(180, 138, 232, 0.38)',
+  gradientGlowCyan: 'rgba(114, 217, 232, 0.18)',
+  gradientVignette: 'rgba(13, 8, 20, 0.55)',
 } as const;
 
 /** Restrained palette — tinted neutrals + single accent (see DESIGN.md) */
