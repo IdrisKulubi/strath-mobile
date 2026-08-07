@@ -471,3 +471,69 @@ export function selectActiveTurn(
 export function shouldEnableMatchmakerQuery(hasAiConsent: boolean, isAiConsentLoading: boolean): boolean {
   return hasAiConsent && !isAiConsentLoading;
 }
+
+export type MatchmakerMessageDisplayVariant = 'hero' | 'body' | 'caption';
+
+const LONG_MESSAGE_THRESHOLD = 140;
+
+export function getMessageDisplayVariant(
+  message: MatchmakerConversationMessage | null,
+): MatchmakerMessageDisplayVariant {
+  if (!message) return 'hero';
+  if (message.role === 'user') return 'caption';
+
+  const text = message.text?.trim() ?? '';
+  if (
+    message.kind === 'search_plan'
+    || message.kind === 'feedback'
+    || message.kind === 'limit'
+    || message.kind === 'candidate'
+    || text.length > LONG_MESSAGE_THRESHOLD
+  ) {
+    return 'body';
+  }
+
+  if (message.kind === 'greeting' || message.kind === 'clarifying_question') {
+    return text.length > LONG_MESSAGE_THRESHOLD ? 'body' : 'hero';
+  }
+
+  return text.length > LONG_MESSAGE_THRESHOLD ? 'body' : 'hero';
+}
+
+export function getMessageEyebrow(
+  message: MatchmakerConversationMessage | null,
+): string | null {
+  if (!message || message.role !== 'assistant') return null;
+
+  switch (message.kind) {
+    case 'greeting':
+    case 'intent':
+    case 'clarifying_question':
+      return "Today's direction";
+    case 'search_plan':
+      return 'Search plan';
+    case 'candidate':
+      return 'Match insight';
+    case 'feedback':
+      return 'Your feedback';
+    case 'limit':
+      return 'Paused for today';
+    default:
+      return null;
+  }
+}
+
+export type MatchmakerConversationStyle = 'minimal' | 'voice' | 'bubble';
+
+export const MATCHMAKER_CONVERSATION_STYLES: MatchmakerConversationStyle[] = ['minimal', 'voice', 'bubble'];
+
+export const MATCHMAKER_CONVERSATION_STYLE_LABELS: Record<MatchmakerConversationStyle, string> = {
+  minimal: 'Minimal Editorial',
+  voice: 'Voice Guide',
+  bubble: 'Bubble Chat',
+};
+
+export function parseMatchmakerConversationStyle(value: string | null | undefined): MatchmakerConversationStyle {
+  if (value === 'voice' || value === 'bubble') return value;
+  return 'minimal';
+}

@@ -13,7 +13,7 @@ import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useMinimizeOnScroll } from 'expo-glass-tabs';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronDown,
@@ -33,11 +33,18 @@ import { MatchmakerShortlistView } from '@/components/matchmaker/matchmaker-shor
 import { MatchmakerFeedbackPanel } from '@/components/matchmaker/matchmaker-feedback-panel';
 import { MatchmakerFeedbackFlow } from '@/components/matchmaker/matchmaker-feedback-flow';
 import { MatchmakerLimitEmptyState } from '@/components/matchmaker/matchmaker-limit-empty-state';
+import {
+  MatchmakerActivePromptBlock,
+  MatchmakerAssistantMessageRow,
+  MatchmakerAssistantVoiceBlock,
+  MatchmakerConversationStylePicker,
+  MatchmakerThinkingRow,
+  MatchmakerUserMessageRow,
+} from '@/components/matchmaker/matchmaker-message-styles';
 import { MatchmakerReplyIcon } from '@/components/matchmaker/matchmaker-reply-icon';
 import { MatchmakerStatePanel } from '@/components/matchmaker/matchmaker-state-panel';
 import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
 import { useToast } from '@/components/ui/toast';
-import { MatchmakerVoiceBubble } from '@/components/matchmaker/matchmaker-voice-bubble';
 import { Text } from '@/components/ui/text';
 import {
   useFindNextMatchmakerCandidate,
@@ -55,11 +62,12 @@ import {
   isMatchmakerSearchConfirmation,
   normalizeQuickReplyLabel,
   partitionConversationMessages,
+  parseMatchmakerConversationStyle,
   resolveQuickReplyAction,
+  type MatchmakerConversationStyle,
   selectActiveTurn,
   shouldShowLimitEmptyState,
   shouldShowMatchmakerComposer,
-  type ActiveTurn,
 } from '@/lib/matchmaker/conversation-ui';
 import {
   getMatchmakerUserMessage,
@@ -84,6 +92,7 @@ const COMPOSER_STATUS_HEIGHT = 18;
 const COMPOSER_GLASS_TINT = 'rgba(30, 21, 43, 0.38)';
 const COMPOSER_GLASS_FALLBACK = 'rgba(30, 21, 43, 0.52)';
 const COMPOSER_PILL_RADIUS = MATCHMAKER_FLOATING_COMPOSER_HEIGHT / 2;
+const CONVERSATION_STYLE_DRAFT_KEY = 'matchmaker-conversation-style';
 
 interface MatchmakerConversationProps {
   conversation: UseQueryResult<MatchmakerConversationResponse, Error>;
@@ -91,31 +100,40 @@ interface MatchmakerConversationProps {
   topInset?: number;
 }
 
-function HistoryBubble({ message }: { message: MatchmakerConversationMessage }) {
-  const isUser = message.role === 'user';
-
-  return (
-    <View style={[styles.historyRow, isUser && styles.historyRowUser]}>
-      <Text
-        style={[
-          styles.historyText,
-          isUser ? styles.historyTextUser : styles.historyTextAssistant,
-        ]}
-        numberOfLines={isUser ? 2 : 3}
-      >
-        {isUser ? `You: ${message.text}` : message.text}
-      </Text>
-    </View>
-  );
+function shouldAnimateAssistantMessage(
+  messageId: string,
+  latestAssistantId: string | undefined,
+  isPending: boolean,
+) {
+  if (isPending) return false;
+  return messageId === latestAssistantId;
 }
 
-function ActivePrompt({ turn }: { turn: ActiveTurn }) {
-  const reduceMotion = useReducedMotion();
+function HistoryMessageRow({
+  message,
+  style,
+}: {
+  message: MatchmakerConversationMessage;
+  style: MatchmakerConversationStyle;
+}) {
+  if (message.role === 'user') {
+    return (
+      <MatchmakerUserMessageRow
+        style={style}
+        message={message}
+        compact
+        animate={false}
+      />
+    );
+  }
+
   return (
-    <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(200)} style={styles.promptBlock}>
-      <Text style={styles.promptEyebrow}>Today&apos;s direction</Text>
-      <Text style={styles.promptText}>{turn.promptText}</Text>
-    </Animated.View>
+    <MatchmakerAssistantMessageRow
+      style={style}
+      message={message}
+      compact
+      animate={false}
+    />
   );
 }
 
@@ -143,6 +161,8 @@ export function MatchmakerConversation({
   const [draft, setDraft] = useState('');
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [feedbackCandidateUserId, setFeedbackCandidateUserId] = useState<string | null>(null);
+  const [conversationStyle, setConversationStyle] = useState<MatchmakerConversationStyle>('minimal');
+  const [pendingUserText, setPendingUserText] = useState<string | null>(null);
   const lastAnnouncement = useRef<string | null>(null);
   const wasOffline = useRef(false);
 
@@ -156,6 +176,12 @@ export function MatchmakerConversation({
   }, [data?.session.state, personalizationV2Enabled, shortlistMessage]);
   const feedbackCandidate = useMemo(() => activeShortlist?.candidates.find((candidate) => candidate.candidateUserId === feedbackCandidateUserId) ?? null, [activeShortlist, feedbackCandidateUserId]);
   const { history, active } = useMemo(() => partitionConversationMessages(messages), [messages]);
+  const latestAssistantMessage = useMemo(
+    () => [...messages].reverse().find((message) => message.role === 'assistant') ?? null,
+    [messages],
+  );
+  const latestAssistantId = latestAssistantMessage?.id;
+  const isConversationPending = sendMessage.isPending || findCandidate.isPending;
   const isBusy = conversation.isLoading
     || conversation.isFetching
     || sendMessage.isPending
@@ -179,6 +205,24 @@ export function MatchmakerConversation({
   const showComposerModeLabel = showComposer
     && (turn.limitMode === 'refine_type' || turn.limitMode === 'date_idea');
   const useLiquidGlass = isLiquidGlassAvailable();
+
+  useEffect(() => {
+    let active = true;
+    loadMatchmakerUiDraft(CONVERSATION_STYLE_DRAFT_KEY).then((saved) => {
+      if (active) setConversationStyle(parseMatchmakerConversationStyle(saved));
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    saveMatchmakerUiDraft(CONVERSATION_STYLE_DRAFT_KEY, conversationStyle).catch(() => undefined);
+  }, [conversationStyle]);
+
+  useEffect(() => {
+    if (!sendMessage.isPending && !findCandidate.isPending) {
+      setPendingUserText(null);
+    }
+  }, [findCandidate.isPending, sendMessage.isPending]);
 
   useEffect(() => {
     const sessionId = data?.session.id;
@@ -320,6 +364,7 @@ export function MatchmakerConversation({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const pendingText = cleaned;
     setDraft('');
+    setPendingUserText(pendingText);
     try {
       await sendMessage.mutateAsync(pendingText);
     } catch {
@@ -401,6 +446,11 @@ export function MatchmakerConversation({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        <MatchmakerConversationStylePicker
+          value={conversationStyle}
+          onChange={setConversationStyle}
+        />
+
         {history.length > 0 ? (
           <View style={styles.historySection}>
             <Pressable
@@ -423,7 +473,11 @@ export function MatchmakerConversation({
             {historyExpanded ? (
               <Animated.View entering={reduceMotion ? undefined : FadeIn.duration(180)} style={styles.historyList}>
                 {history.map((message) => (
-                  <HistoryBubble key={message.id} message={message} />
+                  <HistoryMessageRow
+                    key={message.id}
+                    message={message}
+                    style={conversationStyle}
+                  />
                 ))}
               </Animated.View>
             ) : null}
@@ -455,12 +509,44 @@ export function MatchmakerConversation({
 
         <View style={styles.activeSection}>
           {active.map((message) => (
-            message.role === 'user' ? <HistoryBubble key={message.id} message={message} /> : null
+            message.role === 'user' ? (
+              <MatchmakerUserMessageRow
+                key={message.id}
+                style={conversationStyle}
+                message={message}
+                animate={false}
+              />
+            ) : null
           ))}
 
-          {activeShortlist ? (
+          {pendingUserText ? (
+            <MatchmakerUserMessageRow
+              style={conversationStyle}
+              text={pendingUserText}
+              role="user"
+              messageId="pending-user"
+              animate={false}
+            />
+          ) : null}
+
+          {isConversationPending ? (
+            <View style={styles.sectionInset}>
+              <MatchmakerThinkingRow
+                label={findCandidate.isPending ? 'Searching for a thoughtful match…' : 'Matchmaker is thinking…'}
+                showOrb={conversationStyle === 'voice'}
+              />
+            </View>
+          ) : null}
+
+          {!isConversationPending && activeShortlist ? (
             <View style={styles.candidateSection}>
-              <MatchmakerVoiceBubble text={shortlistMessage?.text || `I found ${activeShortlist.candidates.length} people worth considering.`} compact />
+              <MatchmakerAssistantVoiceBlock
+                style={conversationStyle}
+                text={shortlistMessage?.text || `I found ${activeShortlist.candidates.length} people worth considering.`}
+                messageId={shortlistMessage?.id}
+                animate={shouldAnimateAssistantMessage(shortlistMessage?.id ?? 'shortlist-voice', latestAssistantId, isConversationPending)}
+                compact
+              />
               <MatchmakerShortlistView
                 shortlist={activeShortlist}
                 brief={briefQuery.data}
@@ -483,10 +569,13 @@ export function MatchmakerConversation({
               ) : null}
               {remainingSearches <= 0 ? <Text style={styles.limitNote}>No searches left today. You can still review every person in this shortlist.</Text> : null}
             </View>
-          ) : turn.variant === 'candidate' && turn.candidate ? (
+          ) : !isConversationPending && turn.variant === 'candidate' && turn.candidate ? (
             <View style={styles.candidateSection}>
-              <MatchmakerVoiceBubble
+              <MatchmakerAssistantVoiceBlock
+                style={conversationStyle}
                 text={turn.promptText}
+                messageId={turn.promptMessage?.id}
+                animate={shouldAnimateAssistantMessage(turn.promptMessage?.id ?? 'candidate-voice', latestAssistantId, isConversationPending)}
                 compact
               />
               <MatchmakerCandidateCard
@@ -514,7 +603,7 @@ export function MatchmakerConversation({
                 onUndo={handleBriefUndo}
               />
             </View>
-          ) : turn.variant === 'limit' ? (
+          ) : !isConversationPending && turn.variant === 'limit' ? (
             showLimitEmptyState ? (
               <View style={styles.sectionInset}>
                 <MatchmakerLimitEmptyState
@@ -526,13 +615,15 @@ export function MatchmakerConversation({
               </View>
             ) : (
               <View style={styles.sectionInset}>
-                <MatchmakerVoiceBubble
+                <MatchmakerAssistantVoiceBlock
+                  style={conversationStyle}
                   text={turn.promptText}
-                  compact
+                  messageId={turn.promptMessage?.id}
+                  animate={shouldAnimateAssistantMessage(turn.promptMessage?.id ?? 'limit-voice', latestAssistantId, isConversationPending)}
                 />
               </View>
             )
-          ) : turn.variant === 'no_result' ? (
+          ) : !isConversationPending && turn.variant === 'no_result' ? (
             <View style={styles.sectionInset}>
               <MatchmakerStatePanel
                 variant="no_result"
@@ -542,9 +633,15 @@ export function MatchmakerConversation({
                 onReply={handleQuickReply}
               />
             </View>
-          ) : (
-            <ActivePrompt turn={turn} />
-          )}
+          ) : !isConversationPending ? (
+            <MatchmakerActivePromptBlock
+              style={conversationStyle}
+              text={turn.promptText}
+              message={turn.promptMessage}
+              messageId={turn.promptMessage?.id}
+              animate={shouldAnimateAssistantMessage(turn.promptMessage?.id ?? 'active-prompt', latestAssistantId, isConversationPending)}
+            />
+          ) : null}
 
           {activeShortlist && turn.variant === 'feedback' ? (
             <View style={styles.sectionInset}>
@@ -784,23 +881,6 @@ const styles = StyleSheet.create({
     gap: SPACING.tight,
     paddingHorizontal: SPACING.tight,
   },
-  historyRow: {
-    paddingVertical: 2,
-  },
-  historyRowUser: {
-    alignItems: 'flex-end',
-  },
-  historyText: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '500',
-  },
-  historyTextUser: {
-    color: MATCHMAKER_HOME.mutedForeground,
-  },
-  historyTextAssistant: {
-    color: MATCHMAKER_HOME.foreground,
-  },
   activeSection: {
     gap: SPACING.base,
   },
@@ -815,27 +895,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     paddingHorizontal: SPACING.tight,
-  },
-  promptBlock: {
-    gap: SPACING.compact,
-    paddingHorizontal: 12,
-    paddingBottom: SPACING.tight,
-  },
-  promptEyebrow: {
-    color: MATCHMAKER_HOME.primary,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  promptText: {
-    color: MATCHMAKER_HOME.foreground,
-    width: '100%',
-    fontSize: 28,
-    lineHeight: 35,
-    fontWeight: '600',
-    letterSpacing: -0.45,
   },
   replies: {
     width: '100%',

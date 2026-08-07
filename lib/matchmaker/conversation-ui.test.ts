@@ -24,6 +24,9 @@ import {
   shouldShowLimitEmptyState,
   shouldShowMatchmakerComposer,
   shouldEnableMatchmakerQuery,
+  getMessageDisplayVariant,
+  getMessageEyebrow,
+  parseMatchmakerConversationStyle,
 } from './conversation-ui.ts';
 
 test('formatRemainingSearches handles singular and zero', () => {
@@ -295,6 +298,75 @@ test('historical candidate renderer safely presents the first V2 shortlist candi
   assert.equal(turn.variant, 'candidate');
   assert.equal(turn.candidate?.candidateUserId, 'u1');
   assert.equal(turn.showSearchAction, false);
+});
+
+test('getMessageDisplayVariant maps role and length to hero, body, or caption', () => {
+  const user = {
+    id: 'u1',
+    role: 'user',
+    kind: 'text',
+    text: 'Open to any type',
+    quickReplies: [],
+    metadata: {},
+    createdAt: '',
+  } as MatchmakerConversationResponse['messages'][number];
+
+  const shortAssistant = {
+    id: 'a1',
+    role: 'assistant',
+    kind: 'clarifying_question',
+    text: 'What kind of person would feel right today?',
+    quickReplies: [],
+    metadata: {},
+    createdAt: '',
+  } as MatchmakerConversationResponse['messages'][number];
+
+  const searchPlan = {
+    id: 'a2',
+    role: 'assistant',
+    kind: 'search_plan',
+    text: "I'll search using must-haves: outdoor activities and photography, into sports, third year university student, open; avoid: calm.",
+    quickReplies: [],
+    metadata: {},
+    createdAt: '',
+  } as MatchmakerConversationResponse['messages'][number];
+
+  assert.equal(getMessageDisplayVariant(user), 'caption');
+  assert.equal(getMessageDisplayVariant(shortAssistant), 'hero');
+  assert.equal(getMessageDisplayVariant(searchPlan), 'body');
+});
+
+test('getMessageEyebrow returns contextual labels for assistant messages', () => {
+  const greeting = {
+    id: 'g1',
+    role: 'assistant',
+    kind: 'greeting',
+    text: 'Morning.',
+    quickReplies: [],
+    metadata: {},
+    createdAt: '',
+  } as MatchmakerConversationResponse['messages'][number];
+
+  const searchPlan = {
+    id: 's1',
+    role: 'assistant',
+    kind: 'search_plan',
+    text: 'Ready when you are.',
+    quickReplies: [],
+    metadata: {},
+    createdAt: '',
+  } as MatchmakerConversationResponse['messages'][number];
+
+  assert.equal(getMessageEyebrow(greeting), "Today's direction");
+  assert.equal(getMessageEyebrow(searchPlan), 'Search plan');
+  assert.equal(getMessageEyebrow(null), null);
+});
+
+test('parseMatchmakerConversationStyle falls back to minimal', () => {
+  assert.equal(parseMatchmakerConversationStyle('voice'), 'voice');
+  assert.equal(parseMatchmakerConversationStyle('bubble'), 'bubble');
+  assert.equal(parseMatchmakerConversationStyle('unknown'), 'minimal');
+  assert.equal(parseMatchmakerConversationStyle(null), 'minimal');
 });
 
 test('shouldEnableMatchmakerQuery respects consent', () => {

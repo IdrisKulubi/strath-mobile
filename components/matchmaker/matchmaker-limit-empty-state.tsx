@@ -5,6 +5,7 @@ import { ChevronRight } from 'lucide-react-native';
 
 import { MatchmakerOrb } from '@/components/matchmaker/matchmaker-orb';
 import { MatchmakerReplyIcon } from '@/components/matchmaker/matchmaker-reply-icon';
+import { MatchmakerStreamingText } from '@/components/matchmaker/matchmaker-streaming-text';
 import { Text } from '@/components/ui/text';
 import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 
@@ -77,7 +78,12 @@ export function MatchmakerLimitEmptyState({
 
       {showVoice ? (
         <Animated.View entering={reduceMotion ? undefined : FadeInDown.delay(50).duration(200)} style={styles.voiceRow}>
-          <Text style={styles.voiceText}>{voiceText?.trim()}</Text>
+          <MatchmakerStreamingText
+            text={voiceText?.trim() ?? ''}
+            messageId="limit-empty-voice"
+            animate
+            style={styles.voiceText}
+          />
         </Animated.View>
       ) : null}
 

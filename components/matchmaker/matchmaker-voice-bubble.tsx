@@ -2,17 +2,44 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 
+import { MatchmakerAssistantVoiceBlock } from '@/components/matchmaker/matchmaker-message-styles';
 import { MatchmakerOrb } from '@/components/matchmaker/matchmaker-orb';
+import { MatchmakerStreamingText } from '@/components/matchmaker/matchmaker-streaming-text';
 import { Text } from '@/components/ui/text';
+import type { MatchmakerConversationStyle } from '@/lib/matchmaker/conversation-ui';
 import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 
 interface MatchmakerVoiceBubbleProps {
   text: string;
   compact?: boolean;
+  messageId?: string;
+  animate?: boolean;
+  conversationStyle?: MatchmakerConversationStyle;
 }
 
-export function MatchmakerVoiceBubble({ text, compact = false }: MatchmakerVoiceBubbleProps) {
+export function MatchmakerVoiceBubble({
+  text,
+  compact = false,
+  messageId,
+  animate = true,
+  conversationStyle,
+}: MatchmakerVoiceBubbleProps) {
   const reduceMotion = useReducedMotion();
+
+  if (conversationStyle) {
+    return (
+      <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(220)}>
+        <MatchmakerAssistantVoiceBlock
+          style={conversationStyle}
+          text={text}
+          messageId={messageId}
+          animate={animate}
+          compact={compact}
+        />
+      </Animated.View>
+    );
+  }
+
   return (
     <Animated.View
       entering={reduceMotion ? undefined : FadeInDown.duration(220)}
@@ -20,7 +47,12 @@ export function MatchmakerVoiceBubble({ text, compact = false }: MatchmakerVoice
     >
       <MatchmakerOrb state="success" size={compact ? 28 : 32} />
       <View style={styles.bubble}>
-        <Text style={[styles.text, compact && styles.textCompact]}>{text}</Text>
+        <MatchmakerStreamingText
+          text={text}
+          messageId={messageId}
+          animate={animate}
+          style={[styles.text, compact && styles.textCompact]}
+        />
       </View>
     </Animated.View>
   );
