@@ -1,19 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  FlatList,
   AccessibilityInfo,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   Pressable,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useReducedMotion } from 'react-native-reanimated';
 import { Columns3, X } from 'lucide-react-native';
 
 import { MatchmakerCandidateCard } from '@/components/matchmaker/matchmaker-candidate-card';
+import { MatchmakerShortlistDeck } from '@/components/matchmaker/matchmaker-shortlist-deck';
 import { Text } from '@/components/ui/text';
 import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 import {
@@ -42,15 +39,16 @@ interface Props {
   busy?: boolean;
 }
 
+const CARD_ASPECT = 0.64;
+
 function candidateName(candidate: MatchmakerCandidate, index: number) {
   return candidate.firstName?.trim() || `Person ${index + 1}`;
 }
 
 export function MatchmakerShortlistView({ shortlist, brief, onOpenCandidate, onNotForMe, onEvent, busy = false }: Props) {
   const { width: windowWidth } = useWindowDimensions();
-  const reduceMotion = useReducedMotion();
-  const pageWidth = Math.max(260, windowWidth - (SPACING.screenX * 2));
-  const listRef = useRef<FlatList<MatchmakerCandidate>>(null);
+  const cardWidth = Math.max(260, windowWidth - (SPACING.screenX * 2));
+  const cardHeight = cardWidth / CARD_ASPECT;
   const [position, setPosition] = useState(() => getCachedShortlistPosition(shortlist.id, shortlist.candidates.length));
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const viewedShortlists = useRef(new Set<string>());
@@ -71,8 +69,9 @@ export function MatchmakerShortlistView({ shortlist, brief, onOpenCandidate, onN
     restoreShortlistPosition(shortlist.id, shortlist.candidates.length).then((restored) => {
       if (!active) return;
       setPosition(restored);
-      requestAnimationFrame(() => listRef.current?.scrollToIndex({ index: restored, animated: false }));
-      if (restored > 0) AccessibilityInfo.announceForAccessibility(`Returned to candidate ${restored + 1} of ${shortlist.candidates.length}.`);
+      if (restored > 0) {
+        AccessibilityInfo.announceForAccessibility(`Returned to candidate ${restored + 1} of ${shortlist.candidates.length}.`);
+      }
     });
     return () => { active = false; };
   }, [shortlist.candidates.length, shortlist.id]);
@@ -82,20 +81,12 @@ export function MatchmakerShortlistView({ shortlist, brief, onOpenCandidate, onN
     rememberShortlistPosition(shortlist.id, next, shortlist.candidates.length).catch(() => undefined);
   }, [shortlist.candidates.length, shortlist.id]);
 
-  const handleMomentumEnd = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const next = Math.max(0, Math.min(Math.round(event.nativeEvent.contentOffset.x / pageWidth), shortlist.candidates.length - 1));
-    if (next === position) return;
-    savePosition(next);
-    onEvent?.('shortlist_page_changed', next);
-  }, [onEvent, pageWidth, position, savePosition, shortlist.candidates.length]);
-
   const moveToPosition = useCallback((nextPosition: number) => {
     const next = Math.max(0, Math.min(nextPosition, shortlist.candidates.length - 1));
     if (next === position) return;
-    listRef.current?.scrollToIndex({ index: next, animated: !reduceMotion });
     savePosition(next);
     onEvent?.('shortlist_page_changed', next);
-  }, [onEvent, position, reduceMotion, savePosition, shortlist.candidates.length]);
+  }, [onEvent, position, savePosition, shortlist.candidates.length]);
 
   const openCandidate = useCallback((candidate: MatchmakerCandidate, index: number) => {
     savePosition(index);
@@ -103,8 +94,11 @@ export function MatchmakerShortlistView({ shortlist, brief, onOpenCandidate, onN
     onOpenCandidate(candidate, index);
   }, [onEvent, onOpenCandidate, savePosition]);
 
-  const renderCandidate = useCallback(({ item, index }: { item: MatchmakerCandidate; index: number }) => (
-    <View style={{ width: pageWidth }} accessibilityLabel={`${candidateName(item, index)}, ${index + 1} of ${shortlist.candidates.length}`}>
+  const renderCandidate = useCallback((item: MatchmakerCandidate, index: number) => (
+    <View
+      style={{ width: cardWidth, height: cardHeight }}
+      accessibilityLabel={`${candidateName(item, index)}, ${index + 1} of ${shortlist.candidates.length}`}
+    >
       <MatchmakerCandidateCard
         candidate={item}
         disabled={busy}
@@ -112,9 +106,10 @@ export function MatchmakerShortlistView({ shortlist, brief, onOpenCandidate, onN
         onPress={() => openCandidate(item, index)}
         onNotThisOne={() => onNotForMe(item, index)}
         onExplanationToggle={(expanded) => { if (expanded) onEvent?.('explanation_expanded', index); }}
+        style={{ width: cardWidth, height: cardHeight }}
       />
     </View>
-  ), [busy, onEvent, onNotForMe, openCandidate, pageWidth, shortlist.candidates.length]);
+  ), [busy, cardHeight, cardWidth, onEvent, onNotForMe, openCandidate, shortlist.candidates.length]);
 
   const toggleComparison = () => {
     const next = !comparisonOpen;
@@ -127,36 +122,55 @@ export function MatchmakerShortlistView({ shortlist, brief, onOpenCandidate, onN
       {multiple ? (
         <>
           <View style={styles.positionRow}>
-            <Text accessibilityLiveRegion="polite" style={styles.positionText}>{position + 1} of {shortlist.candidates.length}</Text>
+            <Text accessibilityLiveRegion="polite" style={styles.positionText}>
+              {position + 1} of {shortlist.candidates.length}
+            </Text>
             <View accessibilityElementsHidden style={styles.dots}>
-              {shortlist.candidates.map((candidate, index) => <View key={candidate.candidateUserId} style={[styles.dot, index === position && styles.dotActive]} />)}
+              {shortlist.candidates.map((candidate, index) => (
+                <Pressable
+                  key={candidate.candidateUserId}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Go to ${candidateName(candidate, index)}`}
+                  onPress={() => moveToPosition(index)}
+                  hitSlop={8}
+                >
+                  <View style={[styles.dot, index === position && styles.dotActive]} />
+                </Pressable>
+              ))}
             </View>
           </View>
-          <FlatList
-            ref={listRef}
-            horizontal
-            pagingEnabled
-            nestedScrollEnabled
-            bounces={false}
-            showsHorizontalScrollIndicator={false}
-            data={shortlist.candidates}
-            keyExtractor={(candidate) => candidate.candidateUserId}
-            renderItem={renderCandidate}
-            getItemLayout={(_, index) => ({ length: pageWidth, offset: pageWidth * index, index })}
-            initialScrollIndex={position}
-            onMomentumScrollEnd={handleMomentumEnd}
+
+          <View
             accessibilityRole="adjustable"
             accessibilityLabel="Your candidate shortlist"
-            accessibilityValue={{ min: 1, max: shortlist.candidates.length, now: position + 1, text: `${position + 1} of ${shortlist.candidates.length}` }}
-            accessibilityActions={[{ name: 'increment', label: 'Next candidate' }, { name: 'decrement', label: 'Previous candidate' }]}
-            onAccessibilityAction={(event) => moveToPosition(position + (event.nativeEvent.actionName === 'increment' ? 1 : -1))}
-            initialNumToRender={shortlist.candidates.length}
-            windowSize={3}
-            removeClippedSubviews={false}
-            onScrollToIndexFailed={({ index }) => requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: index * pageWidth, animated: false }))}
-          />
+            accessibilityValue={{
+              min: 1,
+              max: shortlist.candidates.length,
+              now: position + 1,
+              text: `${position + 1} of ${shortlist.candidates.length}`,
+            }}
+            accessibilityActions={[
+              { name: 'increment', label: 'Next candidate' },
+              { name: 'decrement', label: 'Previous candidate' },
+            ]}
+            onAccessibilityAction={(event) => {
+              moveToPosition(position + (event.nativeEvent.actionName === 'increment' ? 1 : -1));
+            }}
+          >
+            <MatchmakerShortlistDeck
+              items={shortlist.candidates}
+              position={position}
+              cardWidth={cardWidth}
+              cardHeight={cardHeight}
+              keyExtractor={(candidate) => candidate.candidateUserId}
+              renderCard={renderCandidate}
+              onPositionChange={moveToPosition}
+            />
+          </View>
+
+          <Text style={styles.swipeHint}>Swipe to browse your shortlist</Text>
         </>
-      ) : renderCandidate({ item: shortlist.candidates[0], index: 0 })}
+      ) : renderCandidate(shortlist.candidates[0], 0)}
 
       {shouldShowShortlistComparison(shortlist.candidates.length, comparisonRows.length) ? (
         <View style={styles.comparisonSection}>
@@ -196,6 +210,13 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', gap: 6 },
   dot: { width: 6, height: 6, borderRadius: RADIUS.full, backgroundColor: MATCHMAKER_HOME.borderStrong },
   dotActive: { width: 18, backgroundColor: MATCHMAKER_HOME.primary },
+  swipeHint: {
+    color: MATCHMAKER_HOME.subtleForeground,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   comparisonSection: { borderTopWidth: 1, borderTopColor: MATCHMAKER_HOME.border, paddingTop: SPACING.tight, gap: SPACING.tight },
   compareButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.tight, borderWidth: 1, borderColor: MATCHMAKER_HOME.border, borderRadius: RADIUS.md, backgroundColor: MATCHMAKER_HOME.backgroundRaised },
   compareButtonText: { color: MATCHMAKER_HOME.primary, fontSize: 14, lineHeight: 20, fontWeight: '700' },
