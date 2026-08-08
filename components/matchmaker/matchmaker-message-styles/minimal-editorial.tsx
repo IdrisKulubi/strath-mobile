@@ -172,7 +172,8 @@ const styles = StyleSheet.create({
   userBubble: {
     maxWidth: '88%',
     backgroundColor: MATCHMAKER_HOME.surfaceStrong,
-    borderRadius: RADIUS.full,
+    borderRadius: RADIUS.lg,
+    borderBottomRightRadius: RADIUS.sm,
     paddingHorizontal: SPACING.compact,
     paddingVertical: SPACING.tight,
   },

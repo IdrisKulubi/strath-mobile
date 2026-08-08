@@ -253,6 +253,146 @@ const llmTurnSchema = z.object({
     }).nullable().optional(),
 });
 
+export const MATCHMAKER_OPENAI_TEXT_FORMAT = {
+    type: "json_schema",
+    name: "matchmaker_turn",
+    strict: true,
+    schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+            messageType: {
+                type: "string",
+                enum: ["intent", "clarifying_question", "search_plan", "small_talk"],
+            },
+            shouldClarify: { type: "boolean" },
+            reply: { type: "string", minLength: 1, maxLength: 700 },
+            clarifyingQuestion: {
+                anyOf: [
+                    { type: "string", maxLength: 300 },
+                    { type: "null" },
+                ],
+            },
+            quickReplies: {
+                type: "array",
+                maxItems: 4,
+                items: { type: "string", minLength: 1, maxLength: 80 },
+            },
+            intent: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                    rawText: { type: "string" },
+                    traits: {
+                        type: "array",
+                        maxItems: 12,
+                        items: { type: "string", minLength: 1, maxLength: 40 },
+                    },
+                    relationshipIntent: {
+                        type: "string",
+                        enum: RELATIONSHIP_INTENT_VALUES,
+                    },
+                    activityRequirement: {
+                        type: "string",
+                        enum: ACTIVITY_REQUIREMENT_VALUES,
+                    },
+                    socialEnergy: {
+                        type: "string",
+                        enum: SOCIAL_ENERGY_VALUES,
+                    },
+                    dealbreakers: {
+                        type: "array",
+                        maxItems: 8,
+                        items: { type: "string", minLength: 1, maxLength: 80 },
+                    },
+                },
+                required: [
+                    "rawText",
+                    "traits",
+                    "relationshipIntent",
+                    "activityRequirement",
+                    "socialEnergy",
+                    "dealbreakers",
+                ],
+            },
+            searchPlan: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                    priorities: {
+                        type: "array",
+                        maxItems: 8,
+                        items: { type: "string", minLength: 1, maxLength: 120 },
+                    },
+                    avoid: {
+                        type: "array",
+                        maxItems: 8,
+                        items: { type: "string", minLength: 1, maxLength: 120 },
+                    },
+                },
+                required: ["priorities", "avoid"],
+            },
+            preferenceProposals: {
+                type: "array",
+                maxItems: 8,
+                items: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                        category: {
+                            type: "string",
+                            enum: MATCHMAKER_PREFERENCE_CATEGORIES,
+                        },
+                        value: { type: "string", minLength: 1, maxLength: 120 },
+                        sentiment: {
+                            type: "string",
+                            enum: ["prefer", "avoid"],
+                        },
+                        importance: {
+                            type: "string",
+                            enum: ["must_have", "prefer", "flexible"],
+                        },
+                        evidence: {
+                            type: "string",
+                            enum: ["explicit", "inferred"],
+                        },
+                    },
+                    required: ["category", "value", "sentiment", "importance", "evidence"],
+                },
+            },
+            unresolvedQuestion: {
+                anyOf: [
+                    {
+                        type: "object",
+                        additionalProperties: false,
+                        properties: {
+                            key: { type: "string", minLength: 1, maxLength: 80 },
+                            category: {
+                                type: "string",
+                                enum: MATCHMAKER_PREFERENCE_CATEGORIES,
+                            },
+                            question: { type: "string", minLength: 1, maxLength: 300 },
+                        },
+                        required: ["key", "category", "question"],
+                    },
+                    { type: "null" },
+                ],
+            },
+        },
+        required: [
+            "messageType",
+            "shouldClarify",
+            "reply",
+            "clarifyingQuestion",
+            "quickReplies",
+            "intent",
+            "searchPlan",
+            "preferenceProposals",
+            "unresolvedQuestion",
+        ],
+    },
+} as const;
+
 const READY_REPLIES = [
     "Go ahead and search",
     "Change something",
@@ -745,6 +885,25 @@ function normalizeTurn(raw: unknown, provider: MatchmakerLlmProvider, model: str
     };
 }
 
+function summarizeValidationIssues(error: z.ZodError) {
+    return error.issues.map((issue) => ({
+        path: issue.path.join("."),
+        code: issue.code,
+        message: issue.message,
+    }));
+}
+
+function buildRetryInstruction(error: unknown) {
+    if (error instanceof z.ZodError) {
+        const fields = error.issues
+            .slice(0, 8)
+            .map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`)
+            .join("; ");
+        return `Your previous JSON failed validation. Return a complete replacement object that strictly follows the supplied JSON Schema. Correct these fields: ${fields}`;
+    }
+    return "Your previous response could not be accepted. Return a complete replacement object that strictly follows the supplied JSON Schema.";
+}
+
 export function parseMatchmakerLlmTurnRaw(raw: unknown) {
     return llmTurnSchema.parse(raw);
 }
@@ -1097,7 +1256,10 @@ User answer: ${input.userMessage}`,
     return reply.text;
 }
 
-async function generateWithOpenAi(input: MatchmakerLlmInput): Promise<MatchmakerLlmTurn> {
+async function generateWithOpenAi(
+    input: MatchmakerLlmInput,
+    retryInstruction?: string,
+): Promise<MatchmakerLlmTurn> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throwMatchmakerLlmUnavailable("OPENAI_API_KEY is not configured");
 
@@ -1116,7 +1278,11 @@ async function generateWithOpenAi(input: MatchmakerLlmInput): Promise<Matchmaker
                     content: [
                         {
                             type: "input_text",
-                            text: `${MATCHMAKER_VOICE_SYSTEM}\n\n${MATCHMAKER_JSON_CONTRACT}`,
+                            text: [
+                                MATCHMAKER_VOICE_SYSTEM,
+                                MATCHMAKER_JSON_CONTRACT,
+                                retryInstruction,
+                            ].filter(Boolean).join("\n\n"),
                         },
                     ],
                 },
@@ -1126,7 +1292,7 @@ async function generateWithOpenAi(input: MatchmakerLlmInput): Promise<Matchmaker
                 },
             ],
             text: {
-                format: { type: "json_object" },
+                format: MATCHMAKER_OPENAI_TEXT_FORMAT,
             },
             temperature: 0.82,
         }),
@@ -1137,7 +1303,19 @@ async function generateWithOpenAi(input: MatchmakerLlmInput): Promise<Matchmaker
         throwMatchmakerLlmUnavailable(`OpenAI Responses API failed (${response.status}): ${error}`);
     }
 
-    const turn = normalizeTurn(parseJsonObject(extractOpenAiText(await response.json())), "openai", model);
+    const rawTurn = parseJsonObject(extractOpenAiText(await response.json()));
+    let turn: MatchmakerLlmTurn;
+    try {
+        turn = normalizeTurn(rawTurn, "openai", model);
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            console.warn("[matchmaker-llm] OpenAI response failed local validation", {
+                model,
+                issues: summarizeValidationIssues(error),
+            });
+        }
+        throw error;
+    }
     if (containsForbiddenReply(turn.reply)) {
         throwForbiddenReply("OpenAI returned a forbidden template-style reply");
     }
@@ -1170,9 +1348,9 @@ export function answerAddressesActiveQuestion(input: MatchmakerLlmInput, turn: M
 export async function generateMatchmakerLlmTurn(input: MatchmakerLlmInput): Promise<MatchmakerLlmTurn> {
     const provider = configuredProvider();
 
-    const run = async () => {
+    const run = async (retryInstruction?: string) => {
         if (provider === "gemini") return preventClarifyingLoop(input, await generateWithGemini(input));
-        if (provider === "openai") return preventClarifyingLoop(input, await generateWithOpenAi(input));
+        if (provider === "openai") return preventClarifyingLoop(input, await generateWithOpenAi(input, retryInstruction));
         throwMatchmakerLlmUnavailable("Matchmaker LLM provider is not configured for conversational replies");
     };
 
@@ -1187,7 +1365,7 @@ export async function generateMatchmakerLlmTurn(input: MatchmakerLlmInput): Prom
             error: error instanceof Error ? error.message : String(error),
         });
         try {
-            return await run();
+            return await run(buildRetryInstruction(error));
         } catch (retryError) {
             throw wrapMatchmakerLlmRetryFailure(retryError, provider);
         }

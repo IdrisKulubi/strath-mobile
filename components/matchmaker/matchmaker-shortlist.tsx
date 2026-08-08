@@ -1,13 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Pressable,
-  ScrollView,
   StyleSheet,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Columns3, X } from 'lucide-react-native';
 
 import { MatchmakerCandidateCard } from '@/components/matchmaker/matchmaker-candidate-card';
 import { MatchmakerShortlistDeck } from '@/components/matchmaker/matchmaker-shortlist-deck';
@@ -18,7 +16,6 @@ import {
   rememberShortlistPosition,
   restoreShortlistPosition,
 } from '@/lib/matchmaker/shortlist-position';
-import { buildShortlistComparison, shouldShowShortlistComparison } from '@/lib/matchmaker/shortlist';
 import type { MatchmakerBrief, MatchmakerCandidate, MatchmakerShortlist } from '@/types/matchmaker';
 
 export type MatchmakerShortlistEvent =
@@ -45,15 +42,13 @@ function candidateName(candidate: MatchmakerCandidate, index: number) {
   return candidate.firstName?.trim() || `Person ${index + 1}`;
 }
 
-export function MatchmakerShortlistView({ shortlist, brief, onOpenCandidate, onNotForMe, onEvent, busy = false }: Props) {
+export function MatchmakerShortlistView({ shortlist, onOpenCandidate, onNotForMe, onEvent, busy = false }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const cardWidth = Math.max(260, windowWidth - (SPACING.screenX * 2));
   const cardHeight = cardWidth / CARD_ASPECT;
   const [position, setPosition] = useState(() => getCachedShortlistPosition(shortlist.id, shortlist.candidates.length));
-  const [comparisonOpen, setComparisonOpen] = useState(false);
   const viewedShortlists = useRef(new Set<string>());
   const multiple = shortlist.candidates.length > 1;
-  const comparisonRows = useMemo(() => buildShortlistComparison(brief, shortlist), [brief, shortlist]);
 
   useEffect(() => {
     if (viewedShortlists.current.has(shortlist.id)) return;
@@ -111,12 +106,6 @@ export function MatchmakerShortlistView({ shortlist, brief, onOpenCandidate, onN
     </View>
   ), [busy, cardHeight, cardWidth, onEvent, onNotForMe, openCandidate, shortlist.candidates.length]);
 
-  const toggleComparison = () => {
-    const next = !comparisonOpen;
-    setComparisonOpen(next);
-    if (next) onEvent?.('compare_opened', position);
-  };
-
   return (
     <View style={styles.wrap}>
       {multiple ? (
@@ -171,34 +160,6 @@ export function MatchmakerShortlistView({ shortlist, brief, onOpenCandidate, onN
           <Text style={styles.swipeHint}>Swipe to browse your shortlist</Text>
         </>
       ) : renderCandidate(shortlist.candidates[0], 0)}
-
-      {shouldShowShortlistComparison(shortlist.candidates.length, comparisonRows.length) ? (
-        <View style={styles.comparisonSection}>
-          <Pressable accessibilityRole="button" accessibilityState={{ expanded: comparisonOpen }} onPress={toggleComparison} style={({ pressed }) => [styles.compareButton, pressed && styles.pressed]}>
-            {comparisonOpen ? <X size={18} color={MATCHMAKER_HOME.primary} /> : <Columns3 size={18} color={MATCHMAKER_HOME.primary} />}
-            <Text style={styles.compareButtonText}>{comparisonOpen ? 'Close comparison' : 'Compare with my priorities'}</Text>
-          </Pressable>
-          {comparisonOpen ? (
-            <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator accessibilityLabel="Candidate comparison based on confirmed priorities" contentContainerStyle={styles.comparisonTable}>
-              <View>
-                <View style={styles.comparisonRow}>
-                  <View style={[styles.comparisonHeaderCell, styles.priorityCell]}><Text style={styles.comparisonHeaderText}>Your priority</Text></View>
-                  {shortlist.candidates.map((candidate, index) => <View key={candidate.candidateUserId} style={[styles.comparisonHeaderCell, styles.candidateCell]}><Text style={styles.candidateHeaderText}>{candidateName(candidate, index)}</Text></View>)}
-                </View>
-                {comparisonRows.map((row) => (
-                  <View key={row.preferenceId} style={styles.comparisonRow} onLayout={() => onEvent?.('comparison_row_viewed', position)}>
-                    <View style={[styles.comparisonCell, styles.priorityCell]}><Text style={styles.priorityText}>{row.label}</Text></View>
-                    {shortlist.candidates.map((candidate, index) => {
-                      const evidence = row.candidates[index]?.evidence ?? 'Not enough information';
-                      return <View key={candidate.candidateUserId} style={[styles.comparisonCell, styles.candidateCell]}><Text style={evidence === 'Strong evidence' ? styles.strongEvidence : styles.unknownEvidence}>{evidence}</Text></View>;
-                    })}
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-          ) : null}
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -217,19 +178,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  comparisonSection: { borderTopWidth: 1, borderTopColor: MATCHMAKER_HOME.border, paddingTop: SPACING.tight, gap: SPACING.tight },
-  compareButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.tight, borderWidth: 1, borderColor: MATCHMAKER_HOME.border, borderRadius: RADIUS.md, backgroundColor: MATCHMAKER_HOME.backgroundRaised },
-  compareButtonText: { color: MATCHMAKER_HOME.primary, fontSize: 14, lineHeight: 20, fontWeight: '700' },
-  comparisonTable: { paddingBottom: SPACING.tight },
-  comparisonRow: { flexDirection: 'row', alignItems: 'stretch' },
-  priorityCell: { width: 132 },
-  candidateCell: { width: 122 },
-  comparisonHeaderCell: { minHeight: 48, justifyContent: 'center', paddingHorizontal: SPACING.tight, borderBottomWidth: 1, borderBottomColor: MATCHMAKER_HOME.border },
-  comparisonHeaderText: { color: MATCHMAKER_HOME.subtleForeground, fontSize: 12, lineHeight: 16, fontWeight: '700' },
-  candidateHeaderText: { color: MATCHMAKER_HOME.foreground, fontSize: 13, lineHeight: 18, fontWeight: '700' },
-  comparisonCell: { minHeight: 64, justifyContent: 'center', paddingHorizontal: SPACING.tight, paddingVertical: SPACING.tight, borderBottomWidth: 1, borderBottomColor: MATCHMAKER_HOME.border },
-  priorityText: { color: MATCHMAKER_HOME.foreground, fontSize: 13, lineHeight: 18, fontWeight: '600' },
-  strongEvidence: { color: MATCHMAKER_HOME.success, fontSize: 12, lineHeight: 17, fontWeight: '700' },
-  unknownEvidence: { color: MATCHMAKER_HOME.mutedForeground, fontSize: 12, lineHeight: 17, fontWeight: '600' },
-  pressed: { opacity: 0.72 },
 });

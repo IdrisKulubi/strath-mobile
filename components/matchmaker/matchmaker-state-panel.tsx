@@ -110,19 +110,25 @@ export function MatchmakerStatePanel({
             accessibilityHint="Retries loading the matchmaker conversation."
             disabled={busy}
             onPress={onRetry}
-            style={({ pressed }) => [
-              styles.retry,
-              styles.retrySurface,
-              pressed && !busy && styles.pressed,
-              busy && styles.disabled,
-            ]}
+            style={styles.retryPressable}
           >
-            {busy ? (
-              <ActivityIndicator size="small" color={MATCHMAKER_HOME.primary} />
-            ) : (
-              <RefreshCw size={15} color={MATCHMAKER_HOME.primary} />
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.retry,
+                  styles.retrySurface,
+                  pressed && !busy && styles.pressed,
+                  busy && styles.disabled,
+                ]}
+              >
+                {busy ? (
+                  <ActivityIndicator size="small" color={MATCHMAKER_HOME.primary} />
+                ) : (
+                  <RefreshCw size={16} color={MATCHMAKER_HOME.primary} strokeWidth={2.5} />
+                )}
+                <Text style={styles.retryText}>Try again</Text>
+              </View>
             )}
-            <Text style={styles.retryText}>Try again</Text>
           </Pressable>
         </View>
       ) : null}
@@ -203,16 +209,17 @@ const styles = StyleSheet.create({
     width: '64%',
   },
   retryRow: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'flex-start',
     paddingTop: 2,
+  },
+  retryPressable: {
+    alignSelf: 'flex-start',
   },
   retry: {
     minHeight: 44,
-    minWidth: 168,
     borderWidth: 1,
     borderRadius: RADIUS.full,
-    paddingHorizontal: 22,
+    paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -227,7 +234,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
     fontWeight: '800',
-    textAlign: 'center',
   },
   replies: {
     gap: SPACING.tight,

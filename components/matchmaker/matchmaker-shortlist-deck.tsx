@@ -1,12 +1,10 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
   Easing,
-  Extrapolation,
-  interpolate,
   runOnJS,
   useAnimatedStyle,
   useReducedMotion,
@@ -16,12 +14,23 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
+import {
+  CARD_STACK_EXIT,
+  CARD_STACK_GESTURE,
+  CARD_STACK_PEEK,
+  CARD_STACK_SPRING_BACK,
+  getCardStackExitDragX,
+  getCardStackIndices,
+  getCardStackOffset,
+  isCardStackLayerVisible,
+  isCardStackTopCard,
+  resolveCardStackTargetIndex,
+} from '@/lib/matchmaker/card-stack-math';
+import {
+  getActiveCardDragStyle,
+  getCardStackLayerStyle,
+} from '@/lib/matchmaker/card-stack-animation';
 import { MATCHMAKER_HOME, RADIUS } from '@/lib/design-tokens';
-
-const SPRING_BACK = { damping: 28, stiffness: 320, mass: 0.7 };
-const EXIT_DURATION = 240;
-const STACK_PEEK = 28;
-const MAX_BEHIND = 2;
 
 interface MatchmakerShortlistDeckProps<T> {
   items: T[];
@@ -38,128 +47,50 @@ function triggerHaptic() {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
 }
 
-interface DeckLayerProps {
-  children: React.ReactNode;
+interface StackCardLayerProps {
+  cardIndex: number;
+  activeIndex: SharedValue<number>;
   dragX: SharedValue<number>;
   cardWidth: number;
-  stackOffset: number;
-  isTop: boolean;
+  children: React.ReactNode;
   reduceMotion: boolean | null;
 }
 
-function DeckLayer({
-  children,
+function StackCardLayer({
+  cardIndex,
+  activeIndex,
   dragX,
   cardWidth,
-  stackOffset,
-  isTop,
+  children,
   reduceMotion,
-}: DeckLayerProps) {
+}: StackCardLayerProps) {
   const animatedStyle = useAnimatedStyle(() => {
-    const dragProgress = interpolate(
-      dragX.value,
-      [-cardWidth, 0, cardWidth],
-      [1, 0, -1],
-      Extrapolation.CLAMP,
-    );
+    const offset = getCardStackOffset(cardIndex, activeIndex.value, dragX.value, cardWidth);
 
-    if (isTop) {
-      const rotate = interpolate(
-        dragX.value,
-        [-cardWidth, 0, cardWidth],
-        [-4, 0, 4],
-        Extrapolation.CLAMP,
-      );
-      const opacity = interpolate(
-        Math.abs(dragX.value),
-        [0, cardWidth * 0.55, cardWidth],
-        [1, 0.92, 0.72],
-        Extrapolation.CLAMP,
-      );
-
+    if (!isCardStackLayerVisible(offset)) {
       return {
-        zIndex: 30,
-        opacity,
-        transform: [
-          { translateX: dragX.value },
-          { rotate: `${rotate}deg` },
-        ],
+        opacity: 0,
+        zIndex: 0,
+        transform: [{ translateX: 0 }, { translateY: 0 }, { scale: 0.9 }],
       };
     }
 
-    const effectiveOffset = Math.max(0, stackOffset - Math.max(0, dragProgress));
-    const scale = interpolate(effectiveOffset, [0, 1, 2], [1, 0.972, 0.945], Extrapolation.CLAMP);
-    const translateY = interpolate(effectiveOffset, [0, 1, 2], [0, -12, -24], Extrapolation.CLAMP);
-    const translateX = stackOffset === 1
-      ? interpolate(effectiveOffset, [0, 1, 2], [0, -10, -6], Extrapolation.CLAMP)
-      : interpolate(effectiveOffset, [0, 1, 2], [0, 12, 16], Extrapolation.CLAMP);
-    const rotate = stackOffset === 1 ? '-2deg' : '2.4deg';
+    if (isCardStackTopCard(offset)) {
+      return getActiveCardDragStyle(dragX.value, cardWidth);
+    }
 
-    return {
-      zIndex: 20 - stackOffset,
-      opacity: interpolate(effectiveOffset, [0, 2], [1, 0.88], Extrapolation.CLAMP),
-      transform: [
-        { translateX },
-        { translateY },
-        { scale },
-        { rotate },
-      ],
-    };
+    return getCardStackLayerStyle(offset, cardWidth);
   });
 
   return (
     <Animated.View
+      pointerEvents="box-none"
       style={[
         styles.layer,
         reduceMotion && styles.layerReducedMotion,
         animatedStyle,
       ]}
     >
-      {children}
-    </Animated.View>
-  );
-}
-
-interface IncomingPreviousLayerProps {
-  children: React.ReactNode;
-  dragX: SharedValue<number>;
-  cardWidth: number;
-  visible: boolean;
-}
-
-function IncomingPreviousLayer({
-  children,
-  dragX,
-  cardWidth,
-  visible,
-}: IncomingPreviousLayerProps) {
-  const animatedStyle = useAnimatedStyle(() => {
-    if (!visible) {
-      return { opacity: 0, zIndex: 0, transform: [{ translateX: -cardWidth }] };
-    }
-
-    const translateX = interpolate(
-      dragX.value,
-      [0, cardWidth],
-      [-cardWidth * 0.9, 0],
-      Extrapolation.CLAMP,
-    );
-    const scale = interpolate(
-      dragX.value,
-      [0, cardWidth],
-      [0.97, 1],
-      Extrapolation.CLAMP,
-    );
-
-    return {
-      zIndex: 12,
-      opacity: interpolate(dragX.value, [0, cardWidth * 0.25], [0, 1], Extrapolation.CLAMP),
-      transform: [{ translateX }, { scale }],
-    };
-  });
-
-  return (
-    <Animated.View pointerEvents="none" style={[styles.layer, animatedStyle]}>
       {children}
     </Animated.View>
   );
@@ -176,134 +107,117 @@ export function MatchmakerShortlistDeck<T>({
   style,
 }: MatchmakerShortlistDeckProps<T>) {
   const reduceMotion = useReducedMotion();
+  const itemCount = items.length;
+  const activeIndex = useSharedValue(position);
   const dragX = useSharedValue(0);
   const isTransitioning = useSharedValue(false);
-  const positionValue = useSharedValue(position);
-  const threshold = cardWidth * 0.2;
-  const flingVelocity = 720;
+  const gestureStartX = useSharedValue(0);
+  const lastIndex = Math.max(0, itemCount - 1);
+
+  const visibleIndices = useMemo(() => {
+    if (itemCount <= 8) {
+      return Array.from({ length: itemCount }, (_, index) => index);
+    }
+    return getCardStackIndices(itemCount, position);
+  }, [itemCount, position]);
 
   useEffect(() => {
-    positionValue.value = position;
     cancelAnimation(dragX);
+    activeIndex.value = position;
     dragX.value = 0;
     isTransitioning.value = false;
-  }, [dragX, isTransitioning, position, positionValue]);
+  }, [activeIndex, dragX, isTransitioning, position]);
 
   const commitPosition = useCallback((next: number) => {
-    if (next < 0 || next >= items.length || next === position) return;
+    if (next < 0 || next >= itemCount) return;
     triggerHaptic();
     onPositionChange(next);
-  }, [items.length, onPositionChange, position]);
+  }, [itemCount, onPositionChange]);
 
-  const panGesture = Gesture.Pan()
-    .activeOffsetX([-12, 12])
-    .failOffsetY([-20, 20])
+  const gestureActiveOffsetX = CARD_STACK_GESTURE.activeOffsetX;
+  const gestureFailOffsetY = CARD_STACK_GESTURE.failOffsetY;
+  const gestureEdgeResistance = CARD_STACK_GESTURE.edgeResistance;
+
+  const panGesture = useMemo(() => Gesture.Pan()
+    .activeOffsetX([-gestureActiveOffsetX, gestureActiveOffsetX])
+    .failOffsetY([-gestureFailOffsetY, gestureFailOffsetY])
     .onBegin(() => {
       if (isTransitioning.value) return;
       cancelAnimation(dragX);
+      gestureStartX.value = dragX.value;
     })
     .onUpdate((event) => {
       if (isTransitioning.value) return;
 
-      const currentPosition = positionValue.value;
-      const atStart = currentPosition <= 0;
-      const atEnd = currentPosition >= items.length - 1;
-      let nextX = event.translationX;
+      const currentIndex = activeIndex.value;
+      const atStart = currentIndex <= 0;
+      const atEnd = currentIndex >= lastIndex;
+      let nextX = gestureStartX.value + event.translationX;
 
-      if (atStart && nextX > 0) nextX *= 0.28;
-      if (atEnd && nextX < 0) nextX *= 0.28;
+      if (atStart && nextX > 0) nextX *= gestureEdgeResistance;
+      if (atEnd && nextX < 0) nextX *= gestureEdgeResistance;
 
       dragX.value = nextX;
     })
     .onEnd((event) => {
       if (isTransitioning.value) return;
 
-      const currentPosition = positionValue.value;
-      const shouldAdvance =
-        (event.translationX < -threshold || event.velocityX < -flingVelocity)
-        && currentPosition < items.length - 1;
-      const shouldRewind =
-        (event.translationX > threshold || event.velocityX > flingVelocity)
-        && currentPosition > 0;
+      const currentIndex = activeIndex.value;
+      const targetIndex = resolveCardStackTargetIndex(
+        currentIndex,
+        dragX.value,
+        event.velocityX,
+        cardWidth,
+        itemCount,
+      );
 
-      if (shouldAdvance) {
-        isTransitioning.value = true;
-        const duration = reduceMotion ? 0 : EXIT_DURATION;
-        dragX.value = withTiming(-cardWidth, {
-          duration,
-          easing: Easing.out(Easing.cubic),
-        }, (finished) => {
-          if (!finished) {
-            isTransitioning.value = false;
-            return;
-          }
-          runOnJS(commitPosition)(currentPosition + 1);
-        });
+      if (targetIndex === currentIndex) {
+        dragX.value = withSpring(0, CARD_STACK_SPRING_BACK);
         return;
       }
 
-      if (shouldRewind) {
-        isTransitioning.value = true;
-        const duration = reduceMotion ? 0 : EXIT_DURATION;
-        dragX.value = withTiming(cardWidth, {
-          duration,
-          easing: Easing.out(Easing.cubic),
-        }, (finished) => {
-          if (!finished) {
-            isTransitioning.value = false;
-            return;
-          }
-          runOnJS(commitPosition)(currentPosition - 1);
-        });
-        return;
-      }
+      isTransitioning.value = true;
+      const exitDragX = getCardStackExitDragX(currentIndex, targetIndex, cardWidth);
+      const duration = reduceMotion ? 0 : CARD_STACK_EXIT.duration;
 
-      dragX.value = withSpring(0, SPRING_BACK);
-    });
+      dragX.value = withTiming(exitDragX, {
+        duration,
+        easing: Easing.out(Easing.cubic),
+      }, (finished) => {
+        if (!finished) {
+          isTransitioning.value = false;
+          return;
+        }
 
-  const behindIndices = [];
-  for (let offset = Math.min(MAX_BEHIND, items.length - position - 1); offset >= 1; offset -= 1) {
-    behindIndices.push(position + offset);
+        activeIndex.value = targetIndex;
+        dragX.value = 0;
+        isTransitioning.value = false;
+        runOnJS(commitPosition)(targetIndex);
+      });
+    }), [cardWidth, commitPosition, dragX, gestureActiveOffsetX, gestureEdgeResistance, gestureFailOffsetY, gestureStartX, isTransitioning, itemCount, lastIndex, reduceMotion]);
+
+  if (itemCount === 0) {
+    return null;
   }
 
-  const topItem = items[position];
-
   return (
-    <View style={[styles.host, { width: cardWidth, height: cardHeight + STACK_PEEK }, style]}>
-      <View style={[styles.deck, { width: cardWidth, height: cardHeight + STACK_PEEK }]}>
-        {position > 0 ? (
-          <IncomingPreviousLayer dragX={dragX} cardWidth={cardWidth} visible>
-            {renderCard(items[position - 1], position - 1)}
-          </IncomingPreviousLayer>
-        ) : null}
-
-        {behindIndices.map((index) => (
-          <DeckLayer
-            key={keyExtractor(items[index], index)}
-            dragX={dragX}
-            cardWidth={cardWidth}
-            stackOffset={index - position}
-            isTop={false}
-            reduceMotion={reduceMotion}
-          >
-            {renderCard(items[index], index)}
-          </DeckLayer>
-        ))}
-
-        {topItem ? (
-          <GestureDetector gesture={panGesture}>
-            <DeckLayer
+    <View style={[styles.host, { width: cardWidth, height: cardHeight + CARD_STACK_PEEK }, style]}>
+      <GestureDetector gesture={panGesture}>
+        <Animated.View style={[styles.deck, { width: cardWidth, height: cardHeight + CARD_STACK_PEEK }]}>
+          {visibleIndices.map((index) => (
+            <StackCardLayer
+              key={keyExtractor(items[index], index)}
+              cardIndex={index}
+              activeIndex={activeIndex}
               dragX={dragX}
               cardWidth={cardWidth}
-              stackOffset={0}
-              isTop
               reduceMotion={reduceMotion}
             >
-              {renderCard(topItem, position)}
-            </DeckLayer>
-          </GestureDetector>
-        ) : null}
-      </View>
+              {renderCard(items[index], index)}
+            </StackCardLayer>
+          ))}
+        </Animated.View>
+      </GestureDetector>
     </View>
   );
 }
@@ -314,7 +228,7 @@ const styles = StyleSheet.create({
   },
   deck: {
     position: 'relative',
-    paddingTop: STACK_PEEK,
+    paddingTop: CARD_STACK_PEEK,
   },
   layer: {
     position: 'absolute',

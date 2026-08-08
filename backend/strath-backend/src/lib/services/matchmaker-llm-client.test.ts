@@ -11,11 +11,22 @@ import {
     inferStructuredIntent,
     isMatchmakerSearchConfirmation,
     isMatchmakerSearchRefinement,
+    MATCHMAKER_OPENAI_TEXT_FORMAT,
     MatchmakerLlmUnavailableError,
     parseMatchmakerLlmTurnRaw,
     resolveMatchmakerClarifyingQuickReplies,
     wrapMatchmakerLlmRetryFailure,
 } from "@/lib/services/matchmaker-llm-client";
+
+test("OpenAI response format strictly constrains proposal sentiment", () => {
+    assert.equal(MATCHMAKER_OPENAI_TEXT_FORMAT.type, "json_schema");
+    assert.equal(MATCHMAKER_OPENAI_TEXT_FORMAT.strict, true);
+    assert.equal(MATCHMAKER_OPENAI_TEXT_FORMAT.schema.additionalProperties, false);
+
+    const proposals = MATCHMAKER_OPENAI_TEXT_FORMAT.schema.properties.preferenceProposals;
+    assert.deepEqual(proposals.items.properties.sentiment.enum, ["prefer", "avoid"]);
+    assert.ok(proposals.items.required.includes("sentiment"));
+});
 
 const baseTurn = {
     messageType: "clarifying_question" as const,
