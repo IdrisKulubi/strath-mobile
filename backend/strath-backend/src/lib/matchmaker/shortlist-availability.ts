@@ -41,3 +41,28 @@ export function applyShortlistAvailability<T extends ShortlistMessageLike>(messa
     });
     return { messages: updatedMessages, staleShortlistIds: [...new Set(staleShortlistIds)] };
 }
+
+export function removeShortlistCandidates<T extends ShortlistMessageLike>(messages: T[], removedIds: Set<string>) {
+    if (removedIds.size === 0) return messages;
+    return messages.map((message) => {
+        const shortlist = record(message.metadata.shortlist);
+        const fallback = record(message.metadata.candidate);
+        if (!shortlist || !Array.isArray(shortlist.candidates)) return message;
+        return {
+            ...message,
+            metadata: {
+                ...message.metadata,
+                shortlist: {
+                    ...shortlist,
+                    candidates: shortlist.candidates.filter((value) => {
+                        const candidate = record(value);
+                        return !candidate || typeof candidate.candidateUserId !== "string" || !removedIds.has(candidate.candidateUserId);
+                    }),
+                },
+                candidate: fallback && typeof fallback.candidateUserId === "string" && removedIds.has(fallback.candidateUserId)
+                    ? undefined
+                    : message.metadata.candidate,
+            },
+        };
+    });
+}

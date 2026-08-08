@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 
 import { Text } from '@/components/ui/text';
@@ -20,6 +21,7 @@ interface MatchmakerFeedbackFlowProps {
 }
 
 export function MatchmakerFeedbackFlow({ shortlistId, candidateUserId, candidateName, briefVersion, busy, onCancel, onSubmit, onEvent }: MatchmakerFeedbackFlowProps) {
+  const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<MatchmakerFeedbackDraft>(createMatchmakerFeedbackDraft);
   const [restored, setRestored] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +32,9 @@ export function MatchmakerFeedbackFlow({ shortlistId, candidateUserId, candidate
 
   useEffect(() => {
     let active = true;
+    setDraft(createMatchmakerFeedbackDraft());
+    setError(null);
+    setRestored(false);
     loadMatchmakerFeedbackDraft(shortlistId, candidateUserId).then((saved) => {
       if (active && saved) setDraft(saved);
       if (active) setRestored(true);
@@ -72,7 +77,26 @@ export function MatchmakerFeedbackFlow({ shortlistId, candidateUserId, candidate
   };
 
   return (
-    <View accessibilityLiveRegion="polite" style={styles.wrap}>
+    <Modal animationType="fade" onRequestClose={close} statusBarTranslucent transparent visible>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalStage}>
+        <Pressable
+          accessibilityLabel="Close feedback"
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={close}
+          style={styles.backdrop}
+        />
+        <View
+          accessibilityLiveRegion="polite"
+          accessibilityViewIsModal
+          style={[styles.wrap, { marginBottom: Math.max(insets.bottom, SPACING.base) }]}
+        >
+          <ScrollView
+            bounces={false}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
       <View style={styles.header}>
         <View style={styles.headerCopy}>
           <Text style={styles.eyebrow}>Private feedback</Text>
@@ -86,12 +110,24 @@ export function MatchmakerFeedbackFlow({ shortlistId, candidateUserId, candidate
       {!draft.reasonCode ? (
         <View style={styles.options}>
           {MATCHMAKER_FEEDBACK_REASONS.map((item) => (
-            <Pressable key={item.code} accessibilityRole="button" disabled={busy} onPress={() => {
-              setDraft({ ...createMatchmakerFeedbackDraft(), reasonCode: item.code });
-              onEvent?.('feedback_reason_selected', item.code);
-            }} style={({ pressed }) => [styles.option, pressed && styles.optionPressed]}>
-              <Text style={styles.optionText}>{item.label}</Text>
-              <ChevronRight size={18} color={MATCHMAKER_HOME.subtleForeground} />
+            <Pressable
+              key={item.code}
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => {
+                setDraft({ ...createMatchmakerFeedbackDraft(), reasonCode: item.code });
+                onEvent?.('feedback_reason_selected', item.code);
+              }}
+              style={styles.optionPressable}
+            >
+              {({ pressed }) => (
+                <View style={[styles.option, pressed && styles.optionPressed]}>
+                  <View style={styles.optionCopy}>
+                    <Text style={styles.optionText}>{item.label}</Text>
+                  </View>
+                  <OptionChevron />
+                </View>
+              )}
             </Pressable>
           ))}
           <Text style={styles.privateNote}>Optional and private. This person will never see it.</Text>
@@ -99,17 +135,41 @@ export function MatchmakerFeedbackFlow({ shortlistId, candidateUserId, candidate
       ) : draft.learningScope === null ? (
         <View style={styles.step}>
           <Text style={styles.question}>How should I use this?</Text>
-          <Pressable accessibilityRole="button" disabled={busy} onPress={() => submit('candidate_only')} style={({ pressed }) => [styles.scopeOption, pressed && styles.optionPressed]}>
-            <View style={styles.scopeCopy}><Text style={styles.scopeTitle}>Only about this person</Text><Text style={styles.scopeBody}>Recommended. Your match brief stays unchanged.</Text></View>
-            <ChevronRight size={18} color={MATCHMAKER_HOME.subtleForeground} />
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy}
+            onPress={() => submit('candidate_only')}
+            style={styles.scopePressable}
+          >
+            {({ pressed }) => (
+              <View style={[styles.scopeOption, pressed && styles.optionPressed]}>
+                <View style={styles.scopeCopy}>
+                  <Text style={styles.scopeTitle}>Only about this person</Text>
+                  <Text style={styles.scopeBody}>Recommended. Your match brief stays unchanged.</Text>
+                </View>
+                <OptionChevron />
+              </View>
+            )}
           </Pressable>
-          <Pressable accessibilityRole="button" disabled={busy} onPress={() => {
-            setDraft((current) => ({ ...current, learningScope: 'future_matches' }));
-            if (reason?.needsFutureDetail && draft.reasonCode) onEvent?.('feedback_follow_up_requested', draft.reasonCode);
-            else if (draft.reasonCode) onEvent?.('feedback_learning_previewed', draft.reasonCode);
-          }} style={({ pressed }) => [styles.scopeOption, pressed && styles.optionPressed]}>
-            <View style={styles.scopeCopy}><Text style={styles.scopeTitle}>Use this for future matches</Text><Text style={styles.scopeBody}>You will review the exact brief change before it is saved.</Text></View>
-            <ChevronRight size={18} color={MATCHMAKER_HOME.primary} />
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy}
+            onPress={() => {
+              setDraft((current) => ({ ...current, learningScope: 'future_matches' }));
+              if (reason?.needsFutureDetail && draft.reasonCode) onEvent?.('feedback_follow_up_requested', draft.reasonCode);
+              else if (draft.reasonCode) onEvent?.('feedback_learning_previewed', draft.reasonCode);
+            }}
+            style={styles.scopePressable}
+          >
+            {({ pressed }) => (
+              <View style={[styles.scopeOption, pressed && styles.optionPressed]}>
+                <View style={styles.scopeCopy}>
+                  <Text style={styles.scopeTitle}>Use this for future matches</Text>
+                  <Text style={styles.scopeBody}>You will review the exact brief change before it is saved.</Text>
+                </View>
+                <OptionChevron emphasized />
+              </View>
+            )}
           </Pressable>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <BackButton onPress={() => setDraft(createMatchmakerFeedbackDraft())} />
@@ -128,14 +188,24 @@ export function MatchmakerFeedbackFlow({ shortlistId, candidateUserId, candidate
             onChangeText={(detail) => setDraft((current) => ({ ...current, detail }))}
             style={styles.input}
           />
-          <Pressable accessibilityRole="button" disabled={busy || !draft.detail.trim()} onPress={() => {
-            setDraft((current) => ({ ...current, detailConfirmed: true }));
-            if (draft.reasonCode) {
-              onEvent?.('feedback_follow_up_completed', draft.reasonCode);
-              onEvent?.('feedback_learning_previewed', draft.reasonCode);
-            }
-          }} style={({ pressed }) => [styles.primaryButton, (!draft.detail.trim() || busy) && styles.disabled, pressed && styles.primaryPressed]}>
-            <Text style={styles.primaryText}>Review brief change</Text><ChevronRight size={18} color={MATCHMAKER_HOME.primaryForeground} />
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy || !draft.detail.trim()}
+            onPress={() => {
+              setDraft((current) => ({ ...current, detailConfirmed: true }));
+              if (draft.reasonCode) {
+                onEvent?.('feedback_follow_up_completed', draft.reasonCode);
+                onEvent?.('feedback_learning_previewed', draft.reasonCode);
+              }
+            }}
+            style={styles.primaryPressable}
+          >
+            {({ pressed }) => (
+              <View style={[styles.primaryButton, (!draft.detail.trim() || busy) && styles.disabled, pressed && styles.primaryPressed]}>
+                <Text style={styles.primaryText}>Review brief change</Text>
+                <ChevronRight size={18} color={MATCHMAKER_HOME.primaryForeground} />
+              </View>
+            )}
           </Pressable>
           <BackButton onPress={() => setDraft((current) => ({ ...current, learningScope: null }))} />
         </View>
@@ -145,9 +215,18 @@ export function MatchmakerFeedbackFlow({ shortlistId, candidateUserId, candidate
           <View style={styles.preview}><Text style={styles.previewLabel}>Your match brief will add</Text><Text style={styles.previewText}>{preview}</Text></View>
           <Text style={styles.scopeBody}>Nothing else about this person will become a rule.</Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Pressable accessibilityRole="button" disabled={busy || !preview} onPress={() => submit('future_matches')} style={({ pressed }) => [styles.primaryButton, (busy || !preview) && styles.disabled, pressed && styles.primaryPressed]}>
-            {busy ? <ActivityIndicator size="small" color={MATCHMAKER_HOME.primaryForeground} /> : <Check size={18} color={MATCHMAKER_HOME.primaryForeground} />}
-            <Text style={styles.primaryText}>Confirm and save</Text>
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy || !preview}
+            onPress={() => submit('future_matches')}
+            style={styles.primaryPressable}
+          >
+            {({ pressed }) => (
+              <View style={[styles.primaryButton, (busy || !preview) && styles.disabled, pressed && styles.primaryPressed]}>
+                {busy ? <ActivityIndicator size="small" color={MATCHMAKER_HOME.primaryForeground} /> : <Check size={18} color={MATCHMAKER_HOME.primaryForeground} />}
+                <Text style={styles.primaryText}>Confirm and save</Text>
+              </View>
+            )}
           </Pressable>
           <BackButton onPress={() => {
             if (draft.reasonCode) onEvent?.('feedback_learning_cancelled', draft.reasonCode);
@@ -155,39 +234,81 @@ export function MatchmakerFeedbackFlow({ shortlistId, candidateUserId, candidate
           }} label="Use only for this person instead" />
         </View>
       ) : null}
-    </View>
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
 function BackButton({ onPress, label = 'Back' }: { onPress: () => void; label?: string }) {
-  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}><ChevronLeft size={17} color={MATCHMAKER_HOME.mutedForeground} /><Text style={styles.backText}>{label}</Text></Pressable>;
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.backPressable}>
+      {({ pressed }) => (
+        <View style={[styles.backButton, pressed && styles.pressed]}>
+          <ChevronLeft size={17} color={MATCHMAKER_HOME.mutedForeground} />
+          <Text style={styles.backText}>{label}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function OptionChevron({ emphasized = false }: { emphasized?: boolean }) {
+  return (
+    <View style={[styles.optionIcon, emphasized && styles.optionIconEmphasized]}>
+      <ChevronRight
+        color={emphasized ? MATCHMAKER_HOME.primary : MATCHMAKER_HOME.mutedForeground}
+        size={18}
+        strokeWidth={2.25}
+      />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: SPACING.base, padding: SPACING.base, borderWidth: 1, borderColor: MATCHMAKER_HOME.borderStrong, borderRadius: RADIUS.xl, backgroundColor: MATCHMAKER_HOME.backgroundRaised },
+  modalStage: { flex: 1, justifyContent: 'center', paddingHorizontal: SPACING.base },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15, 10, 20, 0.76)' },
+  wrap: { width: '100%', maxWidth: 520, maxHeight: '84%', alignSelf: 'center', overflow: 'hidden', borderWidth: 1, borderColor: MATCHMAKER_HOME.borderStrong, borderRadius: RADIUS.xl, backgroundColor: MATCHMAKER_HOME.backgroundRaised },
+  scrollContent: { gap: SPACING.base, padding: SPACING.base },
   header: { minHeight: 44, flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.compact },
   headerCopy: { flex: 1, gap: SPACING.micro },
   eyebrow: { color: MATCHMAKER_HOME.primary, fontSize: 12, lineHeight: 16, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   title: { color: MATCHMAKER_HOME.foreground, fontSize: 18, lineHeight: 24, fontWeight: '700' },
-  iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: MATCHMAKER_HOME.border, borderRadius: 22, backgroundColor: MATCHMAKER_HOME.surface },
   options: { gap: SPACING.tight },
-  option: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: SPACING.compact, paddingHorizontal: SPACING.compact, borderRadius: RADIUS.md, backgroundColor: MATCHMAKER_HOME.surface },
+  optionPressable: {
+    width: '100%',
+  },
+  option: { minHeight: 56, width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.compact, paddingVertical: SPACING.tight, paddingLeft: SPACING.compact, paddingRight: SPACING.tight, borderRadius: RADIUS.md, backgroundColor: MATCHMAKER_HOME.surface },
   optionPressed: { backgroundColor: MATCHMAKER_HOME.surfacePressed },
-  optionText: { flex: 1, color: MATCHMAKER_HOME.foreground, fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  optionCopy: { minWidth: 0, flex: 1, justifyContent: 'center' },
+  optionText: { color: MATCHMAKER_HOME.foreground, fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  optionIcon: { width: 36, height: 36, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: MATCHMAKER_HOME.surfaceStrong },
+  optionIconEmphasized: { borderWidth: 1, borderColor: MATCHMAKER_HOME.borderStrong },
   privateNote: { color: MATCHMAKER_HOME.subtleForeground, fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: SPACING.micro },
   step: { gap: SPACING.compact },
   question: { color: MATCHMAKER_HOME.foreground, fontSize: 16, lineHeight: 22, fontWeight: '700' },
-  scopeOption: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: SPACING.compact, padding: SPACING.compact, borderWidth: 1, borderColor: MATCHMAKER_HOME.border, borderRadius: RADIUS.md },
-  scopeCopy: { flex: 1, gap: 3 },
+  scopePressable: {
+    width: '100%',
+  },
+  scopeOption: { minHeight: 68, width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.compact, padding: SPACING.compact, borderWidth: 1, borderColor: MATCHMAKER_HOME.border, borderRadius: RADIUS.md, backgroundColor: MATCHMAKER_HOME.surface },
+  scopeCopy: { flex: 1, minWidth: 0, gap: 3 },
   scopeTitle: { color: MATCHMAKER_HOME.foreground, fontSize: 14, lineHeight: 19, fontWeight: '700' },
   scopeBody: { color: MATCHMAKER_HOME.mutedForeground, fontSize: 13, lineHeight: 18 },
   input: { minHeight: 104, color: MATCHMAKER_HOME.foreground, fontSize: 15, lineHeight: 21, textAlignVertical: 'top', padding: SPACING.compact, borderWidth: 1, borderColor: MATCHMAKER_HOME.borderStrong, borderRadius: RADIUS.md, backgroundColor: MATCHMAKER_HOME.surface },
   preview: { gap: SPACING.micro, padding: SPACING.compact, borderRadius: RADIUS.md, backgroundColor: MATCHMAKER_HOME.surfaceStrong },
   previewLabel: { color: MATCHMAKER_HOME.subtleForeground, fontSize: 11, lineHeight: 15, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
   previewText: { color: MATCHMAKER_HOME.foreground, fontSize: 15, lineHeight: 21, fontWeight: '600' },
-  primaryButton: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.tight, paddingHorizontal: SPACING.base, borderRadius: RADIUS.md, backgroundColor: MATCHMAKER_HOME.primary },
+  primaryPressable: {
+    width: '100%',
+  },
+  primaryButton: { minHeight: 52, width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.tight, paddingHorizontal: SPACING.base, borderRadius: RADIUS.md, backgroundColor: MATCHMAKER_HOME.primary },
   primaryPressed: { backgroundColor: MATCHMAKER_HOME.primaryPressed },
   primaryText: { color: MATCHMAKER_HOME.primaryForeground, fontSize: 15, lineHeight: 20, fontWeight: '800' },
+  backPressable: {
+    alignSelf: 'center',
+  },
   backButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.micro },
   backText: { color: MATCHMAKER_HOME.mutedForeground, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   error: { color: MATCHMAKER_HOME.error, fontSize: 13, lineHeight: 18 },

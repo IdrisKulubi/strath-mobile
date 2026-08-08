@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyShortlistAvailability, shortlistCandidateIds } from "@/lib/matchmaker/shortlist-availability";
+import { applyShortlistAvailability, removeShortlistCandidates, shortlistCandidateIds } from "@/lib/matchmaker/shortlist-availability";
 
 const messages = [{
     metadata: {
@@ -22,4 +22,11 @@ test("marks only newly unavailable candidates and preserves the rest of the shor
     const shortlist = result.messages[0].metadata.shortlist as unknown as { candidates: { availability: string }[] };
     assert.deepEqual(shortlist.candidates.map((candidate) => candidate.availability), ["unavailable", "available"]);
     assert.deepEqual(result.staleShortlistIds, ["shortlist"]);
+});
+
+test("removes a passed candidate from the shortlist and fallback candidate", () => {
+    const [updated] = removeShortlistCandidates(messages, new Set(["first"]));
+    const shortlist = updated.metadata.shortlist as unknown as { candidates: { candidateUserId: string }[] };
+    assert.deepEqual(shortlist.candidates.map((candidate) => candidate.candidateUserId), ["second"]);
+    assert.equal(updated.metadata.candidate, undefined);
 });

@@ -10,6 +10,7 @@ import {
     mutualMatches,
     profiles,
     user,
+    userMatchInterests,
 } from "@/db/schema";
 import {
     collectUsersIPassedIds,
@@ -257,25 +258,34 @@ async function getBlockedUserIds(userId: string) {
  * is enforced separately via {@link getExistingPairMap} `hasClosedOrMutual`.
  */
 async function getUsersIPassedIds(userId: string): Promise<Set<string>> {
-    const rows = await readDb
-        .select({
-            userAId: candidatePairs.userAId,
-            userBId: candidatePairs.userBId,
-            aDecision: candidatePairs.aDecision,
-            bDecision: candidatePairs.bDecision,
-        })
-        .from(candidatePairs)
-        .where(
-            and(
-                eq(candidatePairs.status, "closed"),
-                or(
-                    and(eq(candidatePairs.userAId, userId), eq(candidatePairs.aDecision, "passed")),
-                    and(eq(candidatePairs.userBId, userId), eq(candidatePairs.bDecision, "passed")),
+    const [pairRows, interestRows] = await Promise.all([
+        readDb
+            .select({
+                userAId: candidatePairs.userAId,
+                userBId: candidatePairs.userBId,
+                aDecision: candidatePairs.aDecision,
+                bDecision: candidatePairs.bDecision,
+            })
+            .from(candidatePairs)
+            .where(
+                and(
+                    eq(candidatePairs.status, "closed"),
+                    or(
+                        and(eq(candidatePairs.userAId, userId), eq(candidatePairs.aDecision, "passed")),
+                        and(eq(candidatePairs.userBId, userId), eq(candidatePairs.bDecision, "passed")),
+                    ),
                 ),
             ),
-        );
+        readDb
+            .select({ candidateUserId: userMatchInterests.candidateUserId })
+            .from(userMatchInterests)
+            .where(and(eq(userMatchInterests.viewerUserId, userId), eq(userMatchInterests.decision, "passed"))),
+    ]);
 
-    return collectUsersIPassedIds(userId, rows);
+    return new Set([
+        ...collectUsersIPassedIds(userId, pairRows),
+        ...interestRows.map((row) => row.candidateUserId),
+    ]);
 }
 
 async function getMatchedUserIds(userId: string) {

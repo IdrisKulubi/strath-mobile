@@ -1,9 +1,9 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import db from "@/db/drizzle";
-import { blocks, matchmakerMessages, matchmakerSessionResults, matchmakerSessions, matchmakerShortlists, profiles } from "@/db/schema";
+import { blocks, matchmakerMessages, matchmakerSessionResults, matchmakerSessions, matchmakerShortlists, profiles, userMatchInterests } from "@/db/schema";
 import { hasCompletedInitialFaceVerification } from "@/lib/matchmaking-pool-eligibility";
-import { applyShortlistAvailability, shortlistCandidateIds } from "@/lib/matchmaker/shortlist-availability";
+import { applyShortlistAvailability, removeShortlistCandidates, shortlistCandidateIds } from "@/lib/matchmaker/shortlist-availability";
 import {
     buildMatchmakerFeedbackProposal,
     hasRecordedFeedbackSubmission,
@@ -32,6 +32,7 @@ import {
 } from "@/lib/services/matchmaker-memory-service";
 import { getPhotoImprovementTips } from "@/lib/services/photo-intelligence-service";
 import { trackMatchmakerEvent } from "@/lib/services/matchmaker-analytics-service";
+import { ensurePermanentCandidatePass } from "@/lib/services/match-intelligence-service";
 import { presentNextMatchmakerCandidate } from "@/lib/services/matchmaker-session-search-service";
 import {
     applyMatchmakerPreferenceProposals,
@@ -648,11 +649,18 @@ async function buildResponse(sessionId: string): Promise<MatchmakerConversationR
     const candidateIds = shortlistCandidateIds(storedMessages);
     let messages = storedMessages;
     if (candidateIds.length > 0) {
-        const [candidateProfiles, blockedByViewer, blockedViewer] = await Promise.all([
+        const [candidateProfiles, blockedByViewer, blockedViewer, passedByViewer] = await Promise.all([
             db.query.profiles.findMany({ where: inArray(profiles.userId, candidateIds) }),
             db.select({ id: blocks.blockedId }).from(blocks).where(and(eq(blocks.blockerId, session.userId), inArray(blocks.blockedId, candidateIds))),
             db.select({ id: blocks.blockerId }).from(blocks).where(and(eq(blocks.blockedId, session.userId), inArray(blocks.blockerId, candidateIds))),
+            db.select({ id: userMatchInterests.candidateUserId }).from(userMatchInterests).where(and(
+                eq(userMatchInterests.viewerUserId, session.userId),
+                eq(userMatchInterests.decision, "passed"),
+                inArray(userMatchInterests.candidateUserId, candidateIds),
+            )),
         ]);
+        const passedIds = new Set(passedByViewer.map((row) => row.id));
+        messages = removeShortlistCandidates(messages, passedIds);
         const eligibleIds = new Set(candidateProfiles.filter((profile) =>
             (profile.profileCompleted || profile.isComplete)
             && profile.isVisible !== false
@@ -660,9 +668,9 @@ async function buildResponse(sessionId: string): Promise<MatchmakerConversationR
             && hasCompletedInitialFaceVerification(profile),
         ).map((profile) => profile.userId));
         const blockedIds = new Set([...blockedByViewer, ...blockedViewer].map((row) => row.id));
-        const unavailableIds = new Set(candidateIds.filter((id) => !eligibleIds.has(id) || blockedIds.has(id)));
+        const unavailableIds = new Set(candidateIds.filter((id) => !passedIds.has(id) && (!eligibleIds.has(id) || blockedIds.has(id))));
         if (unavailableIds.size > 0) {
-            const availability = applyShortlistAvailability(storedMessages, unavailableIds);
+            const availability = applyShortlistAvailability(messages, unavailableIds);
             messages = availability.messages;
             const staleShortlistIds = availability.staleShortlistIds;
             if (staleShortlistIds.length > 0) {
@@ -1039,11 +1047,6 @@ export async function addMatchmakerConversationFeedback(input: {
     const session = await getOrCreateRawSession(input.userId);
     const candidateUserId = input.candidateUserId ?? session.lastCandidateUserId ?? null;
     const learningScope = input.learningScope ?? "candidate_only";
-    if (input.submissionId) {
-        const existingMemory = await getMatchmakerUserMemory(input.userId);
-        const alreadyRecorded = hasRecordedFeedbackSubmission(existingMemory?.feedbackHistory, input.submissionId);
-        if (alreadyRecorded) return buildResponse(session.id);
-    }
 
     if (input.shortlistId && candidateUserId) {
         const shortlistCandidate = await db.query.matchmakerSessionResults.findFirst({
@@ -1055,6 +1058,20 @@ export async function addMatchmakerConversationFeedback(input: {
             columns: { id: true },
         });
         if (!shortlistCandidate) throw new Error("This candidate is not part of your shortlist");
+    }
+
+    if (candidateUserId && (input.outcome === "not_this_one" || input.outcome === "passed")) {
+        await ensurePermanentCandidatePass({
+            viewerUserId: input.userId,
+            candidateUserId,
+            source: "matchmaker",
+        });
+    }
+
+    if (input.submissionId) {
+        const existingMemory = await getMatchmakerUserMemory(input.userId);
+        const alreadyRecorded = hasRecordedFeedbackSubmission(existingMemory?.feedbackHistory, input.submissionId);
+        if (alreadyRecorded) return buildResponse(session.id);
     }
 
     const proposal = input.reasonCode
