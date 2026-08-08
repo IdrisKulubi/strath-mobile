@@ -313,8 +313,9 @@ async function presentNextMatchmakerCandidateV1(session: MatchmakerSessionRow) {
     }).catch(() => undefined);
 }
 
-const SHORTLIST_SIZE = 3;
+const SHORTLIST_MAX_SIZE = 3;
 const SHORTLIST_MINIMUM_INTERNAL_SCORE = 45;
+const SHORTLIST_MINIMUM_RELEVANCE_SCORE = 15;
 
 export function buildMatchmakerShortlistRequestKey(input: {
     sessionId: string;
@@ -327,7 +328,7 @@ export function buildMatchmakerShortlistRequestKey(input: {
 export function curateUniqueShortlist<T extends { candidateUserId: string }>(
     candidates: T[],
     excludedCandidateIds: string[],
-    limit = SHORTLIST_SIZE,
+    limit = SHORTLIST_MAX_SIZE,
 ) {
     const excluded = new Set(excludedCandidateIds);
     const unique = new Map<string, T>();
@@ -336,7 +337,7 @@ export function curateUniqueShortlist<T extends { candidateUserId: string }>(
     }
     return [...unique.values()]
         .filter((candidate) => !excluded.has(candidate.candidateUserId))
-        .slice(0, Math.max(0, Math.min(limit, SHORTLIST_SIZE)));
+        .slice(0, Math.max(0, Math.min(limit, SHORTLIST_MAX_SIZE)));
 }
 
 async function presentCuratedMatchmakerShortlist(session: MatchmakerSessionRow) {
@@ -366,8 +367,9 @@ async function presentCuratedMatchmakerShortlist(session: MatchmakerSessionRow) 
         result = await searchMatchmakerCandidates({
             viewerUserId: session.userId,
             intentText,
-            limit: SHORTLIST_SIZE,
+            limit: SHORTLIST_MAX_SIZE,
             minimumInternalScore: SHORTLIST_MINIMUM_INTERNAL_SCORE,
+            minimumRelevanceScore: SHORTLIST_MINIMUM_RELEVANCE_SCORE,
             excludeUserIds: shownCandidateIds,
             confirmedPreferences: brief.preferences
                 .filter((preference) => preference.status === "active" && preference.certainty === "confirmed")
@@ -446,7 +448,7 @@ async function presentCuratedMatchmakerShortlist(session: MatchmakerSessionRow) 
             briefVersion: brief.version,
             intentSnapshot: { intentText, sessionIntent: session.currentIntent, sessionPlan: session.currentPlan },
             metadata: {
-                requestedSize: SHORTLIST_SIZE,
+                requestedSize: SHORTLIST_MAX_SIZE,
                 resultSize: uniqueCandidates.length,
                 searchedCachedCandidates: result.meta.searchedCachedCandidates,
                 embeddingUsed: result.meta.embeddingUsed,
@@ -509,7 +511,7 @@ async function presentCuratedMatchmakerShortlist(session: MatchmakerSessionRow) 
     });
 
     if (!persisted.created) return;
-    const shortlistEvent = uniqueCandidates.length < SHORTLIST_SIZE ? "shortlist_partial" : "shortlist_generated";
+    const shortlistEvent = uniqueCandidates.length < SHORTLIST_MAX_SIZE ? "shortlist_partial" : "shortlist_generated";
     trackMatchmakerEvent({
         event: shortlistEvent,
         userId: session.userId,

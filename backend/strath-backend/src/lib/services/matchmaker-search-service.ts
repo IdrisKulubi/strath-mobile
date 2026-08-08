@@ -23,6 +23,7 @@ export type MatchmakerSearchOptions = {
     limit?: number;
     excludeUserIds?: string[];
     minimumInternalScore?: number;
+    minimumRelevanceScore?: number;
     confirmedPreferences?: MatchmakerSearchPreference[];
 };
 
@@ -115,7 +116,8 @@ function keywordScore(intent: MatchmakerParsedIntent, candidate: MatchmakerCandi
         candidate.university,
         candidate.course,
     ].filter(Boolean).join(" "));
-    if (!haystack || intent.keywords.length === 0) return 35;
+    if (intent.keywords.length === 0) return 35;
+    if (!haystack) return 0;
 
     const matches = intent.keywords.filter((keyword) => haystack.includes(keyword));
     return clampScore((matches.length / Math.min(intent.keywords.length, 8)) * 100);
@@ -224,7 +226,7 @@ function structuredTagScore(intent: MatchmakerParsedIntent, candidate: Matchmake
         ...normalizeTags(candidate.communicationTags),
         ...normalizeTags(candidate.availabilityTags),
     ]);
-    if (candidateTags.size === 0) return 35;
+    if (candidateTags.size === 0) return 0;
 
     let matches = 0;
     for (const tag of requestedTags) {
@@ -278,6 +280,7 @@ export function rankMatchmakerCandidates(input: {
     intentEmbedding?: number[] | null;
     limit?: number;
     minimumInternalScore?: number;
+    minimumRelevanceScore?: number;
     confirmedPreferences?: MatchmakerSearchPreference[];
 }) {
     const limit = Math.min(Math.max(input.limit ?? 3, 1), 10);
@@ -326,12 +329,26 @@ export function rankMatchmakerCandidates(input: {
                 labels,
                 reason,
                 internalScore: clampScore(score),
+                intentRelevanceScore: clampScore(relevanceScore),
+                hasConfirmedPreferenceEvidence: grounded.explanation.matchedPreferenceIds.length > 0,
                 ...grounded,
             };
         })
-        .filter((candidate) => candidate.internalScore >= (input.minimumInternalScore ?? 0))
+        .filter((candidate) =>
+            candidate.internalScore >= (input.minimumInternalScore ?? 0) &&
+            (
+                input.intent.keywords.length === 0 ||
+                candidate.intentRelevanceScore >= (input.minimumRelevanceScore ?? 0) ||
+                candidate.hasConfirmedPreferenceEvidence
+            ),
+        )
         .sort((left, right) => right.internalScore - left.internalScore || left.candidateUserId.localeCompare(right.candidateUserId))
-        .slice(0, limit);
+        .slice(0, limit)
+        .map(({ intentRelevanceScore, hasConfirmedPreferenceEvidence, ...candidate }) => {
+            void intentRelevanceScore;
+            void hasConfirmedPreferenceEvidence;
+            return candidate;
+        });
 }
 
 async function getExcludedUserIds(viewerUserId: string, additional: string[]) {
@@ -439,7 +456,8 @@ export async function searchMatchmakerCandidates(options: MatchmakerSearchOption
         candidates,
         intentEmbedding,
         limit,
-        minimumInternalScore: options.minimumInternalScore,
+        minimumInternalScore: options.minimumInternalScore ?? 45,
+        minimumRelevanceScore: options.minimumRelevanceScore ?? 15,
         confirmedPreferences: options.confirmedPreferences,
     });
 

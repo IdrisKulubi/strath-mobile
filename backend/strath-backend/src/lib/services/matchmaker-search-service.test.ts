@@ -110,6 +110,34 @@ test("rankMatchmakerCandidates never pads below the requested quality threshold"
     assert.deepEqual(results, []);
 });
 
+test("rankMatchmakerCandidates does not fill the limit with profiles unrelated to the search", () => {
+    const results = rankMatchmakerCandidates({
+        intent: parseMatchmakerIntent("someone calm and serious"),
+        candidates: [
+            candidate({ candidateUserId: "strong-match" }),
+            candidate({
+                candidateUserId: "partial-match",
+                profileSummary: "Calm and thoughtful.",
+                searchText: "calm thoughtful",
+            }),
+            candidate({
+                candidateUserId: "good-profile-wrong-fit",
+                profileSummary: "Outgoing and spontaneous.",
+                searchText: "outgoing spontaneous nightlife",
+                activityScore: 98,
+                responseScore: 95,
+                candidateStrengthScore: 95,
+                profileCompletenessScore: 100,
+            }),
+        ],
+        limit: 3,
+        minimumInternalScore: 45,
+        minimumRelevanceScore: 15,
+    });
+
+    assert.deepEqual(results.map((item) => item.candidateUserId), ["strong-match", "partial-match"]);
+});
+
 test("confirmed avoid evidence excludes a candidate", () => {
     const results = rankMatchmakerCandidates({
         intent: parseMatchmakerIntent("someone calm"),
