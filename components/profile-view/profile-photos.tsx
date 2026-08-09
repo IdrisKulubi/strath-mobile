@@ -1,36 +1,49 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, Dimensions, Pressable } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '@/components/ui/cached-image';
+import { Text } from '@/components/ui/text';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const PHOTO_HEIGHT = 420;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+export function getProfilePhotoHeight() {
+    return Math.round(Math.min(580, Math.max(460, SCREEN_HEIGHT * 0.58)));
+}
+
+interface ProfileHeroIdentity {
+    nameLine: string;
+    subtitle?: string | null;
+}
 
 interface ProfilePhotosProps {
     photos: (string | undefined | null)[];
     onBack?: () => void;
     onPhotoPress?: (uri: string) => void;
+    heroIdentity?: ProfileHeroIdentity;
 }
 
-export function ProfilePhotos({ photos, onBack, onPhotoPress }: ProfilePhotosProps) {
+export function ProfilePhotos({ photos, onBack, onPhotoPress, heroIdentity }: ProfilePhotosProps) {
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
     const [activeIndex, setActiveIndex] = useState(0);
     const scrollRef = useRef<ScrollView>(null);
+    const photoHeight = useMemo(() => getProfilePhotoHeight(), []);
 
     const validPhotos = photos.filter(Boolean) as string[];
     const displayPhotos = validPhotos.length > 0 ? validPhotos : [undefined];
+    const hasHero = Boolean(heroIdentity);
 
-    const handleScroll = useCallback((e: any) => {
+    const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { x: number } } }) => {
         const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
         setActiveIndex(idx);
     }, []);
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { height: photoHeight }]}>
             <ScrollView
                 ref={scrollRef}
                 horizontal
@@ -40,7 +53,7 @@ export function ProfilePhotos({ photos, onBack, onPhotoPress }: ProfilePhotosPro
                 scrollEventThrottle={16}
             >
                 {displayPhotos.map((photo, i) => (
-                    <View key={i} style={styles.photoSlide}>
+                    <View key={i} style={[styles.photoSlide, { width: SCREEN_WIDTH, height: photoHeight }]}>
                         {photo ? (
                             <Pressable
                                 style={styles.photo}
@@ -61,8 +74,16 @@ export function ProfilePhotos({ photos, onBack, onPhotoPress }: ProfilePhotosPro
                 ))}
             </ScrollView>
 
-            {/* Back button */}
-            {onBack && (
+            {hasHero ? (
+                <LinearGradient
+                    pointerEvents="none"
+                    colors={['transparent', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.82)']}
+                    locations={[0, 0.45, 1]}
+                    style={styles.heroGradient}
+                />
+            ) : null}
+
+            {onBack ? (
                 <Pressable
                     onPress={onBack}
                     style={[
@@ -76,11 +97,10 @@ export function ProfilePhotos({ photos, onBack, onPhotoPress }: ProfilePhotosPro
                 >
                     <Ionicons name="chevron-back" size={22} color="#fff" />
                 </Pressable>
-            )}
+            ) : null}
 
-            {/* Dot indicators */}
-            {displayPhotos.length > 1 && (
-                <View style={styles.dots}>
+            {displayPhotos.length > 1 ? (
+                <View style={[styles.dots, hasHero && styles.dotsWithHero]}>
                     {displayPhotos.map((_, i) => (
                         <View
                             key={i}
@@ -94,19 +114,26 @@ export function ProfilePhotos({ photos, onBack, onPhotoPress }: ProfilePhotosPro
                         />
                     ))}
                 </View>
-            )}
+            ) : null}
+
+            {heroIdentity ? (
+                <View pointerEvents="none" style={styles.heroContent}>
+                    <Text style={styles.heroName}>{heroIdentity.nameLine}</Text>
+                    {heroIdentity.subtitle ? (
+                        <Text style={styles.heroSubtitle}>{heroIdentity.subtitle}</Text>
+                    ) : null}
+                </View>
+            ) : null}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        height: PHOTO_HEIGHT,
         position: 'relative',
     },
     photoSlide: {
         width: SCREEN_WIDTH,
-        height: PHOTO_HEIGHT,
     },
     photo: {
         width: '100%',
@@ -115,6 +142,13 @@ const styles = StyleSheet.create({
     photoFallback: {
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    heroGradient: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: 220,
     },
     backBtn: {
         position: 'absolute',
@@ -135,8 +169,31 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 5,
     },
+    dotsWithHero: {
+        bottom: 92,
+    },
     dot: {
         height: 6,
         borderRadius: 3,
+    },
+    heroContent: {
+        position: 'absolute',
+        left: 20,
+        right: 20,
+        bottom: 22,
+        gap: 4,
+    },
+    heroName: {
+        color: '#fff',
+        fontSize: 28,
+        fontWeight: '700',
+        letterSpacing: -0.4,
+        lineHeight: 34,
+    },
+    heroSubtitle: {
+        color: 'rgba(255,255,255,0.88)',
+        fontSize: 15,
+        lineHeight: 20,
+        fontWeight: '500',
     },
 });

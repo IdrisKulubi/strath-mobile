@@ -1,9 +1,10 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import db from "@/db/drizzle";
-import { blocks, matchmakerMessages, matchmakerSessionResults, matchmakerSessions, matchmakerShortlists, profiles, userMatchInterests } from "@/db/schema";
+import { blocks, matchmakerMessages, matchmakerSessionResults, matchmakerSessions, matchmakerShortlists, profileIntelligence, profiles, userMatchInterests } from "@/db/schema";
 import { hasCompletedInitialFaceVerification } from "@/lib/matchmaking-pool-eligibility";
 import { applyShortlistAvailability, removeShortlistCandidates, shortlistCandidateIds } from "@/lib/matchmaker/shortlist-availability";
+import { buildMatchmakerStarterSuggestions } from "@/lib/matchmaker/starter-suggestions";
 import {
     buildMatchmakerFeedbackProposal,
     hasRecordedFeedbackSubmission,
@@ -103,15 +104,9 @@ export interface MatchmakerConversationResponse {
 }
 
 export const MATCHMAKER_VOICE_VERSION = "v3-no-templates";
+const STARTER_SUGGESTIONS_VERSION = "v1-profile-personalized";
 
 const DEFAULT_SEARCH_LIMIT = Number(process.env.MATCHMAKER_DAILY_SEARCH_LIMIT || 3);
-
-const INITIAL_QUICK_REPLIES = [
-    "I want someone calm",
-    "Someone serious",
-    "Someone active today",
-    "Help me figure it out",
-];
 
 const LIMIT_REFINE_QUICK_REPLIES = [
     "Help me refine my type",
@@ -499,14 +494,6 @@ function serializeSession(row: typeof matchmakerSessions.$inferSelect): Matchmak
     };
 }
 
-async function getUserFirstName(userId: string) {
-    const profile = await db.query.profiles.findFirst({
-        where: eq(profiles.userId, userId),
-        columns: { firstName: true },
-    });
-    return profile?.firstName ?? null;
-}
-
 async function listMessages(sessionId: string) {
     const rows = await db.query.matchmakerMessages.findMany({
         where: eq(matchmakerMessages.sessionId, sessionId),
@@ -540,22 +527,62 @@ async function createMessage(input: {
 async function ensureGreeting(session: typeof matchmakerSessions.$inferSelect) {
     const existing = await db.query.matchmakerMessages.findFirst({
         where: eq(matchmakerMessages.sessionId, session.id),
+        orderBy: [asc(matchmakerMessages.createdAt)],
     });
-    if (existing) return;
+    const existingMetadata = existing?.metadata && typeof existing.metadata === "object" && !Array.isArray(existing.metadata)
+        ? existing.metadata as Record<string, unknown>
+        : {};
+    if (existing && existingMetadata.starterSuggestionsVersion === STARTER_SUGGESTIONS_VERSION) return;
 
-    const firstName = await getUserFirstName(session.userId);
-    const greeting = await generateMatchmakerGreeting({ firstName });
+    const personalizationV2 = await isMatchmakerPersonalizationV2EnabledForUser(session.userId);
+    const [profile, intelligence, brief] = await Promise.all([
+        db.query.profiles.findFirst({ where: eq(profiles.userId, session.userId) }),
+        db.query.profileIntelligence.findFirst({ where: eq(profileIntelligence.userId, session.userId) }),
+        personalizationV2 ? getMatchmakerBrief(session.userId) : Promise.resolve(null),
+    ]);
+    const quickReplies = buildMatchmakerStarterSuggestions({
+        seed: session.id,
+        confirmedPreferences: brief?.preferences
+            .filter((preference) => preference.status === "active" && preference.certainty === "confirmed")
+            .map((preference) => ({ value: preference.value, sentiment: preference.sentiment })),
+        lookingFor: profile?.lookingFor,
+        communicationStyle: profile?.communicationStyle,
+        qualities: profile?.qualities,
+        relationshipGoal: profile?.lifestyleAnswers?.relationshipGoal,
+        socialVibe: profile?.personalityAnswers?.socialVibe,
+        idealDateVibe: profile?.personalityAnswers?.idealDateVibe,
+        traitTags: intelligence?.traitTags,
+        datingIntentTags: intelligence?.datingIntentTags,
+        socialEnergyTags: intelligence?.socialEnergyTags,
+        interestTags: intelligence?.interestTags,
+    });
+
+    if (existing) {
+        if (existing.kind === "greeting") {
+            await db.update(matchmakerMessages).set({
+                quickReplies,
+                metadata: {
+                    ...existingMetadata,
+                    starterSuggestionsVersion: STARTER_SUGGESTIONS_VERSION,
+                },
+            }).where(eq(matchmakerMessages.id, existing.id));
+        }
+        return;
+    }
+
+    const greeting = await generateMatchmakerGreeting({ firstName: profile?.firstName });
     await createMessage({
         sessionId: session.id,
         role: "assistant",
         kind: "greeting",
         text: greeting.text,
-        quickReplies: INITIAL_QUICK_REPLIES,
+        quickReplies,
         metadata: {
             provider: greeting.provider,
             model: greeting.model,
             fallbackUsed: greeting.fallbackUsed,
             voiceVersion: MATCHMAKER_VOICE_VERSION,
+            starterSuggestionsVersion: STARTER_SUGGESTIONS_VERSION,
         },
     });
 }

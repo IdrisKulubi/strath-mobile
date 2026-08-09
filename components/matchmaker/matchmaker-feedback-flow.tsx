@@ -10,7 +10,7 @@ import { clearMatchmakerFeedbackDraft, createMatchmakerFeedbackDraft, loadMatchm
 import type { MatchmakerFeedbackInput, MatchmakerFeedbackLearningScope, MatchmakerFeedbackReasonCode } from '@/types/matchmaker';
 
 interface MatchmakerFeedbackFlowProps {
-  shortlistId: string;
+  shortlistId?: string;
   candidateUserId: string;
   candidateName: string | null;
   briefVersion: number;
@@ -60,7 +60,7 @@ export function MatchmakerFeedbackFlow({ shortlistId, candidateUserId, candidate
     try {
       await onSubmit({
         outcome: 'not_this_one',
-        shortlistId,
+        ...(shortlistId ? { shortlistId } : {}),
         candidateUserId,
         reasonCode: draft.reasonCode,
         detail: draft.detail.trim() || undefined,

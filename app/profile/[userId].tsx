@@ -15,7 +15,10 @@ import { useToast } from '@/components/ui/toast';
 import { useTheme } from '@/hooks/use-theme';
 import { useUserProfile } from '@/hooks/use-user-profile';
 import { useRespondToDailyPair } from '@/hooks/use-daily-matches';
-import { useSubmitMatchmakerFeedback } from '@/hooks/use-matchmaker';
+import { useMatchmakerBrief, useSubmitMatchmakerFeedback } from '@/hooks/use-matchmaker';
+import { usePublicFeatureFlags } from '@/hooks/use-payments-enabled';
+import { MatchmakerFeedbackFlow } from '@/components/matchmaker/matchmaker-feedback-flow';
+import type { MatchmakerFeedbackInput } from '@/types/matchmaker';
 import {
     MatchType,
     RecommendationSource,
@@ -29,7 +32,7 @@ import { CompatibilityBlock } from '@/components/profile-view/compatibility-bloc
 import { InterestsChips } from '@/components/profile-view/interests-chips';
 import { PersonalityTags } from '@/components/profile-view/personality-tags';
 import { WingmanQuotes } from '@/components/profile-view/wingman-quotes';
-import { ProfileViewCta } from '@/components/profile-view/profile-view-cta';
+import { ProfileViewCta, PROFILE_VIEW_FLOATING_INSET } from '@/components/profile-view/profile-view-cta';
 import { QualityBadge } from '@/components/ui/quality-badge';
 import {
     buildProfilePills,
@@ -75,10 +78,11 @@ function ProfileSkeleton() {
 }
 
 export default function ProfileViewScreen() {
-    const params = useLocalSearchParams<{ userId: string; source?: string; matchType?: string }>();
+    const params = useLocalSearchParams<{ userId: string; source?: string; matchType?: string; shortlistId?: string }>();
     const userId = getSingleParam(params.userId);
     const sourceParam = getSingleParam(params.source);
     const matchTypeParam = getSingleParam(params.matchType);
+    const shortlistIdParam = getSingleParam(params.shortlistId);
     const router = useRouter();
     const queryClient = useQueryClient();
     const toast = useToast();
@@ -90,8 +94,12 @@ export default function ProfileViewScreen() {
     const recommendationDecision = useRecommendationDecision();
     const recommendationEvent = useRecommendationEvent();
     const matchmakerFeedback = useSubmitMatchmakerFeedback();
+    const featureFlags = usePublicFeatureFlags();
+    const personalizationV2Enabled = Boolean(featureFlags.data?.matchmakerPersonalizationV2);
+    const briefQuery = useMatchmakerBrief(personalizationV2Enabled && sourceParam === 'matchmaker');
     const hasLoggedProfileView = useRef(false);
     const [fullScreenPhotoUri, setFullScreenPhotoUri] = useState<string | null>(null);
+    const [showPassFeedback, setShowPassFeedback] = useState(false);
     const [infoSheet, setInfoSheet] = useState<{ visible: boolean; type: DecisionSheetType }>({
         visible: false,
         type: 'open_to_meet',
@@ -223,7 +231,19 @@ export default function ProfileViewScreen() {
         userId,
     ]);
 
+    const handleMatchmakerPassFeedbackSubmit = useCallback(async (input: MatchmakerFeedbackInput) => {
+        await matchmakerFeedback.mutateAsync(input);
+        updateProfileDecision('passed');
+        setShowPassFeedback(false);
+        router.back();
+    }, [matchmakerFeedback, router, updateProfileDecision]);
+
     const handlePass = useCallback(() => {
+        if (isMatchmakerProfile) {
+            setShowPassFeedback(true);
+            return;
+        }
+
         if (!profile?.pairId) {
             if (!canUseRecommendationDecision || !userId || !recommendationSource) return;
 
@@ -237,16 +257,8 @@ export default function ProfileViewScreen() {
                 {
                     onSuccess: () => {
                         updateProfileDecision('passed');
-                        if (isMatchmakerProfile) {
-                            matchmakerFeedback.mutate({
-                                outcome: 'passed',
-                                candidateUserId: userId,
-                            });
-                        }
                         toast.show({
-                            message: isMatchmakerProfile
-                                ? 'Passed. The matchmaker will adjust.'
-                                : 'Passed. Tomorrow\'s picks will learn from this.',
+                            message: 'Passed. Tomorrow\'s picks will learn from this.',
                             variant: 'default',
                             position: 'bottom',
                         });
@@ -269,12 +281,6 @@ export default function ProfileViewScreen() {
             {
                 onSuccess: () => {
                     updateProfileDecision('passed');
-                    if (isMatchmakerProfile && userId) {
-                        matchmakerFeedback.mutate({
-                            outcome: 'passed',
-                            candidateUserId: userId,
-                        });
-                    }
                     setInfoSheet({ visible: true, type: 'pass' });
                 },
                 onError: () => {
@@ -303,14 +309,10 @@ export default function ProfileViewScreen() {
     const handleCloseInfoSheet = useCallback(() => {
         const wasPass = infoSheet.type === 'pass';
         setInfoSheet((state) => ({ ...state, visible: false }));
-        if (isMatchmakerProfile) {
-            router.replace('/(tabs)');
-            return;
-        }
         if (wasPass) {
             router.back();
         }
-    }, [infoSheet.type, isMatchmakerProfile, router]);
+    }, [infoSheet.type, router]);
 
     if (isLoading) {
         return (
@@ -424,27 +426,28 @@ export default function ProfileViewScreen() {
 
             <ScrollView
                 style={styles.scroll}
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    {
+                        paddingBottom: PROFILE_VIEW_FLOATING_INSET
+                            + ((profile.pairId || canUseRecommendationDecision) && profile.currentUserDecision === 'pending'
+                                ? 28
+                                : 0),
+                    },
+                ]}
                 showsVerticalScrollIndicator={false}
             >
                 <ProfilePhotos
                     photos={allPhotos.length > 0 ? allPhotos : [undefined]}
                     onBack={handleBack}
                     onPhotoPress={(uri) => setFullScreenPhotoUri(uri)}
+                    heroIdentity={{
+                        nameLine: `${profile.firstName}, ${profile.age}`,
+                        subtitle: [profile.course, profile.university].filter(Boolean).join(' · ') || null,
+                    }}
                 />
 
                 <View style={styles.content}>
-                    <View style={styles.nameSection}>
-                        <Text style={[styles.name, { color: colors.foreground }]}>
-                            {profile.firstName}, {profile.age}
-                        </Text>
-                        {(profile.course || profile.university) && (
-                            <Text style={[styles.courseLine, { color: colors.mutedForeground }]}>
-                                {[profile.course, profile.university].filter(Boolean).join(' · ')}
-                            </Text>
-                        )}
-                    </View>
-
                     <CompatibilityBlock
                         score={profile.compatibilityScore}
                         reasons={profile.reasons}
@@ -572,14 +575,6 @@ export default function ProfileViewScreen() {
                 </View>
             </ScrollView>
 
-            {isMatchmakerProfile ? (
-                <View style={[styles.matchmakerDecisionNote, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-                    <Text style={[styles.matchmakerDecisionText, { color: colors.mutedForeground }]}>
-                        Suggested by your matchmaker. Your decision updates the next search.
-                    </Text>
-                </View>
-            ) : null}
-
             <ProfileViewCta
                 onOpenToMeet={handleOpenToMeet}
                 onPass={profile.pairId || canUseRecommendationDecision ? handlePass : undefined}
@@ -608,6 +603,18 @@ export default function ProfileViewScreen() {
                 firstName={profile.firstName}
                 onClose={handleCloseInfoSheet}
             />
+
+            {isMatchmakerProfile && showPassFeedback && userId ? (
+                <MatchmakerFeedbackFlow
+                    shortlistId={shortlistIdParam}
+                    candidateUserId={userId}
+                    candidateName={profile.firstName}
+                    briefVersion={briefQuery.data?.version ?? 0}
+                    busy={matchmakerFeedback.isPending}
+                    onCancel={() => setShowPassFeedback(false)}
+                    onSubmit={handleMatchmakerPassFeedbackSubmit}
+                />
+            ) : null}
         </View>
     );
 }
@@ -621,39 +628,12 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         flexGrow: 1,
-        paddingBottom: 16,
     },
     content: {
         paddingHorizontal: 20,
-        paddingTop: 20,
+        paddingTop: 16,
         paddingBottom: 28,
         gap: 24,
-    },
-    matchmakerDecisionNote: {
-        borderTopWidth: 1,
-        paddingHorizontal: 20,
-        paddingTop: 10,
-        paddingBottom: 2,
-    },
-    matchmakerDecisionText: {
-        fontSize: 12,
-        lineHeight: 16,
-        fontWeight: '600',
-        textAlign: 'center',
-    },
-    nameSection: {
-        gap: 4,
-    },
-    name: {
-        fontSize: 26,
-        fontWeight: '700',
-        letterSpacing: -0.3,
-        lineHeight: 32,
-        paddingTop: 2,
-    },
-    courseLine: {
-        fontSize: 15,
-        fontWeight: '400',
     },
     bioSection: {
         gap: 6,

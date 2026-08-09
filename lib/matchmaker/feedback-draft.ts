@@ -20,9 +20,13 @@ export function createMatchmakerFeedbackDraft(): MatchmakerFeedbackDraft {
   };
 }
 
-const key = (shortlistId: string, candidateUserId: string) => `matchmaker:feedback:v2:${shortlistId}:${candidateUserId}`;
+const key = (shortlistId: string | undefined, candidateUserId: string) => (
+  shortlistId
+    ? `matchmaker:feedback:v2:${shortlistId}:${candidateUserId}`
+    : `matchmaker:feedback:v2:profile:${candidateUserId}`
+);
 
-export async function loadMatchmakerFeedbackDraft(shortlistId: string, candidateUserId: string) {
+export async function loadMatchmakerFeedbackDraft(shortlistId: string | undefined, candidateUserId: string) {
   const raw = await AsyncStorage.getItem(key(shortlistId, candidateUserId));
   if (!raw) return null;
   try {
@@ -35,10 +39,10 @@ export async function loadMatchmakerFeedbackDraft(shortlistId: string, candidate
   }
 }
 
-export function saveMatchmakerFeedbackDraft(shortlistId: string, candidateUserId: string, draft: MatchmakerFeedbackDraft) {
+export function saveMatchmakerFeedbackDraft(shortlistId: string | undefined, candidateUserId: string, draft: MatchmakerFeedbackDraft) {
   return AsyncStorage.setItem(key(shortlistId, candidateUserId), JSON.stringify(draft));
 }
 
-export function clearMatchmakerFeedbackDraft(shortlistId: string, candidateUserId: string) {
+export function clearMatchmakerFeedbackDraft(shortlistId: string | undefined, candidateUserId: string) {
   return AsyncStorage.removeItem(key(shortlistId, candidateUserId));
 }
