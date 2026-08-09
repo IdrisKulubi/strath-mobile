@@ -29,12 +29,22 @@ export interface SignupCapConfig {
 
 export const MATCHMAKER_V2_ROLLOUT_PERCENTAGES = [0, 5, 25, 50, 100] as const;
 export type MatchmakerV2RolloutPercentage = typeof MATCHMAKER_V2_ROLLOUT_PERCENTAGES[number];
+export const MATCHMAKER_DAILY_SEARCH_LIMIT_MIN = 1;
+export const MATCHMAKER_DAILY_SEARCH_LIMIT_MAX = 10;
+export const DEFAULT_MATCHMAKER_DAILY_SEARCH_LIMIT = Math.min(
+    MATCHMAKER_DAILY_SEARCH_LIMIT_MAX,
+    Math.max(
+        MATCHMAKER_DAILY_SEARCH_LIMIT_MIN,
+        Number.parseInt(process.env.MATCHMAKER_DAILY_SEARCH_LIMIT || "3", 10) || 3,
+    ),
+);
 
 export interface MatchmakerV2RolloutConfig {
     percentage: MatchmakerV2RolloutPercentage;
     internalUserIds: string[];
     rollbackReady: boolean;
     stageStartedAt: string | null;
+    dailySearchLimit: number;
 }
 
 export async function isFeatureEnabled(key: string, fallback = false) {
@@ -61,7 +71,13 @@ export function parseMatchmakerV2RolloutConfig(config: unknown): MatchmakerV2Rol
         ? [...new Set(raw.internalUserIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim()))].slice(0, 500)
         : [];
     const stageStartedAt = typeof raw.stageStartedAt === "string" && !Number.isNaN(Date.parse(raw.stageStartedAt)) ? raw.stageStartedAt : null;
-    return { percentage, internalUserIds, rollbackReady: raw.rollbackReady === true, stageStartedAt };
+    const requestedDailySearchLimit = Number(raw.dailySearchLimit ?? DEFAULT_MATCHMAKER_DAILY_SEARCH_LIMIT);
+    const dailySearchLimit = Number.isInteger(requestedDailySearchLimit)
+        && requestedDailySearchLimit >= MATCHMAKER_DAILY_SEARCH_LIMIT_MIN
+        && requestedDailySearchLimit <= MATCHMAKER_DAILY_SEARCH_LIMIT_MAX
+        ? requestedDailySearchLimit
+        : DEFAULT_MATCHMAKER_DAILY_SEARCH_LIMIT;
+    return { percentage, internalUserIds, rollbackReady: raw.rollbackReady === true, stageStartedAt, dailySearchLimit };
 }
 
 export function stableRolloutBucket(userId: string) {
@@ -93,6 +109,10 @@ export async function getMatchmakerV2Rollout(userId?: string | null) {
 
 export async function isMatchmakerPersonalizationV2EnabledForUser(userId: string) {
     return (await getMatchmakerV2Rollout(userId)).enabled;
+}
+
+export async function getMatchmakerDailySearchLimit() {
+    return (await getMatchmakerV2Rollout()).config.dailySearchLimit;
 }
 
 function parseNonNegativeInt(value: unknown, fallback: number) {

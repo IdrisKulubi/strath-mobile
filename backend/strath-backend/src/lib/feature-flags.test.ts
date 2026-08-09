@@ -1,12 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { isUserInMatchmakerV2Rollout, parseMatchmakerV2RolloutConfig, stableRolloutBucket } from "@/lib/feature-flags";
+import {
+    DEFAULT_MATCHMAKER_DAILY_SEARCH_LIMIT,
+    isUserInMatchmakerV2Rollout,
+    parseMatchmakerV2RolloutConfig,
+    stableRolloutBucket,
+} from "@/lib/feature-flags";
 
 test("matchmaker rollout accepts only locked stages and fails closed for invalid config", () => {
     assert.equal(parseMatchmakerV2RolloutConfig({ percentage: 25 }).percentage, 25);
     assert.equal(parseMatchmakerV2RolloutConfig({ percentage: 30 }).percentage, 0);
     assert.equal(parseMatchmakerV2RolloutConfig({}).percentage, 100);
+    assert.equal(parseMatchmakerV2RolloutConfig({ dailySearchLimit: 4 }).dailySearchLimit, 4);
+    assert.equal(parseMatchmakerV2RolloutConfig({ dailySearchLimit: 0 }).dailySearchLimit, DEFAULT_MATCHMAKER_DAILY_SEARCH_LIMIT);
+    assert.equal(parseMatchmakerV2RolloutConfig({ dailySearchLimit: 11 }).dailySearchLimit, DEFAULT_MATCHMAKER_DAILY_SEARCH_LIMIT);
 });
 
 test("rollout assignment is deterministic and the master switch always wins", () => {

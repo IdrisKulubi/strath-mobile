@@ -18,13 +18,23 @@ import {
     candidatePairHistory,
     recommendationEvents,
     userMatchInterests,
+    matchmakerSessions,
+    matchmakerMessages,
 } from "@/db/schema";
-import { eq, desc, count, and, or, gte, sql, isNotNull, isNull, inArray, ne } from "drizzle-orm";
+import { eq, desc, count, and, or, gte, sql, isNotNull, isNull, inArray, ne, ilike, lt } from "drizzle-orm";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 import { revalidatePath } from "next/cache";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
-import { APP_FEATURE_KEYS, parseMatchmakerV2RolloutConfig, parseSignupCapConfig, type SignupCapConfig } from "@/lib/feature-flags";
+import {
+    APP_FEATURE_KEYS,
+    getMatchmakerDailySearchLimit,
+    MATCHMAKER_DAILY_SEARCH_LIMIT_MAX,
+    MATCHMAKER_DAILY_SEARCH_LIMIT_MIN,
+    parseMatchmakerV2RolloutConfig,
+    parseSignupCapConfig,
+    type SignupCapConfig,
+} from "@/lib/feature-flags";
 import {
     admitEveryoneFromWaitlist,
     admitOrWaitlist,
@@ -1336,6 +1346,7 @@ export async function updateAdminMatchmakerV2Rollout(formData: FormData) {
         percentage: Number(formData.get("percentage")),
         rollbackReady: formData.get("rollbackReady") === "on",
         internalUserIds: String(formData.get("internalUserIds") ?? "").split(","),
+        dailySearchLimit: currentConfig.dailySearchLimit,
     });
     if (requested.percentage > currentConfig.percentage && currentConfig.percentage >= 5 && currentConfig.percentage < 100) {
         const stageStartedAt = currentConfig.stageStartedAt ? new Date(currentConfig.stageStartedAt).getTime() : current?.updatedAt.getTime() ?? Date.now();
@@ -1364,6 +1375,226 @@ export async function updateAdminMatchmakerV2Rollout(formData: FormData) {
     return {
         ok: true as const,
         message: "Rollout controls saved. You can now use the master toggle above.",
+    };
+}
+
+function getCurrentNairobiDay() {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Africa/Nairobi",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).format(new Date());
+}
+
+export type AdminMatchmakerQuotaUser = {
+    userId: string;
+    name: string;
+    email: string;
+    used: number;
+    limit: number;
+    remaining: number;
+};
+
+export async function searchAdminUsersForMatchmakerQuota(query: string): Promise<AdminMatchmakerQuotaUser[]> {
+    await requireAdmin();
+    const trimmed = query.trim();
+    if (trimmed.length < 2) return [];
+
+    const pattern = `%${trimmed}%`;
+    const rows = await db
+        .select({
+            userId: user.id,
+            userName: user.name,
+            email: user.email,
+            firstName: profiles.firstName,
+            lastName: profiles.lastName,
+        })
+        .from(user)
+        .leftJoin(profiles, eq(profiles.userId, user.id))
+        .where(or(
+            ilike(user.id, pattern),
+            ilike(user.email, pattern),
+            ilike(user.name, pattern),
+            ilike(profiles.firstName, pattern),
+            ilike(profiles.lastName, pattern),
+            sql`concat_ws(' ', ${profiles.firstName}, ${profiles.lastName}) ilike ${pattern}`,
+        ))
+        .limit(8);
+
+    if (rows.length === 0) return [];
+    const sessions = await db.query.matchmakerSessions.findMany({
+        where: and(
+            inArray(matchmakerSessions.userId, rows.map((row) => row.userId)),
+            eq(matchmakerSessions.sessionDay, getCurrentNairobiDay()),
+            eq(matchmakerSessions.status, "active"),
+        ),
+        orderBy: [desc(matchmakerSessions.updatedAt)],
+    });
+    const sessionByUserId = new Map(sessions.map((session) => [session.userId, session]));
+    const configuredLimit = await getMatchmakerDailySearchLimit();
+
+    return rows.map((row) => {
+        const session = sessionByUserId.get(row.userId);
+        const used = session?.dailySearchCount ?? 0;
+        const limit = session?.searchLimit ?? configuredLimit;
+        return {
+            userId: row.userId,
+            name: [row.firstName, row.lastName].filter(Boolean).join(" ") || row.userName || "Unknown user",
+            email: row.email,
+            used,
+            limit,
+            remaining: Math.max(0, limit - used),
+        };
+    });
+}
+
+export async function updateAdminMatchmakerDailySearchLimit(formData: FormData) {
+    const session = await requireAdmin();
+    const dailySearchLimit = Number(formData.get("dailySearchLimit"));
+    if (
+        !Number.isInteger(dailySearchLimit)
+        || dailySearchLimit < MATCHMAKER_DAILY_SEARCH_LIMIT_MIN
+        || dailySearchLimit > MATCHMAKER_DAILY_SEARCH_LIMIT_MAX
+    ) {
+        return {
+            ok: false as const,
+            message: `Daily suggestions must be between ${MATCHMAKER_DAILY_SEARCH_LIMIT_MIN} and ${MATCHMAKER_DAILY_SEARCH_LIMIT_MAX}.`,
+        };
+    }
+
+    const currentFlag = await db.query.appFeatureFlags.findFirst({
+        where: eq(appFeatureFlags.key, APP_FEATURE_KEYS.matchmakerPersonalizationV2),
+    });
+    const currentConfig = parseMatchmakerV2RolloutConfig(currentFlag?.config);
+    const sessionDay = getCurrentNairobiDay();
+    const reactivatedSessions = await db.query.matchmakerSessions.findMany({
+        where: and(
+            eq(matchmakerSessions.status, "active"),
+            eq(matchmakerSessions.sessionDay, sessionDay),
+            eq(matchmakerSessions.state, "limit_reached"),
+            lt(matchmakerSessions.dailySearchCount, dailySearchLimit),
+        ),
+        columns: { id: true },
+    });
+
+    await db.transaction(async (tx) => {
+        await tx
+            .insert(appFeatureFlags)
+            .values({
+                key: APP_FEATURE_KEYS.matchmakerPersonalizationV2,
+                enabled: false,
+                description: FLAG_DESCRIPTIONS[APP_FEATURE_KEYS.matchmakerPersonalizationV2],
+                config: { ...currentConfig, dailySearchLimit },
+                updatedByUserId: session.user.id,
+            })
+            .onConflictDoUpdate({
+                target: appFeatureFlags.key,
+                set: {
+                    config: { ...currentConfig, dailySearchLimit },
+                    updatedByUserId: session.user.id,
+                    updatedAt: new Date(),
+                },
+            });
+
+        await tx
+            .update(matchmakerSessions)
+            .set({ searchLimit: dailySearchLimit, updatedAt: new Date() })
+            .where(and(
+                eq(matchmakerSessions.status, "active"),
+                eq(matchmakerSessions.sessionDay, sessionDay),
+            ));
+
+        if (reactivatedSessions.length > 0) {
+            const sessionIds = reactivatedSessions.map((row) => row.id);
+            await tx
+                .update(matchmakerSessions)
+                .set({
+                    state: "ready_to_search",
+                    metadata: sql`${matchmakerSessions.metadata} || ${JSON.stringify({ limitMode: "idle" })}::jsonb`,
+                    updatedAt: new Date(),
+                })
+                .where(inArray(matchmakerSessions.id, sessionIds));
+            await tx.insert(matchmakerMessages).values(sessionIds.map((sessionId) => ({
+                sessionId,
+                role: "assistant" as const,
+                kind: "search_plan" as const,
+                text: "You have more suggestions available. Continue with your current search or tell me what to change.",
+                quickReplies: ["Go ahead and search", "Change something"],
+                metadata: { source: "admin_quota_increase", dailySearchLimit },
+            })));
+        }
+    });
+
+    revalidatePath("/admin/feature-flags");
+    return {
+        ok: true as const,
+        message: `Daily suggestions set to ${dailySearchLimit}. Active sessions were updated${reactivatedSessions.length > 0 ? ` and ${reactivatedSessions.length} users received more suggestions` : ""}.`,
+    };
+}
+
+export async function resetAdminMatchmakerQuotaForUser(userId: string) {
+    const adminSession = await requireAdmin();
+    const target = await db.query.user.findFirst({
+        where: eq(user.id, userId),
+        columns: { id: true, name: true, email: true },
+    });
+    if (!target) return { ok: false as const, message: "User not found." };
+
+    const dailySearchLimit = await getMatchmakerDailySearchLimit();
+    const activeSession = await db.query.matchmakerSessions.findFirst({
+        where: and(
+            eq(matchmakerSessions.userId, userId),
+            eq(matchmakerSessions.sessionDay, getCurrentNairobiDay()),
+            eq(matchmakerSessions.status, "active"),
+        ),
+        orderBy: [desc(matchmakerSessions.updatedAt)],
+    });
+
+    if (!activeSession) {
+        return {
+            ok: true as const,
+            message: `${target.name || target.email} has no session today and will receive all ${dailySearchLimit} suggestions when they open Matchmaker.`,
+        };
+    }
+
+    const hasPlan = Object.keys(activeSession.currentPlan ?? {}).length > 0;
+    const wasAtLimit = activeSession.state === "limit_reached";
+    await db.transaction(async (tx) => {
+        await tx
+            .update(matchmakerSessions)
+            .set({
+                dailySearchCount: 0,
+                searchLimit: dailySearchLimit,
+                state: wasAtLimit
+                    ? (hasPlan ? "ready_to_search" : "collecting_intent")
+                    : activeSession.state,
+                metadata: sql`${matchmakerSessions.metadata} || ${JSON.stringify({
+                    limitMode: "idle",
+                    adminQuotaResetAt: new Date().toISOString(),
+                    adminQuotaResetBy: adminSession.user.id,
+                })}::jsonb`,
+                updatedAt: new Date(),
+            })
+            .where(eq(matchmakerSessions.id, activeSession.id));
+        if (wasAtLimit) {
+            await tx.insert(matchmakerMessages).values({
+                sessionId: activeSession.id,
+                role: "assistant",
+                kind: hasPlan ? "search_plan" : "text",
+                text: hasPlan
+                    ? "Your suggestions have been reset. Continue with your current search or tell me what to change."
+                    : "Your suggestions have been reset. Tell me who you would like to meet.",
+                quickReplies: hasPlan ? ["Go ahead and search", "Change something"] : [],
+                metadata: { source: "admin_quota_reset", dailySearchLimit },
+            });
+        }
+    });
+
+    revalidatePath("/admin/feature-flags");
+    return {
+        ok: true as const,
+        message: `${target.name || target.email} now has ${dailySearchLimit} suggestions available.`,
     };
 }
 

@@ -25,7 +25,7 @@ import {
     resolveMatchmakerClarifyingQuickReplies,
     type MatchmakerActiveQuestion,
 } from "@/lib/services/matchmaker-llm-client";
-import { isMatchmakerPersonalizationV2EnabledForUser } from "@/lib/feature-flags";
+import { getMatchmakerDailySearchLimit, isMatchmakerPersonalizationV2EnabledForUser } from "@/lib/feature-flags";
 import {
     getMatchmakerUserMemory,
     recordMatchmakerFeedback,
@@ -105,8 +105,6 @@ export interface MatchmakerConversationResponse {
 
 export const MATCHMAKER_VOICE_VERSION = "v3-no-templates";
 const STARTER_SUGGESTIONS_VERSION = "v1-profile-personalized";
-
-const DEFAULT_SEARCH_LIMIT = Number(process.env.MATCHMAKER_DAILY_SEARCH_LIMIT || 3);
 
 const LIMIT_REFINE_QUICK_REPLIES = [
     "Help me refine my type",
@@ -616,6 +614,7 @@ async function expireSession(sessionId: string) {
 }
 
 async function createSession(userId: string, sessionDay: string) {
+    const searchLimit = await getMatchmakerDailySearchLimit();
     const [created] = await db
         .insert(matchmakerSessions)
         .values({
@@ -623,7 +622,7 @@ async function createSession(userId: string, sessionDay: string) {
             sessionDay,
             status: "active",
             state: "greeting",
-            searchLimit: Math.max(1, DEFAULT_SEARCH_LIMIT),
+            searchLimit,
             metadata: {
                 phase: "conversational_matchmaker",
                 voiceVersion: MATCHMAKER_VOICE_VERSION,

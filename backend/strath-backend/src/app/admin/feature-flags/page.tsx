@@ -7,7 +7,7 @@ import {
 } from "@/lib/actions/admin";
 import { APP_FEATURE_KEYS } from "@/lib/feature-flags";
 
-import { FeatureFlagToggle, MatchmakerV2RolloutPanel, SignupCapPanel } from "./_actions";
+import { FeatureFlagToggle, MatchmakerQuotaPanel, MatchmakerV2RolloutPanel, SignupCapPanel } from "./_actions";
 
 export default async function AdminFeatureFlagsPage() {
     const [flags, stats, waitlistedProfiles, comparison] = await Promise.all([
@@ -81,7 +81,12 @@ export default async function AdminFeatureFlagsPage() {
                                     <SignupCapPanel stats={stats} enabled={flag.enabled} waitlistedProfiles={waitlistedProfiles} />
                                 </div>
                             )}
-                            {isMatchmakerV2 && <div className="mt-6 border-t border-white/10 pt-6"><MatchmakerV2RolloutPanel config={flag.config} /></div>}
+                            {isMatchmakerV2 && (
+                                <div className="mt-6 border-t border-white/10 pt-6">
+                                    <MatchmakerV2RolloutPanel config={flag.config} />
+                                    <MatchmakerQuotaPanel config={flag.config} />
+                                </div>
+                            )}
                         </div>
                     );
                 })}

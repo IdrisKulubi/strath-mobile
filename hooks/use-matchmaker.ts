@@ -71,6 +71,8 @@ export function useMatchmakerBrief(enabled = false) {
       return unwrapData(response);
     },
     staleTime: 30_000,
+    refetchInterval: enabled ? 60_000 : false,
+    refetchIntervalInBackground: false,
     enabled,
   });
 }
