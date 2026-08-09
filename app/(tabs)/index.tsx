@@ -17,7 +17,6 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { AiConsentCard } from '@/components/ai/ai-consent-card';
 import { HomeHeader } from '@/components/home/home-header';
-import { HomeMatchmakerEntry } from '@/components/home/home-matchmaker-entry';
 import { MatchmakerHomeShell } from '@/components/matchmaker';
 import { MatchmakerHomeBackground } from '@/components/matchmaker/matchmaker-home-background';
 import { MatchmakerHeader } from '@/components/matchmaker/matchmaker-header';
@@ -58,6 +57,8 @@ import {
 import { useConnectionRequests } from '@/hooks/use-connection-requests';
 import { useNotificationCounts } from '@/hooks/use-notification-counts';
 import { useHomeIntroLayout } from '@/hooks/use-home-intro-layout';
+import { useHomeExperience } from '@/context/home-experience-context';
+import { apiFetch } from '@/lib/api-client';
 
 function HomeSkeleton() {
     return (
@@ -77,7 +78,7 @@ function parseHomeTab(value: string | string[] | undefined): HomeTab | null {
     return null;
 }
 
-export default function HomeScreen() {
+function MatchmakerHomeScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const tabBarHeight = getGlassTabBarHeight(insets.bottom);
@@ -170,8 +171,8 @@ function LegacyHomeScreen() {
     }>({ visible: false, type: 'open_to_meet' });
     const [refreshing, setRefreshing] = useState(false);
     const [savedDecisions, setSavedDecisions] = useState<Record<string, RecommendationDecision>>({});
-    const [carouselIndex, setCarouselIndex] = useState(0);
-    const [interestedCarouselIndex, setInterestedCarouselIndex] = useState(0);
+    const [, setCarouselIndex] = useState(0);
+    const [, setInterestedCarouselIndex] = useState(0);
     const [homeTab, setHomeTab] = useState<HomeTab>('today');
     const { height: windowHeight } = useWindowDimensions();
     const insets = useSafeAreaInsets();
@@ -181,6 +182,7 @@ function LegacyHomeScreen() {
     const { data: profile } = useProfile();
     const dailyMatches = useDailyMatches();
     const connectionRequests = useConnectionRequests();
+    const refetchConnectionRequests = connectionRequests.refetch;
     const { incomingLikes } = useNotificationCounts();
     const pairDecision = useRespondToDailyPair();
     const dailyRecommendations = useDailyRecommendations();
@@ -227,9 +229,9 @@ function LegacyHomeScreen() {
 
     useEffect(() => {
         if (homeTab !== 'interested') return;
-        void connectionRequests.refetch();
+        void refetchConnectionRequests();
         void queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
-    }, [homeTab, connectionRequests.refetch, queryClient]);
+    }, [homeTab, queryClient, refetchConnectionRequests]);
 
     const handleRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -237,13 +239,13 @@ function LegacyHomeScreen() {
             await Promise.all([
                 dailyMatches.refetch(),
                 dailyRecommendations.refetch(),
-                connectionRequests.refetch(),
+                refetchConnectionRequests(),
                 queryClient.invalidateQueries({ queryKey: ['notificationCounts'] }),
             ]);
         } finally {
             setRefreshing(false);
         }
-    }, [connectionRequests, dailyMatches, dailyRecommendations, queryClient]);
+    }, [dailyMatches, dailyRecommendations, queryClient, refetchConnectionRequests]);
 
     const handleViewDailyMatchProfile = useCallback((match: DailyMatch) => {
         router.push({
@@ -292,10 +294,6 @@ function LegacyHomeScreen() {
                 matchType: recommendation.matchType,
             },
         });
-    }, [router]);
-
-    const handleOpenMatchmaker = useCallback(() => {
-        router.push('/(tabs)/pulse');
     }, [router]);
 
     const handleRecommendationDecision = useCallback(async (
@@ -422,11 +420,6 @@ function LegacyHomeScreen() {
                         compact={showCarousel && headerCompact}
                     />
 
-                    <HomeMatchmakerEntry
-                        compact={showCarousel && headerCompact}
-                        onPress={handleOpenMatchmaker}
-                    />
-
                     <HomeTabSwitcher
                         activeTab={homeTab}
                         onTabChange={setHomeTab}
@@ -455,6 +448,30 @@ function LegacyHomeScreen() {
             </SafeAreaView>
         </TabSwipeView>
     );
+}
+
+export default function HomeScreen() {
+    const { isV2Enabled, isLoading } = useHomeExperience();
+
+    useEffect(() => {
+        if (isLoading) return;
+        void apiFetch('/api/analytics/home-experience', {
+            method: 'POST',
+            body: { event: 'exposed', version: isV2Enabled ? 'v2' : 'v1' },
+        }).catch((error) => {
+            console.warn('[home-experience] Failed to record exposure:', error);
+        });
+    }, [isLoading, isV2Enabled]);
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={styles.versionGate} edges={['top']}>
+                <HomeSkeleton />
+            </SafeAreaView>
+        );
+    }
+
+    return isV2Enabled ? <MatchmakerHomeScreen /> : <LegacyHomeScreen />;
 }
 
 const styles = StyleSheet.create({
@@ -522,5 +539,10 @@ const styles = StyleSheet.create({
     },
     confirmGatePlaceholder: {
         minHeight: 120,
+    },
+    versionGate: {
+        flex: 1,
+        backgroundColor: MATCHMAKER_HOME.background,
+        paddingTop: SPACING.base,
     },
 });

@@ -16,6 +16,8 @@ import {
     appFeatureFlags,
     adminBroadcasts,
     candidatePairHistory,
+    recommendationEvents,
+    userMatchInterests,
 } from "@/db/schema";
 import { eq, desc, count, and, or, gte, sql, isNotNull, isNull, inArray, ne } from "drizzle-orm";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
@@ -1150,7 +1152,7 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
     [APP_FEATURE_KEYS.paymentsEnabled]:
         "Require KES 499 Date Setup Fee (Paystack) before slot confirmation. Default off.",
     [APP_FEATURE_KEYS.matchmakerPersonalizationV2]:
-        "Enable structured matchmaker preferences and the phased V2 experience. Default off.",
+        "Switch from V1 (five daily profiles with Today and Interested) to V2 (matchmaker Home with a dedicated Likes tab). Default off.",
 };
 
 const FLAG_LABELS: Record<string, string> = {
@@ -1158,8 +1160,111 @@ const FLAG_LABELS: Record<string, string> = {
     [APP_FEATURE_KEYS.signupCapEnabled]: "Signup Cap (Soft Launch)",
     [APP_FEATURE_KEYS.adminMatchPreviewEnabled]: "Admin Match Preview",
     [APP_FEATURE_KEYS.paymentsEnabled]: "Date Setup Fee (Payments)",
-    [APP_FEATURE_KEYS.matchmakerPersonalizationV2]: "Matchmaker Personalization V2",
+    [APP_FEATURE_KEYS.matchmakerPersonalizationV2]: "Home & Matchmaker Experience V2",
 };
+
+export type HomeExperienceMetrics = {
+    exposedUsers: number;
+    profileOpens: number;
+    interested: number;
+    passes: number;
+    mutualMatches: number;
+    interestedConversionPct: number;
+    mutualConversionPct: number;
+};
+
+export type HomeExperienceComparison = {
+    sevenDays: Record<"v1" | "v2", HomeExperienceMetrics>;
+    thirtyDays: Record<"v1" | "v2", HomeExperienceMetrics>;
+};
+
+function emptyHomeExperienceMetrics(): HomeExperienceMetrics {
+    return {
+        exposedUsers: 0,
+        profileOpens: 0,
+        interested: 0,
+        passes: 0,
+        mutualMatches: 0,
+        interestedConversionPct: 0,
+        mutualConversionPct: 0,
+    };
+}
+
+async function getHomeExperienceMetricsForPeriod(days: number) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const versions = { v1: emptyHomeExperienceMetrics(), v2: emptyHomeExperienceMetrics() };
+
+    const [exposures, outcomes, mutuals] = await Promise.all([
+        db
+            .select({
+                version: sql<string>`${analyticsEvents.metadata}->>'version'`,
+                count: sql<number>`count(distinct ${analyticsEvents.userId})::int`,
+            })
+            .from(analyticsEvents)
+            .where(and(
+                eq(analyticsEvents.eventType, EVENT_TYPES.HOME_EXPERIENCE_EXPOSED),
+                gte(analyticsEvents.createdAt, since),
+            ))
+            .groupBy(sql`${analyticsEvents.metadata}->>'version'`),
+        db
+            .select({
+                source: recommendationEvents.source,
+                profileOpens: sql<number>`count(*) filter (where ${recommendationEvents.viewedAt} is not null)::int`,
+                interested: sql<number>`count(*) filter (where ${recommendationEvents.decision} = 'open_to_meet')::int`,
+                passes: sql<number>`count(*) filter (where ${recommendationEvents.decision} = 'passed')::int`,
+            })
+            .from(recommendationEvents)
+            .where(and(
+                inArray(recommendationEvents.source, ["daily_recommendations", "matchmaker"]),
+                gte(recommendationEvents.shownAt, since),
+            ))
+            .groupBy(recommendationEvents.source),
+        db
+            .select({
+                source: userMatchInterests.source,
+                count: sql<number>`count(distinct ${userMatchInterests.matchedCandidatePairId})::int`,
+            })
+            .from(userMatchInterests)
+            .where(and(
+                inArray(userMatchInterests.source, ["daily_recommendations", "matchmaker"]),
+                isNotNull(userMatchInterests.matchedCandidatePairId),
+                gte(userMatchInterests.decidedAt, since),
+            ))
+            .groupBy(userMatchInterests.source),
+    ]);
+
+    for (const row of exposures) {
+        if (row.version === "v1" || row.version === "v2") versions[row.version].exposedUsers = Number(row.count ?? 0);
+    }
+    for (const row of outcomes) {
+        const version = row.source === "matchmaker" ? "v2" : "v1";
+        versions[version].profileOpens = Number(row.profileOpens ?? 0);
+        versions[version].interested = Number(row.interested ?? 0);
+        versions[version].passes = Number(row.passes ?? 0);
+    }
+    for (const row of mutuals) {
+        const version = row.source === "matchmaker" ? "v2" : "v1";
+        versions[version].mutualMatches = Number(row.count ?? 0);
+    }
+    for (const version of ["v1", "v2"] as const) {
+        const metrics = versions[version];
+        if (metrics.exposedUsers > 0) {
+            metrics.interestedConversionPct = Math.round((metrics.interested / metrics.exposedUsers) * 1000) / 10;
+            metrics.mutualConversionPct = Math.round((metrics.mutualMatches / metrics.exposedUsers) * 1000) / 10;
+        }
+    }
+
+    return versions;
+}
+
+export async function getHomeExperienceComparison(): Promise<HomeExperienceComparison> {
+    await requireAdmin();
+    const [sevenDays, thirtyDays] = await Promise.all([
+        getHomeExperienceMetricsForPeriod(7),
+        getHomeExperienceMetricsForPeriod(30),
+    ]);
+    return { sevenDays, thirtyDays };
+}
 
 const SUPPORTED_FLAG_KEYS = new Set<string>(Object.values(APP_FEATURE_KEYS));
 
@@ -1174,7 +1279,7 @@ export async function getAdminFeatureFlags() {
         return {
             key,
             label: FLAG_LABELS[key] ?? key,
-            description: row?.description ?? FLAG_DESCRIPTIONS[key] ?? "",
+            description: FLAG_DESCRIPTIONS[key] ?? row?.description ?? "",
             enabled: row?.enabled ?? false,
             config: row?.config ?? {},
             updatedAt: row?.updatedAt?.toISOString() ?? null,
@@ -1193,7 +1298,7 @@ export async function setAdminFeatureFlag(key: string, enabled: boolean) {
         if (!parseMatchmakerV2RolloutConfig(current?.config).rollbackReady) {
             return {
                 ok: false as const,
-                message: "Save rollback readiness before enabling Matchmaker Personalization V2.",
+                message: "Save rollback readiness before enabling Home & Matchmaker Experience V2.",
             };
         }
     }
@@ -1210,6 +1315,7 @@ export async function setAdminFeatureFlag(key: string, enabled: boolean) {
             target: appFeatureFlags.key,
             set: {
                 enabled,
+                description: FLAG_DESCRIPTIONS[key] ?? null,
                 updatedByUserId: session.user.id,
                 updatedAt: new Date(),
             },

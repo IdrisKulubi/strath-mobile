@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMinimizeOnScroll } from 'expo-glass-tabs';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -32,6 +32,7 @@ import {
   getIncomingLikeTimeAgo,
 } from '@/lib/incoming-like-utils';
 import { MATCHMAKER_HOME, RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { useHomeExperience } from '@/context/home-experience-context';
 
 function LikesSkeleton() {
   return (
@@ -128,6 +129,7 @@ function LikeDetailCard({
 }
 
 export default function LikesTabScreen() {
+  const { isV2Enabled, isLoading: isExperienceLoading } = useHomeExperience();
   const router = useRouter();
   const toast = useToast();
   const onScroll = useMinimizeOnScroll();
@@ -219,6 +221,18 @@ export default function LikesTabScreen() {
 
   const tabBarHeight = getGlassTabBarHeight(insets.bottom);
   const cardHeight = Math.max(430, Math.min(580, windowHeight - tabBarHeight - 285));
+
+  if (!isExperienceLoading && !isV2Enabled) {
+    return <Redirect href="/(tabs)?homeTab=interested" />;
+  }
+
+  if (isExperienceLoading) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <LikesSkeleton />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <TabSwipeView route="/(tabs)/pulse">

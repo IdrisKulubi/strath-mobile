@@ -9,10 +9,11 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import {
     buildGlassTabItems,
+    getVisibleTabRoutes,
     HIDDEN_TAB_ROUTES,
-    VISIBLE_TAB_ROUTES,
 } from '@/components/navigation/glass-tab-config';
 import { StrathGlassTabBar, StrathGlassTabButton } from '@/components/navigation/strath-glass-tab-bar';
+import { HomeExperienceProvider, useHomeExperience } from '@/context/home-experience-context';
 import { useTheme } from '@/hooks/use-theme';
 import { formatBadgeCount, useNotificationCounts } from '@/hooks/use-notification-counts';
 import { useProfile } from '@/hooks/use-profile';
@@ -24,26 +25,31 @@ export const unstable_settings = {
     initialRouteName: 'index',
 };
 
-export default function TabLayout() {
+function TabLayoutContent() {
     const router = useRouter();
     const pathname = usePathname();
     const { colors, isDark } = useTheme();
     const { unreadMessages, incomingLikes, homeAttention, datesActionable } = useNotificationCounts();
     const { data: profile, error: profileError, isError: isProfileError, isLoading, isSuccess } = useProfile();
-    const homeBadge = formatBadgeCount(Math.max(0, (homeAttention ?? 0) - incomingLikes));
+    const { isV2Enabled, isLoading: isExperienceLoading } = useHomeExperience();
+    const visibleTabRoutes = useMemo(() => getVisibleTabRoutes(isV2Enabled), [isV2Enabled]);
+    const homeBadge = formatBadgeCount(
+        isV2Enabled ? homeAttention : (homeAttention ?? 0) + incomingLikes,
+    );
     const datesBadge = formatBadgeCount(datesActionable ?? 0);
     const chatsBadge = formatBadgeCount(unreadMessages);
     const likesBadge = formatBadgeCount(incomingLikes);
     const nextRoute = isSuccess ? getProfileRoute(profile) : null;
 
-    const isMatchmakerHome =
+    const isMatchmakerHome = isV2Enabled && (
         pathname === '/(tabs)' ||
         pathname === '/' ||
-        pathname.endsWith('/index');
+        pathname.endsWith('/index')
+    );
 
     const glassTabItems = useMemo(
         () =>
-            buildGlassTabItems(VISIBLE_TAB_ROUTES, {
+            buildGlassTabItems(visibleTabRoutes, {
                 homeBadge,
                 datesBadge,
                 chatsBadge,
@@ -51,7 +57,7 @@ export default function TabLayout() {
                 badgeBackground: colors.primary,
                 badgeColor: colors.primaryForeground,
             }),
-        [chatsBadge, colors.primary, colors.primaryForeground, datesBadge, homeBadge, likesBadge],
+        [chatsBadge, colors.primary, colors.primaryForeground, datesBadge, homeBadge, likesBadge, visibleTabRoutes],
     );
 
     const barTheme = useMemo(() => {
@@ -80,7 +86,13 @@ export default function TabLayout() {
         }
     }, [nextRoute, router]);
 
-    if (isLoading) {
+    useEffect(() => {
+        if (!isExperienceLoading && !isV2Enabled && pathname.endsWith('/pulse')) {
+            router.replace('/(tabs)?homeTab=interested' as never);
+        }
+    }, [isExperienceLoading, isV2Enabled, pathname, router]);
+
+    if (isLoading || isExperienceLoading) {
         return (
             <View style={[styles.centered, { backgroundColor: colors.background }]}>
                 <ActivityIndicator size="large" color={colors.primary} />
@@ -111,16 +123,19 @@ export default function TabLayout() {
             <Tabs>
                 <TabSlot style={styles.slot} renderFn={renderFadingTabScreen} />
                 <TabList style={styles.hiddenTabList}>
-                    {VISIBLE_TAB_ROUTES.map((route) => (
+                    {visibleTabRoutes.map((route) => (
                         <TabTrigger key={route.name} name={route.name} href={route.href as never} />
                     ))}
+                    {!isV2Enabled ? (
+                        <TabTrigger name="pulse" href="/(tabs)/pulse" />
+                    ) : null}
                     {HIDDEN_TAB_ROUTES.map((route) => (
                         <TabTrigger key={route.name} name={route.name} href={route.href as never} />
                     ))}
                 </TabList>
                 <StrathGlassTabBar
                     theme={barTheme}
-                    onIndexSelected={(index) => router.navigate(VISIBLE_TAB_ROUTES[index].href as never)}
+                    onIndexSelected={(index) => router.navigate(visibleTabRoutes[index].href as never)}
                 >
                     {glassTabItems.map((item, index) => (
                         <TabTrigger key={item.name} name={item.name} asChild>
@@ -130,6 +145,14 @@ export default function TabLayout() {
                 </StrathGlassTabBar>
             </Tabs>
         </TabBarMinimizeProvider>
+    );
+}
+
+export default function TabLayout() {
+    return (
+        <HomeExperienceProvider>
+            <TabLayoutContent />
+        </HomeExperienceProvider>
     );
 }
 

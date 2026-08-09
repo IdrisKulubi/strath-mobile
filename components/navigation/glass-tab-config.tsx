@@ -14,13 +14,22 @@ export interface VisibleTabRoute {
     badge?: string | null;
 }
 
-export const VISIBLE_TAB_ROUTES: VisibleTabRoute[] = [
+export const V1_TAB_ROUTES: VisibleTabRoute[] = [
     { name: 'profile', href: '/(tabs)/profile', label: 'Profile', icon: 'person' },
     { name: 'dates', href: '/(tabs)/dates', label: 'Dates', icon: 'calendar' },
     { name: 'index', href: '/(tabs)', label: 'Home', icon: 'home' },
-    { name: 'pulse', href: '/(tabs)/pulse', label: 'Likes', icon: 'heart' },
     { name: 'chats', href: '/(tabs)/chats', label: 'Messages', icon: 'chatbubbles' },
 ];
+
+export const V2_TAB_ROUTES: VisibleTabRoute[] = [
+    ...V1_TAB_ROUTES.slice(0, 3),
+    { name: 'pulse', href: '/(tabs)/pulse', label: 'Likes', icon: 'heart' },
+    V1_TAB_ROUTES[3],
+];
+
+export function getVisibleTabRoutes(isV2Enabled: boolean) {
+    return isV2Enabled ? V2_TAB_ROUTES : V1_TAB_ROUTES;
+}
 
 export const HIDDEN_TAB_ROUTES = [
     { name: 'explore', href: '/(tabs)/explore' },

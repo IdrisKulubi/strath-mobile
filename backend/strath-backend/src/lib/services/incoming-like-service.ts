@@ -4,6 +4,7 @@ import db from "@/db/drizzle";
 import { matches, profiles, swipes, user } from "@/db/schema";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
+import { isMatchmakerPersonalizationV2EnabledForUser } from "@/lib/feature-flags";
 
 export type IncomingLikeSkipReason = "matched" | "already_responded" | "duplicate_like" | "self";
 
@@ -13,14 +14,14 @@ export type IncomingLikeResult = {
     skippedReason?: IncomingLikeSkipReason;
 };
 
-export function buildIncomingLikeNotification(firstName: string) {
+export function buildIncomingLikeNotification(firstName: string, isV2Enabled: boolean) {
     const name = firstName.trim() || "Someone";
     return {
         title: "Someone chose you",
         body: `${name} chose you on StrathSpace`,
         data: {
             type: NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED,
-            route: "/(tabs)/pulse",
+            route: isV2Enabled ? "/(tabs)/pulse" : "/(tabs)?homeTab=interested",
         },
     };
 }
@@ -137,8 +138,11 @@ export async function recordIncomingLike(input: {
         return { recorded: true, notified: false };
     }
 
-    const firstName = await getSwiperFirstName(swiperId);
-    const notification = buildIncomingLikeNotification(firstName);
+    const [firstName, isV2Enabled] = await Promise.all([
+        getSwiperFirstName(swiperId),
+        isMatchmakerPersonalizationV2EnabledForUser(swipedId),
+    ]);
+    const notification = buildIncomingLikeNotification(firstName, isV2Enabled);
 
     await sendPushNotification(recipient.pushToken, {
         ...notification,

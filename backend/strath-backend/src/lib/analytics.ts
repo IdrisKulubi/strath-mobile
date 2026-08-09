@@ -12,6 +12,7 @@ export const EVENT_TYPES = {
     FEEDBACK_SUBMITTED: "feedback_submitted",
     PUSH_TOKEN_REGISTERED: "push_token_registered",
     PUSH_PRE_PROMPT: "push_pre_prompt",
+    HOME_EXPERIENCE_EXPOSED: "home_experience_exposed",
     MATCHMAKER_SESSION_STARTED: "matchmaker_session_started",
     MATCHMAKER_SESSION_OPENED: "matchmaker_session_opened",
     MATCHMAKER_INTENT_SUBMITTED: "matchmaker_intent_submitted",

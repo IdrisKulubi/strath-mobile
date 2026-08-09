@@ -8,15 +8,20 @@ import {
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
 test("buildIncomingLikeNotification uses StrathSpace copy with first name", () => {
-    const notification = buildIncomingLikeNotification("Alex");
+    const notification = buildIncomingLikeNotification("Alex", true);
     assert.equal(notification.title, "Someone chose you");
     assert.equal(notification.body, "Alex chose you on StrathSpace");
     assert.equal(notification.data.type, NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED);
     assert.equal(notification.data.route, "/(tabs)/pulse");
 });
 
+test("buildIncomingLikeNotification routes V1 recipients to Home Interested", () => {
+    const notification = buildIncomingLikeNotification("Alex", false);
+    assert.equal(notification.data.route, "/(tabs)?homeTab=interested");
+});
+
 test("buildIncomingLikeNotification falls back when first name is blank", () => {
-    const notification = buildIncomingLikeNotification("   ");
+    const notification = buildIncomingLikeNotification("   ", false);
     assert.equal(notification.body, "Someone chose you on StrathSpace");
 });
 
