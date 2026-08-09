@@ -18,7 +18,7 @@ export const VISIBLE_TAB_ROUTES: VisibleTabRoute[] = [
     { name: 'profile', href: '/(tabs)/profile', label: 'Profile', icon: 'person' },
     { name: 'dates', href: '/(tabs)/dates', label: 'Dates', icon: 'calendar' },
     { name: 'index', href: '/(tabs)', label: 'Home', icon: 'home' },
-    { name: 'pulse', href: '/(tabs)/pulse', label: 'Wingman', icon: 'people' },
+    { name: 'pulse', href: '/(tabs)/pulse', label: 'Likes', icon: 'heart' },
     { name: 'chats', href: '/(tabs)/chats', label: 'Messages', icon: 'chatbubbles' },
 ];
 
@@ -65,6 +65,7 @@ export function buildGlassTabItems(
         homeBadge?: string | null;
         datesBadge?: string | null;
         chatsBadge?: string | null;
+        likesBadge?: string | null;
         badgeBackground: string;
         badgeColor: string;
     },
@@ -77,6 +78,8 @@ export function buildGlassTabItems(
                   ? options.datesBadge
                   : route.name === 'chats'
                     ? options.chatsBadge
+                    : route.name === 'pulse'
+                      ? options.likesBadge
                     : null;
 
         return {

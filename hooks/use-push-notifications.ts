@@ -62,7 +62,7 @@ function resolveRoute(data: NotificationPayload): string | null {
 
     switch (data.type) {
         case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
-            return '/(tabs)?homeTab=interested';
+            return '/(tabs)/pulse';
 
         case NOTIFICATION_TYPES.DATE_REQUEST_ACCEPTED:
         case NOTIFICATION_TYPES.DATE_REQUEST_DECLINED:

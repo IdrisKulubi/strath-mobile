@@ -20,7 +20,7 @@ export function buildIncomingLikeNotification(firstName: string) {
         body: `${name} chose you on StrathSpace`,
         data: {
             type: NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED,
-            route: "/(tabs)?homeTab=interested",
+            route: "/(tabs)/pulse",
         },
     };
 }

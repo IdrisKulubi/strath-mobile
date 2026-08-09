@@ -12,7 +12,7 @@ test("buildIncomingLikeNotification uses StrathSpace copy with first name", () =
     assert.equal(notification.title, "Someone chose you");
     assert.equal(notification.body, "Alex chose you on StrathSpace");
     assert.equal(notification.data.type, NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED);
-    assert.equal(notification.data.route, "/(tabs)?homeTab=interested");
+    assert.equal(notification.data.route, "/(tabs)/pulse");
 });
 
 test("buildIncomingLikeNotification falls back when first name is blank", () => {

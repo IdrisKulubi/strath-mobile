@@ -117,6 +117,7 @@ export default function ProfileViewScreen() {
     ), [matchTypeParam]);
     const canUseRecommendationDecision = Boolean(recommendationSource && userId);
     const isMatchmakerProfile = recommendationSource === 'matchmaker';
+    const canActOnProfile = Boolean(profile?.pairId || canUseRecommendationDecision);
 
     useEffect(() => {
         if (!userId || !recommendationSource || hasLoggedProfileView.current) {
@@ -295,7 +296,6 @@ export default function ProfileViewScreen() {
     }, [
         canUseRecommendationDecision,
         isMatchmakerProfile,
-        matchmakerFeedback,
         profile?.pairId,
         recommendationDecision,
         recommendationMatchType,
@@ -430,7 +430,7 @@ export default function ProfileViewScreen() {
                     styles.scrollContent,
                     {
                         paddingBottom: PROFILE_VIEW_FLOATING_INSET
-                            + ((profile.pairId || canUseRecommendationDecision) && profile.currentUserDecision === 'pending'
+                            + (canActOnProfile && profile.currentUserDecision === 'pending'
                                 ? 28
                                 : 0),
                     },
@@ -577,10 +577,10 @@ export default function ProfileViewScreen() {
 
             <ProfileViewCta
                 onOpenToMeet={handleOpenToMeet}
-                onPass={profile.pairId || canUseRecommendationDecision ? handlePass : undefined}
+                onPass={canActOnProfile ? handlePass : undefined}
                 completed={profile.currentUserDecision !== 'pending'}
-                disabled={(!profile.pairId && !canUseRecommendationDecision) || respondToPair.isPending || recommendationDecision.isPending || matchmakerFeedback.isPending}
-                label={profile.pairId || canUseRecommendationDecision ? 'Interested' : "Not in today's curated set"}
+                disabled={!canActOnProfile || respondToPair.isPending || recommendationDecision.isPending || matchmakerFeedback.isPending}
+                label={canActOnProfile ? 'Interested' : "Not in today's curated set"}
                 safetyTarget={{
                     userId: profile.userId,
                     userName: profile.firstName || 'User',

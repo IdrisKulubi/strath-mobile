@@ -1,788 +1,366 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useMinimizeOnScroll } from 'expo-glass-tabs';
+import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  ActivityIndicator,
-  Share,
+  Pressable,
+  ScrollView,
   StyleSheet,
-  TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
-import { useMinimizeOnScroll } from 'expo-glass-tabs';
 import Animated from 'react-native-reanimated';
-import { ScreenGradient } from '@/components/ui/screen-gradient';
-import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import {
-  CheckCircle,
-  Copy,
-  Package,
-  ShareNetwork,
-  Users,
-} from 'phosphor-react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Text } from '@/components/ui/text';
-import { useTheme } from '@/hooks/use-theme';
-import { useAiConsent } from '@/hooks/use-ai-consent';
-import {
-  useStartWingmanRound,
-  useWingmanHistory,
-  useWingmanPack,
-  useWingmanStatus,
-} from '@/hooks/use-wingman';
-import { AiConsentCard } from '@/components/ai/ai-consent-card';
-import type { AgentMatch } from '@/hooks/use-agent';
-import { WingmanMatchCard, WingmanMatchDetail } from '@/components/wingman';
-import { getAuthToken } from '@/lib/auth-helpers';
+import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
+import { MatchmakerCandidateCard } from '@/components/matchmaker/matchmaker-candidate-card';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
+import { CachedImage } from '@/components/ui/cached-image';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Text } from '@/components/ui/text';
+import { useToast } from '@/components/ui/toast';
+import {
+  ConnectionRequest,
+  useConnectionRequests,
+  useRespondToConnectionRequest,
+} from '@/hooks/use-connection-requests';
+import {
+  getIncomingLikeFirstName,
+  getIncomingLikePhoto,
+  getIncomingLikeTimeAgo,
+} from '@/lib/incoming-like-utils';
+import { MATCHMAKER_HOME, RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 
-// ─── Progress dots ────────────────────────────────────────────────────────────
-function ProgressDots({
-  current,
-  target,
-  primary,
-  border,
-  isDark,
-}: {
-  current: number;
-  target: number;
-  primary: string;
-  border: string;
-  isDark: boolean;
-}) {
+function LikesSkeleton() {
   return (
-    <View style={dotStyles.row}>
-      {Array.from({ length: target }).map((_, i) => {
-        const filled = i < current;
-        return (
-          <View
-            key={i}
-            style={[
-              dotStyles.dot,
-              filled
-                ? { backgroundColor: primary }
-                : { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: border },
-            ]}
-          >
-            {filled && <CheckCircle size={10} color="#fff" weight="fill" />}
-          </View>
-        );
-      })}
-      <Text style={[dotStyles.label, { color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)' }]}>
-        {current}/{target} replied
-      </Text>
+    <View style={styles.skeletonWrap}>
+      <Skeleton style={styles.titleSkeleton} />
+      <Skeleton style={styles.subtitleSkeleton} />
+      <View style={styles.queueRow}>
+        {[0, 1, 2].map((item) => <Skeleton key={item} style={styles.queueSkeleton} />)}
+      </View>
+      <Skeleton style={styles.cardSkeleton} />
     </View>
   );
 }
 
-const dotStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dot: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  label: { fontSize: 12, fontWeight: '500', marginLeft: 4 },
-});
+function QueuePhoto({
+  request,
+  selected,
+  onPress,
+}: {
+  request: ConnectionRequest;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const firstName = getIncomingLikeFirstName(request.fromUser.name);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Review ${firstName}'s like`}
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.queuePhotoButton,
+        selected && styles.queuePhotoSelected,
+        pressed && styles.pressed,
+      ]}
+    >
+      <CachedImage
+        uri={getIncomingLikePhoto(request)}
+        style={styles.queuePhoto}
+        contentFit="cover"
+        fallbackType="avatar"
+      />
+    </Pressable>
+  );
+}
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.strathspace.com';
+function LikeDetailCard({
+  request,
+  busy,
+  height,
+  onViewProfile,
+  onAccept,
+  onPass,
+}: {
+  request: ConnectionRequest;
+  busy: boolean;
+  height: number;
+  onViewProfile: () => void;
+  onAccept: () => void;
+  onPass: () => void;
+}) {
+  const firstName = getIncomingLikeFirstName(request.fromUser.name);
+  const timeAgo = getIncomingLikeTimeAgo(request.createdAt);
+  const photo = getIncomingLikePhoto(request);
+  const age = request.fromUser.profile?.age;
+  const profile = request.fromUser.profile;
+  const courseLine = [profile?.course, profile?.yearOfStudy ? `Year ${profile.yearOfStudy}` : null]
+    .filter(Boolean)
+    .join(' · ');
 
-// ─── Main screen ──────────────────────────────────────────────────────────────
-export default function WingmanTabScreen() {
-  const onScroll = useMinimizeOnScroll();
+  return (
+    <MatchmakerCandidateCard
+      candidate={{
+        candidateUserId: request.fromUser.id,
+        firstName,
+        age: age ?? null,
+        university: profile?.university ?? null,
+        course: courseLine || null,
+        profilePhoto: photo,
+        photos: profile?.photos ?? undefined,
+        reason: `Liked you ${timeAgo || 'recently'}`,
+        labels: [],
+        availability: 'available',
+      }}
+      variant="likes"
+      disabled={busy}
+      style={{ height }}
+      onPress={onViewProfile}
+      onNotThisOne={onPass}
+      notForMeLabel="Pass"
+      onAccept={onAccept}
+    />
+  );
+}
+
+export default function LikesTabScreen() {
   const router = useRouter();
-  const { colors, colorScheme } = useTheme();
-  const isDark = colorScheme === 'dark';
-  const { hasAiConsent, grantAiConsent, isAiConsentUpdating } = useAiConsent();
+  const toast = useToast();
+  const onScroll = useMinimizeOnScroll();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const { data: requests = [], isLoading, isError, refetch } = useConnectionRequests();
+  const respond = useRespondToConnectionRequest();
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const status = useWingmanStatus(hasAiConsent);
-  const history = useWingmanHistory(5, hasAiConsent);
-  const startRound = useStartWingmanRound(hasAiConsent);
-
-  const [packEnabled, setPackEnabled] = useState(false);
-  const pack = useWingmanPack(hasAiConsent && packEnabled);
-
-  const [selectedMatch, setSelectedMatch] = useState<AgentMatch | null>(null);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const activeLink = status.data?.activeLink;
-  const linkProgress = useMemo(() => {
-    if (!activeLink) return null;
-    return {
-      current: activeLink.currentSubmissions ?? 0,
-      target: activeLink.targetSubmissions ?? 3,
-      status: activeLink.status,
-    };
-  }, [activeLink]);
-
-  const isPackReady =
-    linkProgress?.status === 'ready' ||
-    (linkProgress?.current ?? 0) >= (linkProgress?.target ?? 3);
-
-  const matches = (pack.data?.matches ?? []) as unknown as AgentMatch[];
-  const compiledSummary = pack.data?.compiledSummary as
-    | { topWords?: string[]; greenFlags?: string[]; funniestRedFlag?: string | null; hypeLines?: string[] }
-    | undefined;
-
-  // ─── Handlers ───────────────────────────────────────────────────────────────
-
-  const handleStart = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setPackEnabled(false);
-    await startRound.mutateAsync();
-  }, [startRound]);
-
-  const handleCopy = useCallback(async () => {
-    if (!activeLink?.url) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await Clipboard.setStringAsync(activeLink.url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
-  }, [activeLink?.url]);
-
-  const handleShare = useCallback(async () => {
-    if (!activeLink?.url) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await Share.share({
-      message: `Be my Wingman on StrathSpace 🪽\n\nTakes 30s — answer 3 quick questions about me:\n• Describe me in 3 words\n• What makes me attractive?\n• Best date idea for me?\n\n${activeLink.url}`,
-      url: activeLink.url,
-    });
-  }, [activeLink?.url]);
-
-  const handleOpenPack = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setPackEnabled(true);
-  }, []);
-
-  const handleMatchPress = useCallback((match: AgentMatch) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setSelectedMatch(match);
-  }, []);
-
-  const handleCloseDetail = useCallback(() => setSelectedMatch(null), []);
-
-  const handleConnectFromDetail = useCallback(
-    async (match: AgentMatch, introMessage: string) => {
-      try {
-        setIsConnecting(true);
-        const token = await getAuthToken();
-
-        const swipeRes = await fetch(`${API_URL}/api/swipe`, {
-          method: 'POST',
-          headers: {
-            Authorization: token ? `Bearer ${token}` : '',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ targetUserId: match.profile.userId, action: 'like' }),
-        });
-
-        if (!swipeRes.ok) throw new Error('Failed to connect');
-        const swipeJson = await swipeRes.json();
-        const swipeData = swipeJson.data || swipeJson;
-        const isMatch = Boolean(swipeData.isMatch);
-        const matchId = swipeData.match?.id ?? null;
-
-        if (isMatch && matchId && introMessage?.trim()) {
-          const msgRes = await fetch(`${API_URL}/api/messages/${matchId}`, {
-            method: 'POST',
-            headers: {
-              Authorization: token ? `Bearer ${token}` : '',
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ content: introMessage.trim() }),
-          });
-          if (!msgRes.ok) throw new Error('Match created but failed to send intro');
-        }
-
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setSelectedMatch(null);
-      } catch {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      } finally {
-        setIsConnecting(false);
-      }
-    },
-    [],
+  const visibleRequests = useMemo(
+    () => requests.filter((request) => !removedIds.has(request.requestId)),
+    [removedIds, requests],
   );
 
-  const handleAllowAi = useCallback(async () => {
+  const selectedIndex = useMemo(() => {
+    const index = visibleRequests.findIndex((request) => request.requestId === selectedId);
+    return index >= 0 ? index : 0;
+  }, [selectedId, visibleRequests]);
+  const selected = visibleRequests[selectedIndex] ?? null;
+
+  useEffect(() => {
+    if (!selected && visibleRequests[0]) setSelectedId(visibleRequests[0].requestId);
+  }, [selected, visibleRequests]);
+
+  const selectRequest = useCallback((request: ConnectionRequest) => {
+    Haptics.selectionAsync();
+    setSelectedId(request.requestId);
+  }, []);
+
+  const viewProfile = useCallback((request: ConnectionRequest) => {
+    router.push({
+      pathname: '/profile/[userId]',
+      params: {
+        userId: request.fromUser.id,
+        source: 'matchmaker',
+        matchType: 'discovery',
+      },
+    });
+  }, [router]);
+
+  const handleResponse = useCallback(async (request: ConnectionRequest, action: 'like' | 'pass') => {
+    const firstName = getIncomingLikeFirstName(request.fromUser.name);
     try {
-      await grantAiConsent();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update AI consent';
-      Alert.alert('AI Features', message);
+      const result = await respond.mutateAsync({ targetUserId: request.fromUser.id, action });
+      Haptics.notificationAsync(
+        action === 'like'
+          ? Haptics.NotificationFeedbackType.Success
+          : Haptics.NotificationFeedbackType.Warning,
+      );
+      setRemovedIds((current) => new Set(current).add(request.requestId));
+      setSelectedId(null);
+
+      if (action === 'like' && result?.isMatch) {
+        toast.show({
+          message: `It's mutual with ${firstName}. You can find them in Dates.`,
+          variant: 'success',
+          position: 'top',
+          duration: 3800,
+        });
+        router.push('/(tabs)/dates');
+        return;
+      }
+
+      toast.show({
+        message: action === 'like' ? `You accepted ${firstName}'s like.` : `${firstName} was removed.`,
+        variant: action === 'like' ? 'success' : 'default',
+        position: 'top',
+      });
+    } catch {
+      toast.show({
+        message: 'Could not save your response. Please try again.',
+        variant: 'danger',
+      });
     }
-  }, [grantAiConsent]);
+  }, [respond, router, toast]);
 
-  if (!hasAiConsent) {
-    return (
-      <TabSwipeView route="/(tabs)/pulse">
-      <ScreenGradient edges={['top']} style={s.root}>
-        <View style={s.consentWrap}>
-          <AiConsentCard
-            title="Allow AI for Wingman"
-            description="Wingman uses Google Gemini to build match suggestions from your prompts, optional voice input, and Wingman review data."
-            isLoading={isAiConsentUpdating}
-            onAllow={handleAllowAi}
-            onOpenPrivacy={() => router.push('/legal?section=privacy')}
-          />
-        </View>
-      </ScreenGradient>
-      </TabSwipeView>
+  const confirmPass = useCallback((request: ConnectionRequest) => {
+    const firstName = getIncomingLikeFirstName(request.fromUser.name);
+    Alert.alert(
+      `Pass on ${firstName}?`,
+      'They will be removed from your likes and will not be suggested to you again.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Pass', style: 'destructive', onPress: () => void handleResponse(request, 'pass') },
+      ],
     );
-  }
+  }, [handleResponse]);
 
-  // ─── Loading ──────────────────────────────────────────────────────────────
-
-  if (status.isLoading) {
-    return (
-      <TabSwipeView route="/(tabs)/pulse">
-      <ScreenGradient edges={['top']} style={s.root}>
-        <View style={s.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      </ScreenGradient>
-      </TabSwipeView>
-    );
-  }
-
-  // ─── Error ────────────────────────────────────────────────────────────────
-
-  if (status.isError) {
-    const message = status.error instanceof Error ? status.error.message : 'Request failed';
-    const isNotEnabled = /not enabled|migrations|501|failed to load wingman status/i.test(message);
-    // A transient 401 (rate limit, proxy, intermittent CDN) is NOT a reason
-    // to log the user out. The central api-client session-expired handler is
-    // the only code path that clears auth. Here we just surface a retry.
-    const isNetworkish = /network|offline|timeout|fetch failed/i.test(message);
-
-    return (
-      <TabSwipeView route="/(tabs)/pulse">
-      <ScreenGradient edges={['top']} style={s.root}>
-        <View style={s.centered}>
-          <Text style={[s.errorTitle, { color: colors.foreground }]}>Couldn&apos;t load Wingman</Text>
-          <Text style={[s.errorSub, { color: colors.mutedForeground }]}>
-            {isNetworkish
-              ? "You're offline or the network is flaky. Check your connection and try again."
-              : isNotEnabled
-                ? "Wingman isn't enabled yet — missing DB migration."
-                : message}
-          </Text>
-          <TouchableOpacity
-            onPress={() => status.refetch()}
-            style={[s.outlineBtn, { borderColor: colors.border }]}
-          >
-            <Text style={{ color: colors.foreground, fontWeight: '600' }}>Try again</Text>
-          </TouchableOpacity>
-        </View>
-      </ScreenGradient>
-      </TabSwipeView>
-    );
-  }
-
-  // ─── Main render ──────────────────────────────────────────────────────────
+  const tabBarHeight = getGlassTabBarHeight(insets.bottom);
+  const cardHeight = Math.max(430, Math.min(580, windowHeight - tabBarHeight - 285));
 
   return (
     <TabSwipeView route="/(tabs)/pulse">
-    <ScreenGradient edges={['top']} style={s.root}>
-      <Animated.ScrollView
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        contentContainerStyle={s.scroll}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* ── Header ── */}
-        <View style={s.header}>
-          <Text style={[s.headerTitle, { color: colors.foreground }]}>Wingman</Text>
-          <Text style={[s.headerSub, { color: colors.mutedForeground }]}>
-            Let friends describe you. Get better matches.
-          </Text>
-        </View>
-
-        {/* ── Status card ── */}
-        {!activeLink ? (
-          /* No active link → start a round */
-          <View style={[s.card, {
-            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
-            borderColor: colors.border,
-          }]}>
-            <View style={s.iconRow}>
-              <View style={[s.iconBg, {
-                backgroundColor: isDark ? 'rgba(236,72,153,0.15)' : 'rgba(236,72,153,0.08)',
-              }]}>
-                <Users size={24} color={colors.primary} weight="fill" />
-              </View>
-            </View>
-            <Text style={[s.cardTitle, { color: colors.foreground }]}>Start a Wingman round</Text>
-            <Text style={[s.cardSub, { color: colors.mutedForeground }]}>
-              Share a link with 3 friends. They answer 3 quick questions about you. We use their answers to find you better matches.
-            </Text>
-            <TouchableOpacity
-              onPress={handleStart}
-              disabled={startRound.isPending}
-              activeOpacity={0.85}
-              style={{ marginTop: 20, borderRadius: 18, overflow: 'hidden', opacity: startRound.isPending ? 0.7 : 1 }}
-            >
-              <LinearGradient
-                colors={['#ec4899', '#f43f5e']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={s.gradientBtn}
-              >
-                <Text style={s.gradientBtnText}>
-                  {startRound.isPending ? 'Getting link…' : 'Get my Wingman link'}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          /* Active link → collecting / ready */
-          <View style={[s.card, {
-            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
-            borderColor: isPackReady ? 'rgba(236,72,153,0.4)' : colors.border,
-          }]}>
-            {/* Round + ready badges */}
-            <View style={s.roundBadgeRow}>
-              <View style={[s.roundBadge, {
-                backgroundColor: isDark ? 'rgba(236,72,153,0.15)' : 'rgba(236,72,153,0.08)',
-              }]}>
-                <Text style={[s.roundBadgeText, { color: colors.primary }]}>
-                  Round {activeLink.roundNumber}
-                </Text>
-              </View>
-              {isPackReady && (
-                <View style={[s.readyBadge, { backgroundColor: 'rgba(16,185,129,0.12)' }]}>
-                  <CheckCircle size={12} color="#10b981" weight="fill" />
-                  <Text style={[s.readyBadgeText, { color: '#10b981' }]}>Pack ready!</Text>
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <Animated.ScrollView
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + SPACING.base }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <View style={styles.titleRow}>
+              <Text style={styles.title}>People interested in you</Text>
+              {!isLoading && visibleRequests.length > 0 ? (
+                <View style={styles.countPill}>
+                  <Text style={styles.countText}>{visibleRequests.length}</Text>
                 </View>
-              )}
+              ) : null}
             </View>
-
-            {/* Progress dots */}
-            <View style={{ marginTop: 14 }}>
-              <ProgressDots
-                current={linkProgress?.current ?? 0}
-                target={linkProgress?.target ?? 3}
-                primary={colors.primary}
-                border={colors.border}
-                isDark={isDark}
-              />
-            </View>
-
-            {/* Link box */}
-            <View style={[s.linkBox, {
-              backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-              borderColor: colors.border,
-            }]}>
-              <Text style={[s.linkLabel, { color: colors.mutedForeground }]}>Your link</Text>
-              <Text style={[s.linkUrl, { color: colors.foreground }]} numberOfLines={1}>
-                {activeLink.url}
-              </Text>
-            </View>
-
-            {/* Copy + Share side-by-side */}
-            <View style={s.actionRow}>
-              <TouchableOpacity
-                onPress={handleCopy}
-                activeOpacity={0.8}
-                style={[s.actionBtn, {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)',
-                  borderColor: copied ? colors.primary : colors.border,
-                  flex: 1,
-                }]}
-              >
-                <Copy
-                  size={16}
-                  color={copied ? colors.primary : colors.foreground}
-                  weight={copied ? 'fill' : 'regular'}
-                />
-                <Text style={[s.actionBtnText, { color: copied ? colors.primary : colors.foreground }]}>
-                  {copied ? 'Copied!' : 'Copy link'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handleShare}
-                activeOpacity={0.8}
-                style={[s.actionBtn, {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)',
-                  borderColor: colors.border,
-                  flex: 1,
-                }]}
-              >
-                <ShareNetwork size={16} color={colors.foreground} />
-                <Text style={[s.actionBtnText, { color: colors.foreground }]}>Share</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Open pack — shown when ready and pack not yet loaded */}
-            {isPackReady && !packEnabled && (
-              <TouchableOpacity
-                onPress={handleOpenPack}
-                disabled={pack.isFetching}
-                activeOpacity={0.85}
-                style={{
-                  marginTop: 12,
-                  borderRadius: 18,
-                  overflow: 'hidden',
-                  opacity: pack.isFetching ? 0.7 : 1,
-                }}
-              >
-                <LinearGradient
-                  colors={['#ec4899', '#f43f5e']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={s.gradientBtn}
-                >
-                  <Package size={18} color="#fff" weight="fill" />
-                  <Text style={s.gradientBtnText}>
-                    {pack.isFetching ? 'Building your pack…' : 'Open Wingman Pack 🎁'}
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
-
-            {/* Nudge while still collecting */}
-            {!isPackReady && (
-              <Text style={[s.nudgeText, { color: colors.mutedForeground }]}>
-                {(linkProgress?.target ?? 3) - (linkProgress?.current ?? 0)} more friend
-                {(linkProgress?.target ?? 3) - (linkProgress?.current ?? 0) !== 1 ? 's' : ''} to go — share your link above!
-              </Text>
-            )}
+            <Text style={styles.subtitle}>Review one at a time</Text>
           </View>
-        )}
 
-        {/* ── Pack loading ── */}
-        {packEnabled && pack.isLoading && (
-          <View style={s.packLoading}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={[s.packLoadingText, { color: colors.mutedForeground }]}>
-              Building your pack…
-            </Text>
-          </View>
-        )}
-
-        {/* ── Pack error ── */}
-        {packEnabled && pack.isError && (
-          <View style={[s.infoBox, {
-            backgroundColor: isDark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)',
-            borderColor: 'rgba(239,68,68,0.2)',
-          }]}>
-            <Text style={{ color: '#ef4444', fontSize: 13, fontWeight: '500', textAlign: 'center' }}>
-              Pack not ready yet — check back once all friends have replied.
-            </Text>
-          </View>
-        )}
-
-        {/* ── Pack summary + matches ── */}
-        {packEnabled && !pack.isLoading && !pack.isError && matches.length > 0 && (
-          <>
-            {/* Compiled summary */}
-            {compiledSummary && (
-              <View style={s.summarySection}>
-                <Text style={[s.sectionTitle, { color: colors.foreground }]}>
-                  How your friends see you
-                </Text>
-
-                {(compiledSummary.topWords?.length ?? 0) > 0 && (
-                  <View style={{ marginTop: 10 }}>
-                    <Text style={[s.chipGroupLabel, { color: colors.mutedForeground }]}>In 3 words</Text>
-                    <View style={s.chipRow}>
-                      {compiledSummary.topWords!.map((word, i) => (
-                        <View key={i} style={[s.chip, {
-                          backgroundColor: isDark ? 'rgba(236,72,153,0.12)' : 'rgba(236,72,153,0.07)',
-                          borderColor: 'rgba(236,72,153,0.25)',
-                        }]}>
-                          <Text style={[s.chipText, { color: colors.primary }]}>{word}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                {(compiledSummary.greenFlags?.length ?? 0) > 0 && (
-                  <View style={{ marginTop: 12 }}>
-                    <Text style={[s.chipGroupLabel, { color: colors.mutedForeground }]}>Green flags 🟢</Text>
-                    <View style={s.chipRow}>
-                      {compiledSummary.greenFlags!.map((flag, i) => (
-                        <View key={i} style={[s.chip, {
-                          backgroundColor: isDark ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.07)',
-                          borderColor: 'rgba(16,185,129,0.25)',
-                        }]}>
-                          <Text style={[s.chipText, { color: '#10b981' }]}>{flag}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                {compiledSummary.funniestRedFlag && (
-                  <View style={[s.redFlagBox, {
-                    backgroundColor: isDark ? 'rgba(249,115,22,0.08)' : 'rgba(249,115,22,0.05)',
-                    borderColor: 'rgba(249,115,22,0.2)',
-                  }]}>
-                    <Text style={{ fontSize: 13, color: '#f97316', fontWeight: '500' }}>
-                      😅 Funny red flag:{' '}
-                      <Text style={{ fontStyle: 'italic' }}>
-                        &quot;{compiledSummary.funniestRedFlag}&quot;
-                      </Text>
-                    </Text>
-                  </View>
-                )}
+          {isLoading ? (
+            <LikesSkeleton />
+          ) : isError ? (
+            <View style={styles.stateWrap}>
+              <Ionicons name="cloud-offline-outline" size={36} color={MATCHMAKER_HOME.mutedForeground} />
+              <Text style={styles.stateTitle}>Could not load your likes</Text>
+              <Text style={styles.stateBody}>Check your connection and try again.</Text>
+              <Pressable onPress={() => refetch()} style={styles.retryButton} accessibilityRole="button">
+                <Text style={styles.retryText}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : visibleRequests.length === 0 ? (
+            <View style={styles.stateWrap}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="heart-outline" size={34} color={MATCHMAKER_HOME.primary} />
               </View>
-            )}
-
-            {/* Match cards */}
-            <View style={s.matchesSection}>
-              <Text style={[s.sectionTitle, { color: colors.foreground }]}>Your Matches</Text>
-              <Text style={[s.sectionSub, { color: colors.mutedForeground }]}>
-                AI-curated based on how your friends described you
+              <Text style={styles.stateTitle}>No new likes yet</Text>
+              <Text style={styles.stateBody}>
+                When someone chooses you, they will appear here for you to review privately.
               </Text>
-              <View style={{ gap: 12, marginTop: 12 }}>
-                {matches.map((m, index) => (
-                  <WingmanMatchCard
-                    key={m.profile.userId}
-                    match={m}
-                    index={index}
-                    onPress={handleMatchPress}
+            </View>
+          ) : selected ? (
+            <View style={styles.likesContent}>
+              <ScrollView
+                horizontal
+                style={styles.queueScroller}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.queue}
+              >
+                {visibleRequests.map((request) => (
+                  <QueuePhoto
+                    key={request.requestId}
+                    request={request}
+                    selected={request.requestId === selected.requestId}
+                    onPress={() => selectRequest(request)}
                   />
                 ))}
+              </ScrollView>
+
+              <View style={styles.cardHost}>
+                <LikeDetailCard
+                  request={selected}
+                  busy={respond.isPending}
+                  height={cardHeight}
+                  onViewProfile={() => viewProfile(selected)}
+                  onAccept={() => void handleResponse(selected, 'like')}
+                  onPass={() => confirmPass(selected)}
+                />
+              </View>
+
+              <View style={styles.progressWrap} accessibilityLabel={`${selectedIndex + 1} of ${visibleRequests.length}`}>
+                <View style={styles.progressTrack}>
+                  {visibleRequests.map((request, index) => (
+                    <View
+                      key={request.requestId}
+                      style={[styles.progressSegment, index === selectedIndex && styles.progressSegmentActive]}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.progressText}>{selectedIndex + 1} of {visibleRequests.length}</Text>
               </View>
             </View>
-          </>
-        )}
-
-        {/* ── History ── */}
-        {(history.data?.packs?.length ?? 0) > 0 && (
-          <View style={s.historySection}>
-            <Text style={[s.sectionTitle, { color: colors.foreground }]}>Past packs</Text>
-            <View style={{ gap: 8 }}>
-              {history.data!.packs.map((p) => {
-                const words =
-                  typeof (p.compiledSummary as any)?.topWords?.join === 'function'
-                    ? (p.compiledSummary as any).topWords.join(' · ')
-                    : null;
-                return (
-                  <View
-                    key={p.id}
-                    style={[s.historyItem, {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-                      borderColor: colors.border,
-                    }]}
-                  >
-                    <View style={[s.historyRoundBadge, {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
-                    }]}>
-                      <Text style={[s.historyRoundText, { color: colors.mutedForeground }]}>
-                        Round {p.roundNumber}
-                      </Text>
-                    </View>
-                    {words && (
-                      <Text style={[s.historyWords, { color: colors.foreground }]} numberOfLines={1}>
-                        {words}
-                      </Text>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        <View style={{ height: 40 }} />
-      </Animated.ScrollView>
-
-      {/* ── Match detail sheet ── */}
-      <WingmanMatchDetail
-        visible={!!selectedMatch}
-        match={selectedMatch}
-        isConnecting={isConnecting}
-        onClose={handleCloseDetail}
-        onConnect={handleConnectFromDetail}
-      />
-    </ScreenGradient>
+          ) : null}
+        </Animated.ScrollView>
+      </SafeAreaView>
     </TabSwipeView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  root: { flex: 1 },
-  consentWrap: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
-  scroll: { paddingHorizontal: 16, paddingTop: 8 },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingHorizontal: 24,
-  },
-
-  // Header
-  header: { paddingTop: 20, paddingBottom: 18 },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    lineHeight: 32,
-    paddingTop: 2,
-  },
-  headerSub: { fontSize: 13, marginTop: 4, lineHeight: 18 },
-  legacyHeader: {
-    paddingTop: 26,
-    paddingBottom: 12,
-  },
-
-  // Error
-  errorTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
-  errorSub: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
-  outlineBtn: {
-    marginTop: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-
-  // Card
-  card: { borderRadius: 22, borderWidth: 1, padding: 18 },
-  iconRow: { alignItems: 'flex-start', marginBottom: 12 },
-  iconBg: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
-  cardSub: { fontSize: 13, marginTop: 6, lineHeight: 19 },
-
-  // Gradient button
-  gradientBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 18,
-  },
-  gradientBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
-
-  // Round + ready badges
-  roundBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  roundBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-  },
-  roundBadgeText: { fontSize: 12, fontWeight: '700' },
-  readyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  readyBadgeText: { fontSize: 12, fontWeight: '700' },
-
-  // Link box
-  linkBox: {
-    marginTop: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  linkLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: 3,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  linkUrl: { fontSize: 13, fontWeight: '500' },
-
-  // Copy / Share action row
-  actionRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    paddingVertical: 11,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  actionBtnText: { fontSize: 14, fontWeight: '700' },
-
-  // Nudge
-  nudgeText: { fontSize: 12, marginTop: 12, textAlign: 'center', lineHeight: 17 },
-
-  // Pack loading
-  packLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    justifyContent: 'center',
-    paddingVertical: 28,
-  },
-  packLoadingText: { fontSize: 14, fontWeight: '500' },
-
-  // Info box
-  infoBox: {
-    marginTop: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 14,
-    alignItems: 'center',
-  },
-
-  // Summary section
-  summarySection: { marginTop: 24 },
-  sectionTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
-  sectionSub: { fontSize: 12, marginTop: 3 },
-  chipGroupLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  chipText: { fontSize: 13, fontWeight: '600' },
-  redFlagBox: {
-    marginTop: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
-  },
-
-  // Matches section
-  matchesSection: { marginTop: 28 },
-
-  // History
-  historySection: { marginTop: 32 },
-  historyItem: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  historyRoundBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  historyRoundText: { fontSize: 12, fontWeight: '600' },
-  historyWords: { fontSize: 13, fontWeight: '500', flex: 1 },
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: MATCHMAKER_HOME.background },
+  content: { flexGrow: 1 },
+  header: { paddingHorizontal: SPACING.screenX, paddingTop: SPACING.comfortable, paddingBottom: SPACING.base, gap: 5 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: SPACING.compact },
+  title: { color: MATCHMAKER_HOME.foreground, fontSize: 27, lineHeight: 33, fontWeight: '700', letterSpacing: -0.6 },
+  subtitle: { color: MATCHMAKER_HOME.mutedForeground, ...TYPOGRAPHY.body },
+  likesContent: { width: '100%' },
+  queueScroller: { width: '100%', height: 106, flexGrow: 0 },
+  countPill: { minWidth: 34, height: 30, paddingHorizontal: 10, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center', backgroundColor: MATCHMAKER_HOME.primary },
+  countText: { color: MATCHMAKER_HOME.primaryForeground, fontSize: 14, fontWeight: '700' },
+  queue: { paddingHorizontal: SPACING.screenX, paddingVertical: SPACING.tight, gap: SPACING.compact },
+  queuePhotoButton: { width: 82, height: 82, borderRadius: RADIUS.lg, borderWidth: 1.5, borderColor: MATCHMAKER_HOME.border, padding: 2, overflow: 'hidden' },
+  queuePhotoSelected: { borderColor: MATCHMAKER_HOME.primary, borderWidth: 3 },
+  queuePhoto: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: MATCHMAKER_HOME.surfaceStrong },
+  cardHost: { paddingHorizontal: SPACING.screenX, paddingTop: SPACING.tight },
+  detailCard: { borderRadius: RADIUS.xl, borderWidth: 1, borderColor: MATCHMAKER_HOME.border, overflow: 'hidden', backgroundColor: MATCHMAKER_HOME.surface },
+  photoArea: { ...StyleSheet.absoluteFillObject },
+  heroPhoto: { width: '100%', height: '100%', backgroundColor: MATCHMAKER_HOME.surfaceStrong },
+  detailContent: { flex: 1, justifyContent: 'flex-end', padding: SPACING.comfortable, paddingTop: 170, gap: 7 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.tight, maxWidth: '100%' },
+  name: { color: MATCHMAKER_HOME.foreground, fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.6, flexShrink: 1 },
+  meta: { color: MATCHMAKER_HOME.photoTextMuted, fontSize: 15, lineHeight: 21, fontWeight: '500' },
+  reasonRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.tight, marginTop: SPACING.tight },
+  reason: { color: MATCHMAKER_HOME.foreground, ...TYPOGRAPHY.body, flex: 1 },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.tight },
+  time: { color: MATCHMAKER_HOME.mutedForeground, ...TYPOGRAPHY.caption },
+  profileLink: { minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 2 },
+  profileLinkText: { color: MATCHMAKER_HOME.primary, ...TYPOGRAPHY.callout, fontWeight: '700' },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.base, marginTop: SPACING.tight },
+  passActionWrap: { alignItems: 'center', gap: 4 },
+  passButton: { width: 58, height: 58, borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: MATCHMAKER_HOME.borderStrong, backgroundColor: MATCHMAKER_HOME.glassSurface, alignItems: 'center', justifyContent: 'center' },
+  passLabel: { color: MATCHMAKER_HOME.mutedForeground, ...TYPOGRAPHY.caption },
+  acceptButton: { flex: 1, height: 58, borderRadius: RADIUS.lg, backgroundColor: MATCHMAKER_HOME.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.tight },
+  acceptText: { color: MATCHMAKER_HOME.primaryForeground, fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  progressWrap: { alignItems: 'center', paddingVertical: SPACING.base, gap: SPACING.tight },
+  progressTrack: { width: '48%', flexDirection: 'row', gap: 6 },
+  progressSegment: { flex: 1, height: 3, borderRadius: RADIUS.full, backgroundColor: MATCHMAKER_HOME.border },
+  progressSegmentActive: { backgroundColor: MATCHMAKER_HOME.primary },
+  progressText: { color: MATCHMAKER_HOME.mutedForeground, ...TYPOGRAPHY.caption },
+  stateWrap: { flex: 1, minHeight: 420, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACING.xl, gap: SPACING.compact },
+  emptyIcon: { width: 72, height: 72, borderRadius: RADIUS.full, backgroundColor: MATCHMAKER_HOME.surface, borderWidth: 1, borderColor: MATCHMAKER_HOME.border, alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.tight },
+  stateTitle: { color: MATCHMAKER_HOME.foreground, ...TYPOGRAPHY.title, textAlign: 'center' },
+  stateBody: { color: MATCHMAKER_HOME.mutedForeground, ...TYPOGRAPHY.body, textAlign: 'center', maxWidth: 310 },
+  retryButton: { minHeight: 44, paddingHorizontal: SPACING.comfortable, borderRadius: RADIUS.full, borderWidth: 1, borderColor: MATCHMAKER_HOME.primary, alignItems: 'center', justifyContent: 'center', marginTop: SPACING.tight },
+  retryText: { color: MATCHMAKER_HOME.primary, ...TYPOGRAPHY.callout, fontWeight: '700' },
+  skeletonWrap: { paddingHorizontal: SPACING.screenX, gap: SPACING.compact },
+  titleSkeleton: { width: '65%', height: 28, borderRadius: RADIUS.sm },
+  subtitleSkeleton: { width: '38%', height: 17, borderRadius: RADIUS.sm },
+  queueRow: { flexDirection: 'row', gap: SPACING.compact, paddingVertical: SPACING.tight },
+  queueSkeleton: { width: 82, height: 82, borderRadius: RADIUS.lg },
+  cardSkeleton: { height: 480, borderRadius: RADIUS.xl },
+  pressed: { opacity: 0.72 },
 });

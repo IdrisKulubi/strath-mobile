@@ -18,6 +18,7 @@ export interface ConnectionRequest {
             yearOfStudy: number | null;
             university: string | null;
             photos: string[] | null;
+            age?: number | null;
         } | null;
     };
 }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AlertCircle, ArrowRight, ChevronDown, ChevronUp, Info, X } from 'lucide-react-native';
+import { AlertCircle, ArrowRight, ChevronDown, ChevronUp, Heart, Info, X } from 'lucide-react-native';
 
 import { CachedImage } from '@/components/ui/cached-image';
 import { Text } from '@/components/ui/text';
@@ -18,6 +18,8 @@ interface MatchmakerCandidateCardProps {
   onExplanationToggle?: (expanded: boolean) => void;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
+  variant?: 'matchmaker' | 'likes';
+  onAccept?: () => void;
 }
 
 function getInitial(name: string | null) {
@@ -37,6 +39,8 @@ export function MatchmakerCandidateCard({
   onExplanationToggle,
   disabled = false,
   style,
+  variant = 'matchmaker',
+  onAccept,
 }: MatchmakerCandidateCardProps) {
   const [explanationExpanded, setExplanationExpanded] = useState(false);
   const photo = candidate.profilePhoto ?? candidate.photos?.[0] ?? null;
@@ -48,6 +52,7 @@ export function MatchmakerCandidateCard({
   const hasExplanation = Boolean(explanation && (
     explanation.fitReasons.length > 0 || explanation.tradeoff || explanation.unknown
   ));
+  const likesVariant = variant === 'likes';
 
   const toggleExplanation = () => {
     const next = !explanationExpanded;
@@ -56,7 +61,7 @@ export function MatchmakerCandidateCard({
   };
 
   return (
-    <View style={[styles.card, style]}>
+    <View style={[styles.card, likesVariant && styles.likesCard, style]}>
       <View style={styles.photoFrame}>
         {photo ? (
           <CachedImage uri={photo} style={styles.photo} fallbackType="avatar" contentFit="cover" />
@@ -72,7 +77,7 @@ export function MatchmakerCandidateCard({
           style={styles.photoGradient}
         />
 
-        <View style={styles.topBar}>
+        {!likesVariant ? <View style={styles.topBar}>
           {statusLabel ? (
             <View style={styles.statusChip}>
               <View style={styles.statusDot} />
@@ -95,7 +100,7 @@ export function MatchmakerCandidateCard({
               <X size={24} color={MATCHMAKER_HOME.foreground} strokeWidth={2} />
             </Pressable>
           ) : null}
-        </View>
+        </View> : null}
 
         {unavailable ? (
           <View accessibilityLiveRegion="polite" style={styles.unavailableRow}>
@@ -104,7 +109,11 @@ export function MatchmakerCandidateCard({
           </View>
         ) : null}
 
-        <View style={[styles.infoSheet, explanationExpanded && styles.infoSheetExpanded]}>
+        <View style={[
+          styles.infoSheet,
+          likesVariant && styles.likesInfoSheet,
+          explanationExpanded && styles.infoSheetExpanded,
+        ]}>
           <View style={styles.infoSheetTop}>
             <View style={styles.identityRow}>
               <View style={styles.identityCopy}>
@@ -120,9 +129,9 @@ export function MatchmakerCandidateCard({
               ) : null}
             </View>
 
-            <View style={styles.divider} />
+            {!likesVariant ? <View style={styles.divider} /> : null}
 
-            {hasExplanation ? (
+            {!likesVariant && hasExplanation ? (
               <View style={styles.explanationSection}>
                 <Pressable
                   accessibilityRole="button"
@@ -172,12 +181,12 @@ export function MatchmakerCandidateCard({
                   </ScrollView>
                 ) : null}
               </View>
-            ) : (
+            ) : !likesVariant ? (
               <View style={styles.reasonSummary}>
                 <Info size={19} color={MATCHMAKER_HOME.foreground} strokeWidth={2} />
                 <Text style={styles.reasonSummaryText} numberOfLines={2}>{candidate.reason}</Text>
               </View>
-            )}
+            ) : null}
           </View>
 
           <View style={styles.actions}>
@@ -203,26 +212,68 @@ export function MatchmakerCandidateCard({
               </Pressable>
             ) : null}
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`View profile for ${candidate.firstName || 'this match'}`}
-              disabled={unavailable || disabled}
-              onPress={() => onPress(candidate)}
-              style={styles.primaryActionPressable}
-            >
-              {({ pressed }) => (
-                <View
-                  style={[
-                    styles.primaryAction,
-                    (unavailable || disabled) && styles.primaryActionDisabled,
-                    pressed && styles.primaryActionPressed,
-                  ]}
+            {likesVariant ? (
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`View profile for ${candidate.firstName || 'this match'}`}
+                  disabled={unavailable || disabled}
+                  onPress={() => onPress(candidate)}
+                  style={styles.likesSecondaryPressable}
                 >
-                  <Text style={styles.primaryActionText}>View profile</Text>
-                  <ArrowRight size={20} color={MATCHMAKER_HOME.primaryForeground} strokeWidth={2.5} />
-                </View>
-              )}
-            </Pressable>
+                  {({ pressed }) => (
+                    <View style={[
+                      styles.likesSecondaryAction,
+                      (unavailable || disabled) && styles.secondaryDisabled,
+                      pressed && styles.rejectActionPressed,
+                    ]}>
+                      <Text style={styles.likesSecondaryText}>View profile</Text>
+                      <ArrowRight size={17} color={MATCHMAKER_HOME.foreground} strokeWidth={2.25} />
+                    </View>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Accept ${candidate.firstName || 'this person'}'s like`}
+                  disabled={unavailable || disabled}
+                  onPress={onAccept}
+                  style={styles.likesAcceptPressable}
+                >
+                  {({ pressed }) => (
+                    <View style={[
+                      styles.likesAcceptAction,
+                      (unavailable || disabled) && styles.primaryActionDisabled,
+                      pressed && styles.primaryActionPressed,
+                    ]}>
+                      <Heart size={18} color={MATCHMAKER_HOME.primaryForeground} fill={MATCHMAKER_HOME.primaryForeground} strokeWidth={2} />
+                      <Text style={styles.primaryActionText}>Accept</Text>
+                    </View>
+                  )}
+                </Pressable>
+              </>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`View profile for ${candidate.firstName || 'this match'}`}
+                disabled={unavailable || disabled}
+                onPress={() => onPress(candidate)}
+                style={styles.primaryActionPressable}
+              >
+                {({ pressed }) => (
+                  <View
+                    style={[
+                      styles.primaryAction,
+                      (unavailable || disabled) && styles.primaryActionDisabled,
+                      pressed && styles.primaryActionPressed,
+                    ]}
+                  >
+                    <Text style={styles.primaryActionText}>View profile</Text>
+                    <ArrowRight size={20} color={MATCHMAKER_HOME.primaryForeground} strokeWidth={2.5} />
+                  </View>
+                )}
+              </Pressable>
+            )}
           </View>
         </View>
       </View>
@@ -238,6 +289,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
     backgroundColor: MATCHMAKER_HOME.backgroundRaised,
+  },
+  likesCard: {
+    flex: 0,
   },
   photoFrame: {
     flex: 1,
@@ -344,6 +398,11 @@ const styles = StyleSheet.create({
   },
   infoSheetExpanded: {
     height: 268,
+  },
+  likesInfoSheet: {
+    height: 140,
+    paddingTop: SPACING.compact,
+    gap: SPACING.compact,
   },
   infoSheetTop: {
     flexShrink: 1,
@@ -548,6 +607,46 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 19,
     fontWeight: '700',
+  },
+  likesSecondaryPressable: {
+    flex: 1.15,
+    minWidth: 0,
+    alignSelf: 'stretch',
+  },
+  likesSecondaryAction: {
+    flex: 1,
+    minHeight: 50,
+    paddingHorizontal: SPACING.compact,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: MATCHMAKER_HOME.glassBorder,
+    backgroundColor: MATCHMAKER_HOME.surfaceStrong,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  likesSecondaryText: {
+    color: MATCHMAKER_HOME.foreground,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  likesAcceptPressable: {
+    flex: 1,
+    minWidth: 0,
+    alignSelf: 'stretch',
+  },
+  likesAcceptAction: {
+    flex: 1,
+    minHeight: 50,
+    paddingHorizontal: SPACING.compact,
+    borderRadius: RADIUS.full,
+    backgroundColor: MATCHMAKER_HOME.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   controlPressed: {
     opacity: 0.76,

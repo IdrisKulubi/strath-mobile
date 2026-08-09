@@ -28,11 +28,12 @@ export default function TabLayout() {
     const router = useRouter();
     const pathname = usePathname();
     const { colors, isDark } = useTheme();
-    const { unreadMessages, homeAttention, datesActionable } = useNotificationCounts();
+    const { unreadMessages, incomingLikes, homeAttention, datesActionable } = useNotificationCounts();
     const { data: profile, error: profileError, isError: isProfileError, isLoading, isSuccess } = useProfile();
-    const homeBadge = formatBadgeCount(homeAttention ?? 0);
+    const homeBadge = formatBadgeCount(Math.max(0, (homeAttention ?? 0) - incomingLikes));
     const datesBadge = formatBadgeCount(datesActionable ?? 0);
     const chatsBadge = formatBadgeCount(unreadMessages);
+    const likesBadge = formatBadgeCount(incomingLikes);
     const nextRoute = isSuccess ? getProfileRoute(profile) : null;
 
     const isMatchmakerHome =
@@ -46,10 +47,11 @@ export default function TabLayout() {
                 homeBadge,
                 datesBadge,
                 chatsBadge,
+                likesBadge,
                 badgeBackground: colors.primary,
                 badgeColor: colors.primaryForeground,
             }),
-        [chatsBadge, colors.primary, colors.primaryForeground, datesBadge, homeBadge],
+        [chatsBadge, colors.primary, colors.primaryForeground, datesBadge, homeBadge, likesBadge],
     );
 
     const barTheme = useMemo(() => {
