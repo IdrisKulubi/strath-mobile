@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AccessibilityInfo,
   ActivityIndicator,
+  AppState,
   Platform,
   Pressable,
   StyleSheet,
@@ -71,7 +72,7 @@ import { usePublicFeatureFlags } from '@/hooks/use-payments-enabled';
 import { useMatchmakerExperienceFeedbackStatus } from '@/hooks/use-app-feedback';
 import { useNetwork } from '@/hooks/use-network';
 import {
-  markMatchmakerFeedbackPromptShown,
+  markMatchmakerFeedbackDeferred,
   shouldShowMatchmakerFeedbackPrompt,
 } from '@/lib/app-feedback-storage';
 import {
@@ -197,9 +198,11 @@ export function MatchmakerConversation({
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [feedbackCandidateUserId, setFeedbackCandidateUserId] = useState<string | null>(null);
   const [experienceFeedbackVisible, setExperienceFeedbackVisible] = useState(false);
+  const [feedbackIgnoredThisForeground, setFeedbackIgnoredThisForeground] = useState(false);
   const [pendingUserText, setPendingUserText] = useState<string | null>(null);
   const lastAnnouncement = useRef<string | null>(null);
   const wasOffline = useRef(false);
+  const appState = useRef(AppState.currentState);
 
   const data = conversation.data;
   const messages = useMemo(() => data?.messages ?? [], [data?.messages]);
@@ -229,7 +232,7 @@ export function MatchmakerConversation({
   const retryDraft = draft.trim() || (typeof sendMessage.variables === 'string' ? sendMessage.variables : '');
   const remainingSearches = data?.session.remainingSearches ?? 0;
   const experienceFeedbackStatus = useMatchmakerExperienceFeedbackStatus(
-    personalizationV2Enabled && remainingSearches === 0,
+    personalizationV2Enabled,
   );
   const showLimitEmptyState = shouldShowLimitEmptyState(turn);
   const showComposer = shouldShowMatchmakerComposer(turn.variant, remainingSearches, turn.limitMode);
@@ -251,12 +254,21 @@ export function MatchmakerConversation({
   }, [findCandidate.isPending, sendMessage.isPending]);
 
   useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const returningToForeground = appState.current !== 'active' && nextState === 'active';
+      appState.current = nextState;
+      if (returningToForeground) setFeedbackIgnoredThisForeground(false);
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
     const sessionDay = data?.session.sessionDay;
     if (
       !personalizationV2Enabled
-      || remainingSearches !== 0
       || !sessionDay
       || network.isOffline
+      || feedbackIgnoredThisForeground
       || experienceFeedbackStatus.data?.hasSubmitted !== false
     ) {
       return;
@@ -264,10 +276,9 @@ export function MatchmakerConversation({
 
     let cancelled = false;
     const timer = setTimeout(() => {
-      shouldShowMatchmakerFeedbackPrompt(sessionDay)
-        .then(async (shouldShow) => {
+      shouldShowMatchmakerFeedbackPrompt(sessionDay, remainingSearches === 0)
+        .then((shouldShow) => {
           if (!shouldShow || cancelled) return;
-          await markMatchmakerFeedbackPromptShown(sessionDay);
           if (!cancelled) setExperienceFeedbackVisible(true);
         })
         .catch(() => undefined);
@@ -280,6 +291,7 @@ export function MatchmakerConversation({
   }, [
     data?.session.sessionDay,
     experienceFeedbackStatus.data?.hasSubmitted,
+    feedbackIgnoredThisForeground,
     network.isOffline,
     personalizationV2Enabled,
     remainingSearches,
@@ -907,7 +919,16 @@ export function MatchmakerConversation({
       ) : null}
       <MatchmakerExperienceFeedbackModal
         visible={experienceFeedbackVisible}
-        onClose={() => setExperienceFeedbackVisible(false)}
+        onClose={() => {
+          setExperienceFeedbackVisible(false);
+          setFeedbackIgnoredThisForeground(true);
+        }}
+        onMaybeLater={() => {
+          const sessionDay = data?.session.sessionDay;
+          setExperienceFeedbackVisible(false);
+          setFeedbackIgnoredThisForeground(true);
+          if (sessionDay) markMatchmakerFeedbackDeferred(sessionDay).catch(() => undefined);
+        }}
         onSubmitted={() => setExperienceFeedbackVisible(false)}
       />
     </View>

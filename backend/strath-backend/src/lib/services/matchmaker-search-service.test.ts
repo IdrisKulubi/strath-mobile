@@ -6,8 +6,43 @@ import {
     buildGroundedMatchmakerExplanation,
     buildMatchmakerLabels,
     rankMatchmakerCandidates,
+    selectNaturalShortlistCandidates,
     type MatchmakerCandidateInput,
 } from "@/lib/services/matchmaker-search-service";
+
+function scored(internalScore: number, intentRelevanceScore: number, confirmed = false) {
+    return { internalScore, intentRelevanceScore, hasConfirmedPreferenceEvidence: confirmed };
+}
+
+test("dynamic shortlist size keeps only one when the next result is materially weaker", () => {
+    const results = selectNaturalShortlistCandidates([
+        scored(76, 72),
+        scored(60, 45),
+        scored(59, 42),
+    ], 3);
+
+    assert.equal(results.length, 1);
+});
+
+test("dynamic shortlist size includes two competitive results without padding a third", () => {
+    const results = selectNaturalShortlistCandidates([
+        scored(70, 62),
+        scored(64, 40),
+        scored(58, 38),
+    ], 3);
+
+    assert.equal(results.length, 2);
+});
+
+test("dynamic shortlist size includes three only when all three are strong and close", () => {
+    const results = selectNaturalShortlistCandidates([
+        scored(74, 70),
+        scored(72, 64),
+        scored(70, 58),
+    ], 3);
+
+    assert.equal(results.length, 3);
+});
 
 function candidate(overrides: Partial<MatchmakerCandidateInput>): MatchmakerCandidateInput {
     return {

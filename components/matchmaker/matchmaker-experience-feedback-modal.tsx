@@ -31,12 +31,14 @@ const RATING_LABELS = [
 interface MatchmakerExperienceFeedbackModalProps {
   visible: boolean;
   onClose: () => void;
+  onMaybeLater: () => void;
   onSubmitted: () => void;
 }
 
 export function MatchmakerExperienceFeedbackModal({
   visible,
   onClose,
+  onMaybeLater,
   onSubmitted,
 }: MatchmakerExperienceFeedbackModalProps) {
   const reduceMotion = useReducedMotion();
@@ -187,34 +189,46 @@ export function MatchmakerExperienceFeedbackModal({
               </Text>
             </View>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Send Matchmaker feedback"
-              accessibilityState={{ disabled: !rating, busy: submitFeedback.isPending }}
-              disabled={!rating || submitFeedback.isPending}
-              onPress={() => handleSubmit().catch(() => undefined)}
-              style={({ pressed }) => [
-                styles.submitButton,
-                (!rating || submitFeedback.isPending) && styles.submitButtonDisabled,
-                pressed && Boolean(rating) && !submitFeedback.isPending && styles.submitButtonPressed,
-              ]}
-            >
-              {submitFeedback.isPending ? (
-                <ActivityIndicator size="small" color={MATCHMAKER_HOME.primaryForeground} />
-              ) : (
-                <Text style={styles.submitText}>Send feedback</Text>
-              )}
-            </Pressable>
+            <View style={styles.actions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Send Matchmaker feedback"
+                accessibilityState={{ disabled: !rating, busy: submitFeedback.isPending }}
+                disabled={!rating || submitFeedback.isPending}
+                onPress={() => handleSubmit().catch(() => undefined)}
+                style={styles.submitPressable}
+              >
+                {({ pressed }) => (
+                  <View
+                    style={[
+                      styles.submitButton,
+                      (!rating || submitFeedback.isPending) && styles.submitButtonDisabled,
+                      pressed && Boolean(rating) && !submitFeedback.isPending && styles.submitButtonPressed,
+                    ]}
+                  >
+                    {submitFeedback.isPending ? (
+                      <ActivityIndicator size="small" color={MATCHMAKER_HOME.primaryForeground} />
+                    ) : (
+                      <Text style={styles.submitText}>Send feedback</Text>
+                    )}
+                  </View>
+                )}
+              </Pressable>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Give feedback later"
-              disabled={submitFeedback.isPending}
-              onPress={onClose}
-              style={({ pressed }) => [styles.laterButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.laterText}>Maybe later</Text>
-            </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Give feedback later"
+                disabled={submitFeedback.isPending}
+                onPress={onMaybeLater}
+                style={styles.laterPressable}
+              >
+                {({ pressed }) => (
+                  <View style={[styles.laterButton, pressed && styles.pressed]}>
+                    <Text style={styles.laterText}>Maybe later</Text>
+                  </View>
+                )}
+              </Pressable>
+            </View>
           </ScrollView>
         </Animated.View>
       </KeyboardAvoidingView>
@@ -370,8 +384,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
   },
+  actions: {
+    gap: SPACING.tight,
+    marginTop: SPACING.micro,
+  },
+  submitPressable: {
+    width: '100%',
+  },
   submitButton: {
     minHeight: 54,
+    width: '100%',
     borderRadius: RADIUS.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -389,8 +411,13 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     fontWeight: '800',
   },
+  laterPressable: {
+    width: '100%',
+    alignSelf: 'center',
+  },
   laterButton: {
     minHeight: 44,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },

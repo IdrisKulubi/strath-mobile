@@ -25,6 +25,7 @@ export type MatchmakerSearchOptions = {
     minimumInternalScore?: number;
     minimumRelevanceScore?: number;
     confirmedPreferences?: MatchmakerSearchPreference[];
+    dynamicResultCount?: boolean;
 };
 
 export type MatchmakerSearchPreference = {
@@ -85,6 +86,59 @@ export type RankedMatchmakerCandidate = {
     explanation: MatchmakerCandidateExplanation;
     matchingEvidence: Record<string, unknown>;
 };
+
+type NaturallyRankedCandidate = {
+    internalScore: number;
+    intentRelevanceScore: number;
+    hasConfirmedPreferenceEvidence: boolean;
+};
+
+/**
+ * Treat the requested shortlist size as a ceiling, not a quota.
+ * A second profile must be competitive with the best result. A third is only
+ * included when it is both strong and very close to the best result.
+ */
+export function selectNaturalShortlistCandidates<T extends NaturallyRankedCandidate>(
+    candidates: T[],
+    limit: number,
+) {
+    const cappedLimit = Math.max(0, Math.min(limit, 3));
+    if (cappedLimit === 0 || candidates.length === 0) return [];
+
+    const top = candidates[0];
+    const selected = [top];
+    if (cappedLimit === 1) return selected;
+
+    const second = candidates[1];
+    const secondHasFit = second && (
+        second.intentRelevanceScore >= 20
+        || second.hasConfirmedPreferenceEvidence
+    );
+    if (
+        second
+        && secondHasFit
+        && second.internalScore >= Math.max(55, top.internalScore - 9)
+    ) {
+        selected.push(second);
+    }
+
+    if (cappedLimit === 2 || selected.length < 2) return selected;
+
+    const third = candidates[2];
+    const thirdHasStrongFit = third && (
+        third.intentRelevanceScore >= 30
+        || third.hasConfirmedPreferenceEvidence
+    );
+    if (
+        third
+        && thirdHasStrongFit
+        && third.internalScore >= Math.max(62, top.internalScore - 5)
+    ) {
+        selected.push(third);
+    }
+
+    return selected;
+}
 
 function clampScore(value: number | null | undefined) {
     if (!Number.isFinite(value ?? NaN)) return 0;
@@ -282,9 +336,10 @@ export function rankMatchmakerCandidates(input: {
     minimumInternalScore?: number;
     minimumRelevanceScore?: number;
     confirmedPreferences?: MatchmakerSearchPreference[];
+    dynamicResultCount?: boolean;
 }) {
     const limit = Math.min(Math.max(input.limit ?? 3, 1), 10);
-    return input.candidates
+    const ranked = input.candidates
         .filter((candidate) => {
             if (input.intent.activeToday) return candidate.activityScore >= 45;
             return true;
@@ -342,8 +397,12 @@ export function rankMatchmakerCandidates(input: {
                 candidate.hasConfirmedPreferenceEvidence
             ),
         )
-        .sort((left, right) => right.internalScore - left.internalScore || left.candidateUserId.localeCompare(right.candidateUserId))
-        .slice(0, limit)
+        .sort((left, right) => right.internalScore - left.internalScore || left.candidateUserId.localeCompare(right.candidateUserId));
+    const selected = input.dynamicResultCount
+        ? selectNaturalShortlistCandidates(ranked, limit)
+        : ranked.slice(0, limit);
+
+    return selected
         .map(({ intentRelevanceScore, hasConfirmedPreferenceEvidence, ...candidate }) => {
             void intentRelevanceScore;
             void hasConfirmedPreferenceEvidence;
@@ -459,6 +518,7 @@ export async function searchMatchmakerCandidates(options: MatchmakerSearchOption
         minimumInternalScore: options.minimumInternalScore ?? 45,
         minimumRelevanceScore: options.minimumRelevanceScore ?? 15,
         confirmedPreferences: options.confirmedPreferences,
+        dynamicResultCount: options.dynamicResultCount,
     });
 
     await recordMatchmakerIntent({

@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { shouldPromptForMatchmakerFeedback } from '@/lib/matchmaker/experience-feedback';
+
 const KEYS = {
     lastSubmittedAt: 'strathspace_app_feedback_last_submitted_at',
-    matchmakerPromptShownOn: 'strathspace_matchmaker_feedback_prompt_shown_on',
+    matchmakerFeedbackDeferredOn: 'strathspace_matchmaker_feedback_deferred_on',
 } as const;
 
 async function setNumber(key: string, value: number): Promise<void> {
@@ -33,11 +35,14 @@ async function setString(key: string, value: string): Promise<void> {
     }
 }
 
-export async function shouldShowMatchmakerFeedbackPrompt(sessionDay: string): Promise<boolean> {
-    const shownOn = await getString(KEYS.matchmakerPromptShownOn);
-    return shownOn !== sessionDay;
+export async function shouldShowMatchmakerFeedbackPrompt(
+    sessionDay: string,
+    searchesFinished: boolean,
+): Promise<boolean> {
+    const deferredOn = await getString(KEYS.matchmakerFeedbackDeferredOn);
+    return shouldPromptForMatchmakerFeedback({ sessionDay, deferredOn, searchesFinished });
 }
 
-export async function markMatchmakerFeedbackPromptShown(sessionDay: string): Promise<void> {
-    await setString(KEYS.matchmakerPromptShownOn, sessionDay);
+export async function markMatchmakerFeedbackDeferred(sessionDay: string): Promise<void> {
+    await setString(KEYS.matchmakerFeedbackDeferredOn, sessionDay);
 }

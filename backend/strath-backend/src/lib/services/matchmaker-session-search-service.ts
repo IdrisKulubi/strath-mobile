@@ -379,6 +379,7 @@ async function presentCuratedMatchmakerShortlist(session: MatchmakerSessionRow) 
                     sentiment: preference.sentiment,
                     importance: preference.importance,
                 })),
+            dynamicResultCount: true,
         });
     } catch (error) {
         trackMatchmakerEvent({
