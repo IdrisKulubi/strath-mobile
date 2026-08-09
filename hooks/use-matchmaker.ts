@@ -184,14 +184,24 @@ export function useFindNextMatchmakerCandidate() {
   return useMutation({
     mutationKey: ['matchmaker', 'conversation', 'search'],
     mutationFn: async () => {
-      const response = await apiFetch<{ data: MatchmakerConversationResponse } | MatchmakerConversationResponse>(
-        '/api/matchmaker/session/search',
-        {
-          method: 'POST',
-          timeoutMs: 30_000,
-        },
-      );
-      return unwrapData(response);
+      const minimumAnimationWindow = new Promise<void>((resolve) => {
+        setTimeout(resolve, 1_400);
+      });
+
+      try {
+        const response = await apiFetch<{ data: MatchmakerConversationResponse } | MatchmakerConversationResponse>(
+          '/api/matchmaker/session/search',
+          {
+            method: 'POST',
+            timeoutMs: 30_000,
+          },
+        );
+        await minimumAnimationWindow;
+        return unwrapData(response);
+      } catch (error) {
+        await minimumAnimationWindow;
+        throw error;
+      }
     },
     onSuccess: (conversation) => {
       queryClient.setQueryData(['matchmaker', 'conversation'], conversation);

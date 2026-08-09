@@ -9,5 +9,6 @@ export { MatchmakerHomeShell } from './matchmaker-home-shell';
 export { MatchmakerLimitEmptyState } from './matchmaker-limit-empty-state';
 export { MatchmakerOrb } from './matchmaker-orb';
 export { MatchmakerPanel } from './matchmaker-panel';
+export { MatchmakerSearchAnimation } from './matchmaker-search-animation';
 export { MatchmakerVoiceBubble } from './matchmaker-voice-bubble';
 export { MatchmakerStatePanel } from './matchmaker-state-panel';

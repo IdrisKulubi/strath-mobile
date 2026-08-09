@@ -51,6 +51,7 @@ import {
   MatchmakerUserMessageRow,
 } from '@/components/matchmaker/matchmaker-message-styles';
 import { MatchmakerReplyIcon } from '@/components/matchmaker/matchmaker-reply-icon';
+import { MatchmakerSearchAnimation } from '@/components/matchmaker/matchmaker-search-animation';
 import { MatchmakerStatePanel } from '@/components/matchmaker/matchmaker-state-panel';
 import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
 import { useToast } from '@/components/ui/toast';
@@ -437,6 +438,28 @@ export function MatchmakerConversation({
         busy={conversation.isFetching}
         onRetry={() => conversation.refetch()}
       />
+    );
+  }
+
+  if (findCandidate.isPending) {
+    return (
+      <View style={styles.wrap}>
+        <Animated.ScrollView
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          contentContainerStyle={[
+            styles.searchingScrollContent,
+            {
+              paddingTop: topInset + SPACING.base,
+              paddingBottom: tabBarHeight + SPACING.section,
+            },
+          ]}
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator={false}
+        >
+          <MatchmakerSearchAnimation />
+        </Animated.ScrollView>
+      </View>
     );
   }
 
@@ -853,6 +876,10 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     gap: SPACING.comfortable,
+  },
+  searchingScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   sectionInset: {
     paddingHorizontal: SPACING.screenX,
