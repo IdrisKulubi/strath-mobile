@@ -17,7 +17,6 @@ import { LaunchExperience } from '@/components/intro/launch-experience';
 import { NoInternetScreen } from '@/components/no-internet-screen';
 import { OfflineBanner } from '@/components/offline-banner';
 import { SessionBootstrap } from '@/components/session-bootstrap';
-import { AppFeedbackNudge } from '@/components/feedback/app-feedback-nudge';
 import { useNetwork } from '@/hooks/use-network';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { PaymentDeepLinkHandler } from '@/components/payment/payment-deep-link-handler';
@@ -77,7 +76,6 @@ function RootLayoutNav({ hasAuthToken }: { hasAuthToken: boolean }) {
         <Stack.Screen name="app-feedback" options={{ presentation: 'modal' }} />
       </Stack>
       <OfflineBanner />
-      <AppFeedbackNudge hasAuthToken={hasAuthToken} />
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
     </NavThemeProvider>
   );

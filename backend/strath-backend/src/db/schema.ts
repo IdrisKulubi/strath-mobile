@@ -1451,12 +1451,19 @@ export const feedbacks = pgTable(
         userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
         name: text("name"),
         phoneNumber: text("phone_number"),
+        email: text("email"),
+        rating: integer("rating"),
+        source: text("source").notNull().default("app"),
         message: text("message").notNull(),
         status: text("status").notNull().default("new"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
     },
     (table) => ({
         userIdIdx: index("feedbacks_user_id_idx").on(table.userId),
+        sourceIdx: index("feedbacks_source_idx").on(table.source),
+        matchmakerV2UserUniqueIdx: uniqueIndex("feedbacks_matchmaker_v2_user_unique")
+            .on(table.userId)
+            .where(sql`${table.source} = 'matchmaker_v2' AND ${table.userId} IS NOT NULL`),
     })
 );
 

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { errorResponse, successResponse } from "@/lib/api-response";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
@@ -7,6 +7,36 @@ import { appFeedbackSchema } from "@/lib/validation";
 import { feedbacks, profiles } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
+
+const MATCHMAKER_FEEDBACK_SOURCE = "matchmaker_v2";
+
+export async function GET(req: NextRequest) {
+    try {
+        const session = await getSessionWithFallback(req);
+        if (!session?.user?.id) {
+            return errorResponse(new Error("Unauthorized"), 401);
+        }
+
+        const source = req.nextUrl.searchParams.get("source");
+        if (source !== MATCHMAKER_FEEDBACK_SOURCE) {
+            return errorResponse(new Error("Unsupported feedback source"), 400);
+        }
+
+        const [existing] = await db
+            .select({ id: feedbacks.id })
+            .from(feedbacks)
+            .where(and(
+                eq(feedbacks.userId, session.user.id),
+                eq(feedbacks.source, MATCHMAKER_FEEDBACK_SOURCE),
+            ))
+            .limit(1);
+
+        return successResponse({ hasSubmitted: Boolean(existing) });
+    } catch (error) {
+        console.error("[feedback/status] Error:", error);
+        return errorResponse(error);
+    }
+}
 
 /**
  * POST /api/feedback
@@ -25,9 +55,10 @@ export async function POST(req: NextRequest) {
         const json = await req.json();
         const parsed = appFeedbackSchema.parse(json);
 
-        // Tag the message with the category on the server so the admin UI
-        // can filter without another column change. Keeps schema stable.
-        const taggedMessage = `[${parsed.category}] ${parsed.message}`;
+        const isMatchmakerFeedback = parsed.source === MATCHMAKER_FEEDBACK_SOURCE;
+        const taggedMessage = isMatchmakerFeedback
+            ? `[matchmaker_v2] ${parsed.message || "No written comment."}`
+            : `[${parsed.category}] ${parsed.message}`;
 
         const profile = await db.query.profiles.findFirst({
             where: eq(profiles.userId, session.user.id),
@@ -41,14 +72,38 @@ export async function POST(req: NextRequest) {
             profile?.user?.name ||
             null;
 
-        // Anonymous only hides phone from the stored row; user id + name are always kept for support.
-        const phoneNumber = parsed.anonymous ? null : (profile?.phoneNumber ?? null);
+        // Matchmaker feedback is always attributable so the team can follow up.
+        // General app feedback keeps its existing anonymous option.
+        const hideContact = !isMatchmakerFeedback && parsed.anonymous;
+        const phoneNumber = hideContact
+            ? null
+            : (profile?.phoneNumber ?? profile?.user?.phoneNumber ?? null);
+        const email = hideContact
+            ? null
+            : (profile?.user?.email ?? session.user.email ?? null);
+
+        if (isMatchmakerFeedback) {
+            const [existing] = await db
+                .select({ id: feedbacks.id })
+                .from(feedbacks)
+                .where(and(
+                    eq(feedbacks.userId, session.user.id),
+                    eq(feedbacks.source, MATCHMAKER_FEEDBACK_SOURCE),
+                ))
+                .limit(1);
+            if (existing) {
+                return successResponse({ ok: true, alreadySubmitted: true });
+            }
+        }
 
         await db.insert(feedbacks).values({
             id: crypto.randomUUID(),
             userId: session.user.id,
             name,
             phoneNumber,
+            email,
+            rating: parsed.rating ?? null,
+            source: parsed.source,
             message: taggedMessage,
             status: "new",
         });

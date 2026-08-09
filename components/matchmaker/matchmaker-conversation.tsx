@@ -42,6 +42,7 @@ import { MatchmakerShortlistView } from '@/components/matchmaker/matchmaker-shor
 // Force Metro to rebundle candidate card CTA styles.
 import { MatchmakerFeedbackPanel } from '@/components/matchmaker/matchmaker-feedback-panel';
 import { MatchmakerFeedbackFlow } from '@/components/matchmaker/matchmaker-feedback-flow';
+import { MatchmakerExperienceFeedbackModal } from '@/components/matchmaker/matchmaker-experience-feedback-modal';
 import { MatchmakerLimitEmptyState } from '@/components/matchmaker/matchmaker-limit-empty-state';
 import {
   MatchmakerActivePromptBlock,
@@ -67,7 +68,12 @@ import {
   useUpdateMatchmakerBrief,
 } from '@/hooks/use-matchmaker';
 import { usePublicFeatureFlags } from '@/hooks/use-payments-enabled';
+import { useMatchmakerExperienceFeedbackStatus } from '@/hooks/use-app-feedback';
 import { useNetwork } from '@/hooks/use-network';
+import {
+  markMatchmakerFeedbackPromptShown,
+  shouldShowMatchmakerFeedbackPrompt,
+} from '@/lib/app-feedback-storage';
 import {
   isMatchmakerSearchConfirmation,
   normalizeQuickReplyLabel,
@@ -190,6 +196,7 @@ export function MatchmakerConversation({
   const [draft, setDraft] = useState('');
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [feedbackCandidateUserId, setFeedbackCandidateUserId] = useState<string | null>(null);
+  const [experienceFeedbackVisible, setExperienceFeedbackVisible] = useState(false);
   const [pendingUserText, setPendingUserText] = useState<string | null>(null);
   const lastAnnouncement = useRef<string | null>(null);
   const wasOffline = useRef(false);
@@ -221,6 +228,9 @@ export function MatchmakerConversation({
     : undefined;
   const retryDraft = draft.trim() || (typeof sendMessage.variables === 'string' ? sendMessage.variables : '');
   const remainingSearches = data?.session.remainingSearches ?? 0;
+  const experienceFeedbackStatus = useMatchmakerExperienceFeedbackStatus(
+    personalizationV2Enabled && remainingSearches === 0,
+  );
   const showLimitEmptyState = shouldShowLimitEmptyState(turn);
   const showComposer = shouldShowMatchmakerComposer(turn.variant, remainingSearches, turn.limitMode);
   const composerPlaceholder = turn.limitMode === 'refine_type'
@@ -239,6 +249,41 @@ export function MatchmakerConversation({
       setPendingUserText(null);
     }
   }, [findCandidate.isPending, sendMessage.isPending]);
+
+  useEffect(() => {
+    const sessionDay = data?.session.sessionDay;
+    if (
+      !personalizationV2Enabled
+      || remainingSearches !== 0
+      || !sessionDay
+      || network.isOffline
+      || experienceFeedbackStatus.data?.hasSubmitted !== false
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      shouldShowMatchmakerFeedbackPrompt(sessionDay)
+        .then(async (shouldShow) => {
+          if (!shouldShow || cancelled) return;
+          await markMatchmakerFeedbackPromptShown(sessionDay);
+          if (!cancelled) setExperienceFeedbackVisible(true);
+        })
+        .catch(() => undefined);
+    }, 650);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    data?.session.sessionDay,
+    experienceFeedbackStatus.data?.hasSubmitted,
+    network.isOffline,
+    personalizationV2Enabled,
+    remainingSearches,
+  ]);
 
   useEffect(() => {
     const sessionId = data?.session.id;
@@ -860,6 +905,11 @@ export function MatchmakerConversation({
           </View>
         </View>
       ) : null}
+      <MatchmakerExperienceFeedbackModal
+        visible={experienceFeedbackVisible}
+        onClose={() => setExperienceFeedbackVisible(false)}
+        onSubmitted={() => setExperienceFeedbackVisible(false)}
+      />
     </View>
   );
 }
