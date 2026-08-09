@@ -1478,53 +1478,53 @@ export async function updateAdminMatchmakerDailySearchLimit(formData: FormData) 
         columns: { id: true },
     });
 
-    await db.transaction(async (tx) => {
-        await tx
-            .insert(appFeatureFlags)
-            .values({
-                key: APP_FEATURE_KEYS.matchmakerPersonalizationV2,
-                enabled: false,
-                description: FLAG_DESCRIPTIONS[APP_FEATURE_KEYS.matchmakerPersonalizationV2],
+    const upsertLimit = db
+        .insert(appFeatureFlags)
+        .values({
+            key: APP_FEATURE_KEYS.matchmakerPersonalizationV2,
+            enabled: false,
+            description: FLAG_DESCRIPTIONS[APP_FEATURE_KEYS.matchmakerPersonalizationV2],
+            config: { ...currentConfig, dailySearchLimit },
+            updatedByUserId: session.user.id,
+        })
+        .onConflictDoUpdate({
+            target: appFeatureFlags.key,
+            set: {
                 config: { ...currentConfig, dailySearchLimit },
                 updatedByUserId: session.user.id,
-            })
-            .onConflictDoUpdate({
-                target: appFeatureFlags.key,
-                set: {
-                    config: { ...currentConfig, dailySearchLimit },
-                    updatedByUserId: session.user.id,
-                    updatedAt: new Date(),
-                },
-            });
+                updatedAt: new Date(),
+            },
+        });
+    const updateActiveLimits = db
+        .update(matchmakerSessions)
+        .set({ searchLimit: dailySearchLimit, updatedAt: new Date() })
+        .where(and(
+            eq(matchmakerSessions.status, "active"),
+            eq(matchmakerSessions.sessionDay, sessionDay),
+        ));
 
-        await tx
+    if (reactivatedSessions.length > 0) {
+        const sessionIds = reactivatedSessions.map((row) => row.id);
+        const reactivateSessions = db
             .update(matchmakerSessions)
-            .set({ searchLimit: dailySearchLimit, updatedAt: new Date() })
-            .where(and(
-                eq(matchmakerSessions.status, "active"),
-                eq(matchmakerSessions.sessionDay, sessionDay),
-            ));
-
-        if (reactivatedSessions.length > 0) {
-            const sessionIds = reactivatedSessions.map((row) => row.id);
-            await tx
-                .update(matchmakerSessions)
-                .set({
-                    state: "ready_to_search",
-                    metadata: sql`${matchmakerSessions.metadata} || ${JSON.stringify({ limitMode: "idle" })}::jsonb`,
-                    updatedAt: new Date(),
-                })
-                .where(inArray(matchmakerSessions.id, sessionIds));
-            await tx.insert(matchmakerMessages).values(sessionIds.map((sessionId) => ({
-                sessionId,
-                role: "assistant" as const,
-                kind: "search_plan" as const,
-                text: "You have more suggestions available. Continue with your current search or tell me what to change.",
-                quickReplies: ["Go ahead and search", "Change something"],
-                metadata: { source: "admin_quota_increase", dailySearchLimit },
-            })));
-        }
-    });
+            .set({
+                state: "ready_to_search",
+                metadata: sql`${matchmakerSessions.metadata} || ${JSON.stringify({ limitMode: "idle" })}::jsonb`,
+                updatedAt: new Date(),
+            })
+            .where(inArray(matchmakerSessions.id, sessionIds));
+        const addQuotaMessages = db.insert(matchmakerMessages).values(sessionIds.map((sessionId) => ({
+            sessionId,
+            role: "assistant" as const,
+            kind: "search_plan" as const,
+            text: "You have more suggestions available. Continue with your current search or tell me what to change.",
+            quickReplies: ["Go ahead and search", "Change something"],
+            metadata: { source: "admin_quota_increase", dailySearchLimit },
+        })));
+        await db.batch([upsertLimit, updateActiveLimits, reactivateSessions, addQuotaMessages]);
+    } else {
+        await db.batch([upsertLimit, updateActiveLimits]);
+    }
 
     revalidatePath("/admin/feature-flags");
     return {
@@ -1560,36 +1560,38 @@ export async function resetAdminMatchmakerQuotaForUser(userId: string) {
 
     const hasPlan = Object.keys(activeSession.currentPlan ?? {}).length > 0;
     const wasAtLimit = activeSession.state === "limit_reached";
-    await db.transaction(async (tx) => {
-        await tx
-            .update(matchmakerSessions)
-            .set({
-                dailySearchCount: 0,
-                searchLimit: dailySearchLimit,
-                state: wasAtLimit
-                    ? (hasPlan ? "ready_to_search" : "collecting_intent")
-                    : activeSession.state,
-                metadata: sql`${matchmakerSessions.metadata} || ${JSON.stringify({
-                    limitMode: "idle",
-                    adminQuotaResetAt: new Date().toISOString(),
-                    adminQuotaResetBy: adminSession.user.id,
-                })}::jsonb`,
-                updatedAt: new Date(),
-            })
-            .where(eq(matchmakerSessions.id, activeSession.id));
-        if (wasAtLimit) {
-            await tx.insert(matchmakerMessages).values({
-                sessionId: activeSession.id,
-                role: "assistant",
-                kind: hasPlan ? "search_plan" : "text",
-                text: hasPlan
-                    ? "Your suggestions have been reset. Continue with your current search or tell me what to change."
-                    : "Your suggestions have been reset. Tell me who you would like to meet.",
-                quickReplies: hasPlan ? ["Go ahead and search", "Change something"] : [],
-                metadata: { source: "admin_quota_reset", dailySearchLimit },
-            });
-        }
-    });
+    const resetSession = db
+        .update(matchmakerSessions)
+        .set({
+            dailySearchCount: 0,
+            searchLimit: dailySearchLimit,
+            state: wasAtLimit
+                ? (hasPlan ? "ready_to_search" : "collecting_intent")
+                : activeSession.state,
+            metadata: sql`${matchmakerSessions.metadata} || ${JSON.stringify({
+                limitMode: "idle",
+                adminQuotaResetAt: new Date().toISOString(),
+                adminQuotaResetBy: adminSession.user.id,
+            })}::jsonb`,
+            updatedAt: new Date(),
+        })
+        .where(eq(matchmakerSessions.id, activeSession.id));
+
+    if (wasAtLimit) {
+        const addResetMessage = db.insert(matchmakerMessages).values({
+            sessionId: activeSession.id,
+            role: "assistant",
+            kind: hasPlan ? "search_plan" : "text",
+            text: hasPlan
+                ? "Your suggestions have been reset. Continue with your current search or tell me what to change."
+                : "Your suggestions have been reset. Tell me who you would like to meet.",
+            quickReplies: hasPlan ? ["Go ahead and search", "Change something"] : [],
+            metadata: { source: "admin_quota_reset", dailySearchLimit },
+        });
+        await db.batch([resetSession, addResetMessage]);
+    } else {
+        await resetSession;
+    }
 
     revalidatePath("/admin/feature-flags");
     return {
