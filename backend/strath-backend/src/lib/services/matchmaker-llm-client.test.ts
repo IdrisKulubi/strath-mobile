@@ -8,6 +8,7 @@ import {
     coerceRelationshipIntent,
     coerceSocialEnergy,
     generateMatchmakerLlmTurn,
+    hasActionableMatchmakerTurn,
     inferStructuredIntent,
     isMatchmakerSearchConfirmation,
     isMatchmakerSearchRefinement,
@@ -15,6 +16,7 @@ import {
     MatchmakerLlmUnavailableError,
     parseMatchmakerLlmTurnRaw,
     resolveMatchmakerClarifyingQuickReplies,
+    shouldBypassNewUserClarification,
     wrapMatchmakerLlmRetryFailure,
 } from "@/lib/services/matchmaker-llm-client";
 
@@ -47,6 +49,42 @@ const baseTurn = {
     model: "gpt-4.1-mini",
     fallbackUsed: false,
 };
+
+test("a new user with a clear request bypasses preference clarification", () => {
+    const actionableTurn = {
+        ...baseTurn,
+        intent: {
+            ...baseTurn.intent,
+            rawText: "I want someone calm",
+            traits: ["calm"],
+            socialEnergy: "quiet" as const,
+        },
+        preferenceProposals: [{
+            category: "social_energy" as const,
+            value: "calm",
+            sentiment: "prefer" as const,
+            importance: "prefer" as const,
+            evidence: "explicit" as const,
+        }],
+    };
+    assert.equal(hasActionableMatchmakerTurn(actionableTurn), true);
+    assert.equal(shouldBypassNewUserClarification({
+        hasConfirmedPreferences: false,
+        turn: actionableTurn,
+    }), true);
+    assert.equal(shouldBypassNewUserClarification({
+        hasConfirmedPreferences: true,
+        turn: actionableTurn,
+    }), false);
+});
+
+test("a genuinely vague new-user request still allows one clarifier", () => {
+    assert.equal(hasActionableMatchmakerTurn(baseTurn), false);
+    assert.equal(shouldBypassNewUserClarification({
+        hasConfirmedPreferences: false,
+        turn: baseTurn,
+    }), false);
+});
 
 test("an unrelated answer does not resolve the active question", () => {
     const input = {

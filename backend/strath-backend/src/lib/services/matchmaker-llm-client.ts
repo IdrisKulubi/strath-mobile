@@ -532,6 +532,24 @@ function uniqueStrings(values: string[]) {
     return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
+export function hasActionableMatchmakerTurn(turn: MatchmakerLlmTurn) {
+    return (turn.preferenceProposals ?? []).some((proposal) => proposal.evidence === "explicit")
+        || turn.intent.traits.length > 0
+        || turn.intent.dealbreakers.length > 0
+        || turn.intent.relationshipIntent !== "unknown"
+        || turn.intent.activityRequirement !== "any"
+        || turn.intent.socialEnergy !== "unknown";
+}
+
+export function shouldBypassNewUserClarification(input: {
+    hasConfirmedPreferences: boolean;
+    turn: MatchmakerLlmTurn;
+}) {
+    return !input.hasConfirmedPreferences
+        && input.turn.shouldClarify
+        && hasActionableMatchmakerTurn(input.turn);
+}
+
 export function resolveMatchmakerClarifyingQuickReplies(input: {
     question: string;
     category?: string | null;
@@ -801,6 +819,7 @@ Rules:
 - Never mark an unanswered question as resolved or convert it into a preference.
 - Extract directly stated preferences separately from reasonable inferences. Use evidence "explicit" only when the user's own message clearly states it.
 - Inferred preferences must never be described as confirmed facts.
+- Still-learning or inferred preferences are optional review suggestions. Never ask the user to confirm them during a search conversation and never let them trigger clarification.
 - Never repeat the same clarifying question twice in a row.
 - If the user's intent is clear, produce a search plan the backend can use.
 - For a search_plan reply, summarize the direction in one short message and ask if they want you to search now. Do not say you are already searching. Do not produce acknowledgment loops like "you're welcome" or "keep going".

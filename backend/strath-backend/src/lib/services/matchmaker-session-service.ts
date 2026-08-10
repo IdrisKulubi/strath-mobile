@@ -21,6 +21,7 @@ import {
     generateMatchmakerProfileTipsReply,
     generateMatchmakerRefinePromptReply,
     generateMatchmakerRefineSavedReply,
+    shouldBypassNewUserClarification,
     isMatchmakerSearchConfirmation,
     resolveMatchmakerClarifyingQuickReplies,
     type MatchmakerActiveQuestion,
@@ -851,7 +852,9 @@ export async function addMatchmakerConversationMessage(input: {
         activeQuestion = null;
     }
     const structuredBriefSummary = briefBeforeTurn ? buildMatchmakerBriefSummary(briefBeforeTurn) : null;
-    const memorySummary = [memory?.memorySummary, structuredBriefSummary].filter(Boolean).join(". ") || null;
+    const memorySummary = personalizationV2
+        ? structuredBriefSummary
+        : memory?.memorySummary ?? null;
     const llmTurn = await generateMatchmakerLlmTurn({
         userMessage: cleaned,
         state: session.state,
@@ -863,10 +866,20 @@ export async function addMatchmakerConversationMessage(input: {
             text: message.text,
         })),
     });
+    const hadConfirmedPreferences = Boolean(briefBeforeTurn?.preferences.some((preference) =>
+        preference.status === "active" && preference.certainty === "confirmed",
+    ));
+    const bypassNewUserClarification = personalizationV2 && shouldBypassNewUserClarification({
+        hasConfirmedPreferences: hadConfirmedPreferences,
+        turn: llmTurn,
+    });
 
     let nextActiveQuestion: MatchmakerActiveQuestion | null = null;
     let persistedBrief = briefBeforeTurn;
     let shouldClarify = llmTurn.shouldClarify;
+    let clarificationReason: "current_ambiguity" | "contradiction" | null = llmTurn.shouldClarify
+        ? "current_ambiguity"
+        : null;
     let assistantReply = llmTurn.reply;
     let assistantQuickReplies = llmTurn.quickReplies;
     if (personalizationV2) {
@@ -879,6 +892,7 @@ export async function addMatchmakerConversationMessage(input: {
         const contradiction = findMatchmakerBriefContradictions(briefAfterTurn)[0];
         if (contradiction) {
             shouldClarify = true;
+            clarificationReason = "contradiction";
             assistantReply = `I have “${contradiction.value}” both as something you want and something to avoid. Which one should guide future matches?`;
             assistantQuickReplies = ["I want this", "Avoid this", "Keep it flexible"];
             nextActiveQuestion = {
@@ -893,8 +907,25 @@ export async function addMatchmakerConversationMessage(input: {
             };
         } else if (resolvedContradiction) {
             shouldClarify = false;
+            clarificationReason = null;
             assistantReply = buildMatchmakerSearchConfirmation(briefAfterTurn);
             assistantQuickReplies = ["Go ahead and search", "Change something"];
+        } else if (bypassNewUserClarification) {
+            shouldClarify = false;
+            clarificationReason = null;
+            assistantReply = buildMatchmakerSearchConfirmation(briefAfterTurn);
+            assistantQuickReplies = ["Go ahead and search", "Change something"];
+            nextActiveQuestion = null;
+            trackMatchmakerEvent({
+                event: "new_user_clarification_bypassed",
+                userId: input.userId,
+                sessionId: session.id,
+                metadata: {
+                    staleQuestionCleared: Boolean(activeQuestionAtTurnStart),
+                    explicitProposalCount: (llmTurn.preferenceProposals ?? [])
+                        .filter((proposal) => proposal.evidence === "explicit").length,
+                },
+            }).catch(() => undefined);
         } else if (llmTurn.shouldClarify) {
             const answeredPrevious = answerAddressesActiveQuestion({
                 userMessage: cleaned,
@@ -991,6 +1022,7 @@ export async function addMatchmakerConversationMessage(input: {
             messageType: llmTurn.messageType,
             quickReplyCount: assistantQuickReplies.length,
             briefVersion: persistedBrief?.version,
+            clarificationReason,
         },
     }).catch(() => undefined);
     if (personalizationV2 && activeQuestionAtTurnStart && !nextActiveQuestion) {

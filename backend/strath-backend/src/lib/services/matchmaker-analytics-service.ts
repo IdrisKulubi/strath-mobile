@@ -19,6 +19,8 @@ export type MatchmakerAnalyticsEvent =
     | "brief_version_conflict"
     | "brief_undone"
     | "clarification_resolved"
+    | "new_user_clarification_bypassed"
+    | "inferred_preferences_archived"
     | "shortlist_requested"
     | "shortlist_generated"
     | "shortlist_partial"
@@ -59,6 +61,8 @@ const EVENT_TYPE_BY_NAME: Record<MatchmakerAnalyticsEvent, string> = {
     brief_version_conflict: EVENT_TYPES.MATCHMAKER_BRIEF_VERSION_CONFLICT,
     brief_undone: EVENT_TYPES.MATCHMAKER_BRIEF_UNDONE,
     clarification_resolved: EVENT_TYPES.MATCHMAKER_CLARIFICATION_RESOLVED,
+    new_user_clarification_bypassed: EVENT_TYPES.MATCHMAKER_NEW_USER_CLARIFICATION_BYPASSED,
+    inferred_preferences_archived: EVENT_TYPES.MATCHMAKER_INFERRED_PREFERENCES_ARCHIVED,
     shortlist_requested: EVENT_TYPES.MATCHMAKER_SHORTLIST_REQUESTED,
     shortlist_generated: EVENT_TYPES.MATCHMAKER_SHORTLIST_GENERATED,
     shortlist_partial: EVENT_TYPES.MATCHMAKER_SHORTLIST_PARTIAL,

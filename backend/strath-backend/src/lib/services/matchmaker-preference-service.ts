@@ -19,6 +19,8 @@ type PreferenceRow = typeof matchmakerUserPreferences.$inferSelect;
 type BriefReader = Pick<typeof db, "query">;
 type PreferenceSnapshot = MatchmakerBriefPreference & { normalizedValue: string };
 
+export const MAX_ACTIVE_INFERRED_PREFERENCES = 15;
+
 export interface MatchmakerBriefPreference {
     id: string;
     category: string;
@@ -39,6 +41,48 @@ export interface MatchmakerBrief {
     latestChangeId: string | null;
     preferences: MatchmakerBriefPreference[];
     updatedAt: string | null;
+}
+
+type RankablePreference = {
+    id: string;
+    certainty: "confirmed" | "inferred";
+    source: "direct" | "feedback" | "migrated_memory" | "system";
+    status: "active" | "removed";
+    createdAt: Date | string;
+    updatedAt: Date | string;
+};
+
+function inferredSourceRank(source: RankablePreference["source"]) {
+    if (source === "system") return 0;
+    if (source === "migrated_memory") return 1;
+    return 2;
+}
+
+function timestamp(value: Date | string) {
+    return value instanceof Date ? value.getTime() : new Date(value).getTime();
+}
+
+export function rankActiveInferredPreferences<T extends RankablePreference>(preferences: T[]): T[] {
+    return preferences
+        .filter((preference) => preference.status === "active" && preference.certainty === "inferred")
+        .sort((left, right) =>
+            inferredSourceRank(left.source) - inferredSourceRank(right.source)
+            || timestamp(right.updatedAt) - timestamp(left.updatedAt)
+            || timestamp(right.createdAt) - timestamp(left.createdAt)
+            || left.id.localeCompare(right.id),
+        );
+}
+
+export function inferredPreferenceOverflow<T extends RankablePreference>(
+    preferences: T[],
+    limit = MAX_ACTIVE_INFERRED_PREFERENCES,
+): T[] {
+    return rankActiveInferredPreferences(preferences).slice(limit);
+}
+
+function wasArchivedByInferredQueueCap(preference: Pick<PreferenceRow, "metadata" | "status">) {
+    return preference.status === "removed"
+        && preference.metadata?.archivedReason === "inferred_queue_cap";
 }
 
 export class MatchmakerBriefVersionConflictError extends Error {
@@ -111,14 +155,14 @@ export interface MatchmakerPreferenceProposal {
 }
 
 export function buildMatchmakerBriefSummary(brief: MatchmakerBrief) {
-    const confirmed = brief.preferences.filter((preference) => preference.certainty === "confirmed");
-    const inferred = brief.preferences.filter((preference) => preference.certainty === "inferred");
+    const confirmed = brief.preferences.filter((preference) =>
+        preference.status === "active" && preference.certainty === "confirmed",
+    );
     const label = (preference: MatchmakerBriefPreference) =>
         `${preference.sentiment === "avoid" ? "avoid" : preference.importance}: ${preference.value}`;
     return [
         confirmed.length ? `Confirmed: ${confirmed.map(label).join("; ")}` : "Confirmed: none yet",
-        inferred.length ? `Still learning (not confirmed): ${inferred.map(label).join("; ")}` : null,
-    ].filter(Boolean).join(". ");
+    ].join(". ");
 }
 
 export function buildMatchmakerBriefSearchPlan(brief: MatchmakerBrief) {
@@ -158,14 +202,13 @@ export function buildMatchmakerSearchConfirmation(brief: MatchmakerBrief) {
     const criteria = parts.length
         ? `I’ll search using ${parts.join("; ")}.`
         : "I’ll keep this search broad because nothing is confirmed yet.";
-    const uncertainty = plan.unresolved.length
-        ? ` I’m still learning about ${plan.unresolved.join(", ")}, so I won’t treat ${plan.unresolved.length === 1 ? "it" : "them"} as a filter.`
-        : "";
-    return `${criteria}${uncertainty} Want me to search now?`;
+    return `${criteria} Want me to search now?`;
 }
 
 export function findMatchmakerBriefContradictions(brief: MatchmakerBrief) {
-    const active = brief.preferences.filter((preference) => preference.status === "active");
+    const active = brief.preferences.filter((preference) =>
+        preference.status === "active" && preference.certainty === "confirmed",
+    );
     const contradictions: Array<{ category: string; value: string; preferenceIds: string[] }> = [];
     const grouped = new Map<string, MatchmakerBriefPreference[]>();
     for (const preference of active) {
@@ -337,6 +380,10 @@ export async function mutateMatchmakerBrief(input: {
                 const key = `${operation.category}:${normalizedValue}:${sentiment}`;
                 const existing = byKey.get(key);
                 if (existing) {
+                    const nextCertainty = operation.certainty ?? "confirmed";
+                    if (nextCertainty === "inferred" && wasArchivedByInferredQueueCap(existing)) {
+                        continue;
+                    }
                     const [updated] = await tx.update(matchmakerUserPreferences).set({
                         value: operation.value.trim(),
                         sentiment,
@@ -398,6 +445,20 @@ export async function mutateMatchmakerBrief(input: {
             byId.set(updated.id, updated);
         }
 
+        const overflow = inferredPreferenceOverflow([...byId.values()]);
+        for (const preference of overflow) {
+            const [archived] = await tx.update(matchmakerUserPreferences).set({
+                status: "removed",
+                version: preference.version + 1,
+                metadata: {
+                    ...preference.metadata,
+                    archivedReason: "inferred_queue_cap",
+                },
+                updatedAt: new Date(),
+            }).where(eq(matchmakerUserPreferences.id, preference.id)).returning();
+            byId.set(archived.id, archived);
+        }
+
         const nextVersion = brief.version + 1;
         const afterRows = await tx.query.matchmakerUserPreferences.findMany({
             where: eq(matchmakerUserPreferences.userId, input.userId),
@@ -427,7 +488,10 @@ export async function mutateMatchmakerBrief(input: {
             throw new ConcurrentBriefMutationError("Match brief was changed concurrently");
         }
 
-            return readBrief(tx, input.userId);
+            return {
+                brief: await readBrief(tx, input.userId),
+                archivedCount: overflow.length,
+            };
         });
         trackMatchmakerEvent({
             event: "brief_mutated",
@@ -435,10 +499,21 @@ export async function mutateMatchmakerBrief(input: {
             metadata: {
                 operationCount: input.operations.length,
                 operationTypes: [...new Set(input.operations.map((operation) => operation.type))],
-                version: result.version,
+                version: result.brief.version,
             },
         }).catch(() => undefined);
-        return result;
+        if (result.archivedCount > 0) {
+            trackMatchmakerEvent({
+                event: "inferred_preferences_archived",
+                userId: input.userId,
+                metadata: {
+                    archivedCount: result.archivedCount,
+                    cap: MAX_ACTIVE_INFERRED_PREFERENCES,
+                    source: "brief_mutation",
+                },
+            }).catch(() => undefined);
+        }
+        return result.brief;
     } catch (error) {
         if (input.requestKey && error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === "23505") {
             return getMatchmakerBrief(input.userId);

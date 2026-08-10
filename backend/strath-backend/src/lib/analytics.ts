@@ -31,6 +31,8 @@ export const EVENT_TYPES = {
     MATCHMAKER_BRIEF_VERSION_CONFLICT: "matchmaker_brief_version_conflict",
     MATCHMAKER_BRIEF_UNDONE: "matchmaker_brief_undone",
     MATCHMAKER_CLARIFICATION_RESOLVED: "matchmaker_clarification_resolved",
+    MATCHMAKER_NEW_USER_CLARIFICATION_BYPASSED: "matchmaker_new_user_clarification_bypassed",
+    MATCHMAKER_INFERRED_PREFERENCES_ARCHIVED: "matchmaker_inferred_preferences_archived",
     MATCHMAKER_SHORTLIST_REQUESTED: "matchmaker_shortlist_requested",
     MATCHMAKER_SHORTLIST_GENERATED: "matchmaker_shortlist_generated",
     MATCHMAKER_SHORTLIST_PARTIAL: "matchmaker_shortlist_partial",
