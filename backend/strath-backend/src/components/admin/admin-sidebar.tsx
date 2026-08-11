@@ -24,6 +24,7 @@ import {
     Sparkles,
     Users,
     RotateCcw,
+    MessageSquareText,
 } from "lucide-react";
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -85,6 +86,7 @@ const groups: NavGroup[] = [
         items: [
             { href: "/admin/users", label: "Users", icon: Users },
             { href: "/admin/metrics", label: "Metrics", icon: BarChart3 },
+            { href: "/admin/feedback", label: "Feedback", icon: MessageSquareText },
             { href: "/admin/profile-intelligence", label: "Profile Intelligence", icon: BrainCircuit },
             { href: "/admin/photo-intelligence", label: "Photo Intelligence", icon: Image },
             { href: "/admin/push-notifications", label: "Push notifications", icon: Bell },
