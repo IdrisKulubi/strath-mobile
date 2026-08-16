@@ -220,7 +220,7 @@ export default function ChatPage() {
   useEffect(() => {
     fetchMatchData();
     fetchCurrentUser();
-    const interval = setInterval(fetchMessages, 3000);
+    const interval = setInterval(fetchMessages, 20_000);
     return () => clearInterval(interval);
   }, [matchId, fetchMatchData, fetchCurrentUser, fetchMessages]);
 

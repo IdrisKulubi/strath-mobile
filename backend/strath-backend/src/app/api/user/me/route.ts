@@ -11,6 +11,7 @@ import { ensureProfileIntelligenceJob } from "@/lib/services/profile-intelligenc
 import { admitOrWaitlist, getWaitlistViewFor } from "@/lib/services/admission-service";
 import { getSessionWithBearerFallback } from "@/lib/security";
 import { ZodError } from "zod";
+import { buildWaitlistViewForProfile, selectCurrentUserProfile } from "@/lib/db/queries/profiles";
 
 function formatProfileValidationError(error: ZodError) {
     const promptResponseIssue = error.issues.find(
@@ -38,12 +39,7 @@ export async function GET(req: NextRequest) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
 
-        const profile = await db.query.profiles.findFirst({
-            where: eq(profiles.userId, session.user.id),
-            with: {
-                user: true,
-            },
-        });
+        const profile = await selectCurrentUserProfile(session.user.id);
 
         if (!profile) {
             console.info("[GET /api/user/me] Authenticated user has no profile yet; returning onboarding state", {
@@ -52,10 +48,11 @@ export async function GET(req: NextRequest) {
             return successResponse(null);
         }
 
-        // Attach a lightweight waitlist view so the mobile client can route to
-        // the waitlist screen without a second round-trip. `null` for admitted
-        // or not-yet-gated users.
-        const waitlist = await getWaitlistViewFor(session.user.id).catch((err) => {
+        const waitlist = await buildWaitlistViewForProfile({
+            waitlistStatus: profile.waitlistStatus,
+            waitlistPosition: profile.waitlistPosition,
+            gender: profile.gender,
+        }).catch((err) => {
             console.error("[GET /api/user/me] waitlist view failed:", err);
             return null;
         });

@@ -4,9 +4,9 @@ import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { setSessionExpiredHandler, apiFetch, isAuthExpiredError, isNetworkError } from '@/lib/api-client';
-import { clearSession, getStoredAuth } from '@/lib/auth-helpers';
-import { setCachedProfile } from '@/lib/session-cache';
+import { setSessionExpiredHandler, isAuthExpiredError, isNetworkError } from '@/lib/api-client';
+import { getStoredAuth } from '@/lib/auth-helpers';
+import { queryClient } from '@/lib/react-query';
 import { useNetwork } from '@/hooks/use-network';
 import { useToast } from '@/components/ui/toast';
 
@@ -69,9 +69,7 @@ export function SessionBootstrap() {
             try {
                 const stored = await getStoredAuth();
                 if (!stored) return;
-                const response = await apiFetch<{ data?: any }>('/api/user/me');
-                const profile = response?.data ?? null;
-                await setCachedProfile(stored.userId, profile);
+                await queryClient.invalidateQueries({ queryKey: ['profile'] });
             } catch (error) {
                 if (isAuthExpiredError(error)) return; // handled centrally
                 if (isNetworkError(error)) return;

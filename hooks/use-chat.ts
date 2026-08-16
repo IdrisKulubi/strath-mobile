@@ -236,7 +236,7 @@ export function useChat(matchId: string, options?: UseChatOptions) {
             hasMoreRef.current = hasMore;
             return loaded;
         },
-        refetchInterval: isAppActive && !pausePolling ? 3000 : false,
+        refetchInterval: isAppActive && !pausePolling ? 20_000 : false,
         refetchIntervalInBackground: false,
         enabled,
         retry: (failureCount, err) => {

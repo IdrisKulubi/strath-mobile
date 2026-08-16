@@ -92,9 +92,9 @@ export function useNotificationCounts() {
     const { data, isLoading, refetch } = useQuery({
         queryKey: ['notificationCounts'],
         queryFn: fetchNotificationCounts,
-        refetchInterval: isAppActive ? 15000 : false, // Poll every 15s when active
+        refetchInterval: isAppActive ? 60_000 : false,
         refetchIntervalInBackground: false,
-        staleTime: 10000, // Consider data stale after 10s
+        staleTime: 30_000,
         gcTime: 5 * 60 * 1000, // Keep in cache for 5 min
         retry: 1,
     });

@@ -3,10 +3,9 @@ import { NextRequest } from "next/server";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
 import { getActiveAdminCuratedCandidatePairsForUser } from "@/lib/services/candidate-pairs-service";
-import { runPairExpiration } from "@/lib/services/pair-expiration-service";
 import { getActiveMatchHoldForUser } from "@/lib/services/match-hold-service";
 import { getManualMatchmakingCopy, isManualMatchmakingModeEnabled } from "@/lib/services/manual-matchmaking-mode";
-import { isAdminMatchPreviewUser } from "@/lib/services/match-exclusion-service";
+import { createMatchExclusionContext, isAdminMatchPreviewUser } from "@/lib/services/match-exclusion-service";
 
 export const dynamic = "force-dynamic";
 
@@ -18,22 +17,19 @@ export async function GET(req: NextRequest) {
         }
 
         const userId = session.user.id;
+        const sessionUserRole = (session.user as { role?: string }).role ?? null;
         const manualMode = isManualMatchmakingModeEnabled();
-        const isAdminPreview = await isAdminMatchPreviewUser(userId);
+        const isAdminPreview = await isAdminMatchPreviewUser(userId, { sessionUserRole });
+        const exclusionContext = await createMatchExclusionContext(sessionUserRole);
         console.log("[daily-matches] GET", {
             userId,
-            userRole: (session.user as { role?: string }).role ?? null,
+            userRole: sessionUserRole,
             manualMode,
             isAdminPreview,
         });
 
         if (manualMode && isAdminPreview) {
             console.log("[daily-matches] admin match preview bypassing manual matchmaking mode", { userId });
-        }
-
-        const expiration = await runPairExpiration();
-        if (expiration.expiredCount > 0) {
-            console.log("[daily-matches] expired pairs", { userId, expiredCount: expiration.expiredCount });
         }
 
         const hold = await getActiveMatchHoldForUser(userId);
@@ -52,7 +48,7 @@ export async function GET(req: NextRequest) {
             });
         }
 
-        const curatedMatches = await getActiveAdminCuratedCandidatePairsForUser(userId);
+        const curatedMatches = await getActiveAdminCuratedCandidatePairsForUser(userId, exclusionContext);
         console.log("[daily-matches] curated override lookup", {
             userId,
             curatedCount: curatedMatches.length,

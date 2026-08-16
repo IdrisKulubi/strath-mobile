@@ -34,7 +34,9 @@ import {
     parseMatchmakerV2RolloutConfig,
     parseSignupCapConfig,
     type SignupCapConfig,
+    invalidateFeatureFlagCache,
 } from "@/lib/feature-flags";
+import { invalidateMatchExcludedUserIdsCache } from "@/lib/services/match-exclusion-service";
 import {
     admitEveryoneFromWaitlist,
     admitOrWaitlist,
@@ -1331,6 +1333,7 @@ export async function setAdminFeatureFlag(key: string, enabled: boolean) {
             },
         });
 
+    await invalidateFeatureFlagCache(key);
     revalidatePath("/admin/feature-flags");
     return {
         ok: true as const,
@@ -1371,6 +1374,7 @@ export async function updateAdminMatchmakerV2Rollout(formData: FormData) {
         target: appFeatureFlags.key,
         set: { config: { ...config }, updatedByUserId: session.user.id, updatedAt: new Date() },
     });
+    await invalidateFeatureFlagCache(APP_FEATURE_KEYS.matchmakerPersonalizationV2);
     revalidatePath("/admin/feature-flags");
     return {
         ok: true as const,
@@ -1670,6 +1674,7 @@ export async function updateAdminSignupCapConfig(formData: FormData) {
             },
         });
 
+    await invalidateFeatureFlagCache(APP_FEATURE_KEYS.signupCapEnabled);
     // If the cap was raised, try to release anyone now within the new limits.
     const stats = await getAdmissionStats();
     const buckets: GenderBucket[] = ["male", "female", "other"];
@@ -1777,6 +1782,7 @@ export async function openAppToEveryone() {
             },
         });
 
+    await invalidateFeatureFlagCache(APP_FEATURE_KEYS.signupCapEnabled);
     const released = await admitEveryoneFromWaitlist();
     revalidatePath("/admin/feature-flags");
     return released;
@@ -1970,6 +1976,7 @@ export async function setUserRole(userId: string, role: "user" | "admin") {
     await requireAdmin();
     await db.update(user).set({ role }).where(eq(user.id, userId));
     await db.update(profiles).set({ role }).where(eq(profiles.userId, userId));
+    await invalidateMatchExcludedUserIdsCache();
     revalidatePath("/admin/users");
 }
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, type LayoutChangeEvent } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTheme } from '@/hooks/use-theme';
 import { IconProps } from 'phosphor-react-native';
@@ -10,6 +10,8 @@ interface SectionCardProps {
     icon: React.ReactElement<IconProps>;
     children: React.ReactNode;
     delay?: number;
+    onLayout?: (event: LayoutChangeEvent) => void;
+    highlighted?: boolean;
 }
 
 export function SectionCard({
@@ -18,11 +20,14 @@ export function SectionCard({
     icon,
     children,
     delay = 0,
+    onLayout,
+    highlighted = false,
 }: SectionCardProps) {
     const { colors, isDark } = useTheme();
 
     return (
         <Animated.View
+            onLayout={onLayout}
             entering={FadeInDown.delay(delay).springify()}
             style={[
                 styles.container,
@@ -30,9 +35,11 @@ export function SectionCard({
                     backgroundColor: isDark
                         ? 'rgba(255, 255, 255, 0.04)'
                         : '#ffffff',
-                    borderColor: isDark
-                        ? 'rgba(255, 255, 255, 0.08)'
-                        : 'rgba(0, 0, 0, 0.06)',
+                    borderColor: highlighted
+                        ? colors.primary
+                        : isDark
+                          ? 'rgba(255, 255, 255, 0.08)'
+                          : 'rgba(0, 0, 0, 0.06)',
                     // Add shadow for light mode
                     ...(isDark
                         ? {}

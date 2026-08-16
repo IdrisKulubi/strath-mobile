@@ -191,7 +191,7 @@ export default function EditProfileScreen() {
     const router = useRouter();
     const params = useLocalSearchParams<{ focus?: string | string[] }>();
     const scrollViewRef = useRef<ScrollView>(null);
-    const photosSectionY = useRef(0);
+    const sectionPositions = useRef<Record<string, number>>({});
 
     const focusRaw = params.focus;
     const focusParam = Array.isArray(focusRaw) ? focusRaw[0] : focusRaw;
@@ -217,21 +217,26 @@ export default function EditProfileScreen() {
     }, [profile]);
 
     useEffect(() => {
-        if (focusParam !== 'photos' || isLoading) {
+        if (!focusParam || isLoading) {
             return;
         }
         const timer = setTimeout(() => {
+            const targetY = sectionPositions.current[focusParam];
+            if (targetY == null) return;
             scrollViewRef.current?.scrollTo({
-                y: Math.max(0, photosSectionY.current - 16),
+                y: Math.max(0, targetY - 16),
                 animated: true,
             });
         }, 480);
         return () => clearTimeout(timer);
     }, [focusParam, isLoading]);
 
-    const onPhotosSectionLayout = useCallback((e: LayoutChangeEvent) => {
-        photosSectionY.current = e.nativeEvent.layout.y;
-    }, []);
+    const registerSectionLayout = useCallback(
+        (section: string) => (event: LayoutChangeEvent) => {
+            sectionPositions.current[section] = event.nativeEvent.layout.y;
+        },
+        [],
+    );
 
     useEffect(() => {
         if (isDirty) {
@@ -589,7 +594,7 @@ export default function EditProfileScreen() {
                     </Animated.View>
 
                     {/* Photos Section — layout y used when opening from face verification (focus=photos) */}
-                    <View onLayout={onPhotosSectionLayout}>
+                    <View onLayout={registerSectionLayout('photos')}>
                         <Animated.View entering={FadeInDown.delay(150)}>
                             <PhotosEditor
                                 profilePhoto={formData.profilePhoto}
@@ -682,6 +687,8 @@ export default function EditProfileScreen() {
                         subtitle="Help us find your perfect match"
                         icon={<Heart />}
                         delay={250}
+                        onLayout={registerSectionLayout('dating')}
+                        highlighted={focusParam === 'dating'}
                     >
                         <SelectorRow
                             label="Looking For"
@@ -718,6 +725,8 @@ export default function EditProfileScreen() {
                         subtitle="Your academic journey"
                         icon={<GraduationCap />}
                         delay={300}
+                        onLayout={registerSectionLayout('education')}
+                        highlighted={focusParam === 'education'}
                     >
                         <StyledInput
                             label="University"
@@ -760,6 +769,8 @@ export default function EditProfileScreen() {
                         subtitle="Show off your personality"
                         icon={<Sparkle />}
                         delay={350}
+                        onLayout={registerSectionLayout('personality')}
+                        highlighted={focusParam === 'personality'}
                     >
                         <View style={styles.selectorGrid}>
                             <SelectorRow
@@ -904,6 +915,8 @@ export default function EditProfileScreen() {
                         subtitle="Your daily habits"
                         icon={<Barbell />}
                         delay={550}
+                        onLayout={registerSectionLayout('lifestyle')}
+                        highlighted={focusParam === 'lifestyle'}
                     >
                         <View style={styles.selectorGrid}>
                             {[
@@ -988,6 +1001,8 @@ export default function EditProfileScreen() {
                         subtitle="Help people get to know you better"
                         icon={<User />}
                         delay={600}
+                        onLayout={registerSectionLayout('details')}
+                        highlighted={focusParam === 'details'}
                     >
                         <View style={styles.selectorGrid}>
                             {[
@@ -1034,6 +1049,8 @@ export default function EditProfileScreen() {
                         subtitle="Connect your social accounts"
                         icon={<InstagramLogo />}
                         delay={700}
+                        onLayout={registerSectionLayout('socials')}
+                        highlighted={focusParam === 'socials'}
                     >
                         <View style={styles.socialRow}>
                             <View

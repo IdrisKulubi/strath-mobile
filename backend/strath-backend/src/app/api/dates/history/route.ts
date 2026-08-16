@@ -1,9 +1,14 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { dateFeedback, dateMatches, profiles } from "@/db/schema";
+import { dateFeedback, dateMatches } from "@/db/schema";
 import { eq, or, desc, and } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
+import {
+    getPrimaryProfilePhoto,
+    getProfileFirstName,
+    selectProfileCardsByUserIds,
+} from "@/lib/db/queries/profiles";
 
 export const dynamic = "force-dynamic";
 
@@ -31,14 +36,15 @@ export async function GET(req: NextRequest) {
 
         const historyStatuses = ["attended", "cancelled", "no_show"];
         const filtered = matches.filter((m) => historyStatuses.includes(m.status));
+        const otherUserIds = filtered.map((dm) =>
+            dm.userAId === session.user.id ? dm.userBId : dm.userAId,
+        );
+        const profileMap = await selectProfileCardsByUserIds(otherUserIds);
 
         const result = await Promise.all(
             filtered.map(async (dm) => {
                 const otherUserId = dm.userAId === session.user.id ? dm.userBId : dm.userAId;
-                const otherProfile = await db.query.profiles.findFirst({
-                    where: eq(profiles.userId, otherUserId),
-                    with: { user: true },
-                });
+                const otherProfile = profileMap.get(otherUserId);
                 const myFeedback = await db.query.dateFeedback.findFirst({
                     where: and(
                         eq(dateFeedback.dateMatchId, dm.id),
@@ -56,8 +62,8 @@ export async function GET(req: NextRequest) {
                     scheduledAt: dm.scheduledAt?.toISOString() ?? undefined,
                     withUser: {
                         id: otherUserId,
-                        firstName: otherProfile?.firstName ?? otherProfile?.user?.name?.split(" ")[0] ?? "Unknown",
-                        profilePhoto: otherProfile?.profilePhoto ?? otherProfile?.user?.profilePhoto ?? otherProfile?.user?.image,
+                        firstName: otherProfile ? getProfileFirstName(otherProfile) : "Unknown",
+                        profilePhoto: otherProfile ? getPrimaryProfilePhoto(otherProfile) : undefined,
                     },
                 };
             })

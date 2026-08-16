@@ -7,7 +7,6 @@ import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { SPACING, TYPOGRAPHY, RADIUS } from '@/lib/design-tokens';
 import { useTheme } from '@/hooks/use-theme';
-import { CompletionHalo } from '@/components/profile/completion-halo';
 
 interface ProfileHeroCardProps {
     profilePhoto?: string | null;
@@ -19,7 +18,6 @@ interface ProfileHeroCardProps {
     university?: string;
     personalityType?: string;
     zodiacSign?: string;
-    completionPercentage: number;
     vibeLine?: string;
     onSettingsPress?: () => void;
 }
@@ -44,7 +42,6 @@ export function ProfileHeroCard({
     course,
     yearOfStudy,
     university,
-    completionPercentage,
     personalityType,
     zodiacSign,
     vibeLine,
@@ -55,49 +52,51 @@ export function ProfileHeroCard({
 
     return (
         <Animated.View entering={FadeInDown.duration(280)} style={styles.container}>
-            {onSettingsPress && (
-                <Pressable
-                    onPress={onSettingsPress}
-                    accessibilityLabel="Settings"
-                    style={[styles.settingsBtn, { backgroundColor: colors.muted }]}
-                >
-                    <Ionicons name="settings-outline" size={22} color={colors.foreground} />
-                </Pressable>
-            )}
-
-            <View style={styles.avatarWrap}>
-                <CompletionHalo percentage={completionPercentage} radius={72} strokeWidth={3}>
-                    <CachedImage
-                        uri={profilePhoto}
-                        style={[styles.avatar, { borderColor: colors.border }]}
-                        fallbackType="avatar"
-                    />
-                </CompletionHalo>
+            <View style={styles.topRow}>
+                <Text style={[styles.screenTitle, { color: colors.foreground }]}>Profile</Text>
+                {onSettingsPress && (
+                    <Pressable
+                        onPress={onSettingsPress}
+                        accessibilityRole="button"
+                        accessibilityLabel="Settings"
+                        style={({ pressed }) => [
+                            styles.settingsBtn,
+                            { backgroundColor: colors.muted, opacity: pressed ? 0.72 : 1 },
+                        ]}
+                    >
+                        <Ionicons name="settings-outline" size={21} color={colors.foreground} />
+                    </Pressable>
+                )}
             </View>
 
-            <View style={styles.identity}>
-                <Text style={[styles.name, { color: colors.foreground }]}>
-                    {firstName} {lastName}
-                    {age != null ? `, ${age}` : ''}
-                </Text>
-                {(course || yearOfStudy != null) && (
-                    <Text variant="muted" style={{ color: colors.mutedForeground }}>
-                        {course}
-                        {yearOfStudy != null ? ` · Year ${yearOfStudy}` : ''}
+            <View style={styles.profileRow}>
+                <CachedImage
+                    uri={profilePhoto}
+                    style={[styles.avatar, { borderColor: colors.border }]}
+                    fallbackType="avatar"
+                />
+                <View style={styles.identity}>
+                    <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
+                        {firstName} {lastName}
+                        {age != null ? `, ${age}` : ''}
                     </Text>
-                )}
-                {university && (
-                    <View style={[styles.uniPill, { borderColor: colors.border, backgroundColor: colors.muted }]}>
-                        <Text variant="label" style={{ color: colors.foreground }}>
+                    {(course || yearOfStudy != null) && (
+                        <Text variant="muted" style={{ color: colors.mutedForeground }} numberOfLines={1}>
+                            {course}
+                            {course && yearOfStudy != null ? ' · ' : ''}
+                            {yearOfStudy != null ? `Year ${yearOfStudy}` : ''}
+                        </Text>
+                    )}
+                    {university ? (
+                        <Text variant="caption" style={{ color: colors.mutedForeground }} numberOfLines={1}>
                             {university}
                         </Text>
-                    </View>
-                )}
-                {displayVibe ? (
-                    <Text variant="caption" style={{ color: colors.mutedForeground, textAlign: 'center' }}>
-                        {displayVibe}
-                    </Text>
-                ) : null}
+                    ) : displayVibe ? (
+                        <Text variant="caption" style={{ color: colors.mutedForeground }} numberOfLines={1}>
+                            {displayVibe}
+                        </Text>
+                    ) : null}
+                </View>
             </View>
         </Animated.View>
     );
@@ -105,47 +104,27 @@ export function ProfileHeroCard({
 
 const styles = StyleSheet.create({
     container: {
-        alignItems: 'center',
-        paddingTop: SPACING.comfortable,
-        paddingBottom: SPACING.section,
         paddingHorizontal: SPACING.screenX,
+        paddingTop: SPACING.tight,
+        paddingBottom: SPACING.compact,
     },
+    topRow: {
+        minHeight: 44,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: SPACING.compact,
+    },
+    screenTitle: { ...TYPOGRAPHY.title, fontWeight: '700' },
     settingsBtn: {
-        position: 'absolute',
-        top: SPACING.comfortable,
-        right: SPACING.screenX,
         width: 44,
         height: 44,
-        borderRadius: RADIUS.full,
+        borderRadius: RADIUS.md,
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 10,
     },
-    avatarWrap: {
-        position: 'relative',
-    },
-    avatar: {
-        width: 144,
-        height: 144,
-        borderRadius: 72,
-        borderWidth: 1,
-    },
-    identity: {
-        alignItems: 'center',
-        marginTop: SPACING.comfortable,
-        gap: SPACING.tight,
-        width: '100%',
-        maxWidth: 320,
-    },
-    name: {
-        ...TYPOGRAPHY.display,
-        textAlign: 'center',
-    },
-    uniPill: {
-        paddingHorizontal: SPACING.compact,
-        paddingVertical: SPACING.micro + 2,
-        borderRadius: RADIUS.full,
-        borderWidth: 1,
-        marginTop: SPACING.micro,
-    },
+    profileRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.compact },
+    avatar: { width: 72, height: 72, borderRadius: 36, borderWidth: 1 },
+    identity: { flex: 1, minWidth: 0, gap: 2 },
+    name: { ...TYPOGRAPHY.title, fontWeight: '700' },
 });

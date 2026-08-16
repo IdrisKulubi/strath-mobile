@@ -2,6 +2,10 @@ import { eq } from "drizzle-orm";
 
 import { appFeatureFlags } from "@/db/schema";
 import { db } from "@/lib/db";
+import { redis } from "@/lib/redis";
+
+const FEATURE_FLAG_CACHE_PREFIX = "feature_flag:";
+const FEATURE_FLAG_TTL_SECONDS = 5 * 60;
 
 export const APP_FEATURE_KEYS = {
     demoLoginEnabled: "demo_login_enabled",
@@ -47,12 +51,48 @@ export interface MatchmakerV2RolloutConfig {
     dailySearchLimit: number;
 }
 
+function featureFlagCacheKey(key: string) {
+    return `${FEATURE_FLAG_CACHE_PREFIX}${key}`;
+}
+
+export async function invalidateFeatureFlagCache(key?: string) {
+    try {
+        if (key) {
+            await redis.del(featureFlagCacheKey(key));
+            return;
+        }
+
+        const keys = Object.values(APP_FEATURE_KEYS).map((flagKey) => featureFlagCacheKey(flagKey));
+        if (keys.length > 0) {
+            await redis.del(...keys);
+        }
+    } catch (error) {
+        console.warn("[feature-flags] cache invalidation failed", error);
+    }
+}
+
 export async function isFeatureEnabled(key: string, fallback = false) {
+    try {
+        const cached = await redis.get<boolean>(featureFlagCacheKey(key));
+        if (typeof cached === "boolean") {
+            return cached;
+        }
+    } catch (error) {
+        console.warn("[feature-flags] cache read failed", error);
+    }
+
     const flag = await db.query.appFeatureFlags.findFirst({
         where: eq(appFeatureFlags.key, key),
     });
+    const enabled = flag?.enabled ?? fallback;
 
-    return flag?.enabled ?? fallback;
+    try {
+        await redis.set(featureFlagCacheKey(key), enabled, { ex: FEATURE_FLAG_TTL_SECONDS });
+    } catch (error) {
+        console.warn("[feature-flags] cache write failed", error);
+    }
+
+    return enabled;
 }
 
 export async function getFeatureFlag(key: string) {

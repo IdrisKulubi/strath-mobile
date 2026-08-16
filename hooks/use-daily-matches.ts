@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-helpers';
 import { isVerificationRequiredError, parseApiError } from '@/lib/api-errors';
 import type { RescheduleViewerState } from '@/lib/reschedule-types';
+import { getDailyMatchesPollInterval } from '@/lib/daily-matches-polling';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -128,22 +129,7 @@ export function useDailyMatches() {
             };
         },
         staleTime: 60 * 1000,
-        refetchInterval: (query) => {
-            const data = query.state.data;
-            if (!data) return false;
-            if (data.mode === 'hold' && data.hold?.autoReleaseAt) {
-                const ms = new Date(data.hold.autoReleaseAt).getTime() - Date.now();
-                return ms > 0 ? ms : 1000;
-            }
-            if (data.mode === 'manual_curation') return 30 * 1000;
-            const matches = data.matches ?? [];
-            if (matches.length === 0) return 60 * 1000;
-            const now = Date.now();
-            const soonestMs = Math.min(...matches.map((m) => new Date(m.expiresAt).getTime()));
-            const msUntilExpiry = soonestMs - now;
-            if (msUntilExpiry <= 0) return 1000;
-            return msUntilExpiry;
-        },
+        refetchInterval: (query) => getDailyMatchesPollInterval(query.state.data),
     });
 
     return {

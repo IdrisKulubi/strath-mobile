@@ -88,8 +88,8 @@ export function useWeeklyDrop(enabled: boolean = true) {
         queryKey: ["weekly-drop-current"],
         queryFn: fetchCurrentDropAPI,
         enabled,
-        staleTime: 30 * 1000,
-        refetchInterval: 30 * 1000,
+        staleTime: 2 * 60 * 1000,
+        refetchInterval: 2 * 60 * 1000,
         retry: 1,
     });
 

@@ -99,7 +99,7 @@ const navItems = [
 export function AppSidebar({ user, profile }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { unopenedMatches, unreadMessages } = useNotificationCounts({ pollingInterval: 10000 });
+  const { unopenedMatches, unreadMessages } = useNotificationCounts({ pollingInterval: 60_000 });
 
   const getBadgeCount = (badge: "matches" | "messages" | "both" | null) => {
     if (badge === "matches") return unopenedMatches;

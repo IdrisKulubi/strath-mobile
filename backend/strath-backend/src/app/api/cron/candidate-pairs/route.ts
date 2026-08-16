@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { isAuthorizedCronRequest } from "@/lib/security";
 import {
     generateCandidatePairsForUser,
-    getActiveCandidatePairsForUser,
+    countActiveCandidatePairsForUser,
     promoteDueQueuedPairsForUser,
     sendPendingCandidatePairReminders,
     DAILY_CANDIDATE_PAIR_LIMIT,
@@ -14,6 +14,7 @@ import {
 import { runPairExpiration } from "@/lib/services/pair-expiration-service";
 import { isManualMatchmakingModeEnabled } from "@/lib/services/manual-matchmaking-mode";
 import { releaseStalePreDateMatchHolds } from "@/lib/services/match-hold-service";
+import { createMatchExclusionContext } from "@/lib/services/match-exclusion-service";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -63,11 +64,12 @@ export async function GET(req: NextRequest) {
         usersToCheck = Array.from(new Map(usersToCheck.map((u) => [u.id, u])).values());
 
         let generatedFor = 0;
+        const exclusionContext = await createMatchExclusionContext();
         for (const activeUser of usersToCheck) {
-            await promoteDueQueuedPairsForUser(activeUser.id);
-            const existingPairs = await getActiveCandidatePairsForUser(activeUser.id);
-            if (existingPairs.length >= DAILY_CANDIDATE_PAIR_LIMIT) continue;
-            const created = await generateCandidatePairsForUser(activeUser.id);
+            await promoteDueQueuedPairsForUser(activeUser.id, exclusionContext);
+            const existingPairCount = await countActiveCandidatePairsForUser(activeUser.id, exclusionContext);
+            if (existingPairCount >= DAILY_CANDIDATE_PAIR_LIMIT) continue;
+            const created = await generateCandidatePairsForUser(activeUser.id, { context: exclusionContext });
             if (created.length > 0) {
                 generatedFor++;
             }

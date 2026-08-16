@@ -4,6 +4,7 @@ import db from "@/db/drizzle";
 import { matches, messages, mutualMatches, profiles, user } from "@/db/schema";
 import { CHAT_UNLOCKED_STATUSES, isChatUnlockedStatus } from "@/lib/chat-access";
 import { ensureLegacyMatch } from "@/lib/services/legacy-match-service";
+import { PROFILE_CARD_COLUMNS } from "@/lib/db/queries/profiles";
 
 export interface ConversationItem {
     id: string;
@@ -113,9 +114,17 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
         ? await Promise.all([
               db.query.profiles.findMany({
                   where: inArray(profiles.userId, partnerIds),
+                  columns: PROFILE_CARD_COLUMNS,
               }),
               db.query.user.findMany({
                   where: inArray(user.id, partnerIds),
+                  columns: {
+                      id: true,
+                      name: true,
+                      profilePhoto: true,
+                      image: true,
+                      lastActive: true,
+                  },
               }),
           ])
         : [[], []];
