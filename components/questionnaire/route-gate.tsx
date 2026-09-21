@@ -1,19 +1,52 @@
-import React,{useEffect} from 'react';
-import { Redirect,usePathname } from 'expo-router';
-import { useExperience,useIdentity } from '@/lib/questionnaire';
-import { Page,Loading,Feedback,Action } from './ui';
-export function QuestionnaireRouteGate({children}:{children:React.ReactNode}){
- const path=usePathname(),identity=useIdentity(),q=useExperience();
- useEffect(()=>{void identity.refetch();},[path]);
- if(!identity.data)return <>{children}</>;
- if(q.isPending)return <Page title="Strathspace"><Loading/></Page>;
- // Network failure must not render a legacy workflow for a migrated user.
- if(q.isError)return <Page title="Strathspace"><Feedback error={q.error}/><Action label="Try again" onPress={()=>q.refetch()}/></Page>;
- if(!q.data?.shell)return <>{children}</>;
- const allowed=['/dating','/questions','/compatibility/','/verification','/legal','/settings','/app-feedback'];
- if(!allowed.some(x=>path===x||path.startsWith(x.endsWith('/')?x:x+'/'))&&!path.startsWith('/dating-setup')&&!path.startsWith('/dating-chat/')){
-  const legacyChat=path.match(/^\/chat\/([^/]+)$/);
-  return <Redirect href={(legacyChat?`/dating-chat/${legacyChat[1]}`:'/dating') as never}/>;
- }
- return <>{children}</>;
+import React, { useEffect } from 'react';
+import { Redirect, usePathname } from 'expo-router';
+
+import { Action, Feedback, Loading, Page } from './ui';
+import { useExperience, useIdentity } from '@/lib/questionnaire';
+
+const questionnaireRoutes = [
+  '/dating',
+  '/dating-setup',
+  '/dating-chat',
+  '/questions',
+  '/verification',
+  '/legal',
+  '/settings',
+  '/app-feedback',
+];
+
+export function isQuestionnaireRoute(path: string) {
+  return questionnaireRoutes.some((route) => path === route || path.startsWith(`${route}/`));
+}
+
+function replacementForLegacyRoute(path: string) {
+  const conversation = path.match(/^\/chat\/([^/]+)$/);
+  if (conversation) return `/dating-chat/${conversation[1]}`;
+  if (path === '/chats') return '/dating/messages';
+  return '/dating';
+}
+
+export function QuestionnaireRouteGate({ children }: { children: React.ReactNode }) {
+  const path = usePathname();
+  const identity = useIdentity();
+  const experience = useExperience();
+  const { data: identityData, isError: identityError, isPending: identityPending, refetch: refetchIdentity } = identity;
+
+  useEffect(() => {
+    void refetchIdentity();
+  }, [path, refetchIdentity]);
+
+  if (identityPending) return <Page title="Strathspace"><Loading label="Checking your account" /></Page>;
+  if (identityError || !identityData) return <>{children}</>;
+  if (experience.isPending) return <Page title="Strathspace"><Loading label="Opening your experience" /></Page>;
+  if (experience.isError) {
+    return (
+      <Page title="Strathspace">
+        <Feedback error={experience.error} />
+        <Action label="Try again" tone="primary" onPress={() => { void experience.refetch(); }} />
+      </Page>
+    );
+  }
+  if (!experience.data?.shell || isQuestionnaireRoute(path)) return <>{children}</>;
+  return <Redirect href={replacementForLegacyRoute(path) as never} />;
 }

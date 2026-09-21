@@ -1,4 +1,16 @@
-import React,{useState} from 'react';
-import { useQuestionnaire,type Person } from '@/lib/questionnaire';
-import { Page,Copy,Action,Feedback,Loading,PersonCard } from '@/components/questionnaire/ui';
-export default function Likes(){const [tab,setTab]=useState<'received'|'sent'>('received'),q=useQuestionnaire<{received:Person[];sent:Person[]}>('likes');return <Page title="Likes"><Action label="Received" selected={tab==='received'} onPress={()=>setTab('received')}/><Action label="Sent" selected={tab==='sent'} onPress={()=>setTab('sent')}/><Copy>When you both like each other, you can start a conversation.</Copy>{q.isPending&&<Loading/>}<Feedback error={q.error}/>{q.isError&&<Action label="Try again" onPress={()=>q.refetch()}/>} {q.data?.[tab].length===0&&<Copy>No {tab} likes yet.</Copy>}{q.data?.[tab].map(p=><PersonCard key={p.id} person={p}/>)}</Page>;}
+import React from 'react';
+
+import { Copy, Notice, Page } from '@/components/questionnaire/ui';
+import { useExperience } from '@/lib/questionnaire';
+
+export default function LikesScreen() {
+  const experience = useExperience();
+  return (
+    <Page title="Likes">
+      <Copy>Received and sent likes will appear here without a new paywall.</Copy>
+      {!experience.data?.matching
+        ? <Notice>Likes are intentionally unavailable in this onboarding preview. They open after compatible discovery is tested.</Notice>
+        : <Notice>Likes become available with the Phase 5 connection release.</Notice>}
+    </Page>
+  );
+}

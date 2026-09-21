@@ -1,6 +1,6 @@
 # Phase 3 — Profile and questionnaire on the phone
 
-Depends on accepted Phases 1–2. Status: draft screens exist; no phone acceptance.
+Depends on accepted Phases 1–2. Status: implementation complete; user phone UI review and acceptance remain open.
 
 ## Outcome and boundary
 
@@ -10,14 +10,22 @@ Expose the new development shell to an internal test account. Discover/Likes may
 
 ## Work
 
-- [ ] Finish a clean internal-account entry point into the new shell, independent collection/shell flags and safe route guards.
-- [ ] Finish profile setup: adult DOB, gender, city/location, explicit partner preferences, photos and introduction; university is optional.
-- [ ] Connect upload and verification to existing services and return users correctly to the new flow.
-- [ ] Finish four batches of five saved answers, progress, back navigation, skip/replacement and sensitive-question avoidance in the starter flow.
-- [ ] Finish own answer, accepted partner answers, importance, privacy toggle and optional explanation controls.
-- [ ] Make save/failure state explicit; preserve drafts appropriately across interruption, discard stale drafts safely and scope them to the correct account.
-- [ ] Add answer review/edit/delete; dropping below twenty pauses discovery eligibility without touching messages.
-- [ ] Make the feature visible on the phone before calling this phase complete. Document the startup command, test account setup and entry route.
+- [x] Finish a clean internal-account entry point into the new shell, independent collection/shell flags and safe route guards.
+- [x] Finish profile setup: adult DOB, gender, city/location, explicit partner preferences, photos and introduction; university is optional.
+- [x] Connect upload and verification to existing services and return users correctly to the new flow.
+- [x] Finish four batches of five saved answers, progress, back navigation, skip/replacement and sensitive-question avoidance in the starter flow.
+- [x] Finish own answer, accepted partner answers, importance, privacy toggle and optional explanation controls.
+- [x] Make save/failure state explicit; preserve drafts appropriately across interruption, discard stale drafts safely and scope them to the correct account.
+- [x] Add answer review/edit/delete; dropping below twenty pauses discovery eligibility without touching messages.
+- [x] Provide a phone-ready internal flow and document startup, enrolment and entry. Phone acceptance remains a manual gate.
+
+## Phone review handoff
+
+Use an isolated backend database with the Phase 2 migration applied. Enrol only the test account by setting `QUESTIONNAIRE_USER_IDS` to its account ID. Set `QUESTIONNAIRE_SCHEMA_READY=true`, `QUESTIONNAIRE_COLLECTION_ENABLED=true`, `QUESTIONNAIRE_SHELL_ENABLED=true` and `QUESTIONNAIRE_MATCHING_ENABLED=false`. Do not use `*` outside an isolated environment.
+
+Start the backend with `npm run dev` from `backend/strath-backend`. Point the mobile environment at that reachable API, then run `node scripts/expo-cli.mjs start` from the mobile root. Open the QR code in Expo Go or the compatible development build. The app scheme is `strathspace`; the direct entry is `strathspace://dating`, and an enrolled account also receives **Question matching preview** on its existing Profile screen.
+
+The root route guard keeps enrolled accounts in the new shell, maps legacy chat deep links into the preserved-conversation screen and prevents retired date/payment entry points from reopening. Discover and Likes clearly remain unavailable while matching is disabled. Existing conversations use the existing conversation and message services and do not show date or checkout prompts in this shell.
 
 ## Independent test procedure
 
@@ -40,3 +48,5 @@ Expose the new development shell to an internal test account. Discover/Likes may
 - [ ] Phone evidence and walkthrough result are recorded in master; Phase 3 is checked complete.
 
 Only then begin Phase 4. A browser preview alone does not satisfy this gate.
+
+Implementation evidence recorded 2026-09-21: focused questionnaire TypeScript passed; focused ESLint passed with no findings; three mobile flow unit tests passed; Phase 2 backend TypeScript and all eight PGlite API tests passed; `git diff --check` passed. An initial Expo web bundle compiled 7,379 modules successfully; a later hot rebuild exhausted the Windows Metro process file-handle limit (`EMFILE`) before source compilation and the server was stopped. The user chose to perform the visual review, so device model, OS, screenshots and manual scenario results are intentionally not claimed here.

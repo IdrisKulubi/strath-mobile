@@ -1,5 +1,36 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useRouter } from 'expo-router';
-import { useQuestionnaire, type Person } from '@/lib/questionnaire';
-import { Page, Copy, Action, Feedback, Loading, PersonCard } from '@/components/questionnaire/ui';
-export default function Discover(){const router=useRouter(),[page,setPage]=useState(0),q=useQuestionnaire<{items:Person[];hasMore:boolean}>(`discovery?page=${page}`);return <Page title="Discover"><Copy>Find people through what matters to both of you.</Copy><Action label="Preferences and filters" onPress={()=>router.push('/dating-setup' as never)}/><Action label="Improve your matches" onPress={()=>router.push('/questions' as never)}/>{q.isPending&&<Loading/>}<Feedback error={q.error}/>{q.isError&&<><Action label="Complete your profile" onPress={()=>router.push('/dating-setup' as never)}/><Action label="Try again" onPress={()=>q.refetch()}/></>}{q.data?.items.length===0&&<Copy>No profiles fit your preferences yet. You can adjust your filters or check back later.</Copy>}{q.data?.items.map(p=><PersonCard key={p.id} person={p}/>)}{page>0&&<Action label="Previous profiles" onPress={()=>setPage(x=>x-1)}/>} {q.data?.hasMore&&<Action label="More profiles" onPress={()=>setPage(x=>x+1)}/>}</Page>;}
+
+import { Action, Copy, Notice, Page, Progress } from '@/components/questionnaire/ui';
+import { useExperience, useQuestionnaire, type QuestionnaireState } from '@/lib/questionnaire';
+
+export default function DiscoverScreen() {
+  const router = useRouter();
+  const experience = useExperience();
+  const status = useQuestionnaire<QuestionnaireState>('status', Boolean(experience.data?.collection));
+  const count = status.data?.answerCount ?? 0;
+  return (
+    <Page title="Discover" eyebrow="Question-based matching">
+      <Copy>Build compatibility from what matters to both of you.</Copy>
+      <Progress value={Math.min(count, 20)} total={20} label={`${count} of 20 starter answers saved`} />
+      {!experience.data?.collection ? (
+        <Notice>Questionnaire collection is not enabled for this test account yet.</Notice>
+      ) : !status.data?.complete ? (
+        <>
+          <Notice>Finish twenty answers before discovery opens. Existing messages remain available.</Notice>
+          <Action label={count ? 'Continue your questions' : 'Start your questions'} tone="primary" onPress={() => router.push('/questions' as never)} />
+          <Action label="Review profile and preferences" onPress={() => router.push('/dating-setup' as never)} />
+        </>
+      ) : !experience.data?.matching ? (
+        <>
+          <Notice tone="success">Your questionnaire is ready.</Notice>
+          <Notice>Compatible discovery is still in development for this internal preview. No profiles are being fabricated or ranked yet.</Notice>
+          <Action label="Review your answers" onPress={() => router.push('/questions' as never)} />
+          <Action label="Update discovery preferences" onPress={() => router.push('/dating-setup' as never)} />
+        </>
+      ) : (
+        <Notice>Discovery becomes available in Phase 4 after ranking and privacy checks pass.</Notice>
+      )}
+    </Page>
+  );
+}

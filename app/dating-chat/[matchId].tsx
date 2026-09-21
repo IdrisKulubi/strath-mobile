@@ -1,9 +1,80 @@
-import React,{useState} from 'react';
-import { FlatList,View,TextInput,Text,KeyboardAvoidingView,Platform } from 'react-native';
+import React, { useState } from 'react';
+import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams,useRouter } from 'expo-router';
+
+import { Action, Feedback, Loading } from '@/components/questionnaire/ui';
 import { useChat } from '@/hooks/use-chat';
 import { useTheme } from '@/hooks/use-theme';
-import { useQuestionnaireMutation } from '@/lib/questionnaire';
-import { Action,Copy,Feedback,Loading } from '@/components/questionnaire/ui';
-export default function Chat(){const {matchId}=useLocalSearchParams<{matchId:string}>(),router=useRouter(),{colors}=useTheme(),chat=useChat(matchId),unmatch=useQuestionnaireMutation('unmatch'),[draft,setDraft]=useState(''),[error,setError]=useState<unknown>(null);return <SafeAreaView style={{flex:1,backgroundColor:colors.background}}><KeyboardAvoidingView style={{flex:1,padding:16,gap:12}} behavior={Platform.OS==='ios'?'padding':undefined}><Action label="Back to messages" onPress={()=>router.replace('/dating/messages' as never)}/><Copy>Conversation</Copy>{chat.isInitialLoading&&<Loading/>}<Feedback error={chat.isAccessDenied?new Error('This conversation is no longer available.'):chat.error||error||unmatch.error}/>{chat.isError&&<Action label="Try again" onPress={()=>chat.refetch()}/>}<FlatList data={chat.messages} keyExtractor={m=>m.id} contentContainerStyle={{gap:12}} ListHeaderComponent={chat.hasMoreMessages?<Action label="Load earlier messages" onPress={()=>{void chat.loadOlderMessages();}}/>:null} renderItem={({item})=><View style={{padding:12,borderRadius:12,backgroundColor:item.senderId===chat.currentUserId?colors.secondary:colors.card,alignSelf:item.senderId===chat.currentUserId?'flex-end':'flex-start',maxWidth:'90%'}}><Text style={{color:colors.foreground,fontSize:16}}>{item.content}</Text><Text style={{color:colors.mutedForeground,fontSize:13}}>{new Date(item.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}{item.senderId===chat.currentUserId?` · ${item.status}`:''}</Text></View>}/><TextInput accessibilityLabel="Message" placeholder="Write a message" placeholderTextColor={colors.mutedForeground} multiline value={draft} onChangeText={setDraft} maxLength={2000} style={{minHeight:48,maxHeight:150,padding:12,borderWidth:1,borderRadius:12,borderColor:colors.border,color:colors.foreground,fontSize:16}}/><Action label={chat.isSending?'Sending…':'Send'} selected disabled={!draft.trim()||chat.isSending||chat.isAccessDenied||!chat.canSend} onPress={()=>{setError(null);chat.sendMessage(draft.trim(),{onSuccess:()=>setDraft(''),onError:e=>setError(e)});}}/><Action label="Unmatch" disabled={unmatch.isPending} onPress={()=>{void unmatch.mutateAsync({matchId}).then(()=>router.replace('/dating/messages' as never)).catch(()=>{});}}/></KeyboardAvoidingView></SafeAreaView>;}
+import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+
+export default function PreservedConversationScreen() {
+  const { matchId } = useLocalSearchParams<{ matchId: string }>();
+  const router = useRouter();
+  const { colors } = useTheme();
+  const chat = useChat(matchId);
+  const [draft, setDraft] = useState('');
+  const [sendError, setSendError] = useState<unknown>(null);
+
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Action label="Back to messages" tone="ghost" onPress={() => router.replace('/dating/messages' as never)} />
+        <Text accessibilityRole="header" style={[TYPOGRAPHY.title, { color: colors.foreground }]}>Conversation</Text>
+        {chat.isInitialLoading ? <Loading label="Loading conversation" /> : null}
+        <Feedback error={chat.isAccessDenied ? new Error('This conversation is no longer available.') : chat.error ?? sendError} />
+        {chat.isError ? <Action label="Try loading again" onPress={() => { void chat.refetch(); }} /> : null}
+        <FlatList
+          style={styles.list}
+          data={chat.messages}
+          keyExtractor={(message) => message.id}
+          contentContainerStyle={styles.messages}
+          ListHeaderComponent={chat.hasMoreMessages ? <Action label="Load earlier messages" onPress={() => { void chat.loadOlderMessages(); }} /> : null}
+          renderItem={({ item }) => (
+            <View style={[
+              styles.bubble,
+              { backgroundColor: item.senderId === chat.currentUserId ? colors.secondary : colors.card },
+              item.senderId === chat.currentUserId ? styles.sent : styles.received,
+            ]}>
+              <Text style={[TYPOGRAPHY.body, { color: colors.foreground }]}>{item.content}</Text>
+              <Text style={[TYPOGRAPHY.caption, { color: colors.mutedForeground }]}>
+                {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {item.senderId === chat.currentUserId ? ` Â· ${item.status}` : ''}
+              </Text>
+            </View>
+          )}
+        />
+        <TextInput
+          accessibilityLabel="Message"
+          placeholder="Write a message"
+          placeholderTextColor={colors.mutedForeground}
+          multiline
+          value={draft}
+          onChangeText={setDraft}
+          maxLength={2000}
+          style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+        />
+        <Action
+          label={chat.isSending ? 'Sendingâ€¦' : 'Send'}
+          tone="primary"
+          disabled={!draft.trim() || chat.isSending || chat.isAccessDenied || !chat.canSend}
+          onPress={() => {
+            setSendError(null);
+            chat.sendMessage(draft.trim(), { onSuccess: () => setDraft(''), onError: setSendError });
+          }}
+        />
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1 },
+  page: { flex: 1, padding: SPACING.base, gap: SPACING.compact },
+  list: { flex: 1 },
+  messages: { gap: SPACING.compact, paddingVertical: SPACING.compact },
+  bubble: { maxWidth: '88%', padding: SPACING.compact, borderRadius: RADIUS.md, gap: SPACING.micro },
+  sent: { alignSelf: 'flex-end' },
+  received: { alignSelf: 'flex-start' },
+  input: { minHeight: 52, maxHeight: 150, padding: SPACING.compact, borderWidth: 1, borderRadius: RADIUS.md, ...TYPOGRAPHY.body },
+});

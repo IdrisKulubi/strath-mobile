@@ -2,7 +2,7 @@
 
 Last audited: 2026-09-21. Branch: `revamped`.
 
-**Current state: Phase 1 is accepted. Phase 2 is next and has not started its acceptance work.**
+**Current state: Phases 1 and 2 are accepted. Phase 3 engineering is complete and awaits the user's phone UI review.**
 
 This is the source of truth for progress. The phase documents define the work and acceptance criteria; this document records what actually exists and what has passed. The architecture and experience documents remain design references, not proof of completion.
 
@@ -23,8 +23,8 @@ Checkbox meanings: an implemented item means a file/behavior has been written; a
 | Completion | Phase | Current state | Independently testable result |
 |---|---|---|---|
 | [x] | [1. Foundation and scoring engine](phase-01-foundation-and-engine.md) | Accepted 2026-09-21 | A local Python API calculates documented scores from synthetic inputs. |
-| [ ] | [2. Questionnaire data and APIs](phase-02-questionnaire-data-and-api.md) | Draft implementation exists | An authenticated test user saves, resumes, edits and deletes answers in an isolated database without the app or Railway. |
-| [ ] | [3. Profile and questionnaire on the phone](phase-03-mobile-onboarding.md) | Draft screens exist | A phone user completes a profile and twenty answers, then resumes and edits them. No discovery or new matching needed. |
+| [x] | [2. Questionnaire data and APIs](phase-02-questionnaire-data-and-api.md) | Accepted 2026-09-21 | An authenticated test user saves, resumes, edits and deletes answers in an isolated database without the app or Railway. |
+| [ ] | [3. Profile and questionnaire on the phone](phase-03-mobile-onboarding.md) | Implementation complete; phone acceptance pending | A phone user completes a profile and twenty answers, then resumes and edits them. No discovery or new matching needed. |
 | [ ] | [4. Compatible discovery on the phone](phase-04-discovery-and-compatibility.md) | Draft backend and screens exist | Verified test users browse ranked profiles and compare permitted answers on a phone, without needing mutual likes or chat. |
 | [ ] | [5. Mutual likes, messages and controlled release](phase-05-connections-messaging-and-release.md) | Draft implementation exists | Two test accounts match and exchange messages; preserved history and safe rollback are demonstrated before rollout. |
 
@@ -55,29 +55,30 @@ Checkbox meanings: an implemented item means a file/behavior has been written; a
 - [x] Draft 100-question catalogue and explicit migration/seed runner.
 - [x] Draft state, answer save/delete/skip, preferences and profile APIs.
 - [x] Draft private DOB, answer revisions, private-by-default visibility and collection flag.
-- [ ] Finish schema/API review, readable formatting and validation fixes.
-- [ ] Separate or safely defer connection backfill in the migration so this phase does not require Phase 5 behavior.
-- [ ] Implement the isolated database test harness and reconciliation report.
+- [x] Finish schema/API review, readable formatting and validation fixes.
+- [x] Separate connection tables and backfill from the Phase 2 migration so this phase does not require Phase 5 behavior.
+- [x] Implement the isolated database test harness and reconciliation report.
 
 ### Verified
-- [ ] Current backend typecheck passes.
-- [ ] Isolated migration, seed rerun and rollback rehearsal pass.
-- [ ] Answer validation, resume, skip, stale-revision conflict, delete and privacy tests pass.
-- [ ] Legacy account/profile/message counts and IDs reconcile unchanged.
-- [ ] **Phase 2 accepted; Phase 3 may begin.**
+- [x] Current backend typecheck passes.
+- [x] Isolated migration, seed rerun and rollback rehearsal pass.
+- [x] Answer validation, resume, skip, stale-revision conflict, delete and privacy tests pass.
+- [x] Legacy account/profile/message counts and IDs reconcile unchanged.
+- [x] **Phase 2 accepted; Phase 3 may begin.**
 
 ## Phase 3 checklist
 
 ### Implemented
-- [x] Draft four-tab mobile shell and route guard.
-- [x] Draft profile/preferences/photo setup, question editor and answer-management screens.
-- [x] Draft private answer controls, secure draft storage and existing verification navigation.
-- [ ] Finish four-batch progression, back/skip/revisit handling and network recovery.
-- [ ] Finish independently reachable development phone flow and enrolment-safe routing.
-- [ ] Review upload ownership, photo-change verification behavior and draft/session isolation.
+- [x] Finish four-tab mobile shell and mount the enrolment-safe root route guard.
+- [x] Finish profile/preferences/photo setup, question editor and answer-management screens.
+- [x] Finish private answer controls, account/revision-scoped secure drafts and existing verification navigation.
+- [x] Finish four-batch progression, back/skip/revisit handling and network recovery.
+- [x] Finish independently reachable development phone flow with separate collection, shell and matching flags.
+- [x] Review upload ownership, photo-change verification behavior and draft/session isolation.
+- [x] Preserve existing conversation access in the new shell without date or checkout prompts.
 
 ### Verified
-- [ ] Changed mobile files pass type/lint checks; unrelated repository errors are documented separately.
+- [x] Changed mobile files pass focused type/lint checks; unrelated repository errors are documented separately.
 - [ ] Development app opens on the target phone and the new onboarding route is reachable.
 - [ ] Complete twenty answers, terminate/reopen, edit/delete, skip/revisit and retry failed saves on a phone.
 - [ ] Check light/dark themes, keyboard, large text, screen reader labels, back navigation and touch targets.
@@ -139,6 +140,15 @@ Checkbox meanings: an implemented item means a file/behavior has been written; a
 | 2026-09-21 | 50-run maximum-bound validation/scoring benchmark | 25 candidates × 500 answers; 1,168,381 bytes; median 35.842 ms; p95 47.49 ms; peak 13.701 MiB | Local processing baseline recorded; Railway end-to-end evidence remains Phase 4 work. |
 | 2026-09-21 | Packaging/static safety tests and `git diff --check` | Passed; Docker CLI unavailable locally | Runtime dependency separation, non-root image declaration, `PORT`, Railway healthcheck and whitespace checks pass. Actual image/staging deployment remains Phase 4. |
 | 2026-09-21 | Search running layout/chat files for `QuestionnaireRouteGate` and `chatAccess` | No matches | Later-phase drafts cannot intercept legacy routing or chat authorization in Phase 1. |
+| 2026-09-21 | Phase 2 PGlite migration/API suite | 8/8 passed | Migration/seed idempotency and rollback, legacy reconciliation, authorization, validation, twenty-answer resume, privacy, analytics and photo verification integration passed without Expo or Railway. |
+| 2026-09-21 | Backend TypeScript and focused Phase 2 ESLint | Passed | Accepted Phase 2 implementation compiles and the changed modules have no lint findings. |
+| 2026-09-21 | Full backend test suite | 221/222 passed | Phase 2 tests passed; one unrelated existing face-verification expectation failed and reproduces alone. |
+| 2026-09-21 | Phase 1 Python regression | 35/35 passed | Questionnaire data/API work did not regress the accepted scoring engine. |
+| 2026-09-21 | Phase 3 focused mobile TypeScript and ESLint | Passed | New onboarding, shell, questionnaire, verification-return, route-guard and preserved-message code has no focused type or lint findings. |
+| 2026-09-21 | Phase 3 questionnaire flow unit tests | 3/3 passed | Four batches, skip replacement/sensitive exclusion and account-question-revision draft isolation behave deterministically. |
+| 2026-09-21 | Phase 3 backend regression | TypeScript passed; Phase 2 PGlite suite 8/8 passed | Public experience flags work independently of collection while accepted questionnaire behavior remains intact. |
+| 2026-09-21 | Phase 3 Expo web compile | Initial bundle compiled 7,379 modules; later hot rebuild stopped with Windows Metro `EMFILE` | Source compiled once; the later process-level file-handle exhaustion is documented for the phone handoff and is not claimed as device acceptance. |
+| 2026-09-21 | Phase 3 phone UI review | Delegated to user; no device evidence recorded | Engineering is complete, but Phase 3 remains unchecked until the user records a real-phone walkthrough. |
 
 ## How to record future acceptance
 
@@ -153,4 +163,4 @@ For each completed phase append:
 - Remaining limitations and whether they block acceptance.
 - Only then update both the phase acceptance box and the completion table.
 
-**Next action:** begin Phase 2 questionnaire data/API work when requested. Keep Phase 3–5 drafts parked and unverified.
+**Next action:** user performs the Phase 3 phone review using the handoff in the phase document. Record device evidence and manual results before checking Phase 3 accepted or beginning Phase 4. Keep Phase 4–5 drafts parked and unverified.

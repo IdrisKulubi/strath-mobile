@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx --test \"src/**/*.test.ts\"",
+    "test:questionnaire": "tsx --test src/lib/questionnaire/phase2.test.ts",
+    "migrate:questionnaire": "tsx src/scripts/migrate-questionnaire.ts --apply",
     "test:openai": "tsx src/scripts/test-openai-matchmaker.ts",
     "verify:production": "tsx src/scripts/verify-production-matchmaker.ts"
   },
@@ -56,6 +58,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.14",
     "@tailwindcss/postcss": "^4",
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^20",

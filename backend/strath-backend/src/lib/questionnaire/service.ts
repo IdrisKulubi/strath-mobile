@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { PoolClient } from "pg";
+import type { SqlExecutor } from "./db";
 import { z } from "zod";
 import { query, transaction } from "./db";
 import { ageOn, ALGORITHM, answerInput, preferenceInput, publicScore, scoreSchema, sortScores, type EnginePerson, type Score } from "./contracts";
@@ -8,7 +8,7 @@ import { rank } from "./engine-client";
 
 export class DomainError extends Error { constructor(message:string,public status=400){super(message);} }
 const idSchema=z.string().min(1).max(128);
-async function ensureState(id:string,c?:PoolClient){await query('INSERT INTO q_state(user_id) VALUES($1) ON CONFLICT DO NOTHING',[id],c);}
+async function ensureState(id:string,c?:SqlExecutor){await query('INSERT INTO q_state(user_id) VALUES($1) ON CONFLICT DO NOTHING',[id],c);}
 export async function status(id:string){
  await ensureState(id);
  const [s]=await query<{revision:number;birth_date:string|null;preferences:import("./contracts").Preferences|null;skipped:string[];count:number}>(`SELECT revision,birth_date::text,preferences,skipped,(SELECT count(*)::int FROM q_answers a JOIN q_questions q ON q.id=a.question_id AND q.published WHERE a.user_id=s.user_id) AS count FROM q_state s WHERE user_id=$1`,[id]);
@@ -63,7 +63,7 @@ export async function preferences(id:string,body:unknown){
   return {saved:true};
  });
 }
-export async function candidates(viewer:string,only?:string,c?:PoolClient):Promise<Candidate[]>{
+export async function candidates(viewer:string,only?:string,c?:SqlExecutor):Promise<Candidate[]>{
  return query<Candidate>(`SELECT u.id,u.deleted_at,s.revision,s.birth_date::text,s.preferences,jsonb_build_object('first_name',p.first_name,'gender',p.gender,'about_me',p.about_me,'bio',p.bio,'photos',p.photos,'profile_completed',p.profile_completed,'is_complete',p.is_complete,'is_visible',p.is_visible,'discovery_paused',p.discovery_paused,'anonymous',p.anonymous,'face_verification_status',p.face_verification_status,'incognito_mode',p.incognito_mode,'visibility_mode',p.visibility_mode) AS profile,
  (SELECT count(*)::int FROM q_answers a JOIN q_questions q ON q.id=a.question_id AND q.published WHERE a.user_id=u.id) AS answer_count,
  EXISTS(SELECT 1 FROM q_decisions d WHERE d.actor_id=u.id AND d.target_id=$1 AND d.decision='like') AS incoming_like
@@ -71,7 +71,7 @@ export async function candidates(viewer:string,only?:string,c?:PoolClient):Promi
  WHERE ($2::text IS NULL OR u.id=$2) AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$1 AND b.blocked_id=u.id) OR (b.blocked_id=$1 AND b.blocker_id=u.id))
  ORDER BY u.id LIMIT 10001`,[viewer,only??null],c);
 }
-async function pair(id:string,target:string,c?:PoolClient){
+async function pair(id:string,target:string,c?:SqlExecutor){
  if(id===target)throw new DomainError('Choose another profile');
  const [a]=await candidates(id,id,c),[b]=await candidates(id,target,c);
  if(!a||!b||!eligible(a,b))throw new DomainError('This profile is unavailable',404);

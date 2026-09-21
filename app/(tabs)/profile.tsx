@@ -38,6 +38,8 @@ import {
 } from 'phosphor-react-native';
 import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
+import { Action, Copy } from '@/components/questionnaire/ui';
+import { useExperience } from '@/lib/questionnaire';
 import {
     calculateProfileCompletion,
     getProfileCompletionTasks,
@@ -65,6 +67,7 @@ export default function ProfileScreen() {
     const onScroll = useMinimizeOnScroll();
     const { data: profile, isLoading } = useProfile();
     const { data: hypeData } = useMyHype();
+    const experience = useExperience();
 
     const completionTasks = profile ? getProfileCompletionTasks(profile) : [];
     const calculatedCompletion = calculateProfileCompletion(profile);
@@ -197,6 +200,15 @@ export default function ProfileScreen() {
                         <ProfileEditProfileButton onPress={() => handlePress('/edit-profile')} />
                     )}
 
+                    {experience.data?.shell ? (
+                        <ProfileContentSection title="Question matching preview">
+                            <View style={styles.previewEntry}>
+                                <Copy muted>Complete your profile and questionnaire in the new internal experience.</Copy>
+                                <Action label="Open question matching" tone="primary" onPress={() => handlePress('/dating')} />
+                            </View>
+                        </ProfileContentSection>
+                    ) : null}
+
                     <ProfilePhotoGrid
                         photos={allPhotos.length > 0 ? allPhotos : [undefined]}
                         onEditPress={() => handlePress('/edit-profile')}
@@ -273,5 +285,9 @@ const styles = StyleSheet.create({
     },
     promptList: {
         gap: SPACING.compact,
+    },
+    previewEntry: {
+        gap: SPACING.compact,
+        paddingHorizontal: SPACING.screenX,
     },
 });

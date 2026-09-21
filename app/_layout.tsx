@@ -27,6 +27,7 @@ import {
 import { usePresenceHeartbeat } from '@/hooks/use-presence-heartbeat';
 import { hasCompletedIntroSlides } from '@/lib/intro-storage';
 import { isAuthenticated } from '@/lib/auth-helpers';
+import { QuestionnaireRouteGate } from '@/components/questionnaire/route-gate';
 
 ExpoSplashScreen.preventAutoHideAsync();
 
@@ -159,7 +160,9 @@ export default function RootLayout() {
                 <>
                   <SessionBootstrap />
                   <NotificationsBootstrap>
-                    <RootLayoutNav hasAuthToken={bootstrap.hasAuthToken} />
+                    <QuestionnaireRouteGate>
+                      <RootLayoutNav hasAuthToken={bootstrap.hasAuthToken} />
+                    </QuestionnaireRouteGate>
                   </NotificationsBootstrap>
                 </>
               )}
