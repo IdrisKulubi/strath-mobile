@@ -1,0 +1,2602 @@
+[
+  {
+    "id": "q001:1",
+    "categoryId": "connection",
+    "prompt": "What kind of connection are you looking for?",
+    "options": [
+      {
+        "id": "0",
+        "label": "A long-term relationship"
+      },
+      {
+        "id": "1",
+        "label": "Dating and seeing where it goes"
+      },
+      {
+        "id": "2",
+        "label": "Something casual"
+      },
+      {
+        "id": "3",
+        "label": "Still figuring it out"
+      }
+    ],
+    "position": 0,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q002:1",
+    "categoryId": "connection",
+    "prompt": "How often would you like to hear from someone you are dating?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Throughout the day"
+      },
+      {
+        "id": "1",
+        "label": "Once a day"
+      },
+      {
+        "id": "2",
+        "label": "A few times a week"
+      },
+      {
+        "id": "3",
+        "label": "Whenever we have something to share"
+      }
+    ],
+    "position": 1,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q003:1",
+    "categoryId": "connection",
+    "prompt": "How do you prefer to handle a disagreement?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Talk it through straight away"
+      },
+      {
+        "id": "1",
+        "label": "Take a break then talk"
+      },
+      {
+        "id": "2",
+        "label": "Write down what I mean"
+      },
+      {
+        "id": "3",
+        "label": "It depends on the issue"
+      }
+    ],
+    "position": 2,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q004:1",
+    "categoryId": "connection",
+    "prompt": "What does a good weekend together look like?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Going out and exploring"
+      },
+      {
+        "id": "1",
+        "label": "A quiet day at home"
+      },
+      {
+        "id": "2",
+        "label": "Time with friends"
+      },
+      {
+        "id": "3",
+        "label": "A balance of plans and rest"
+      }
+    ],
+    "position": 3,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q005:1",
+    "categoryId": "connection",
+    "prompt": "How much time alone do you usually need?",
+    "options": [
+      {
+        "id": "0",
+        "label": "A little each day"
+      },
+      {
+        "id": "1",
+        "label": "A whole day most weeks"
+      },
+      {
+        "id": "2",
+        "label": "Occasional time alone"
+      },
+      {
+        "id": "3",
+        "label": "Very little"
+      }
+    ],
+    "position": 4,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q006:1",
+    "categoryId": "connection",
+    "prompt": "How do you feel about planning ahead?",
+    "options": [
+      {
+        "id": "0",
+        "label": "I like detailed plans"
+      },
+      {
+        "id": "1",
+        "label": "A loose plan works best"
+      },
+      {
+        "id": "2",
+        "label": "I prefer spontaneity"
+      },
+      {
+        "id": "3",
+        "label": "It depends on the occasion"
+      }
+    ],
+    "position": 5,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q007:1",
+    "categoryId": "connection",
+    "prompt": "How do you most naturally show affection?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Kind words"
+      },
+      {
+        "id": "1",
+        "label": "Time together"
+      },
+      {
+        "id": "2",
+        "label": "Practical help"
+      },
+      {
+        "id": "3",
+        "label": "Physical affection"
+      }
+    ],
+    "position": 6,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q008:1",
+    "categoryId": "connection",
+    "prompt": "How do you prefer someone to support you after a hard day?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Listen to me"
+      },
+      {
+        "id": "1",
+        "label": "Help find a solution"
+      },
+      {
+        "id": "2",
+        "label": "Give me space"
+      },
+      {
+        "id": "3",
+        "label": "Do something comforting together"
+      }
+    ],
+    "position": 7,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q009:1",
+    "categoryId": "connection",
+    "prompt": "What pace feels right at the start of dating?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Take things slowly"
+      },
+      {
+        "id": "1",
+        "label": "Regular dates without rushing"
+      },
+      {
+        "id": "2",
+        "label": "Frequent contact from the start"
+      },
+      {
+        "id": "3",
+        "label": "Decide together as we go"
+      }
+    ],
+    "position": 8,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q010:1",
+    "categoryId": "connection",
+    "prompt": "How important is arriving on time to you?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Very important"
+      },
+      {
+        "id": "1",
+        "label": "A little flexibility is fine"
+      },
+      {
+        "id": "2",
+        "label": "I am usually relaxed about time"
+      },
+      {
+        "id": "3",
+        "label": "It depends on the plan"
+      }
+    ],
+    "position": 9,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q011:1",
+    "categoryId": "connection",
+    "prompt": "How much do you enjoy trying unfamiliar food?",
+    "options": [
+      {
+        "id": "0",
+        "label": "A lot"
+      },
+      {
+        "id": "1",
+        "label": "Sometimes"
+      },
+      {
+        "id": "2",
+        "label": "Rarely"
+      },
+      {
+        "id": "3",
+        "label": "I prefer familiar food"
+      }
+    ],
+    "position": 10,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q012:1",
+    "categoryId": "connection",
+    "prompt": "What is your usual social energy?",
+    "options": [
+      {
+        "id": "0",
+        "label": "I enjoy large gatherings"
+      },
+      {
+        "id": "1",
+        "label": "I prefer small groups"
+      },
+      {
+        "id": "2",
+        "label": "I prefer one-to-one time"
+      },
+      {
+        "id": "3",
+        "label": "It changes from day to day"
+      }
+    ],
+    "position": 11,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q013:1",
+    "categoryId": "connection",
+    "prompt": "How do you feel about separate hobbies in a relationship?",
+    "options": [
+      {
+        "id": "0",
+        "label": "They are essential"
+      },
+      {
+        "id": "1",
+        "label": "They are welcome alongside shared interests"
+      },
+      {
+        "id": "2",
+        "label": "I prefer mostly shared hobbies"
+      },
+      {
+        "id": "3",
+        "label": "I have no preference"
+      }
+    ],
+    "position": 12,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q014:1",
+    "categoryId": "connection",
+    "prompt": "When making a shared decision, what works best for you?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Discuss every option"
+      },
+      {
+        "id": "1",
+        "label": "Take turns deciding"
+      },
+      {
+        "id": "2",
+        "label": "Let the more interested person lead"
+      },
+      {
+        "id": "3",
+        "label": "Make a quick choice together"
+      }
+    ],
+    "position": 13,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q015:1",
+    "categoryId": "connection",
+    "prompt": "How do you prefer to receive invitations?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Several days ahead"
+      },
+      {
+        "id": "1",
+        "label": "A day ahead"
+      },
+      {
+        "id": "2",
+        "label": "On the same day"
+      },
+      {
+        "id": "3",
+        "label": "Any time is fine"
+      }
+    ],
+    "position": 14,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q016:1",
+    "categoryId": "connection",
+    "prompt": "What does quality time mean to you?",
+    "options": [
+      {
+        "id": "0",
+        "label": "An uninterrupted conversation"
+      },
+      {
+        "id": "1",
+        "label": "Doing an activity together"
+      },
+      {
+        "id": "2",
+        "label": "Being together without a plan"
+      },
+      {
+        "id": "3",
+        "label": "Helping each other with daily life"
+      }
+    ],
+    "position": 15,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q017:1",
+    "categoryId": "connection",
+    "prompt": "How do you feel about phones during time together?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Put them away"
+      },
+      {
+        "id": "1",
+        "label": "Occasional checking is fine"
+      },
+      {
+        "id": "2",
+        "label": "Using them together is fine"
+      },
+      {
+        "id": "3",
+        "label": "No particular rule"
+      }
+    ],
+    "position": 16,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q018:1",
+    "categoryId": "connection",
+    "prompt": "What kind of humour do you enjoy most?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Playful silliness"
+      },
+      {
+        "id": "1",
+        "label": "Dry wit"
+      },
+      {
+        "id": "2",
+        "label": "Observational humour"
+      },
+      {
+        "id": "3",
+        "label": "A mix of styles"
+      }
+    ],
+    "position": 17,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q019:1",
+    "categoryId": "connection",
+    "prompt": "When plans change unexpectedly, how do you usually react?",
+    "options": [
+      {
+        "id": "0",
+        "label": "I adapt easily"
+      },
+      {
+        "id": "1",
+        "label": "I need a moment then adjust"
+      },
+      {
+        "id": "2",
+        "label": "I find it difficult"
+      },
+      {
+        "id": "3",
+        "label": "It depends how much notice I get"
+      }
+    ],
+    "position": 18,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q020:1",
+    "categoryId": "connection",
+    "prompt": "What makes you feel appreciated?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Being thanked"
+      },
+      {
+        "id": "1",
+        "label": "Being listened to"
+      },
+      {
+        "id": "2",
+        "label": "Thoughtful gestures"
+      },
+      {
+        "id": "3",
+        "label": "Reliable follow-through"
+      }
+    ],
+    "position": 19,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q021:1",
+    "categoryId": "relationships",
+    "prompt": "Would you consider a long-distance relationship?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Yes"
+      },
+      {
+        "id": "1",
+        "label": "For a limited time"
+      },
+      {
+        "id": "2",
+        "label": "Only if we had already met"
+      },
+      {
+        "id": "3",
+        "label": "No"
+      }
+    ],
+    "position": 20,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q022:1",
+    "categoryId": "relationships",
+    "prompt": "How soon do you prefer to discuss exclusivity?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Early on"
+      },
+      {
+        "id": "1",
+        "label": "After several dates"
+      },
+      {
+        "id": "2",
+        "label": "When it comes up naturally"
+      },
+      {
+        "id": "3",
+        "label": "I do not seek exclusivity"
+      }
+    ],
+    "position": 21,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q023:1",
+    "categoryId": "relationships",
+    "prompt": "How do you feel about introducing a partner to friends?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Early in dating"
+      },
+      {
+        "id": "1",
+        "label": "Once things feel established"
+      },
+      {
+        "id": "2",
+        "label": "Only in a serious relationship"
+      },
+      {
+        "id": "3",
+        "label": "I prefer to keep these separate"
+      }
+    ],
+    "position": 22,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q024:1",
+    "categoryId": "relationships",
+    "prompt": "How do you approach relationship milestones?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Discuss them explicitly"
+      },
+      {
+        "id": "1",
+        "label": "Let them happen naturally"
+      },
+      {
+        "id": "2",
+        "label": "Follow a rough timeline"
+      },
+      {
+        "id": "3",
+        "label": "Decide case by case"
+      }
+    ],
+    "position": 23,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q025:1",
+    "categoryId": "relationships",
+    "prompt": "How often would you ideally spend time with a partner?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Most days"
+      },
+      {
+        "id": "1",
+        "label": "A few days a week"
+      },
+      {
+        "id": "2",
+        "label": "Once a week"
+      },
+      {
+        "id": "3",
+        "label": "It varies"
+      }
+    ],
+    "position": 24,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q026:1",
+    "categoryId": "relationships",
+    "prompt": "How do you feel about public affection?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Comfortable with it"
+      },
+      {
+        "id": "1",
+        "label": "Small gestures only"
+      },
+      {
+        "id": "2",
+        "label": "Mostly private"
+      },
+      {
+        "id": "3",
+        "label": "It depends on the setting"
+      }
+    ],
+    "position": 25,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q027:1",
+    "categoryId": "relationships",
+    "prompt": "Would you relocate for a relationship?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Yes"
+      },
+      {
+        "id": "1",
+        "label": "Within my region"
+      },
+      {
+        "id": "2",
+        "label": "Only with a shared long-term plan"
+      },
+      {
+        "id": "3",
+        "label": "No"
+      }
+    ],
+    "position": 26,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q028:1",
+    "categoryId": "relationships",
+    "prompt": "What place does friendship have in romance for you?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Friendship first"
+      },
+      {
+        "id": "1",
+        "label": "Build both together"
+      },
+      {
+        "id": "2",
+        "label": "Romantic chemistry first"
+      },
+      {
+        "id": "3",
+        "label": "No preferred order"
+      }
+    ],
+    "position": 27,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q029:1",
+    "categoryId": "relationships",
+    "prompt": "How do you feel about celebrating anniversaries?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Make a special plan"
+      },
+      {
+        "id": "1",
+        "label": "A small acknowledgement"
+      },
+      {
+        "id": "2",
+        "label": "Only major milestones"
+      },
+      {
+        "id": "3",
+        "label": "They are not important to me"
+      }
+    ],
+    "position": 28,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q030:1",
+    "categoryId": "relationships",
+    "prompt": "What is your preferred way to get to know someone?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Long conversations"
+      },
+      {
+        "id": "1",
+        "label": "Shared activities"
+      },
+      {
+        "id": "2",
+        "label": "Time with mutual friends"
+      },
+      {
+        "id": "3",
+        "label": "A mix of approaches"
+      }
+    ],
+    "position": 29,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q031:1",
+    "categoryId": "relationships",
+    "prompt": "Would you enjoy travelling with a partner?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Frequently"
+      },
+      {
+        "id": "1",
+        "label": "Occasionally"
+      },
+      {
+        "id": "2",
+        "label": "Short local trips only"
+      },
+      {
+        "id": "3",
+        "label": "I prefer other activities"
+      }
+    ],
+    "position": 30,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q032:1",
+    "categoryId": "relationships",
+    "prompt": "How do you feel about sharing a home eventually?",
+    "options": [
+      {
+        "id": "0",
+        "label": "I would like that"
+      },
+      {
+        "id": "1",
+        "label": "Maybe after a long time"
+      },
+      {
+        "id": "2",
+        "label": "I prefer separate homes"
+      },
+      {
+        "id": "3",
+        "label": "I am undecided"
+      }
+    ],
+    "position": 31,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q033:1",
+    "categoryId": "relationships",
+    "prompt": "How do you approach meeting a partner's family?",
+    "options": [
+      {
+        "id": "0",
+        "label": "I look forward to it"
+      },
+      {
+        "id": "1",
+        "label": "When the relationship is established"
+      },
+      {
+        "id": "2",
+        "label": "I need plenty of time"
+      },
+      {
+        "id": "3",
+        "label": "It depends on the family situation"
+      }
+    ],
+    "position": 32,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q034:1",
+    "categoryId": "relationships",
+    "prompt": "What role should personal ambition play in a relationship?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Strong mutual encouragement"
+      },
+      {
+        "id": "1",
+        "label": "Support with clear boundaries"
+      },
+      {
+        "id": "2",
+        "label": "Shared goals come first"
+      },
+      {
+        "id": "3",
+        "label": "Decide together"
+      }
+    ],
+    "position": 33,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q035:1",
+    "categoryId": "relationships",
+    "prompt": "How do you feel about surprises from a partner?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Love them"
+      },
+      {
+        "id": "1",
+        "label": "Small surprises only"
+      },
+      {
+        "id": "2",
+        "label": "Only with some notice"
+      },
+      {
+        "id": "3",
+        "label": "Prefer no surprises"
+      }
+    ],
+    "position": 34,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q036:1",
+    "categoryId": "relationships",
+    "prompt": "What matters most in a first conversation?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Curiosity"
+      },
+      {
+        "id": "1",
+        "label": "Humour"
+      },
+      {
+        "id": "2",
+        "label": "Honesty about intentions"
+      },
+      {
+        "id": "3",
+        "label": "Ease and comfort"
+      }
+    ],
+    "position": 35,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q037:1",
+    "categoryId": "relationships",
+    "prompt": "Would you date someone whose hobbies differ from yours?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Definitely"
+      },
+      {
+        "id": "1",
+        "label": "If we share some interests"
+      },
+      {
+        "id": "2",
+        "label": "Only with substantial overlap"
+      },
+      {
+        "id": "3",
+        "label": "I am unsure"
+      }
+    ],
+    "position": 36,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q038:1",
+    "categoryId": "relationships",
+    "prompt": "How do you feel about spending holidays separately?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Comfortable"
+      },
+      {
+        "id": "1",
+        "label": "Occasionally is fine"
+      },
+      {
+        "id": "2",
+        "label": "Only when necessary"
+      },
+      {
+        "id": "3",
+        "label": "I prefer spending them together"
+      }
+    ],
+    "position": 37,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q039:1",
+    "categoryId": "relationships",
+    "prompt": "How important is having a shared daily routine?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Very important"
+      },
+      {
+        "id": "1",
+        "label": "Nice but optional"
+      },
+      {
+        "id": "2",
+        "label": "Separate routines work well"
+      },
+      {
+        "id": "3",
+        "label": "No preference"
+      }
+    ],
+    "position": 38,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q040:1",
+    "categoryId": "relationships",
+    "prompt": "What helps a relationship grow over time?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Regular check-ins"
+      },
+      {
+        "id": "1",
+        "label": "New experiences"
+      },
+      {
+        "id": "2",
+        "label": "Consistent everyday care"
+      },
+      {
+        "id": "3",
+        "label": "Shared long-term goals"
+      }
+    ],
+    "position": 39,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q041:1",
+    "categoryId": "communication",
+    "prompt": "How do you prefer to apologise?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Say it directly"
+      },
+      {
+        "id": "1",
+        "label": "Explain and discuss"
+      },
+      {
+        "id": "2",
+        "label": "Make a practical repair"
+      },
+      {
+        "id": "3",
+        "label": "A combination"
+      }
+    ],
+    "position": 40,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q042:1",
+    "categoryId": "communication",
+    "prompt": "How do you feel about voice notes?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Prefer them"
+      },
+      {
+        "id": "1",
+        "label": "Enjoy short ones"
+      },
+      {
+        "id": "2",
+        "label": "Occasionally is fine"
+      },
+      {
+        "id": "3",
+        "label": "Prefer text"
+      }
+    ],
+    "position": 41,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q043:1",
+    "categoryId": "communication",
+    "prompt": "What is your preferred way to discuss something sensitive?",
+    "options": [
+      {
+        "id": "0",
+        "label": "In person"
+      },
+      {
+        "id": "1",
+        "label": "A phone or video call"
+      },
+      {
+        "id": "2",
+        "label": "Written messages"
+      },
+      {
+        "id": "3",
+        "label": "Depends on the topic"
+      }
+    ],
+    "position": 42,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q044:1",
+    "categoryId": "communication",
+    "prompt": "How quickly do you usually reply to non-urgent messages?",
+    "options": [
+      {
+        "id": "0",
+        "label": "As soon as I can"
+      },
+      {
+        "id": "1",
+        "label": "Within a few hours"
+      },
+      {
+        "id": "2",
+        "label": "By the end of the day"
+      },
+      {
+        "id": "3",
+        "label": "When I have energy"
+      }
+    ],
+    "position": 43,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q045:1",
+    "categoryId": "communication",
+    "prompt": "How do you feel about constructive feedback from a partner?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Welcome direct feedback"
+      },
+      {
+        "id": "1",
+        "label": "Prefer gentle suggestions"
+      },
+      {
+        "id": "2",
+        "label": "Need to be asked first"
+      },
+      {
+        "id": "3",
+        "label": "Prefer advice only when requested"
+      }
+    ],
+    "position": 44,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q046:1",
+    "categoryId": "communication",
+    "prompt": "When you feel overwhelmed, what do you usually do?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Talk to someone"
+      },
+      {
+        "id": "1",
+        "label": "Spend time alone"
+      },
+      {
+        "id": "2",
+        "label": "Keep busy"
+      },
+      {
+        "id": "3",
+        "label": "Rest"
+      }
+    ],
+    "position": 45,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q047:1",
+    "categoryId": "communication",
+    "prompt": "How do you handle a misunderstanding over text?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Call or meet"
+      },
+      {
+        "id": "1",
+        "label": "Clarify in writing"
+      },
+      {
+        "id": "2",
+        "label": "Pause before responding"
+      },
+      {
+        "id": "3",
+        "label": "Ask a direct question"
+      }
+    ],
+    "position": 46,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q048:1",
+    "categoryId": "communication",
+    "prompt": "How openly do you express your feelings?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Very openly"
+      },
+      {
+        "id": "1",
+        "label": "Once trust develops"
+      },
+      {
+        "id": "2",
+        "label": "Mostly through actions"
+      },
+      {
+        "id": "3",
+        "label": "I find it difficult"
+      }
+    ],
+    "position": 47,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q049:1",
+    "categoryId": "communication",
+    "prompt": "How do you like to resolve recurring problems?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Regular check-ins"
+      },
+      {
+        "id": "1",
+        "label": "Agree on practical changes"
+      },
+      {
+        "id": "2",
+        "label": "Get an outside perspective"
+      },
+      {
+        "id": "3",
+        "label": "Work through them gradually"
+      }
+    ],
+    "position": 48,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q050:1",
+    "categoryId": "communication",
+    "prompt": "What conversation length feels comfortable on a call?",
+    "options": [
+      {
+        "id": "0",
+        "label": "A few minutes"
+      },
+      {
+        "id": "1",
+        "label": "Around half an hour"
+      },
+      {
+        "id": "2",
+        "label": "An hour or more"
+      },
+      {
+        "id": "3",
+        "label": "It varies"
+      }
+    ],
+    "position": 49,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q051:1",
+    "categoryId": "communication",
+    "prompt": "How do you feel about playful teasing?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Enjoy it"
+      },
+      {
+        "id": "1",
+        "label": "Only about light topics"
+      },
+      {
+        "id": "2",
+        "label": "Only after trust develops"
+      },
+      {
+        "id": "3",
+        "label": "Prefer not to be teased"
+      }
+    ],
+    "position": 50,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q052:1",
+    "categoryId": "communication",
+    "prompt": "How should a partner raise a concern?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Directly and privately"
+      },
+      {
+        "id": "1",
+        "label": "Gently with context"
+      },
+      {
+        "id": "2",
+        "label": "Ask for a good time first"
+      },
+      {
+        "id": "3",
+        "label": "Write it down first"
+      }
+    ],
+    "position": 51,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q053:1",
+    "categoryId": "communication",
+    "prompt": "How do you approach asking for help?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Ask readily"
+      },
+      {
+        "id": "1",
+        "label": "Ask people I trust"
+      },
+      {
+        "id": "2",
+        "label": "Try alone first"
+      },
+      {
+        "id": "3",
+        "label": "Find it difficult"
+      }
+    ],
+    "position": 52,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q054:1",
+    "categoryId": "communication",
+    "prompt": "What do you prefer during a disagreement?",
+    "options": [
+      {
+        "id": "0",
+        "label": "One issue at a time"
+      },
+      {
+        "id": "1",
+        "label": "Understand the bigger pattern"
+      },
+      {
+        "id": "2",
+        "label": "Focus on a solution"
+      },
+      {
+        "id": "3",
+        "label": "First acknowledge feelings"
+      }
+    ],
+    "position": 53,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q055:1",
+    "categoryId": "communication",
+    "prompt": "How do you feel about silence while spending time together?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Very comfortable"
+      },
+      {
+        "id": "1",
+        "label": "Comfortable sometimes"
+      },
+      {
+        "id": "2",
+        "label": "Prefer conversation"
+      },
+      {
+        "id": "3",
+        "label": "Depends on the person"
+      }
+    ],
+    "position": 54,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q056:1",
+    "categoryId": "communication",
+    "prompt": "How do you prefer to make plans with a partner?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Shared calendar"
+      },
+      {
+        "id": "1",
+        "label": "Messages"
+      },
+      {
+        "id": "2",
+        "label": "A conversation"
+      },
+      {
+        "id": "3",
+        "label": "Informally as we go"
+      }
+    ],
+    "position": 55,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q057:1",
+    "categoryId": "communication",
+    "prompt": "How do you respond to a partner needing space?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Give space without checking in"
+      },
+      {
+        "id": "1",
+        "label": "Agree on a check-in time"
+      },
+      {
+        "id": "2",
+        "label": "Offer company without pressure"
+      },
+      {
+        "id": "3",
+        "label": "Need reassurance first"
+      }
+    ],
+    "position": 56,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q058:1",
+    "categoryId": "communication",
+    "prompt": "How much detail do you like to share about your day?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Most of it"
+      },
+      {
+        "id": "1",
+        "label": "Highlights"
+      },
+      {
+        "id": "2",
+        "label": "Only important events"
+      },
+      {
+        "id": "3",
+        "label": "Depends on my energy"
+      }
+    ],
+    "position": 57,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q059:1",
+    "categoryId": "communication",
+    "prompt": "How do you prefer to receive compliments?",
+    "options": [
+      {
+        "id": "0",
+        "label": "In private"
+      },
+      {
+        "id": "1",
+        "label": "Anywhere"
+      },
+      {
+        "id": "2",
+        "label": "Through messages"
+      },
+      {
+        "id": "3",
+        "label": "Through actions instead"
+      }
+    ],
+    "position": 58,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q060:1",
+    "categoryId": "communication",
+    "prompt": "When you change your mind, how do you communicate it?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Explain directly"
+      },
+      {
+        "id": "1",
+        "label": "Talk through my thinking"
+      },
+      {
+        "id": "2",
+        "label": "Wait until I am certain"
+      },
+      {
+        "id": "3",
+        "label": "Find it difficult to say"
+      }
+    ],
+    "position": 59,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q061:1",
+    "categoryId": "lifestyle",
+    "prompt": "What is your usual sleep schedule?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Early nights and mornings"
+      },
+      {
+        "id": "1",
+        "label": "Late nights and mornings"
+      },
+      {
+        "id": "2",
+        "label": "Somewhere between"
+      },
+      {
+        "id": "3",
+        "label": "Irregular"
+      }
+    ],
+    "position": 60,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q062:1",
+    "categoryId": "lifestyle",
+    "prompt": "How often do you enjoy eating out?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Several times a week"
+      },
+      {
+        "id": "1",
+        "label": "Weekly"
+      },
+      {
+        "id": "2",
+        "label": "Occasionally"
+      },
+      {
+        "id": "3",
+        "label": "Rarely"
+      }
+    ],
+    "position": 61,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q063:1",
+    "categoryId": "lifestyle",
+    "prompt": "How do you feel about cooking together?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Love it"
+      },
+      {
+        "id": "1",
+        "label": "Sometimes"
+      },
+      {
+        "id": "2",
+        "label": "Prefer taking turns"
+      },
+      {
+        "id": "3",
+        "label": "Prefer other ways to eat"
+      }
+    ],
+    "position": 62,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q064:1",
+    "categoryId": "lifestyle",
+    "prompt": "How tidy do you like your living space?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Very tidy"
+      },
+      {
+        "id": "1",
+        "label": "Generally tidy"
+      },
+      {
+        "id": "2",
+        "label": "Comfortably lived-in"
+      },
+      {
+        "id": "3",
+        "label": "I am relaxed about clutter"
+      }
+    ],
+    "position": 63,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q065:1",
+    "categoryId": "lifestyle",
+    "prompt": "How do you usually get around locally?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Walking or cycling"
+      },
+      {
+        "id": "1",
+        "label": "Public transport"
+      },
+      {
+        "id": "2",
+        "label": "Driving"
+      },
+      {
+        "id": "3",
+        "label": "A mix"
+      }
+    ],
+    "position": 64,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q066:1",
+    "categoryId": "lifestyle",
+    "prompt": "How much exercise is part of your week?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Most days"
+      },
+      {
+        "id": "1",
+        "label": "A few times a week"
+      },
+      {
+        "id": "2",
+        "label": "Occasionally"
+      },
+      {
+        "id": "3",
+        "label": "Rarely"
+      }
+    ],
+    "position": 65,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q067:1",
+    "categoryId": "lifestyle",
+    "prompt": "What pace do you prefer when travelling?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Lots of activities"
+      },
+      {
+        "id": "1",
+        "label": "A few planned highlights"
+      },
+      {
+        "id": "2",
+        "label": "Mostly relaxation"
+      },
+      {
+        "id": "3",
+        "label": "No fixed itinerary"
+      }
+    ],
+    "position": 66,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q068:1",
+    "categoryId": "lifestyle",
+    "prompt": "How do you feel about pets at home?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Would love pets"
+      },
+      {
+        "id": "1",
+        "label": "Open to some pets"
+      },
+      {
+        "id": "2",
+        "label": "Prefer no pets"
+      },
+      {
+        "id": "3",
+        "label": "Depends on the situation"
+      }
+    ],
+    "position": 67,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q069:1",
+    "categoryId": "lifestyle",
+    "prompt": "How do you spend a free evening?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Go out"
+      },
+      {
+        "id": "1",
+        "label": "Read or learn"
+      },
+      {
+        "id": "2",
+        "label": "Watch or play something"
+      },
+      {
+        "id": "3",
+        "label": "Rest and recharge"
+      }
+    ],
+    "position": 68,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q070:1",
+    "categoryId": "lifestyle",
+    "prompt": "How do you approach household tasks?",
+    "options": [
+      {
+        "id": "0",
+        "label": "A regular schedule"
+      },
+      {
+        "id": "1",
+        "label": "Share tasks as needed"
+      },
+      {
+        "id": "2",
+        "label": "Each person owns certain tasks"
+      },
+      {
+        "id": "3",
+        "label": "Decide together"
+      }
+    ],
+    "position": 69,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q071:1",
+    "categoryId": "lifestyle",
+    "prompt": "How do you feel about hosting friends?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Often"
+      },
+      {
+        "id": "1",
+        "label": "Occasionally"
+      },
+      {
+        "id": "2",
+        "label": "Small gatherings only"
+      },
+      {
+        "id": "3",
+        "label": "Prefer meeting elsewhere"
+      }
+    ],
+    "position": 70,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q072:1",
+    "categoryId": "lifestyle",
+    "prompt": "How often do you enjoy being outdoors?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Daily"
+      },
+      {
+        "id": "1",
+        "label": "Weekly"
+      },
+      {
+        "id": "2",
+        "label": "Occasionally"
+      },
+      {
+        "id": "3",
+        "label": "Rarely"
+      }
+    ],
+    "position": 71,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q073:1",
+    "categoryId": "lifestyle",
+    "prompt": "What is your approach to shopping?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Plan carefully"
+      },
+      {
+        "id": "1",
+        "label": "Buy what I need when needed"
+      },
+      {
+        "id": "2",
+        "label": "Enjoy browsing"
+      },
+      {
+        "id": "3",
+        "label": "Mostly avoid it"
+      }
+    ],
+    "position": 72,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q074:1",
+    "categoryId": "lifestyle",
+    "prompt": "How do you prefer to spend a rainy day?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Stay home"
+      },
+      {
+        "id": "1",
+        "label": "Go out anyway"
+      },
+      {
+        "id": "2",
+        "label": "Visit an indoor place"
+      },
+      {
+        "id": "3",
+        "label": "No preference"
+      }
+    ],
+    "position": 73,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q075:1",
+    "categoryId": "lifestyle",
+    "prompt": "How much music is part of your daily life?",
+    "options": [
+      {
+        "id": "0",
+        "label": "A lot"
+      },
+      {
+        "id": "1",
+        "label": "Some"
+      },
+      {
+        "id": "2",
+        "label": "Occasionally"
+      },
+      {
+        "id": "3",
+        "label": "Very little"
+      }
+    ],
+    "position": 74,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q076:1",
+    "categoryId": "lifestyle",
+    "prompt": "How do you feel about dancing?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Love it"
+      },
+      {
+        "id": "1",
+        "label": "With people I know"
+      },
+      {
+        "id": "2",
+        "label": "Occasionally"
+      },
+      {
+        "id": "3",
+        "label": "Not for me"
+      }
+    ],
+    "position": 75,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q077:1",
+    "categoryId": "lifestyle",
+    "prompt": "How do you approach learning a new skill?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Regular practice"
+      },
+      {
+        "id": "1",
+        "label": "Learn as needed"
+      },
+      {
+        "id": "2",
+        "label": "Try lots of things"
+      },
+      {
+        "id": "3",
+        "label": "Prefer familiar activities"
+      }
+    ],
+    "position": 76,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q078:1",
+    "categoryId": "lifestyle",
+    "prompt": "What kind of outing appeals most?",
+    "options": [
+      {
+        "id": "0",
+        "label": "A cultural event"
+      },
+      {
+        "id": "1",
+        "label": "A nature walk"
+      },
+      {
+        "id": "2",
+        "label": "A meal"
+      },
+      {
+        "id": "3",
+        "label": "A game or activity"
+      }
+    ],
+    "position": 77,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q079:1",
+    "categoryId": "lifestyle",
+    "prompt": "How do you prefer to recharge after a busy week?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Alone"
+      },
+      {
+        "id": "1",
+        "label": "With a partner"
+      },
+      {
+        "id": "2",
+        "label": "With friends"
+      },
+      {
+        "id": "3",
+        "label": "A mix"
+      }
+    ],
+    "position": 78,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q080:1",
+    "categoryId": "lifestyle",
+    "prompt": "How do you feel about an unplanned day?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Love it"
+      },
+      {
+        "id": "1",
+        "label": "Sometimes welcome"
+      },
+      {
+        "id": "2",
+        "label": "Prefer a few plans"
+      },
+      {
+        "id": "3",
+        "label": "Find it uncomfortable"
+      }
+    ],
+    "position": 79,
+    "sensitive": false,
+    "published": true
+  },
+  {
+    "id": "q081:1",
+    "categoryId": "values",
+    "prompt": "How do you approach saving money?",
+    "options": [
+      {
+        "id": "0",
+        "label": "A regular budget"
+      },
+      {
+        "id": "1",
+        "label": "Save when possible"
+      },
+      {
+        "id": "2",
+        "label": "Focus on current needs"
+      },
+      {
+        "id": "3",
+        "label": "Still developing a system"
+      }
+    ],
+    "position": 80,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q082:1",
+    "categoryId": "values",
+    "prompt": "How do you feel about discussing finances in a relationship?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Early and openly"
+      },
+      {
+        "id": "1",
+        "label": "When things become serious"
+      },
+      {
+        "id": "2",
+        "label": "Only for shared expenses"
+      },
+      {
+        "id": "3",
+        "label": "I prefer privacy"
+      }
+    ],
+    "position": 81,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q083:1",
+    "categoryId": "values",
+    "prompt": "Would you like children in the future?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Yes"
+      },
+      {
+        "id": "1",
+        "label": "No"
+      },
+      {
+        "id": "2",
+        "label": "Maybe"
+      },
+      {
+        "id": "3",
+        "label": "I already have children and am undecided about more"
+      }
+    ],
+    "position": 82,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q084:1",
+    "categoryId": "values",
+    "prompt": "How important is shared religious practice to you?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Essential"
+      },
+      {
+        "id": "1",
+        "label": "Helpful but optional"
+      },
+      {
+        "id": "2",
+        "label": "Not important"
+      },
+      {
+        "id": "3",
+        "label": "Prefer separate beliefs and practices"
+      }
+    ],
+    "position": 83,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q085:1",
+    "categoryId": "values",
+    "prompt": "How do you feel about political differences in a relationship?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Comfortable"
+      },
+      {
+        "id": "1",
+        "label": "Depends on the issue"
+      },
+      {
+        "id": "2",
+        "label": "Prefer broadly similar views"
+      },
+      {
+        "id": "3",
+        "label": "Need close alignment"
+      }
+    ],
+    "position": 84,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q086:1",
+    "categoryId": "values",
+    "prompt": "What is your relationship with alcohol?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Do not drink"
+      },
+      {
+        "id": "1",
+        "label": "Occasionally"
+      },
+      {
+        "id": "2",
+        "label": "Regularly in moderation"
+      },
+      {
+        "id": "3",
+        "label": "Prefer not to say"
+      }
+    ],
+    "position": 85,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q087:1",
+    "categoryId": "values",
+    "prompt": "Do you smoke tobacco?",
+    "options": [
+      {
+        "id": "0",
+        "label": "No"
+      },
+      {
+        "id": "1",
+        "label": "Occasionally"
+      },
+      {
+        "id": "2",
+        "label": "Regularly"
+      },
+      {
+        "id": "3",
+        "label": "Trying to stop"
+      }
+    ],
+    "position": 86,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q088:1",
+    "categoryId": "values",
+    "prompt": "How do you approach supporting extended family?",
+    "options": [
+      {
+        "id": "0",
+        "label": "A major priority"
+      },
+      {
+        "id": "1",
+        "label": "Within agreed limits"
+      },
+      {
+        "id": "2",
+        "label": "Case by case"
+      },
+      {
+        "id": "3",
+        "label": "Prefer not to discuss yet"
+      }
+    ],
+    "position": 87,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q089:1",
+    "categoryId": "values",
+    "prompt": "What relationship structure do you want?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Monogamy"
+      },
+      {
+        "id": "1",
+        "label": "Consensual non-monogamy"
+      },
+      {
+        "id": "2",
+        "label": "Still exploring"
+      },
+      {
+        "id": "3",
+        "label": "Prefer to discuss personally"
+      }
+    ],
+    "position": 88,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q090:1",
+    "categoryId": "values",
+    "prompt": "How do you feel about marriage for yourself?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Would like it"
+      },
+      {
+        "id": "1",
+        "label": "Open to it"
+      },
+      {
+        "id": "2",
+        "label": "Do not want it"
+      },
+      {
+        "id": "3",
+        "label": "Undecided"
+      }
+    ],
+    "position": 89,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q091:1",
+    "categoryId": "values",
+    "prompt": "How important is community involvement to you?",
+    "options": [
+      {
+        "id": "0",
+        "label": "A regular commitment"
+      },
+      {
+        "id": "1",
+        "label": "Occasional involvement"
+      },
+      {
+        "id": "2",
+        "label": "Interested in doing more"
+      },
+      {
+        "id": "3",
+        "label": "Not a priority"
+      }
+    ],
+    "position": 90,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q092:1",
+    "categoryId": "values",
+    "prompt": "How do you approach charitable giving?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Regularly"
+      },
+      {
+        "id": "1",
+        "label": "When a cause moves me"
+      },
+      {
+        "id": "2",
+        "label": "Through time rather than money"
+      },
+      {
+        "id": "3",
+        "label": "Not currently able to give"
+      }
+    ],
+    "position": 91,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q093:1",
+    "categoryId": "values",
+    "prompt": "How do you feel about ambitious career changes?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Excited by them"
+      },
+      {
+        "id": "1",
+        "label": "Supportive with planning"
+      },
+      {
+        "id": "2",
+        "label": "Prefer stability"
+      },
+      {
+        "id": "3",
+        "label": "Depends on circumstances"
+      }
+    ],
+    "position": 92,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q094:1",
+    "categoryId": "values",
+    "prompt": "How important is environmental impact in your choices?",
+    "options": [
+      {
+        "id": "0",
+        "label": "A central consideration"
+      },
+      {
+        "id": "1",
+        "label": "One of several considerations"
+      },
+      {
+        "id": "2",
+        "label": "Occasionally consider it"
+      },
+      {
+        "id": "3",
+        "label": "Not currently a priority"
+      }
+    ],
+    "position": 93,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q095:1",
+    "categoryId": "values",
+    "prompt": "How do you balance work and personal life?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Firm boundaries"
+      },
+      {
+        "id": "1",
+        "label": "Flexible balance"
+      },
+      {
+        "id": "2",
+        "label": "Work often comes first"
+      },
+      {
+        "id": "3",
+        "label": "Personal life comes first"
+      }
+    ],
+    "position": 94,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q096:1",
+    "categoryId": "values",
+    "prompt": "How do you feel about sharing passwords with a partner?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Prefer not to"
+      },
+      {
+        "id": "1",
+        "label": "Only for shared accounts"
+      },
+      {
+        "id": "2",
+        "label": "Comfortable if mutually agreed"
+      },
+      {
+        "id": "3",
+        "label": "Undecided"
+      }
+    ],
+    "position": 95,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q097:1",
+    "categoryId": "values",
+    "prompt": "What are your expectations around social media privacy?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Keep the relationship private"
+      },
+      {
+        "id": "1",
+        "label": "Occasional shared posts"
+      },
+      {
+        "id": "2",
+        "label": "Comfortable sharing openly"
+      },
+      {
+        "id": "3",
+        "label": "Agree together"
+      }
+    ],
+    "position": 96,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q098:1",
+    "categoryId": "values",
+    "prompt": "How do you approach setting personal boundaries?",
+    "options": [
+      {
+        "id": "0",
+        "label": "State them clearly"
+      },
+      {
+        "id": "1",
+        "label": "Discuss as situations arise"
+      },
+      {
+        "id": "2",
+        "label": "Need time to identify them"
+      },
+      {
+        "id": "3",
+        "label": "Still learning"
+      }
+    ],
+    "position": 97,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q099:1",
+    "categoryId": "values",
+    "prompt": "How do you feel about a partner maintaining friendships with former partners?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Comfortable"
+      },
+      {
+        "id": "1",
+        "label": "With clear boundaries"
+      },
+      {
+        "id": "2",
+        "label": "It would be difficult for me"
+      },
+      {
+        "id": "3",
+        "label": "Depends on the situation"
+      }
+    ],
+    "position": 98,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q100:1",
+    "categoryId": "values",
+    "prompt": "What does fairness in a relationship mean most to you?",
+    "options": [
+      {
+        "id": "0",
+        "label": "Equal contributions"
+      },
+      {
+        "id": "1",
+        "label": "Contributions based on capacity"
+      },
+      {
+        "id": "2",
+        "label": "Taking turns supporting each other"
+      },
+      {
+        "id": "3",
+        "label": "Discussing needs openly"
+      }
+    ],
+    "position": 99,
+    "sensitive": true,
+    "published": true
+  }
+]

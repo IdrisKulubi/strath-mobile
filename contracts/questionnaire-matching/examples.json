@@ -1,0 +1,1146 @@
+{
+  "cases": [
+    {
+      "name": "perfect",
+      "request": {
+        "candidates": [
+          {
+            "answers": [
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q0:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q1:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q2:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q3:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q4:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q5:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q6:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q7:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q8:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q9:1",
+                "weight": 1
+              }
+            ],
+            "id": "candidate-perfect",
+            "revision": 3
+          }
+        ],
+        "viewer": {
+          "answers": [
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q0:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q1:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q2:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q3:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q4:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q5:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q6:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q7:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q8:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q9:1",
+              "weight": 1
+            }
+          ],
+          "id": "viewer",
+          "revision": 2
+        }
+      },
+      "response": {
+        "results": [
+          {
+            "algorithmVersion": "questionnaire-v1",
+            "candidateId": "candidate-perfect",
+            "candidateRevision": 3,
+            "evidenceCount": 10,
+            "score": 100.0,
+            "sharedCount": 10,
+            "status": "ready",
+            "viewerRevision": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "asymmetric",
+      "request": {
+        "candidates": [
+          {
+            "answers": [
+              {
+                "acceptableAnswerIds": [
+                  "no"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q0:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "no"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q1:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q2:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q3:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q4:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q5:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q6:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q7:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q8:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q9:1",
+                "weight": 1
+              }
+            ],
+            "id": "candidate-asymmetric",
+            "revision": 3
+          }
+        ],
+        "viewer": {
+          "answers": [
+            {
+              "acceptableAnswerIds": [
+                "no"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q0:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q1:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q2:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q3:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q4:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q5:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q6:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q7:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q8:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q9:1",
+              "weight": 1
+            }
+          ],
+          "id": "viewer",
+          "revision": 2
+        }
+      },
+      "response": {
+        "results": [
+          {
+            "algorithmVersion": "questionnaire-v1",
+            "candidateId": "candidate-asymmetric",
+            "candidateRevision": 3,
+            "evidenceCount": 10,
+            "score": 84.8528137423857,
+            "sharedCount": 10,
+            "status": "ready",
+            "viewerRevision": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "zero-agreement",
+      "request": {
+        "candidates": [
+          {
+            "answers": [
+              {
+                "acceptableAnswerIds": [
+                  "no"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q0:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "no"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q1:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "no"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q2:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "no"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q3:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "no"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q4:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "no"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q5:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "no"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q6:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "no"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q7:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "no"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q8:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "no"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q9:1",
+                "weight": 1
+              }
+            ],
+            "id": "candidate-zero-agreement",
+            "revision": 3
+          }
+        ],
+        "viewer": {
+          "answers": [
+            {
+              "acceptableAnswerIds": [
+                "no"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q0:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "no"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q1:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "no"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q2:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "no"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q3:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "no"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q4:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "no"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q5:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "no"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q6:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "no"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q7:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "no"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q8:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "no"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q9:1",
+              "weight": 1
+            }
+          ],
+          "id": "viewer",
+          "revision": 2
+        }
+      },
+      "response": {
+        "results": [
+          {
+            "algorithmVersion": "questionnaire-v1",
+            "candidateId": "candidate-zero-agreement",
+            "candidateRevision": 3,
+            "evidenceCount": 10,
+            "score": 0.0,
+            "sharedCount": 10,
+            "status": "ready",
+            "viewerRevision": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "sparse",
+      "request": {
+        "candidates": [
+          {
+            "answers": [
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q0:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q1:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q2:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q3:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q4:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q5:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q6:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q7:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q8:1",
+                "weight": 1
+              }
+            ],
+            "id": "candidate-sparse",
+            "revision": 3
+          }
+        ],
+        "viewer": {
+          "answers": [
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q0:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q1:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q2:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q3:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q4:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q5:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q6:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q7:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q8:1",
+              "weight": 1
+            }
+          ],
+          "id": "viewer",
+          "revision": 2
+        }
+      },
+      "response": {
+        "results": [
+          {
+            "algorithmVersion": "questionnaire-v1",
+            "candidateId": "candidate-sparse",
+            "candidateRevision": 3,
+            "evidenceCount": 9,
+            "score": null,
+            "sharedCount": 9,
+            "status": "insufficient_evidence",
+            "viewerRevision": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "zero-weight",
+      "request": {
+        "candidates": [
+          {
+            "answers": [
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q0:1",
+                "weight": 0
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q1:1",
+                "weight": 0
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q2:1",
+                "weight": 0
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q3:1",
+                "weight": 0
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q4:1",
+                "weight": 0
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q5:1",
+                "weight": 0
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q6:1",
+                "weight": 0
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q7:1",
+                "weight": 0
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q8:1",
+                "weight": 0
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q9:1",
+                "weight": 0
+              }
+            ],
+            "id": "candidate-zero-weight",
+            "revision": 3
+          }
+        ],
+        "viewer": {
+          "answers": [
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q0:1",
+              "weight": 0
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q1:1",
+              "weight": 0
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q2:1",
+              "weight": 0
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q3:1",
+              "weight": 0
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q4:1",
+              "weight": 0
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q5:1",
+              "weight": 0
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q6:1",
+              "weight": 0
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q7:1",
+              "weight": 0
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q8:1",
+              "weight": 0
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q9:1",
+              "weight": 0
+            }
+          ],
+          "id": "viewer",
+          "revision": 2
+        }
+      },
+      "response": {
+        "results": [
+          {
+            "algorithmVersion": "questionnaire-v1",
+            "candidateId": "candidate-zero-weight",
+            "candidateRevision": 3,
+            "evidenceCount": 0,
+            "score": null,
+            "sharedCount": 10,
+            "status": "insufficient_evidence",
+            "viewerRevision": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "version-mismatch",
+      "request": {
+        "candidates": [
+          {
+            "answers": [
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q0:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q1:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q2:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q3:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q4:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q5:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q6:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q7:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q8:1",
+                "weight": 1
+              },
+              {
+                "acceptableAnswerIds": [
+                  "yes"
+                ],
+                "answerId": "yes",
+                "questionVersionId": "q9:2",
+                "weight": 1
+              }
+            ],
+            "id": "candidate-version-mismatch",
+            "revision": 3
+          }
+        ],
+        "viewer": {
+          "answers": [
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q0:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q1:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q2:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q3:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q4:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q5:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q6:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q7:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q8:1",
+              "weight": 1
+            },
+            {
+              "acceptableAnswerIds": [
+                "yes"
+              ],
+              "answerId": "yes",
+              "questionVersionId": "q9:1",
+              "weight": 1
+            }
+          ],
+          "id": "viewer",
+          "revision": 2
+        }
+      },
+      "response": {
+        "results": [
+          {
+            "algorithmVersion": "questionnaire-v1",
+            "candidateId": "candidate-version-mismatch",
+            "candidateRevision": 3,
+            "evidenceCount": 9,
+            "score": null,
+            "sharedCount": 9,
+            "status": "insufficient_evidence",
+            "viewerRevision": 2
+          }
+        ]
+      }
+    }
+  ]
+}

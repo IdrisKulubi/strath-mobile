@@ -3034,3 +3034,5 @@ export type FeedbackRating = "amazing" | "nice" | "meh" | "not_for_me";
 
 // Pulse category type
 export type PulseCategory = "missed_connection" | "campus_thought" | "dating_rant" | "hot_take" | "looking_for" | "general";
+
+export * from "./questionnaire-schema";

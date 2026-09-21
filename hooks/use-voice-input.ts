@@ -1,7 +1,13 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
+import {
+    RecordingPresets,
+    requestRecordingPermissionsAsync,
+    setAudioModeAsync,
+    useAudioRecorder,
+    useAudioRecorderState,
+} from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getAuthToken } from '@/lib/auth-helpers';
 import { useAiConsent } from '@/hooks/use-ai-consent';
@@ -11,7 +17,7 @@ import { AI_CONSENT_REQUIRED_MESSAGE } from '@/lib/ai-consent';
 // useVoiceInput — Gemini-powered voice transcription
 // ============================================
 // Architecture:
-//   1. expo-av records audio to a local .m4a file
+//   1. expo-audio records audio to a local .m4a file
 //   2. File is read as base64 and POSTed to /api/agent/voice
 //   3. Backend sends audio to Gemini 2.0 Flash for transcription
 //   4. Transcript is returned and fed into the agent search
@@ -48,6 +54,25 @@ interface UseVoiceInputReturn {
     volume: number;
 }
 
+const RECORDING_OPTIONS = {
+    ...RecordingPresets.HIGH_QUALITY,
+    isMeteringEnabled: true,
+};
+
+const RECORDING_AUDIO_MODE = {
+    allowsRecording: true,
+    playsInSilentMode: true,
+    interruptionMode: 'mixWithOthers' as const,
+    interruptionModeAndroid: 'duckOthers' as const,
+    shouldDuckAndroid: true,
+    shouldPlayInBackground: false,
+};
+
+const IDLE_AUDIO_MODE = {
+    ...RECORDING_AUDIO_MODE,
+    allowsRecording: false,
+};
+
 // Map dBFS metering (-160..0) to the 0–10 scale the overlay expects
 function dbfsToVolume(db: number): number {
     if (db <= -60) return 0;
@@ -65,7 +90,6 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
     const [error, setError] = useState<string | null>(null);
     const [volume, setVolume] = useState(0);
 
-    const recordingRef = useRef<Audio.Recording | null>(null);
     const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const cancelledRef = useRef(false);
 
@@ -73,6 +97,15 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
     onTranscriptRef.current = onTranscript;
     const onErrorRef = useRef(onError);
     onErrorRef.current = onError;
+
+    const recorder = useAudioRecorder(RECORDING_OPTIONS);
+    const recorderState = useAudioRecorderState(recorder, 200);
+
+    useEffect(() => {
+        if (recorderState.isRecording && recorderState.metering !== undefined) {
+            setVolume(dbfsToVolume(recorderState.metering));
+        }
+    }, [recorderState.isRecording, recorderState.metering]);
 
     const handleError = useCallback((msg: string) => {
         setError(msg);
@@ -124,7 +157,6 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
             handleError('Voice transcription failed — check your connection');
         } finally {
             setIsTranscribing(false);
-            // Clean up the temp file
             FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => null);
         }
     }, [handleError]);
@@ -144,8 +176,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
         setVolume(0);
 
         try {
-            // Request microphone permission
-            const { granted } = await Audio.requestPermissionsAsync();
+            const { granted } = await requestRecordingPermissionsAsync();
             if (!granted) {
                 handleError('Microphone permission is required for voice search');
                 return;
@@ -155,33 +186,15 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
             // interrupt or evict other audio. DoNotMix causes iOS error !pri (561017449)
             // "AVAudioSessionErrorCodeCannotInterruptOthers" when any non-interruptible
             // session (Siri, calls, Expo Go host audio, etc.) is active.
-            await Audio.setAudioModeAsync({
-                allowsRecordingIOS: true,
-                playsInSilentModeIOS: true,
-                interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
-                interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-                shouldDuckAndroid: true,
-                playThroughEarpieceAndroid: false,
-                staysActiveInBackground: false,
-            });
+            await setAudioModeAsync(RECORDING_AUDIO_MODE);
+            await recorder.prepareToRecordAsync();
+            recorder.record();
 
-            const { recording } = await Audio.Recording.createAsync(
-                Audio.RecordingOptionsPresets.HIGH_QUALITY,
-                (status) => {
-                    if (status.isRecording && status.metering !== undefined) {
-                        setVolume(dbfsToVolume(status.metering));
-                    }
-                },
-                200
-            );
-
-            recordingRef.current = recording;
             setIsRecording(true);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-            // Auto-stop after maxDurationMs
             autoStopTimerRef.current = setTimeout(async () => {
-                if (recordingRef.current) {
+                if (recorder.isRecording) {
                     await stopRecording();
                 }
             }, maxDurationMs);
@@ -191,7 +204,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
         }
     // stopRecording is defined below; we use a ref to avoid circular deps
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [hasAiConsent, isRecording, isTranscribing, handleError, maxDurationMs]);
+    }, [hasAiConsent, isRecording, isTranscribing, handleError, maxDurationMs, recorder]);
 
     // ─── Stop recording and transcribe ───────────────────────────────────────
     const stopRecording = useCallback(async () => {
@@ -200,29 +213,19 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
             autoStopTimerRef.current = null;
         }
 
-        const recording = recordingRef.current;
-        if (!recording) return;
+        if (!recorder.isRecording && !isRecording) return;
 
-        recordingRef.current = null;
         setIsRecording(false);
         setVolume(0);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
         try {
-            await recording.stopAndUnloadAsync();
-            await Audio.setAudioModeAsync({
-                allowsRecordingIOS: false,
-                playsInSilentModeIOS: true,
-                interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
-                interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-                shouldDuckAndroid: true,
-                playThroughEarpieceAndroid: false,
-                staysActiveInBackground: false,
-            });
+            await recorder.stop();
+            await setAudioModeAsync(IDLE_AUDIO_MODE);
 
             if (cancelledRef.current) return;
 
-            const uri = recording.getURI();
+            const uri = recorder.uri;
             if (!uri) {
                 handleError('Recording failed — no audio captured');
                 return;
@@ -231,19 +234,10 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
             await transcribeFile(uri);
         } catch (err) {
             console.error('[VoiceInput] Failed to stop recording:', err);
-            // Always release the audio session so the next attempt starts clean
-            Audio.setAudioModeAsync({
-                allowsRecordingIOS: false,
-                playsInSilentModeIOS: true,
-                interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
-                interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-                shouldDuckAndroid: true,
-                playThroughEarpieceAndroid: false,
-                staysActiveInBackground: false,
-            }).catch(() => null);
+            setAudioModeAsync(IDLE_AUDIO_MODE).catch(() => null);
             handleError('Failed to process recording — please try again');
         }
-    }, [handleError, transcribeFile]);
+    }, [handleError, transcribeFile, recorder, isRecording]);
 
     // ─── Cancel without transcribing ─────────────────────────────────────────
     const cancelRecording = useCallback(() => {
@@ -254,21 +248,11 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
             autoStopTimerRef.current = null;
         }
 
-        const recording = recordingRef.current;
-        if (recording) {
-            recordingRef.current = null;
-            recording.stopAndUnloadAsync()
-                .then(() => Audio.setAudioModeAsync({
-                    allowsRecordingIOS: false,
-                    playsInSilentModeIOS: true,
-                    interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
-                    interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-                    shouldDuckAndroid: true,
-                    playThroughEarpieceAndroid: false,
-                    staysActiveInBackground: false,
-                }))
+        if (recorder.isRecording || isRecording) {
+            recorder.stop()
+                .then(() => setAudioModeAsync(IDLE_AUDIO_MODE))
                 .then(() => {
-                    const uri = recording.getURI();
+                    const uri = recorder.uri;
                     if (uri) FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => null);
                 })
                 .catch(() => null);
@@ -278,7 +262,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
         setIsTranscribing(false);
         setVolume(0);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }, []);
+    }, [recorder, isRecording]);
 
     const toggleRecording = useCallback(async () => {
         if (isRecording) {

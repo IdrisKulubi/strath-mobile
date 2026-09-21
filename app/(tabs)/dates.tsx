@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, RefreshControl, StatusBar, Pressable } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMinimizeOnScroll } from 'expo-glass-tabs';
 import { ScreenGradient } from '@/components/ui/screen-gradient';
 import Animated, {
