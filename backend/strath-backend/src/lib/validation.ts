@@ -66,6 +66,7 @@ export const swipeSchema = z.object({
 
 export const messageSchema = z.object({
     content: z.string().min(1),
+    clientRequestId: z.string().min(8).max(128).optional(),
 });
 
 export const reportSchema = z.object({

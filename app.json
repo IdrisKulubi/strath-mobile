@@ -8,7 +8,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "strathspace",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.strathspace.mobile",
@@ -36,7 +35,6 @@
         "foregroundImage": "./assets/images/android-adaptive-foreground.png",
         "backgroundColor": "#fce7f3"
       },
-      "edgeToEdgeEnabled": true,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
@@ -66,7 +64,12 @@
       "@react-native-community/datetimepicker",
       "expo-location",
       "expo-font",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-image",
+      "expo-status-bar",
+      "expo-audio",
+      "expo-notifications",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

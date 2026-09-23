@@ -1,0 +1,335 @@
+{
+  "components": {
+    "schemas": {
+      "Answer": {
+        "additionalProperties": false,
+        "properties": {
+          "acceptableAnswerIds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Acceptableanswerids",
+            "type": "array"
+          },
+          "answerId": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Answerid",
+            "type": "string"
+          },
+          "questionVersionId": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Questionversionid",
+            "type": "string"
+          },
+          "weight": {
+            "enum": [
+              0,
+              1,
+              10,
+              50,
+              250
+            ],
+            "title": "Weight",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "questionVersionId",
+          "answerId",
+          "acceptableAnswerIds",
+          "weight"
+        ],
+        "title": "Answer",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "algorithmVersion": {
+            "const": "questionnaire-v1",
+            "default": "questionnaire-v1",
+            "title": "Algorithmversion",
+            "type": "string"
+          },
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "Person": {
+        "additionalProperties": false,
+        "properties": {
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/Answer"
+            },
+            "maxItems": 500,
+            "title": "Answers",
+            "type": "array"
+          },
+          "id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "revision": {
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "answers"
+        ],
+        "title": "Person",
+        "type": "object"
+      },
+      "RankRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/Person"
+            },
+            "maxItems": 25,
+            "title": "Candidates",
+            "type": "array"
+          },
+          "viewer": {
+            "$ref": "#/components/schemas/Person"
+          }
+        },
+        "required": [
+          "viewer",
+          "candidates"
+        ],
+        "title": "RankRequest",
+        "type": "object"
+      },
+      "RankResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ScoreResult"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "RankResponse",
+        "type": "object"
+      },
+      "ScoreResult": {
+        "additionalProperties": false,
+        "properties": {
+          "algorithmVersion": {
+            "const": "questionnaire-v1",
+            "title": "Algorithmversion",
+            "type": "string"
+          },
+          "candidateId": {
+            "title": "Candidateid",
+            "type": "string"
+          },
+          "candidateRevision": {
+            "minimum": 0.0,
+            "title": "Candidaterevision",
+            "type": "integer"
+          },
+          "evidenceCount": {
+            "minimum": 0.0,
+            "title": "Evidencecount",
+            "type": "integer"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "sharedCount": {
+            "minimum": 0.0,
+            "title": "Sharedcount",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "insufficient_evidence"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "viewerRevision": {
+            "minimum": 0.0,
+            "title": "Viewerrevision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "candidateId",
+          "viewerRevision",
+          "candidateRevision",
+          "algorithmVersion",
+          "status",
+          "sharedCount",
+          "evidenceCount"
+        ],
+        "title": "ScoreResult",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Internal, stateless compatibility scoring. Payloads contain opaque IDs and structured answers only.",
+    "title": "Strathspace questionnaire matching",
+    "version": "questionnaire-v1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/v1/rank": {
+      "post": {
+        "operationId": "calculate_v1_rank_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RankRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RankResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Calculate",
+        "tags": [
+          "matching"
+        ]
+      }
+    }
+  }
+}

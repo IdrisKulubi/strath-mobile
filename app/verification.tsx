@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Easing } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -35,6 +35,10 @@ import { useToast } from '@/components/ui/toast';
 
 export default function VerificationScreen() {
     const router = useRouter();
+    const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
+    const returnPath = returnTo === '/questions' || returnTo === '/dating/profile' || returnTo === '/dating-setup'
+        ? returnTo
+        : '/(tabs)';
     const queryClient = useQueryClient();
     const { show } = useToast();
     const { data: profile, isLoading: isProfileLoading, refetch: refetchProfile } = useProfile();
@@ -117,7 +121,7 @@ export default function VerificationScreen() {
 
                 queryClient.setQueryData(['profile'], next);
                 await setCachedProfile(next.userId, next);
-                router.replace('/(tabs)' as any);
+                router.replace(returnPath as any);
             } catch {
                 exitToTabsInFlightRef.current = false;
             }
@@ -131,6 +135,7 @@ export default function VerificationScreen() {
         queryClient,
         router,
         refetchProfile,
+        returnPath,
     ]);
 
     const showSuccessState =
@@ -173,7 +178,7 @@ export default function VerificationScreen() {
 
     const handleEditProfilePhotos = () => {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        router.push({ pathname: '/edit-profile', params: { focus: 'photos' } } as any);
+        router.push((returnTo ? '/dating-setup' : '/edit-profile') as any);
     };
 
     const handleDismissRetryCard = () => {
@@ -182,7 +187,7 @@ export default function VerificationScreen() {
     };
 
     useEffect(() => {
-        setResultStateDismissed(false);
+        queueMicrotask(() => setResultStateDismissed(false));
     }, [latestSession?.id, status]);
 
     useEffect(() => {
@@ -213,7 +218,7 @@ export default function VerificationScreen() {
 
     useEffect(() => {
         if (!isUploadingAndSubmitting && !isProcessing) {
-            setOverlayStageIndex(0);
+            queueMicrotask(() => setOverlayStageIndex(0));
             return;
         }
 
@@ -353,7 +358,7 @@ export default function VerificationScreen() {
                 queryClient.setQueryData(['profile'], nextProfile);
                 await setCachedProfile(nextProfile.userId, nextProfile);
             }
-            router.replace('/(tabs)' as any);
+            router.replace(returnPath as any);
         } finally {
             setIsContinuingToApp(false);
         }
