@@ -70,3 +70,37 @@ export async function applyQuestionnaireMigration(database: QuestionnaireDatabas
         return { migration: "0038", questions: catalogue.length, alreadyApplied: applied.rows.length > 0 };
     });
 }
+
+export async function applyDiscoveryMigration(database: QuestionnaireDatabase, migrationSql: string) {
+    return database.transaction(async (executor) => {
+        await executor.query(`
+            CREATE TABLE IF NOT EXISTS q_migrations (
+                name text PRIMARY KEY,
+                applied_at timestamptz NOT NULL DEFAULT now()
+            )
+        `);
+        const applied = await executor.query("SELECT name FROM q_migrations WHERE name = $1", ["0039"]);
+        if (applied.rows.length === 0) {
+            await executor.query(migrationSql);
+            await executor.query("INSERT INTO q_migrations(name) VALUES($1)", ["0039"]);
+        }
+        return { migration: "0039", alreadyApplied: applied.rows.length > 0 };
+    });
+}
+
+export async function applyConnectionsMigration(database: QuestionnaireDatabase, migrationSql: string) {
+    return database.transaction(async (executor) => {
+        await executor.query(`
+            CREATE TABLE IF NOT EXISTS q_migrations (
+                name text PRIMARY KEY,
+                applied_at timestamptz NOT NULL DEFAULT now()
+            )
+        `);
+        const applied = await executor.query("SELECT name FROM q_migrations WHERE name = $1", ["0040"]);
+        if (applied.rows.length === 0) {
+            await executor.query(migrationSql);
+            await executor.query("INSERT INTO q_migrations(name) VALUES($1)", ["0040"]);
+        }
+        return { migration: "0040", alreadyApplied: applied.rows.length > 0 };
+    });
+}

@@ -1,13 +1,17 @@
 import { query } from "./db";
+import { handlePhase4Request } from "./phase4-api";
+import { handlePhase5Request } from "./phase5-api";
 import * as questionnaire from "./phase2-service";
 
 export type Phase2Request = {
     userId: string | null;
     collectionEnabled: boolean;
+    matchingEnabled?: boolean;
     featureFlags?: { collection: boolean; matching: boolean; shell: boolean };
     method: string;
     path: string[];
     body?: unknown;
+    query?: Record<string, string>;
 };
 
 export async function handlePhase2Request(request: Phase2Request) {
@@ -23,6 +27,25 @@ export async function handlePhase2Request(request: Phase2Request) {
         return request.featureFlags ?? { collection: request.collectionEnabled, matching: false, shell: false };
     }
     if (!request.collectionEnabled) throw new questionnaire.DomainError("Questionnaire unavailable", 404);
+    if (["discovery", "comparison", "block", "report"].includes(resource)) {
+        return handlePhase4Request({
+            userId: request.userId,
+            matchingEnabled: request.matchingEnabled ?? request.featureFlags?.matching ?? false,
+            method: request.method,
+            path: request.path,
+            query: request.query,
+            body: request.body,
+        });
+    }
+    if (["likes", "connections", "decisions", "unmatch"].includes(resource)) {
+        return handlePhase5Request({
+            userId: request.userId,
+            matchingEnabled: request.matchingEnabled ?? request.featureFlags?.matching ?? false,
+            method: request.method,
+            path: request.path,
+            body: request.body,
+        });
+    }
     if (request.method === "GET" && resource === "status") return questionnaire.status(request.userId);
     if (request.method === "GET" && resource === "questions") return questionnaire.questions(request.userId);
     if (request.method === "GET" && resource === "profile") return questionnaire.ownProfile(request.userId);

@@ -8,6 +8,8 @@ const questionnaireRoutes = [
   '/dating',
   '/dating-setup',
   '/dating-chat',
+  '/compatibility',
+  '/discovery-filters',
   '/questions',
   '/verification',
   '/legal',

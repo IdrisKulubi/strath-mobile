@@ -18,14 +18,14 @@ export default function MessagesScreen() {
 
   return (
     <Page title="Messages">
-      <Copy>Your existing conversations remain available while you complete your questionnaire.</Copy>
+      <Copy>Your existing conversations and new mutual questionnaire matches appear together.</Copy>
       {conversations.isLoading ? <ActivityIndicator accessibilityLabel="Loading conversations" color={colors.primary} /> : null}
       <Feedback error={conversations.error} />
       {conversations.isError ? <Action label="Try loading again" onPress={() => { void conversations.refetch(); }} /> : null}
       {!conversations.isLoading && !conversations.isError && !conversations.data?.length ? (
         <View style={[styles.empty, { borderColor: colors.border, backgroundColor: colors.card }]}>
           <Text style={[TYPOGRAPHY.title, { color: colors.foreground }]}>No conversations yet</Text>
-          <Copy muted>Existing conversations will appear here. New questionnaire matches arrive in a later phase.</Copy>
+          <Copy muted>When you and another person like each other, your conversation will appear here immediately.</Copy>
           <Action label="Continue your questionnaire" tone="primary" onPress={() => router.push('/questions' as never)} />
         </View>
       ) : null}

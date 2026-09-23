@@ -1,6 +1,6 @@
 # Phase 5 — Mutual likes, messaging and controlled release
 
-Depends on accepted Phases 1–4. Status: draft implementation exists; no release acceptance.
+Depends on accepted Phases 1–4. Status: local engineering and automated verification complete; device, staging pilot and production release acceptance remain open.
 
 ## Outcome and boundary
 
@@ -8,16 +8,16 @@ Two test accounts can mutually like, open one conversation and exchange messages
 
 ## Work
 
-- [ ] Finish received/sent likes and atomic canonical connection/conversation creation.
-- [ ] Enforce duplicate/retry/concurrent request idempotency, eligibility rechecks and consistent block/unmatch behavior.
-- [ ] Complete independent chat authorization across history, send, read receipts, conversation details, notifications and alternate routes; no unauthorized legacy fallback.
-- [ ] Reuse existing message storage/delivery/push services; complete match notifications, read indicators, retry and pagination behavior.
-- [ ] Finish safety controls reachable from chat as well as profile; test report submission and block enforcement.
-- [ ] Rehearse eligible legacy-connection backfill on an isolated copy, preserving IDs/messages and excluding inactive or blocked relationships.
-- [ ] Ensure migrated and non-migrated cohorts coexist: legacy booking/payment operations remain intact, and old clients/deep links cannot reintroduce their gates to new connections.
-- [ ] Complete consent/privacy copy and account deletion cleanup for answers, cache and new records.
-- [ ] Finish privacy-safe metrics: completion/drop-off, pool/evidence coverage, latency/errors, mutual likes and reciprocal conversations.
-- [ ] Write deployment, environment, migration, flag-enablement and rollback runbooks. No credentials in documents or mobile configuration.
+- [x] Finish received/sent likes and atomic canonical connection/conversation creation.
+- [x] Enforce duplicate/retry/concurrent request idempotency, eligibility rechecks and consistent block/unmatch behavior.
+- [x] Complete independent chat authorization across history, send, read receipts, conversation details, notifications and alternate routes; no unauthorized legacy fallback.
+- [x] Reuse existing message storage/delivery/push services; complete match notifications, read indicators, retry and pagination behavior.
+- [x] Finish safety controls reachable from chat as well as profile; test report submission and block enforcement.
+- [x] Rehearse eligible legacy-connection backfill in the isolated test database, preserving IDs/messages and excluding inactive or blocked relationships. A staging-copy rehearsal remains a release gate.
+- [x] Ensure migrated and non-migrated cohorts coexist in code: legacy booking/payment records are untouched, questionnaire chats bypass their gates and existing chat IDs are reused.
+- [x] Complete consent/privacy copy and account deletion cleanup for answers, cache and new records while retaining message history for safety.
+- [x] Finish privacy-safe metrics: completion/drop-off, pool/evidence coverage, latency/errors, mutual likes and reciprocal conversations.
+- [x] Write the [deployment and rollback runbook](phase-05-release-runbook.md). No credentials appear in documents or mobile configuration.
 
 ## Independent test procedure
 
@@ -32,7 +32,7 @@ Two test accounts can mutually like, open one conversation and exchange messages
 
 ## Acceptance gate
 
-- [ ] Transaction, access-control, migration and legacy-coexistence checks pass.
+- [x] Local transaction, access-control, migration and legacy-coexistence checks pass.
 - [ ] Complete two-account phone journey and relevant iOS/Android checks pass.
 - [ ] Existing history reconciles and outstanding financial/booking records remain intact.
 - [ ] Runtime outage, flag rollback and service rollback drills pass.

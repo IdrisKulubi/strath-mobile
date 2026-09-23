@@ -5,9 +5,25 @@ import { getCurrentUserId } from '@/lib/auth-helpers';
 
 export type Experience = { collection: boolean; matching: boolean; shell: boolean };
 export type Compatibility = { status: 'ready' | 'insufficient_evidence'; score: number | null; sharedCount: number; evidenceCount: number };
-export type Person = { id: string; name: string; age: number; gender: string; city: string; bio: string; photos: string[]; intentions: string[]; compatibility?: Compatibility };
+export type Person = { id: string; name: string; age: number; city: string; bio: string; photos: string[]; intentions: string[]; compatibility?: Compatibility };
 export type Preferences = { genders: string[]; minAge: number; maxAge: number; city: string; radiusKm: number | null; latitude: number | null; longitude: number | null; intentions: string[] };
 export type QuestionnaireState = { answerCount: number; required: number; complete: boolean; revision: number; birthDate: string | null; preferences: Preferences | null; skipped: string[] };
+export type DiscoveryResponse = { items: Person[]; page: number; pageSize: number; totalEligible: number; hasMore: boolean };
+export type LikesResponse = { received: Person[]; sent: Person[] };
+export type DecisionResponse = { mutual: boolean; matchId?: string };
+export type PublicComparison = {
+  profile: Person;
+  compatibility: Compatibility;
+  questions: {
+    id: string;
+    prompt: string;
+    options: { id: string; label: string }[];
+    yours: string;
+    theirs: string;
+    yourExplanation: string;
+    theirExplanation: string;
+  }[];
+};
 export type Question = {
   id: string;
   question_key: string;

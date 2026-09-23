@@ -7,6 +7,8 @@
     "app/dating/**/*.tsx",
     "app/dating-chat/**/*.tsx",
     "app/dating-setup.tsx",
+    "app/discovery-filters.tsx",
+    "app/compatibility/**/*.tsx",
     "app/questions.tsx",
     "components/questionnaire/**/*.tsx",
     "lib/questionnaire.ts",

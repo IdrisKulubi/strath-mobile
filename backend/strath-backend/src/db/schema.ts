@@ -1481,6 +1481,7 @@ export const messages = pgTable(
         senderId: text("sender_id")
             .references(() => user.id)
             .notNull(),
+        clientRequestId: text("client_request_id"),
         status: text("status", { enum: ["sent", "delivered", "read"] })
             .default("sent")
             .notNull(),
@@ -1493,6 +1494,9 @@ export const messages = pgTable(
         createdAtIdx: index("created_at_idx").on(table.createdAt),
         // Composite index for efficient message pagination queries
         matchIdCreatedAtIdx: index("match_id_created_at_idx").on(table.matchId, table.createdAt),
+        senderRequestUniqueIdx: uniqueIndex("messages_sender_request_unique_idx")
+            .on(table.matchId, table.senderId, table.clientRequestId)
+            .where(sql`${table.clientRequestId} IS NOT NULL`),
     })
 );
 

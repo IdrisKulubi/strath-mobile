@@ -53,6 +53,16 @@ async function ensureState(userId: string, executor?: SqlExecutor) {
     await query("INSERT INTO q_state(user_id) VALUES($1) ON CONFLICT DO NOTHING", [userId], executor);
 }
 
+async function invalidateCompatibilityCache(userId: string, executor: SqlExecutor) {
+    const [table] = await query<{ exists: string | null } & QueryResultRow>(
+        "SELECT to_regclass('q_compatibility_cache')::text AS exists",
+        [], executor,
+    );
+    if (table.exists) {
+        await query("DELETE FROM q_compatibility_cache WHERE user_a = $1 OR user_b = $1", [userId], executor);
+    }
+}
+
 async function loadStatus(userId: string, executor?: SqlExecutor) {
     await ensureState(userId, executor);
     const [state] = await query<QuestionnaireStateRow>(`
@@ -180,6 +190,7 @@ export async function saveAnswer(userId: string, input: unknown) {
                 updated_at = now()
         `, [userId, answer.questionId, answer.answerId, JSON.stringify(answer.acceptable), answer.weight, answer.public, answer.explanation], executor);
         await query("UPDATE q_state SET revision = revision + 1, updated_at = now() WHERE user_id = $1", [userId], executor);
+        await invalidateCompatibilityCache(userId, executor);
         const progress = await recordProgress(userId, executor);
         return { saved: true, revision: progress.revision, answerCount: progress.answer_count, complete: progress.answer_count >= REQUIRED_ANSWER_COUNT };
     });
@@ -201,6 +212,7 @@ export async function deleteAnswer(userId: string, input: unknown) {
         `, [userId, answer.questionId], executor);
         if (removed.length === 0) return { deleted: false, revision: state.revision };
         await query("UPDATE q_state SET revision = revision + 1, updated_at = now() WHERE user_id = $1", [userId], executor);
+        await invalidateCompatibilityCache(userId, executor);
         const progress = await recordProgress(userId, executor);
         return { deleted: true, revision: progress.revision, answerCount: progress.answer_count };
     });
@@ -244,6 +256,7 @@ export async function savePreferences(userId: string, input: unknown) {
             WHERE user_id = $1
             RETURNING revision
         `, [userId, birthDate, JSON.stringify(preferences)], executor);
+        await invalidateCompatibilityCache(userId, executor);
         await recordProgress(userId, executor);
         return { saved: true, revision: row.revision };
     });

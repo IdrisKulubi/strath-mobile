@@ -45,10 +45,12 @@ async function handle(request: NextRequest, context: { params: Promise<{ path: s
         const result = await handlePhase2Request({
             userId,
             collectionEnabled: featureFlags?.collection ?? false,
+            matchingEnabled: featureFlags?.matching ?? false,
             featureFlags,
             method: request.method,
             path,
             body,
+            query: Object.fromEntries(request.nextUrl.searchParams.entries()),
         });
         return NextResponse.json(result);
     } catch (error) {

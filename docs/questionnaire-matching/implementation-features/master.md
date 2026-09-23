@@ -1,8 +1,8 @@
 # Master implementation checklist
 
-Last audited: 2026-09-21. Branch: `revamped`.
+Last audited: 2026-09-22. Branch: `revamped`.
 
-**Current state: Phases 1 and 2 are accepted. Phase 3 engineering is complete and awaits the user's phone UI review.**
+**Current state: Phases 1 and 2 are accepted. At the user's direction, local engineering is complete through Phase 5. Phone reviews, Railway/staging validation, internal pilot and production release remain open.**
 
 This is the source of truth for progress. The phase documents define the work and acceptance criteria; this document records what actually exists and what has passed. The architecture and experience documents remain design references, not proof of completion.
 
@@ -25,8 +25,8 @@ Checkbox meanings: an implemented item means a file/behavior has been written; a
 | [x] | [1. Foundation and scoring engine](phase-01-foundation-and-engine.md) | Accepted 2026-09-21 | A local Python API calculates documented scores from synthetic inputs. |
 | [x] | [2. Questionnaire data and APIs](phase-02-questionnaire-data-and-api.md) | Accepted 2026-09-21 | An authenticated test user saves, resumes, edits and deletes answers in an isolated database without the app or Railway. |
 | [ ] | [3. Profile and questionnaire on the phone](phase-03-mobile-onboarding.md) | Implementation complete; phone acceptance pending | A phone user completes a profile and twenty answers, then resumes and edits them. No discovery or new matching needed. |
-| [ ] | [4. Compatible discovery on the phone](phase-04-discovery-and-compatibility.md) | Draft backend and screens exist | Verified test users browse ranked profiles and compare permitted answers on a phone, without needing mutual likes or chat. |
-| [ ] | [5. Mutual likes, messages and controlled release](phase-05-connections-messaging-and-release.md) | Draft implementation exists | Two test accounts match and exchange messages; preserved history and safe rollback are demonstrated before rollout. |
+| [ ] | [4. Compatible discovery on the phone](phase-04-discovery-and-compatibility.md) | Local engineering verified; Railway and phone acceptance pending | Verified test users browse ranked profiles and compare permitted answers on a phone, without needing mutual likes or chat. |
+| [ ] | [5. Mutual likes, messages and controlled release](phase-05-connections-messaging-and-release.md) | Local engineering verified; pilot and release acceptance pending | Two test accounts match and exchange messages; preserved history and safe rollback are demonstrated before rollout. |
 
 ## Phase 1 checklist
 
@@ -90,15 +90,15 @@ Checkbox meanings: an implemented item means a file/behavior has been written; a
 ### Implemented
 - [x] Draft candidate eligibility, service client, revision-keyed cache and discovery APIs.
 - [x] Draft discovery list, filters and profile/answer comparison screens.
-- [ ] Finish eligibility/privacy review, large-pool behavior, cache races and stable pagination.
+- [x] Finish eligibility/privacy review, large-pool behavior, cache races and stable pagination.
 - [ ] Deploy and validate a staging Railway engine with backend-only credentials.
-- [ ] Finish discovery-specific monitoring and safe unavailable/empty states.
+- [x] Finish privacy-safe discovery events and unavailable, empty, retry and insufficient-evidence states.
 
 ### Verified
-- [ ] Backend-to-engine contract and cached/outage/revision-change tests pass.
-- [ ] Reciprocal preferences, blocks, age, visibility, verification and privacy checks pass.
+- [x] Local backend-to-engine contract and cached/outage/revision-change tests pass; Railway validation remains open.
+- [x] Reciprocal preferences, blocks, age, visibility, verification and privacy checks pass in the isolated database suite.
 - [ ] Phone displays seeded rankings, honest evidence states, editable filters and public-only comparisons.
-- [ ] No private answers, DOB, precise coordinates or per-answer score contributions reach another user.
+- [x] Automated response tests confirm private answers, DOB, precise coordinates and per-answer score contributions do not reach another user.
 - [ ] Record phone/network/error-state evidence and staging latency results.
 - [ ] **Phase 4 accepted; Phase 5 may begin.**
 
@@ -109,16 +109,16 @@ Checkbox meanings: an implemented item means a file/behavior has been written; a
 - [x] Draft independent chat authorization and legacy conversation backfill.
 - [x] Draft received/sent likes, messages, new chat screen and block/report actions.
 - [x] Draft separate collection/matching/shell flags and a small set of operational events.
-- [ ] Finish concurrency/idempotency and legacy coexistence review.
-- [ ] Finish match notifications, delivery/read behavior, chat safety and complete event coverage.
-- [ ] Finish reconciliation tooling, account-data lifecycle, deployment runbook and rollback handling.
+- [x] Finish concurrency/idempotency and legacy coexistence review.
+- [x] Finish match notifications, delivery/read behavior, chat safety and privacy-safe event coverage.
+- [x] Finish reconciliation tooling, account-data lifecycle, deployment runbook and rollback handling.
 
 ### Verified
-- [ ] Simultaneous/repeated likes create one connection and preserve existing conversation IDs.
-- [ ] Unauthorized, blocked and unmatched users cannot read/send through any chat endpoint.
+- [x] Isolated tests confirm simultaneous/repeated likes create one connection and preserve/reuse conversation IDs.
+- [x] Shared authorization tests confirm non-members, blocked and unmatched users are denied independently of date/payment state.
 - [ ] Two phone sessions complete like → match → message → read → unmatch/block without dates or payment.
-- [ ] Migration rehearsal preserves history and never revives inactive relationships.
-- [ ] Engine outage and feature rollback preserve new and existing conversations safely.
+- [x] Isolated migration rehearsal preserves history and never revives inactive relationships; staging-copy rehearsal remains open.
+- [x] Automated flag rollback confirms matching can stop while active conversations remain available; operational drill remains open.
 - [ ] Internal staging pilot and complete phone acceptance pass.
 - [ ] Production deployment/configuration and controlled cohort rollout are verified.
 - [ ] **Phase 5 accepted; release complete.**
@@ -149,6 +149,17 @@ Checkbox meanings: an implemented item means a file/behavior has been written; a
 | 2026-09-21 | Phase 3 backend regression | TypeScript passed; Phase 2 PGlite suite 8/8 passed | Public experience flags work independently of collection while accepted questionnaire behavior remains intact. |
 | 2026-09-21 | Phase 3 Expo web compile | Initial bundle compiled 7,379 modules; later hot rebuild stopped with Windows Metro `EMFILE` | Source compiled once; the later process-level file-handle exhaustion is documented for the phone handoff and is not claimed as device acceptance. |
 | 2026-09-21 | Phase 3 phone UI review | Delegated to user; no device evidence recorded | Engineering is complete, but Phase 3 remains unchecked until the user records a real-phone walkthrough. |
+| 2026-09-22 | Phase 4 isolated discovery suite | 11/11 passed | Additive migration, deterministic full-pool ranking, 25-candidate batches, stable pagination, reciprocal exclusions, revision-valid cache fallback, stale-race rejection, public-only comparison, feature gating, safety actions and engine-client behavior pass. |
+| 2026-09-22 | Phase 4 backend and mobile focused TypeScript/ESLint | Passed | New discovery endpoints, filters, list, profile comparison and safety actions compile and have no focused lint findings. |
+| 2026-09-22 | Phase 2 and Python regression | Phase 2 8/8; Python 35/35 | Discovery work preserves accepted questionnaire behavior and the frozen scoring engine contract. |
+| 2026-09-22 | Live local TypeScript client → FastAPI `/health` and `/v1/rank` | HTTP 200; authenticated `questionnaire-v1` response with score 100 and 10 evidence questions | The actual server client interoperates with a live engine process locally; this is not Railway staging evidence. |
+| 2026-09-22 | Phase 4 Railway deployment | Not run; Railway CLI/linked credentials unavailable | Configuration and a concrete staging handoff exist, but service authentication, network latency and resource use must be verified after deployment. |
+| 2026-09-22 | Phase 4 phone UI review | Delegated to user; no device evidence recorded | The UI is implemented and focused checks pass, but Phase 4 remains unchecked until the phone walkthrough is recorded. |
+| 2026-09-22 | Phase 5 isolated connection suite | 10/10 passed | Additive migration, simultaneous likes, one canonical chat, eligibility recheck, likes privacy, chat authorization, block/unmatch, idempotent message retry, rollback independence, legacy backfill and account cleanup pass. |
+| 2026-09-22 | Questionnaire regression suites | Phase 2 8/8; Phase 4 11/11; Phase 5 10/10 | Accepted questionnaire data and discovery behavior remain intact after connection integration. |
+| 2026-09-22 | Phase 5 backend/mobile focused TypeScript and ESLint | Passed | Connection APIs, shared chat authorization, conversation aggregation, likes/profile/chat UI and retry handling compile with no focused lint findings. |
+| 2026-09-22 | Full legacy backend suite | 242/243 passed | The sole failure is the previously recorded unrelated face-verification expectation; all other legacy tests pass. |
+| 2026-09-22 | Phase 5 device, staging pilot and production rollout | Not run | Local code is complete, but Phase 5 remains unchecked until external release gates and rollback drill are recorded. |
 
 ## How to record future acceptance
 
@@ -163,4 +174,4 @@ For each completed phase append:
 - Remaining limitations and whether they block acceptance.
 - Only then update both the phase acceptance box and the completion table.
 
-**Next action:** user performs the Phase 3 phone review using the handoff in the phase document. Record device evidence and manual results before checking Phase 3 accepted or beginning Phase 4. Keep Phase 4–5 drafts parked and unverified.
+**Next action:** complete the Phase 3–5 phone walkthrough, Railway validation and isolated staging-copy backfill using the release runbook. Then run the internal pilot and rollback drill before enabling a production cohort.
