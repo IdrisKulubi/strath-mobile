@@ -23,8 +23,11 @@ export function errorResponse(error: unknown, status = 500) {
     }
 
     if (error instanceof Error) {
+        const message = status >= 500 && process.env.NODE_ENV === "production"
+            ? "Internal Server Error"
+            : error.message;
         return NextResponse.json(
-            { success: false, error: error.message },
+            { success: false, error: message },
             { status }
         );
     }
