@@ -10,6 +10,12 @@ Use [DESIGN.md](../../DESIGN.md) for app-wide tokens and this document for onboa
 
 ![Approved Rising sheet visual direction](../onboarding-concepts/01-rising-sheet.png)
 
+The user also approved this close-up for option rows and bottom actions:
+
+![Approved option rows and bottom action pill](../onboarding-concepts/option-rows-action-pill.png)
+
+Use its dark tonal rows, pink selected outline and right-side indicator, and dark bottom pill with a pink heart circle and trailing chevrons. This is visual guidance: the action remains tap-to-continue, and option labels/icons still come from the actual product catalogue.
+
 The image communicates composition, surfaces, selection feedback, and pacing. It does not define literal copy, progress counts, scoring, privacy promises, or new features. Options 2 and 3 are archived explorations, not implementation targets.
 
 Correct these concept-image artifacts during implementation:
@@ -28,6 +34,8 @@ Use one persistent, raised content sheet beneath a quiet branded header. Replace
 
 Show a compact editable summary of the previous answer where helpful. Keep Back available. Do not accumulate prior fields or a long conversation transcript. Longer content may scroll inside the sheet; the action remains reachable with keyboard and safe areas respected.
 
+When a person types, the active text field and its caret must remain visible just above the keyboard. Scroll that field into the sheet's visible area when focus or keyboard height changes; do not leave it hidden behind the keyboard or the pinned action. This applies to optional context and other onboarding text beats.
+
 Progress describes real chapters and saved progress. Keep the twenty-question requirement discoverable in the introduction/progress detail; do not disguise it with a false count or repeatedly put “Question 1 of 20” in the main heading.
 
 ## Visual system
@@ -35,13 +43,14 @@ Progress describes real chapters and saved progress. Keep the twenty-question re
 | Element | Contract |
 | --- | --- |
 | Canvas / sheet / controls | Existing dark tokens: #0D0B0D / #151215 / #1E1A1E |
-| Accent | #E0186A primary action; #FF5C97 text accent; at most one pink-filled primary control per screen |
+| Accent | #E0186A selection and heart badge; #FF5C97 text accent; at most one pink-filled primary control per screen |
 | Text | #F7F3F5 primary; existing muted token with verified contrast |
 | Typography | System font; centered onboarding heading; 26–28px display, 15–16px body; support font scaling |
 | Shape | 32px top corners on the main sheet, 16px choice rows, pill actions; reuse token values |
 | Spacing | 20px outer gutter, 24px sheet inset; existing spacing scale |
 | Targets | At least 48 logical pixels for controls; typical choice/action height 56, growing with content |
-| Selection | Pink outline plus checked indicator; never color alone; stable label and accessible selected state |
+| Selection | Selected row uses the dark sheet tone, pink outline, and right-side radio dot or check. Unselected rows use the raised control tone. Never rely on color alone; retain accessible selected state. |
+| Bottom action | Dark bordered pill, pink circular heart (or task-specific icon) at left, centered label, paired chevrons at right. Disabled state dims icon and label. The whole pill is a tap target, not a required swipe. |
 | Decoration | One purposeful small icon/asset where useful; no glass stacks, confetti, neon, or emoji on every row |
 | Themes | Dark is the approved reference. Preserve the existing light-mode contract with equivalent contrast and hierarchy |
 

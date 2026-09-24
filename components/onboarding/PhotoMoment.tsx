@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/immutability -- Reanimated shared values are intentionally updated by gesture worklets. */
 import React, { useRef, useState } from 'react';
 import {
     Alert,
@@ -25,6 +26,7 @@ import { Plus, Star, X } from 'phosphor-react-native';
 import { Text } from '@/components/ui/text';
 import { Palette, RADIUS, SPACING } from '@/lib/design-tokens';
 import { useOnboardingTheme } from '@/lib/onboarding-theme';
+import { useImageUpload } from '@/hooks/use-image-upload';
 
 
 import { OnboardingPrimaryButton } from './onboarding-primary-button';
@@ -51,12 +53,14 @@ const DraggablePhoto = ({
     index,
     totalPhotos,
     onRemove,
+    onReplace,
     onMove,
 }: {
     photo: PhotoSlot;
     index: number;
     totalPhotos: number;
     onRemove: (id: number) => void;
+    onReplace: (index: number) => void;
     onMove: (fromIndex: number, toIndex: number) => void;
 }) => {
     const theme = useOnboardingTheme();
@@ -161,6 +165,14 @@ const DraggablePhoto = ({
                 >
                     <X size={14} color="#fff" weight="bold" />
                 </Pressable>
+                <Pressable
+                    style={styles.replaceButton}
+                    onPress={() => onReplace(index)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Replace photo ${index + 1}`}
+                >
+                    <Text style={styles.replaceText}>Replace</Text>
+                </Pressable>
             </Animated.View>
         </GestureDetector>
     );
@@ -215,6 +227,11 @@ export function PhotoMoment({
     );
     const photoSlotsRef = useRef(photoSlots);
     const nextId = useRef(photos.length);
+    const photoUploadInFlight = useRef(false);
+    const { uploadImage, isUploading, progress, stage } = useImageUpload();
+    const [failedUri, setFailedUri] = useState<string | null>(null);
+    const [failedReplaceIndex, setFailedReplaceIndex] = useState<number | null>(null);
+    const [uploadError, setUploadError] = useState<string | null>(null);
 
     const photosWithContent = photoSlots.filter((photo) => photo.uri !== null);
     const hasMinPhotos = photosWithContent.length >= 2;
@@ -226,8 +243,10 @@ export function PhotoMoment({
         onUpdate(nextSlots.map((photo) => photo.uri!).filter(Boolean));
     };
 
-    const pickImage = async (useCamera: boolean) => {
+    const pickImage = async (useCamera: boolean, replaceIndex: number | null = null) => {
+        if (isUploading) return;
         try {
+            setUploadError(null);
             const permission = useCamera
                 ? await ImagePicker.requestCameraPermissionsAsync()
                 : await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -249,8 +268,8 @@ export function PhotoMoment({
                   })
                 : await ImagePicker.launchImageLibraryAsync({
                       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                      allowsMultipleSelection: true,
-                      selectionLimit: 6 - photosWithContent.length,
+                      allowsMultipleSelection: replaceIndex === null,
+                      selectionLimit: replaceIndex === null ? 6 - photosWithContent.length : 1,
                       allowsEditing: false,
                       quality: 0.8,
                   });
@@ -258,27 +277,37 @@ export function PhotoMoment({
             if (!result.canceled && result.assets.length > 0) {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-                const newPhotos: PhotoSlot[] = result.assets.map((asset) => ({
-                    id: nextId.current++,
-                    uri: asset.uri,
-                }));
-
-                const existing = photoSlotsRef.current.filter((photo) => photo.uri !== null);
-                const combined = [...existing, ...newPhotos].slice(0, 6);
-                commitPhotoSlots(combined);
+                for (const asset of result.assets) {
+                    await uploadSelectedPhoto(asset.uri, replaceIndex);
+                }
             }
         } catch (error) {
-            console.error('Error picking image:', error);
-            Alert.alert('Error', 'Failed to pick image');
+            setUploadError(error instanceof Error ? error.message : 'Could not add this photo. Try again.');
         }
     };
 
-    const showImageOptions = () => {
-        Alert.alert('Add Photo', 'Choose how to add your photo', [
-            { text: 'Take Photo', onPress: () => pickImage(true) },
-            { text: 'Choose from Library', onPress: () => pickImage(false) },
-            { text: 'Cancel', style: 'cancel' },
-        ]);
+    const uploadSelectedPhoto = async (uri: string, replaceIndex: number | null = null) => {
+        if (photoUploadInFlight.current) return;
+        photoUploadInFlight.current = true;
+        setFailedUri(null);
+        setFailedReplaceIndex(null);
+        try {
+            const uploaded = await uploadImage(uri);
+            if (!photoSlotsRef.current.some((photo) => photo.uri === uploaded)) {
+                const next = [...photoSlotsRef.current];
+                if (replaceIndex !== null && replaceIndex < next.length) next[replaceIndex] = { id: nextId.current++, uri: uploaded };
+                else next.push({ id: nextId.current++, uri: uploaded });
+                commitPhotoSlots(next.slice(0, 6));
+            }
+            setUploadError(null);
+        } catch (error) {
+            setFailedUri(uri);
+            setFailedReplaceIndex(replaceIndex);
+            setUploadError(error instanceof Error ? error.message : 'Upload failed. Try again.');
+            throw error;
+        } finally {
+            photoUploadInFlight.current = false;
+        }
     };
 
     const removePhoto = (id: number) => {
@@ -293,14 +322,19 @@ export function PhotoMoment({
         commitPhotoSlots(updated);
     };
 
-    const emptySlots = 6 - photosWithContent.length;
+    const emptySlots = photosWithContent.length < 6 ? 1 : 0;
 
     return (
         <OnboardingScreenShell
+            presentation="rising"
             stepIndex={globalStepIndex}
+            beatKey="profile-photos"
+            progressLabel="Your profile"
+            progressIndex={2}
+            progressCount={3}
             onBack={onBack}
             title="Show your best self"
-            subtitle="Add at least 2 photos. Photo 1 is your main — long-press and drag to reorder."
+            subtitle="Add at least 2 photos. The first is your main; long-press to reorder."
             scrollable
             footer={
                 <View style={styles.footerBlock}>
@@ -312,7 +346,7 @@ export function PhotoMoment({
                     >
                         {!hasMinPhotos
                             ? `Add ${2 - photosWithContent.length} more to continue`
-                            : `${photosWithContent.length} / 6 photos`}
+                            : `${photosWithContent.length} / 6 photos ready`}
                     </Text>
                     <OnboardingPrimaryButton
                         label="Continue"
@@ -320,7 +354,8 @@ export function PhotoMoment({
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                             onNext();
                         }}
-                        disabled={!hasMinPhotos}
+                        disabled={!hasMinPhotos || isUploading || Boolean(failedUri)}
+                        appearance="rising"
                     />
                 </View>
             }
@@ -333,6 +368,7 @@ export function PhotoMoment({
                         index={index}
                         totalPhotos={photosWithContent.length}
                         onRemove={removePhoto}
+                        onReplace={(photoIndex) => { void pickImage(false, photoIndex); }}
                         onMove={reorderPhotos}
                     />
                 ))}
@@ -341,10 +377,14 @@ export function PhotoMoment({
                     <AddPhotoSlot
                         key={`empty-${index}`}
                         index={photosWithContent.length + index}
-                        onPress={showImageOptions}
+                        onPress={() => { void pickImage(false); }}
                     />
                 ))}
             </View>
+            {isUploading ? <Text accessibilityRole="text" style={[styles.counterText, { color: theme.foreground }]}>{stage === 'uploading' ? progress !== null ? `Uploading photo: ${progress}%` : 'Uploading photo…' : 'Preparing photo for upload…'}</Text> : null}
+            {uploadError ? <Text accessibilityRole="alert" style={[styles.counterText, { color: theme.mutedForeground }]}>{uploadError}</Text> : null}
+            {failedUri && !isUploading ? <Pressable accessibilityRole="button" accessibilityLabel="Retry photo upload" onPress={() => { void uploadSelectedPhoto(failedUri, failedReplaceIndex).catch(() => {}); }}><Text style={[styles.counterText, { color: theme.primary }]}>Retry this photo</Text></Pressable> : null}
+            {photosWithContent.length < 6 ? <Pressable accessibilityRole="button" accessibilityLabel="Take profile photo" disabled={isUploading} onPress={() => { void pickImage(true); }}><Text style={[styles.counterText, { color: theme.primary }]}>Take a photo instead</Text></Pressable> : null}
         </OnboardingScreenShell>
     );
 }
@@ -413,6 +453,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
+    replaceButton: { position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0, 0, 0, 0.7)', borderRadius: RADIUS.md, paddingHorizontal: 7, paddingVertical: 4 },
+    replaceText: { color: '#fff', fontSize: 10, fontWeight: '700' },
     addPhotoSlot: {
         width: PHOTO_SIZE,
         height: PHOTO_SIZE * 1.25,

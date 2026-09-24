@@ -1,13 +1,15 @@
-import React, { useEffect, useRef } from 'react';
+import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     AccessibilityInfo,
     findNodeHandle,
+    Keyboard,
     KeyboardAvoidingView,
     Platform,
     Pressable,
     ScrollView,
     StyleSheet,
     Text as RNText,
+    TextInput,
     View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +22,11 @@ import { useTheme } from '@/hooks/use-theme';
 
 import { OnboardingProgressBar } from './onboarding-progress-bar';
 import type { OnboardingScreenShellProps } from './onboarding-screen-shell';
+
+export const RisingKeyboardFocusContext = createContext<{
+    registerFocusedInput: (input: TextInput | null) => void;
+    revealFocusedInput: () => void;
+} | null>(null);
 
 /** The sheet is persistent; only the active beat content changes. */
 export function RisingSheetScreen({
@@ -44,6 +51,51 @@ export function RisingSheetScreen({
     const insets = useSafeAreaInsets();
     const reducedMotion = useReducedMotion();
     const headingRef = useRef<RNText>(null);
+    const scrollRef = useRef<ScrollView>(null);
+    const focusedInputRef = useRef<TextInput | null>(null);
+    const scrollOffsetRef = useRef(0);
+    const keyboardTopRef = useRef<number | null>(null);
+    const [keyboardScrollSpace, setKeyboardScrollSpace] = useState(0);
+
+    const revealFocusedInput = useCallback(() => {
+        const input = TextInput.State.currentlyFocusedInput() ?? focusedInputRef.current;
+        const scroll = scrollRef.current;
+        if (!input || !scroll) return;
+        const nativeScroll = scroll.getNativeScrollRef();
+        if (!nativeScroll) return;
+        input.measureInWindow((_inputX, inputY, _inputWidth, inputHeight) => {
+            nativeScroll.measureInWindow((_scrollX, scrollY, _scrollWidth, scrollHeight) => {
+                const visibleBottom = Math.min(scrollY + scrollHeight, keyboardTopRef.current ?? Infinity) - SPACING.base;
+                const overflow = inputY + inputHeight - visibleBottom;
+                if (overflow > 0) {
+                    const nextOffset = scrollOffsetRef.current + overflow;
+                    scrollOffsetRef.current = nextOffset;
+                    scroll.scrollTo({ y: nextOffset, animated: true });
+                }
+            });
+        });
+    }, []);
+
+    const registerFocusedInput = useCallback((input: TextInput | null) => {
+        focusedInputRef.current = input;
+        if (input) setTimeout(revealFocusedInput, 80);
+    }, [revealFocusedInput]);
+    const keyboardFocus = useMemo(() => ({ registerFocusedInput, revealFocusedInput }), [registerFocusedInput, revealFocusedInput]);
+
+    useEffect(() => {
+        const shown = Keyboard.addListener('keyboardDidShow', (event) => {
+            keyboardTopRef.current = event.endCoordinates.screenY;
+            setKeyboardScrollSpace(Math.max(HEIGHTS.input * 2, Math.min(event.endCoordinates.height, 300)));
+            setTimeout(revealFocusedInput, 60);
+        });
+        const hidden = Keyboard.addListener('keyboardDidHide', () => { keyboardTopRef.current = null; setKeyboardScrollSpace(0); });
+        return () => { shown.remove(); hidden.remove(); };
+    }, [revealFocusedInput]);
+
+    useEffect(() => {
+        scrollRef.current?.scrollTo({ y: 0, animated: false });
+        scrollOffsetRef.current = 0;
+    }, [beatKey]);
 
     useEffect(() => {
         let active = true;
@@ -97,10 +149,15 @@ export function RisingSheetScreen({
                 ) : null}
             </View>
 
+            <RisingKeyboardFocusContext.Provider value={keyboardFocus}>
             <Animated.View entering={sheetEntry} style={[styles.sheet, { backgroundColor: colors.sheet }]}>
                 <ScrollView
+                    key={String(beatKey)}
+                    ref={scrollRef}
                     style={styles.scroll}
-                    contentContainerStyle={styles.scrollContent}
+                    contentContainerStyle={[styles.scrollContent, { paddingBottom: SPACING.section + keyboardScrollSpace }]}
+                    onScroll={(event) => { scrollOffsetRef.current = event.nativeEvent.contentOffset.y; }}
+                    scrollEventThrottle={16}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
                     showsVerticalScrollIndicator={false}
@@ -142,6 +199,7 @@ export function RisingSheetScreen({
                     </View>
                 ) : <View style={{ height: Math.max(insets.bottom, SPACING.base) }} />}
             </Animated.View>
+            </RisingKeyboardFocusContext.Provider>
         </KeyboardAvoidingView>
     );
 }

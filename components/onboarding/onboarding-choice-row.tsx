@@ -57,8 +57,8 @@ export function OnboardingChoiceRow({
 
     const borderColor = hasError ? errorColor : selected ? accent : border;
     const backgroundColor = selected
-        ? rising ? surface : withOnboardingAlpha(theme.primary, theme.isDark ? 0.18 : 0.07)
-        : surface;
+        ? rising ? colors.sheet : withOnboardingAlpha(theme.primary, theme.isDark ? 0.18 : 0.07)
+        : rising ? colors.controlActive : surface;
 
     return (
         <Pressable
@@ -67,18 +67,18 @@ export function OnboardingChoiceRow({
             accessibilityRole={selectionMode === 'multiple' ? 'checkbox' : showRadio ? 'radio' : 'button'}
             accessibilityState={selectionMode === 'multiple' ? { checked: selected, disabled } : { selected, disabled }}
             accessibilityLabel={option.description ? `${option.label}. ${option.description}` : option.label}
-            style={({ pressed }) => [
+            style={[
                 styles.row,
                 rising && styles.risingRow,
                 {
                     backgroundColor,
                     borderColor,
                     borderWidth: rising ? 1 : selected ? 2 : StyleSheet.hairlineWidth,
-                    opacity: disabled ? 0.55 : pressed ? 0.94 : 1,
+                    opacity: disabled && !(rising && selected) ? 0.55 : 1,
                 },
             ]}
         >
-            <View style={styles.rowInner}>
+            <View style={[styles.rowInner, rising && styles.risingRowInner]}>
                 {option.emoji ? (
                     <View
                         style={[
@@ -110,12 +110,14 @@ export function OnboardingChoiceRow({
                             styles.radio,
                             {
                                 borderColor: selected ? accent : muted,
-                                backgroundColor: selected ? accent : 'transparent',
+                                backgroundColor: selected && selectionMode === 'multiple' ? accent : rising && !selected ? border : 'transparent',
                             },
                         ]}
                     >
                         {selected ? (
-                            <Ionicons name="checkmark" size={14} color={rising ? colors.primaryForeground : theme.primaryForeground} />
+                            selectionMode === 'multiple'
+                                ? <Ionicons name="checkmark" size={14} color={rising ? colors.primaryForeground : theme.primaryForeground} />
+                                : rising ? <View style={[styles.radioDot, { backgroundColor: accent }]} /> : <Ionicons name="checkmark" size={14} color={theme.primaryForeground} />
                         ) : null}
                     </View>
                 ) : null}
@@ -131,7 +133,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: SPACING.base,
         paddingVertical: SPACING.compact,
     },
-    risingRow: { minHeight: 56 },
+    risingRow: { minHeight: 56, paddingVertical: SPACING.micro },
+    risingRowInner: { minHeight: 48 },
     rowInner: {
         width: '100%',
         minHeight: 56,
@@ -173,4 +176,5 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         flexShrink: 0,
     },
+    radioDot: { width: 8, height: 8, borderRadius: RADIUS.full },
 });

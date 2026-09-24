@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
+import { useReducedMotion } from 'react-native-reanimated';
 
 import { Text } from '@/components/ui/text';
 import {
@@ -18,6 +19,7 @@ import { OnboardingChip } from './onboarding-chip';
 import { OnboardingChoiceRow } from './onboarding-choice-row';
 import { OnboardingPrimaryButton } from './onboarding-primary-button';
 import { OnboardingScreenShell } from './onboarding-screen-shell';
+import { useRisingBeatController } from './use-rising-beat-controller';
 
 interface CampusBasicsData {
     yearOfStudy: string;
@@ -63,7 +65,9 @@ export function CampusBasicsStep({
     onBackToCoreProfile,
 }: CampusBasicsStepProps) {
     const theme = useOnboardingTheme();
-    const [subStep, setSubStep] = useState(0);
+    const reducedMotion = useReducedMotion();
+    const resumeBeat = data.interests.length >= INTEREST_MIN_SELECTION ? 2 : data.yearOfStudy ? 1 : 0;
+    const { beat: subStep, advance, back } = useRisingBeatController(2, reducedMotion, resumeBeat);
     const [isRequestingLocation, setIsRequestingLocation] = useState(false);
     const [locationError, setLocationError] = useState('');
 
@@ -77,13 +81,13 @@ export function CampusBasicsStep({
             return;
         }
 
-        setSubStep((current) => current - 1);
+        back();
     };
 
     const handleYearSelect = (yearOfStudy: string) => {
         onUpdate({ yearOfStudy });
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setTimeout(() => setSubStep(1), 220);
+        advance();
     };
 
     const toggleInterest = (label: string) => {
@@ -109,7 +113,7 @@ export function CampusBasicsStep({
         }
 
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setSubStep(2);
+        advance();
     };
 
     const handleLocationPermission = async () => {
@@ -151,7 +155,7 @@ export function CampusBasicsStep({
             });
 
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setTimeout(onComplete, 220);
+            onComplete();
         } catch (error) {
             console.error('[CampusBasicsStep] Failed to capture location:', error);
             onUpdate({
@@ -201,7 +205,13 @@ export function CampusBasicsStep({
 
     return (
         <OnboardingScreenShell
+            presentation="rising"
+            sheetEntrance={false}
             stepIndex={globalStepIndex}
+            beatKey={subStep}
+            progressLabel={subStep === 2 ? 'Your preferences' : 'About you'}
+            progressIndex={subStep === 2 ? 1 : 0}
+            progressCount={4}
             stepLabel={campusBasicsStepLabel(subStep)}
             onBack={handleBack}
             title={stepCopy.title}
@@ -210,6 +220,7 @@ export function CampusBasicsStep({
             footer={
                 subStep === 1 ? (
                     <OnboardingPrimaryButton
+                        appearance="rising"
                         label="Continue"
                         onPress={handleInterestsContinue}
                         disabled={!hasEnoughInterests}
@@ -217,6 +228,7 @@ export function CampusBasicsStep({
                 ) : subStep === 2 ? (
                     <View style={styles.locationFooter}>
                         <OnboardingPrimaryButton
+                            appearance="rising"
                             label={isRequestingLocation ? 'Getting location...' : 'Allow location access'}
                             onPress={handleLocationPermission}
                             disabled={isRequestingLocation}
@@ -241,6 +253,7 @@ export function CampusBasicsStep({
                 <View style={styles.choiceList}>
                     {YEAR_OF_STUDY_OPTIONS.map((option) => (
                         <OnboardingChoiceRow
+                            appearance="rising"
                             key={option.value}
                             option={option}
                             selected={data.yearOfStudy === option.value}

@@ -3,6 +3,7 @@
 ## Design direction
 
 The user approved **Option 1: Rising sheet** on 2026-09-24. Preserve this direction in future design, coding, review, and fix tasks without requiring the user to repeat it.
+The user later approved the dark option rows and dark bottom action pill shown in [the control reference](docs/onboarding-concepts/option-rows-action-pill.png). Apply those shared Rising controls throughout onboarding; the heart-and-chevron pill remains a tap button unless a separate interaction is requested.
 
 Before UI work, read:
 1. [DESIGN.md](DESIGN.md) for shared visual tokens.
@@ -18,6 +19,7 @@ Use the same shared visual language elsewhere in the mobile app, but the rising-
 - Reuse and evolve existing components, theme tokens, auth, upload, verification, and questionnaire contracts.
 - One active prompt at a time. Follow-ups arrive automatically. No importance slider, accumulated questionnaire form, or More menu hiding visibility/context.
 - Single-choice taps advance after clear feedback; multi-select and text input use Continue. Final saves, consent, permissions, and destructive actions remain explicit.
+- When an onboarding text field is focused, keep the entered text and caret visible above the keyboard; scroll the active field into view and keep the action reachable.
 - The generated image is a visual reference, not executable specification. Written design contract wins over invented mockup copy and artifacts.
 - Preserve scoring values, privacy, adult eligibility, routing, and existing user data. No silent backend or product-rule changes.
 - Before ending a phase task, update its checklist and evidence, then master status, blockers, and next action. Mark Done only after the stated acceptance checks pass. Record unavailable checks honestly.

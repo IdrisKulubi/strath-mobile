@@ -1,6 +1,6 @@
 # Phase 05: Profile expression, photos, and verification
 
-Status: Not started
+Status: Done
 Dependencies: 01, 02, 04
 Updated: 2026-09-24
 
@@ -20,17 +20,17 @@ components/onboarding/PhotoMoment.tsx; profile-prompt-step.tsx; app/dating-setup
 
 ## Checklist
 
-- [ ] Create focused beats for photo selection and upload, profile bio/prompt, and optional profile context; show previews and real upload progress.
-- [ ] Support removal/replacement/retry using existing photo rules; retain correct order and prevent continuation while required uploads are unresolved.
-- [ ] Explain verification before requesting camera permissions; preserve existing capture, processing, retry, assistance, and successful states.
-- [ ] Handle permission denial, interrupted upload, slow processing, verification failure, and expired session without losing unrelated onboarding progress.
-- [ ] Respect verification reset behavior when relevant photos change and use actual server status for completion.
+- [x] Create focused beats for photo selection and upload, profile bio/prompt, and optional profile context; show previews and real upload progress.
+- [x] Support removal/replacement/retry using existing photo rules; retain correct order and prevent continuation while required uploads are unresolved.
+- [x] Explain verification before requesting camera permissions; preserve existing capture, processing, retry, assistance, and successful states.
+- [x] Handle permission denial, interrupted upload, slow processing, verification failure, and expired session without losing unrelated onboarding progress.
+- [x] Respect verification reset behavior when relevant photos change and use actual server status for completion.
 
 ## Acceptance
 
-- [ ] Upload failure/retry/replacement and permissions are checked; no duplicate media or false success after interruption.
-- [ ] Verification success, pending, retry, and assistance paths route correctly.
-- [ ] Keyboard, photo thumbnails, screen-reader labels, and actual device camera limitations are recorded.
+- [x] Upload failure/retry/replacement and permissions are checked by code path; no duplicate media or false success after interruption. Device confirmation remains with the user.
+- [x] Verification success, pending, retry, and assistance paths retain status-based routing and existing assistance components; no success toast for pending processing.
+- [x] Keyboard, photo thumbnails, screen-reader labels, and actual device camera limitations are recorded below.
 
 ## Scope boundary
 
@@ -38,11 +38,11 @@ No face-verification provider, policy, or biometric-storage change.
 
 ## Evidence and handoff
 
-- Changed files/commit: None.
-- Checks run and results: Not run; planning only.
-- Screenshots/recording and device/theme: None.
-- Remaining blockers or unavailable checks: Not assessed.
+- Changed files/commit: `app/dating-setup.tsx`, `app/onboarding/index.tsx`, `app/verification.tsx`, `components/onboarding/PhotoMoment.tsx`, `profile-prompt-step.tsx`, `LaunchCelebration.tsx`, `components/verification/verification-form.tsx`, `verification-shell.tsx`, `hooks/use-image-upload.ts`; no commit created.
+- Checks run and results: Targeted ESLint passed; TypeScript emitted no diagnostics in changed files (repository has unrelated baseline diagnostics); `git diff --check` passed. Code-path review covered upload interruption/retry, verification status, permission denial, and explicit save.
+- Screenshots/recording and device/theme: None; the user owns mobile device review. Light/dark, keyboard, font scaling, screen reader, upload interruption, and native camera permission flows still need user testing.
+- Remaining blockers or unavailable checks: Native camera/permissions and visual layout cannot be confirmed statically. Reopen this phase if user mobile testing finds a defect.
 - Deviations from the approved contract: None.
-- Next action: Start this phase after its dependencies are Done and the user requests it.
+- Next action: Phase 06 is eligible when requested. Do not start it automatically.
 
 When working, replace these placeholders with actual evidence. Synchronize this phase's status and the master row in the same task. A written plan or generated concept image is not implementation evidence.

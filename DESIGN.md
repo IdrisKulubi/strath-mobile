@@ -181,6 +181,8 @@ Spacing scale: 4, 8, 12, 16, 20, 24, 32, 40. Screen horizontal padding **20**; s
 
 ### Option row
 
+For the approved Rising onboarding variant, use a raised `controlActive` row when idle and the `sheet` tone with a 1px `primary` outline when selected. Keep the trailing radio dot or checkbox check and a 56px minimum row height. Add a leading emoji or icon only when the option has a meaningful one.
+
 - **Anatomy:** leading 3D emoji or 24px icon, `body` 600 label, trailing radio ring (24px).
 - **Default:** fill `control`, border `controlBorder`, radius `row`, height 56.
 - **Selected:** border 1px `primary`, radio ring `primary` with inner fill; background stays `control`.
@@ -204,7 +206,7 @@ Spacing scale: 4, 8, 12, 16, 20, 24, 32, 40. Screen horizontal padding **20**; s
 
 ### Swipe-to-continue
 
-- **Use for:** commit moments only (continue, log in, verify, save questionnaire batch when specified).
+- **Use for:** only flows that explicitly call for a swipe interaction. The approved Rising onboarding action is a tap pill, including commits.
 - **Anatomy:** full-width pill track `primary`, height 56; white circular knob (heart icon) on the left; centered label `foreground` on track; chevrons on the right.
 - **Interaction:** drag knob past threshold to fire action; **always** provide tap-to-commit fallback and `accessibilityActions`.
 - **Complete:** light impact + success notification haptic; ease-out snap (no spring).
@@ -212,14 +214,16 @@ Spacing scale: 4, 8, 12, 16, 20, 24, 32, 40. Screen horizontal padding **20**; s
 
 ### Secondary pill (pre-commit)
 
-- Dark pill `control` + border `controlBorder`, height 56.
-- Pink heart knob on the left (visual parity with Flareo Continue before swipe is enabled).
+The approved Rising onboarding action pill now uses this dark track treatment for both Continue and explicit save/consent actions: `controlActive` fill, `controlBorder` hairline, pink circular heart (or task icon) on the left, centered label, and paired chevrons on the right. It is a tap control; chevrons do not imply that a swipe is required. Preserve disabled, loading, and accessibility states.
+
+- Dark pill `controlActive` + border `controlBorder`, height 56.
+- Pink heart circle on the left.
 - Label centered, `muted` when disabled, `foreground` when enabled.
-- Transitions to swipe-to-continue when step is valid.
+- Stays a tap action when the step becomes valid.
 
 ### Primary pill button
 
-- Non-commit actions or when swipe is not appropriate: fill `primary`, height 56, radius `pill`, label `primaryForeground` 600.
+- Outside Rising onboarding, non-commit actions or flows that call for a filled control may use `primary`, height 56, radius `pill`, label `primaryForeground` 600.
 - Only one pink-filled control visible per screen (swipe **or** primary pill, not both).
 
 ### OTP input
