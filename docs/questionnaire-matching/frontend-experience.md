@@ -1,5 +1,7 @@
 # Questionnaire mobile experience
 
+Onboarding UI update (2026-09-24): the user selected **Option 1: Rising sheet**. The [approved design contract](../onboarding-redesign/design-contract.md) supersedes the combined-screen onboarding layout described below. Own answer, partner answers, importance, visibility, and optional explanation become sequential beats. Keep existing matching/data/eligibility contracts. Track the redesign in the [onboarding master tracker](../onboarding-redesign/master.md); historical implementation status does not certify the redesign.
+
 Delivery and verification status: [master implementation checklist](implementation-features/master.md). This document describes the design; it does not certify implementation or testing.
 
 ## Product

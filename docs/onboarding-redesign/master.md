@@ -1,0 +1,112 @@
+# Onboarding redesign: master tracker
+
+Approved design: **Option 1: Rising sheet**.
+Last updated: **2026-09-24**.
+Current stage: **Phase 03 sign-in layout and Apple runtime fallback corrected after user screenshots; mobile retest pending.**
+Implementation phases Done: **2 / 8**.
+Active phase: **Phase 03 In review**.
+Next eligible task: **Confirm Phase 03 mobile layout, then Phase 04: About you and partner preferences**.
+
+This is a manually maintained tracker updated by Codex during each phase task, not a background monitor or scheduled automation.
+
+## Start here
+
+- [Project instructions](../../AGENTS.md)
+- [Approved design and interaction contract](design-contract.md)
+- [Selected visual reference](../onboarding-concepts/01-rising-sheet.png)
+- [App-wide design tokens and rules](../../DESIGN.md)
+
+Scope is the whole mobile onboarding journey: welcome/account/consent, about you, partner preferences, profile/photos, verification, compatibility answers, and discovery handoff. Implementation uses one phase per task unless the user explicitly requests otherwise.
+
+## Phase status
+
+| Phase | Scope | Depends on | Status | Evidence / remaining work |
+| --- | --- | --- | --- | --- |
+| [01: Journey inventory and behavior map](phase-01-journey-audit.md) | Map every active onboarding path and existing data contract before changing UI. | None | Done | [Route/data map and acceptance matrix](journey-map.md); static code trace, direct TypeScript check and 3/3 flow tests; native captures unavailable |
+| [02: Rising sheet foundation and motion](phase-02-sheet-foundation.md) | Build the shared visual and interaction primitives before migrating whole flows. | 01 | Done | Opt-in Rising sheet, choice/progress/action/feedback primitives, guarded beat controller, development preview; targeted lint and file-scoped TypeScript clean; user mobile review pending |
+| [03: Welcome, account, and consent](phase-03-welcome-auth.md) | Apply the approved experience to entry, supported auth, and legal consent. | 01, 02 | In review | User screenshot exposed broken sign-in layout; corrective UI changes and static checks complete, awaiting user mobile retest |
+| [04: About you and partner preferences](phase-04-profile-preferences.md) | Replace dense setup forms with guided personal-detail and preference beats. | 01, 02, 03 | Not started | Checklist pending; no implementation evidence |
+| [05: Profile expression, photos, and verification](phase-05-photos-verification.md) | Bring photos, bio/prompts, and verification into the same guided experience. | 01, 02, 04 | Not started | Checklist pending; no implementation evidence |
+| [06: Compatibility answers as guided beats](phase-06-compatibility-beats.md) | Replace the current questionnaire layout with the approved sequential Rising sheet interaction. | 01, 02, 05 | Not started | Checklist pending; no implementation evidence |
+| [07: Resume, milestones, review, and discovery handoff](phase-07-resume-review-handoff.md) | Make the redesigned chapters behave as one resumable journey. | 03, 04, 05, 06 | Not started | Checklist pending; no implementation evidence |
+| [08: Accessibility, regression checks, and staged rollout](phase-08-qa-rollout.md) | Verify the whole implementation, close defects, and prepare controlled release. | 01–07 | Not started | Checklist pending; no implementation evidence |
+
+## Status rules
+
+- **Not started**: no implementation for this phase.
+- **In progress**: work started; checklist and evidence show completed and outstanding items.
+- **In review**: implementation exists but required validation or acceptance is outstanding.
+- **Blocked**: a specific dependency prevents progress; name the dependency, impact, and unblock action.
+- **Done**: implementation checklist and static acceptance passed, available evidence recorded, and master/phase documents agree. User-owned mobile validation is tracked separately and can reopen a phase.
+
+Do not infer Done from existing components, earlier questionnaire work, generated mockups, or a passing compile alone. Reopen a Done phase if later changes invalidate its acceptance. Track partial progress through checklist items rather than invented percentages.
+
+## Completed preparation
+
+- [x] User selected Option 1.
+- [x] Selected concept saved in the repository.
+- [x] Persistent project instructions created.
+- [x] Written visual/interaction contract created.
+- [x] Eight phase plans with dependencies and acceptance criteria created.
+- [x] Master tracker created.
+- [x] Full static journey/cohort audit verified (Phase 01); live cohort and device routing checks remain in Phase 07/08.
+- [x] Production UI implementation begun (shared opt-in primitives; no route migration yet).
+- [ ] End-to-end device validation completed.
+- [ ] Release executed and verified.
+
+Documentation completion is separate from implementation completion.
+
+## Known findings and open work
+
+| Finding | Treatment | Owner |
+| --- | --- | --- |
+| Existing older onboarding and newer dating-setup/questionnaire entry paths coexist | Trace actual cohort routing; do not assume all users follow both | 01 |
+| Existing importance weights are 0, 1, 10, 50, 250; image shows three rows | Keep five named tap choices and values; verify score semantics | 01, 06 |
+| More currently contains profile visibility and optional explanation | Bring these into the normal beat sequence | 06 |
+| Image contains invented privacy/save copy | Written contract and verified server behavior win | All |
+| Existing staged/uncommitted changes already touch design and questionnaire code | Preserve them; inspect diffs before each implementation task | All |
+| Native device, screen-reader, camera, and motion evidence not yet collected | User will test the mobile app; keep pending checks visible and never claim unrun checks passed | User, 08 |
+| Auth uses Google/Apple and a flagged demo route; register aliases login | Keep supported provider flow and link terms/privacy in Phase 03 | 03 |
+| Auth entry and consent are now Rising sheet screens; account creation still precedes explicit onboarding consent as in the original flow | Validate product/legal sequence on device and retain existing policy until a separate decision | User, 08 |
+| Shell-enabled users may be redirected from legacy onboarding/waitlist because the global gate's allowlist omits those paths | Verify on device before sending traffic to the new journey | 07, 08 |
+| Questionnaire flags stage the questionnaire cohort, not the new visual design for legacy onboarding | Phase 02 preview stays isolated; decide a reversible UI rollout before route migration | 02, 03, 08 |
+| Legacy profile setup is in-memory, while question drafts are user/question/revision-scoped SecureStore entries | Preserve state and design explicit resume behavior | 04, 06, 07 |
+| Native baseline captures unavailable; whole-repo lint has 175 existing errors and 52 warnings | User owns device review; isolate new lint issues from baseline | User, 08 |
+
+These are planning findings, not proof of defects or blanket blockers to starting Phase 01.
+
+## How each task updates this tracker
+
+1. Read project instructions, design contract, this tracker, and the target phase.
+2. Confirm dependency statuses; inspect current code and uncommitted changes.
+3. Mark that phase In progress; complete only its scoped work.
+4. Tick only delivered checklist items; add changed paths, check results, device/capture links, and deviations in the phase document.
+5. Set Done only if acceptance is satisfied; otherwise use In progress, In review, or Blocked and explain what remains.
+6. Update this table, phase count, active phase, next task, open issues, and session log.
+7. Report completed work and the next phase. Do not automatically begin it.
+
+Routine choices within an authorized phase do not require renewed permission. The phase boundary keeps separate tasks manageable; an explicit request for multiple phases overrides that default.
+
+## Session log
+
+| Date | Scope | Result | Validation | Next action |
+| --- | --- | --- | --- | --- |
+| 2026-09-24 | Design selection and planning | Option 1 recorded; guidance, contract, and eight phase documents prepared | Local links validated in 14 documents; all 8 phase statuses match Not started; git diff --check passed; no app tests or UI implementation claimed | User can request Phase 01 |
+| 2026-09-24 | Phase 01 journey audit | All active route families, data contracts, flags, saves, and next-phase owners mapped in `journey-map.md` | Questionnaire typecheck passed; flow tests 3/3; repository lint baseline 175 errors/52 warnings; native captures unavailable | Phase 02 Rising sheet foundation |
+| 2026-09-24 | Phase 02 Rising sheet foundation | Shared opt-in presentation and interactive development preview implemented; production routes remain on standard presentation | Targeted lint passed; no TypeScript diagnostics in changed Phase 02 files; full check retains 77 unrelated diagnostics; user owns device review | Phase 03 when requested; reopen Phase 02 for user-reported issues |
+| 2026-09-24 | Phase 03 welcome, account, and consent | First-launch intro, auth provider entry, post-auth welcome, and explicit consent moved to Rising sheet; existing auth services and redirects retained | Targeted lint passed; zero Phase 03 TypeScript diagnostics (71 unrelated repository diagnostics); diff check passed; mobile checks user-owned | Phase 04 when requested; reopen Phase 03 for user-reported issues |
+| 2026-09-24 | Phase 03 user screenshot correction | Fixed empty header circles, provider button layout, excess spacing, and detached legal links; consolidated auth errors inline | User screenshot documented the failure; targeted lint, changed-file TypeScript, and diff checks passed after the correction; no retest claimed | User mobile retest; keep Phase 03 In review until confirmed |
+| 2026-09-24 | Phase 03 Apple sign-in follow-up | User screenshot showed an unimplemented native Apple button view; replaced it with a standard control that gates the existing Apple handler on native availability | Targeted lint, changed-file TypeScript, and diff checks passed; no device sign-in claim | User mobile retest; Phase 03 remains In review |
+
+Append one row per implementation task, including partial work and remaining checks.
+
+## Release status
+
+Not scheduled or executed. Phase 08 prepares and verifies the release procedure. Record environment, version/commit, release time, smoke checks, and rollback reference here only after an actual authorized release.
+
+## Example follow-up requests
+
+- “Implement Phase 1 of the onboarding redesign and update the tracker.”
+- “Continue with the next onboarding phase.”
+- “Show what is done and what remains in the onboarding redesign.”
+- “Fix the issue in Phase 6 and update its verification evidence.”

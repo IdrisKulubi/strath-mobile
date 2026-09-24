@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useOnboardingTheme, withOnboardingAlpha } from '@/lib/onboarding-theme';
 import { Palette, RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { useTheme } from '@/hooks/use-theme';
 
 export interface OnboardingChoiceOption {
     value: string;
@@ -21,6 +22,8 @@ interface OnboardingChoiceRowProps {
     disabled?: boolean;
     hasError?: boolean;
     showRadio?: boolean;
+    appearance?: 'standard' | 'rising';
+    selectionMode?: 'single' | 'multiple';
 }
 
 export function OnboardingChoiceRow({
@@ -30,8 +33,17 @@ export function OnboardingChoiceRow({
     disabled = false,
     hasError = false,
     showRadio = true,
+    appearance = 'standard',
+    selectionMode = 'single',
 }: OnboardingChoiceRowProps) {
     const theme = useOnboardingTheme();
+    const { colors } = useTheme();
+    const rising = appearance === 'rising';
+    const accent = rising ? colors.primary : theme.primary;
+    const foreground = rising ? colors.foreground : theme.foreground;
+    const muted = rising ? colors.mutedForeground : theme.mutedForeground;
+    const surface = rising ? colors.control : theme.surface;
+    const border = rising ? colors.controlBorder : theme.border;
     const errorColor = theme.isDark ? Palette.dark.destructive : Palette.light.destructive;
 
     const handlePress = () => {
@@ -43,24 +55,25 @@ export function OnboardingChoiceRow({
         onPress(option.value);
     };
 
-    const borderColor = hasError ? errorColor : selected ? theme.primary : theme.border;
+    const borderColor = hasError ? errorColor : selected ? accent : border;
     const backgroundColor = selected
-        ? withOnboardingAlpha(theme.primary, theme.isDark ? 0.18 : 0.07)
-        : theme.surface;
+        ? rising ? surface : withOnboardingAlpha(theme.primary, theme.isDark ? 0.18 : 0.07)
+        : surface;
 
     return (
         <Pressable
             onPress={handlePress}
             disabled={disabled}
-            accessibilityRole={showRadio ? 'radio' : 'button'}
-            accessibilityState={{ selected, disabled }}
+            accessibilityRole={selectionMode === 'multiple' ? 'checkbox' : showRadio ? 'radio' : 'button'}
+            accessibilityState={selectionMode === 'multiple' ? { checked: selected, disabled } : { selected, disabled }}
             accessibilityLabel={option.description ? `${option.label}. ${option.description}` : option.label}
             style={({ pressed }) => [
                 styles.row,
+                rising && styles.risingRow,
                 {
                     backgroundColor,
                     borderColor,
-                    borderWidth: selected ? 2 : StyleSheet.hairlineWidth,
+                    borderWidth: rising ? 1 : selected ? 2 : StyleSheet.hairlineWidth,
                     opacity: disabled ? 0.55 : pressed ? 0.94 : 1,
                 },
             ]}
@@ -83,9 +96,9 @@ export function OnboardingChoiceRow({
                 ) : null}
 
                 <View style={styles.copy}>
-                    <Text style={[styles.label, { color: theme.foreground }]}>{option.label}</Text>
+                    <Text style={[styles.label, { color: foreground }]}>{option.label}</Text>
                     {option.description ? (
-                        <Text style={[styles.description, { color: theme.mutedForeground }]}>
+                        <Text style={[styles.description, { color: muted }]}>
                             {option.description}
                         </Text>
                     ) : null}
@@ -96,15 +109,13 @@ export function OnboardingChoiceRow({
                         style={[
                             styles.radio,
                             {
-                                borderColor: selected
-                                    ? theme.primary
-                                    : withOnboardingAlpha(theme.mutedForeground, 0.5),
-                                backgroundColor: selected ? theme.primary : 'transparent',
+                                borderColor: selected ? accent : muted,
+                                backgroundColor: selected ? accent : 'transparent',
                             },
                         ]}
                     >
                         {selected ? (
-                            <Ionicons name="checkmark" size={14} color={theme.primaryForeground} />
+                            <Ionicons name="checkmark" size={14} color={rising ? colors.primaryForeground : theme.primaryForeground} />
                         ) : null}
                     </View>
                 ) : null}
@@ -120,6 +131,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: SPACING.base,
         paddingVertical: SPACING.compact,
     },
+    risingRow: { minHeight: 56 },
     rowInner: {
         width: '100%',
         minHeight: 56,

@@ -18,6 +18,7 @@ const questionnaireRoutes = [
 ];
 
 export function isQuestionnaireRoute(path: string) {
+  if (__DEV__ && (path === '/ui-preview' || path.startsWith('/ui-preview/'))) return true;
   return questionnaireRoutes.some((route) => path === route || path.startsWith(`${route}/`));
 }
 

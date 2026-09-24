@@ -86,6 +86,10 @@ components:
 
 ## Overview
 
+### Approved onboarding direction (2026-09-24)
+
+The user selected **Option 1: Rising sheet** for the entire mobile onboarding redesign. Read the [onboarding design contract](docs/onboarding-redesign/design-contract.md) for the authoritative sequential interaction and [master tracker](docs/onboarding-redesign/master.md) for implementation status. This file remains the shared visual-token reference. For onboarding, the contract overrides older combined-form layouts: one active prompt, automatic follow-ups, named importance tap choices, and visible privacy/context beats. Implement only the requested phase. Existing components are not evidence that a redesign phase is complete.
+
 StrathSpace mobile is **dark-first, warm, and tactile**. Surfaces are near-black with a soft smoky backdrop on auth and onboarding; content often sits on a raised **sheet** with large top corners. Shapes are **pills and circles**. One **hot pink** filled control carries the main action per screen; links and headline accents use **primary text** pink on dark surfaces.
 
 Personality comes from **3D emoji or simple icons**, motion, and swipe-to-commit controls, not from decorative gradients or card stacks. See `PRODUCT.md` for voice and strategy.

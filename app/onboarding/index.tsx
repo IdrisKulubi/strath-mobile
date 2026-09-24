@@ -360,6 +360,7 @@ export default function OnboardingScreen() {
                 return (
                     <TermsAcceptance
                         onAccept={() => setStep(2)}
+                        onBack={() => setStep(0)}
                     />
                 );
 
@@ -467,7 +468,7 @@ export default function OnboardingScreen() {
     return (
         <SafeAreaView
             style={styles.container}
-            edges={step === 0 || step === 1 ? ['bottom'] : ['top', 'bottom']}
+            edges={step === 0 || step === 1 ? [] : ['top', 'bottom']}
         >
             <StatusBar style={isDark ? 'light' : 'dark'} />
             <View style={styles.content}>
