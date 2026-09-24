@@ -5,7 +5,7 @@ import { afterEach, beforeEach, test } from "node:test";
 
 import { handlePhase2Request } from "./phase2-api";
 import { setQuestionnaireDatabaseForTests, type QuestionnaireDatabase } from "./db";
-import { applyQuestionnaireMigration } from "./migration";
+import { applyQuestionnaireMigration, seedQuestionnaireCatalogue } from "./migration";
 import * as service from "./phase2-service";
 import { createTestDatabase, legacyTestSchema } from "./test-database";
 
@@ -42,6 +42,10 @@ afterEach(async () => {
 test("migration and catalogue seed are additive, immutable, and idempotent", async () => {
     const second = await applyQuestionnaireMigration(database, migrationSql);
     assert.equal(second.alreadyApplied, true);
+    await database.query("DELETE FROM q_questions");
+    await database.query("DELETE FROM q_categories");
+    const seedOnly = await seedQuestionnaireCatalogue(database);
+    assert.equal(seedOnly.publishedQuestions, 100);
     const questions = await database.query<{ count: number } & import("pg").QueryResultRow>(
         "SELECT count(*)::int AS count FROM q_questions",
     );

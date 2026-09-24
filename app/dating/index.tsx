@@ -2,10 +2,21 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Action, Copy, Feedback, Loading, Notice, Page, PersonCard, Progress, SectionLabel } from '@/components/questionnaire/ui';
+import { ExpandableRow, TextLink } from '@/components/questionnaire/expandable-row';
+import { ChapterProgress, ChapterProgressSkeleton } from '@/components/questionnaire/segmented-progress';
+import { StickyFooter } from '@/components/questionnaire/sticky-footer';
+import { Action, Copy, Feedback, Loading, Notice, Page, PersonCard, SectionLabel } from '@/components/questionnaire/ui';
 import { isApiError } from '@/lib/api-client';
-import { useExperience, useQuestionnaire, type DiscoveryResponse, type QuestionnaireState } from '@/lib/questionnaire';
 import { SPACING } from '@/lib/design-tokens';
+import { useExperience, useQuestionnaire, type DiscoveryResponse, type QuestionnaireState } from '@/lib/questionnaire';
+
+const STARTER_TARGET = 20;
+
+function gatePrimaryLabel(count: number) {
+  if (count <= 0) return 'Start questions';
+  const remaining = STARTER_TARGET - count;
+  return `Continue: ${remaining} to go`;
+}
 
 export default function DiscoverScreen() {
   const router = useRouter();
@@ -15,24 +26,43 @@ export default function DiscoverScreen() {
   const discovery = useQuestionnaire<DiscoveryResponse>(`discovery?page=${page}`, Boolean(experience.data?.matching && status.data?.complete));
   const count = status.data?.answerCount ?? 0;
   const preferences = status.data?.preferences;
+  const statusLoading = experience.data?.collection && status.isPending;
+
+  if (statusLoading) {
+    return (
+      <Page title="Discover" eyebrow="Matches built from your answers">
+        <ChapterProgressSkeleton />
+        <Copy muted>Loading your progress…</Copy>
+      </Page>
+    );
+  }
+
+  const lockedFooter = !status.data?.complete && experience.data?.collection ? (
+    <StickyFooter
+      primaryLabel={gatePrimaryLabel(count)}
+      onPrimaryPress={() => router.push('/questions' as never)}
+      reserveTabBar
+    />
+  ) : null;
 
   return (
-    <Page title="Discover" eyebrow="Question-based matching">
-      <Copy>Compatibility reflects both people’s answers. It is not a prediction of relationship success.</Copy>
-      <Progress value={Math.min(count, 20)} total={20} label={`${count} of 20 starter answers saved`} />
-
+    <Page title="Discover" eyebrow="Matches built from your answers" footer={lockedFooter}>
       {!experience.data?.collection ? (
         <Notice>Questionnaire collection is not enabled for this test account yet.</Notice>
       ) : !status.data?.complete ? (
         <>
-          <Notice>Finish twenty answers before discovery opens. Existing messages remain available.</Notice>
-          <Action label={count ? 'Continue your questions' : 'Start your questions'} tone="primary" onPress={() => router.push('/questions' as never)} />
-          <Action label="Review profile and preferences" onPress={() => router.push('/dating-setup' as never)} />
+          <ChapterProgress answerCount={count} />
+          <Copy>Answer 20 quick questions. We only show you people whose answers fit yours.</Copy>
+          <ExpandableRow title="How matching works">
+            Compatibility reflects both people’s answers. It is not a prediction of relationship success.
+          </ExpandableRow>
+          <TextLink label="Review profile and preferences" onPress={() => router.push('/dating-setup' as never)} />
         </>
       ) : !experience.data?.matching ? (
         <>
+          <ChapterProgress answerCount={STARTER_TARGET} />
           <Notice tone="success">Your questionnaire is ready.</Notice>
-          <Notice>Compatible discovery is disabled for this account. No profiles are being fabricated or ranked.</Notice>
+          <Copy muted>Compatible discovery is disabled for this account. No profiles are being fabricated or ranked.</Copy>
           <Action label="Review your answers" onPress={() => router.push('/questions' as never)} />
           <Action label="Update discovery preferences" onPress={() => router.push('/discovery-filters' as never)} />
         </>

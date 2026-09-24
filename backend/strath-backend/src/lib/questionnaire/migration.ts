@@ -53,6 +53,17 @@ async function seedCatalogue(executor: SqlExecutor) {
     }
 }
 
+/** Seed an existing questionnaire schema without running schema migrations. */
+export async function seedQuestionnaireCatalogue(database: QuestionnaireDatabase) {
+    return database.transaction(async (executor) => {
+        await seedCatalogue(executor);
+        const result = await executor.query<{ count: number } & QueryResultRow>(
+            "SELECT count(*)::int AS count FROM q_questions WHERE published",
+        );
+        return { publishedQuestions: result.rows[0].count };
+    });
+}
+
 export async function applyQuestionnaireMigration(database: QuestionnaireDatabase, migrationSql: string) {
     return database.transaction(async (executor) => {
         await executor.query(`

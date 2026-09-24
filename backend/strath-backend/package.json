@@ -12,6 +12,7 @@
     "test:questionnaire-discovery": "tsx --test src/lib/questionnaire/phase4.test.ts",
     "test:questionnaire-connections": "tsx --test src/lib/questionnaire/phase5.test.ts",
     "migrate:questionnaire": "tsx src/scripts/migrate-questionnaire.ts --apply",
+    "seed:questionnaire-catalogue": "tsx src/scripts/seed-questionnaire-catalogue.ts",
     "reconcile:questionnaire-connections": "tsx src/scripts/reconcile-questionnaire-connections.ts",
     "test:openai": "tsx src/scripts/test-openai-matchmaker.ts",
     "verify:production": "tsx src/scripts/verify-production-matchmaker.ts"
