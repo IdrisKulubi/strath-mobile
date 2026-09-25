@@ -1,4 +1,5 @@
 import rawCatalogue from "./catalogue.json";
+import { NEUTRAL_ANSWER_IDS, REQUIRED_ANSWER_COUNT, REQUIRED_QUESTION_IDS } from "./contracts";
 
 export type QuestionOption = { id: string; label: string };
 export type CatalogueQuestion = {
@@ -25,7 +26,7 @@ export function questionPool(question: CatalogueQuestion) {
 }
 
 export function validateCatalogue() {
-    if (catalogue.length !== 100) throw new Error(`Expected 100 questions, found ${catalogue.length}`);
+    if (catalogue.length !== 109) throw new Error(`Expected 109 questions, found ${catalogue.length}`);
     const ids = new Set<string>();
     const positions = new Set<number>();
     for (const question of catalogue) {
@@ -38,5 +39,18 @@ export function validateCatalogue() {
         }
         ids.add(question.id);
         positions.add(question.position);
+    }
+    if (REQUIRED_QUESTION_IDS.length !== REQUIRED_ANSWER_COUNT || new Set(REQUIRED_QUESTION_IDS).size !== REQUIRED_ANSWER_COUNT) {
+        throw new Error("Required question IDs must be unique and match the completion target");
+    }
+    for (const id of REQUIRED_QUESTION_IDS) {
+        const question = catalogue.find((item) => item.id === id);
+        if (!question?.published) throw new Error(`Required question is missing or unpublished: ${id}`);
+    }
+    for (const [id, optionId] of Object.entries(NEUTRAL_ANSWER_IDS)) {
+        const question = catalogue.find((item) => item.id === id);
+        if (!question?.options.some((option) => option.id === optionId)) {
+            throw new Error(`Neutral answer option is missing: ${id}/${optionId}`);
+        }
     }
 }

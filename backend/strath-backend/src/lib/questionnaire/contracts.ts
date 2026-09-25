@@ -1,7 +1,17 @@
 import { z } from "zod";
 
 export const ALGORITHM = "questionnaire-v1";
-export const REQUIRED_ANSWER_COUNT = 20;
+export const REQUIRED_QUESTION_IDS = [
+    ...Array.from({ length: 20 }, (_, index) => `q${String(index + 1).padStart(3, "0")}:1`),
+    "q101:1", "q083:2", "q090:1", "q102:1", "q084:2", "q085:2",
+    "q086:2", "q087:2", "q089:1", "q082:1", "q088:2", "q100:2",
+] as const;
+export const REQUIRED_ANSWER_COUNT = REQUIRED_QUESTION_IDS.length;
+export const NEUTRAL_ANSWER_IDS: Readonly<Record<string, string>> = {
+    "q101:1": "2", "q083:2": "3", "q102:1": "4", "q084:2": "3",
+    "q085:2": "4", "q086:2": "4", "q087:2": "4", "q089:1": "3",
+    "q082:1": "3",
+};
 export const importanceWeight = z.union([
     z.literal(0), z.literal(1), z.literal(10), z.literal(50), z.literal(250),
 ]);
@@ -16,7 +26,7 @@ export const answerInput = z.object({
         "Accepted answers must be unique",
     ),
     weight: importanceWeight,
-    public: z.boolean().default(false),
+    public: z.literal(true).default(true),
     explanation: z.string().trim().max(500).default(""),
     revision: z.number().int().nonnegative(),
 }).strict();

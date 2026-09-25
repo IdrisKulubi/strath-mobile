@@ -9,8 +9,9 @@ import { Action, Copy, Feedback, Loading, Notice, Page, PersonCard, SectionLabel
 import { isApiError } from '@/lib/api-client';
 import { SPACING } from '@/lib/design-tokens';
 import { useExperience, useQuestionnaire, type DiscoveryResponse, type QuestionnaireState } from '@/lib/questionnaire';
+import { ONBOARDING_ANSWER_TARGET } from '@/lib/questionnaire-flow';
 
-const STARTER_TARGET = 20;
+const STARTER_TARGET = ONBOARDING_ANSWER_TARGET;
 
 function gatePrimaryLabel(count: number) {
   if (count <= 0) return 'Start questions';
@@ -52,7 +53,7 @@ export default function DiscoverScreen() {
       ) : !status.data?.complete ? (
         <>
           <ChapterProgress answerCount={count} />
-          <Copy>Answer 20 quick questions. We only show you people whose answers fit yours.</Copy>
+          <Copy>Answer {STARTER_TARGET} questions to start discovering people whose answers fit yours.</Copy>
           <ExpandableRow title="How matching works">
             Compatibility reflects both people’s answers. It is not a prediction of relationship success.
           </ExpandableRow>

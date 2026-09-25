@@ -21,7 +21,10 @@ import { HEIGHTS, MOTION, RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-token
 import { useTheme } from '@/hooks/use-theme';
 
 import { OnboardingProgressBar } from './onboarding-progress-bar';
+import { RisingHeaderProgressiveBlur } from './rising-header-progressive-blur';
 import type { OnboardingScreenShellProps } from './onboarding-screen-shell';
+
+const HEADER_FADE_TAIL = 14;
 
 export const RisingKeyboardFocusContext = createContext<{
     registerFocusedInput: (input: TextInput | null) => void;
@@ -47,7 +50,7 @@ export function RisingSheetScreen({
     keyboardAvoiding = true,
     contentContainerStyle,
 }: OnboardingScreenShellProps) {
-    const { colors, isDark } = useTheme();
+    const { colors } = useTheme();
     const insets = useSafeAreaInsets();
     const reducedMotion = useReducedMotion();
     const headingRef = useRef<RNText>(null);
@@ -56,6 +59,20 @@ export function RisingSheetScreen({
     const scrollOffsetRef = useRef(0);
     const keyboardTopRef = useRef<number | null>(null);
     const [keyboardScrollSpace, setKeyboardScrollSpace] = useState(0);
+    const footerBottomInset = Math.max(insets.bottom, SPACING.base);
+    const footerFallbackReserved = footer
+        ? HEIGHTS.primaryControl + SPACING.compact + footerBottomInset
+        : footerBottomInset;
+    const [footerLayout, setFooterLayout] = useState<{ beat: string | number; height: number } | null>(null);
+    const footerReserved = footerLayout?.beat === beatKey ? footerLayout.height : footerFallbackReserved;
+    const headerChromeFallback = SPACING.compact
+        + HEIGHTS.touchMin
+        + (showProgress ? SPACING.tight + 18 + 4 : 0)
+        + SPACING.section
+        + insets.top;
+    const [headerLayout, setHeaderLayout] = useState<{ beat: string | number; height: number } | null>(null);
+    const headerChromeHeight = headerLayout?.beat === beatKey ? headerLayout.height : headerChromeFallback;
+    const headerBlurHeight = headerChromeHeight + HEADER_FADE_TAIL;
 
     const revealFocusedInput = useCallback(() => {
         const input = TextInput.State.currentlyFocusedInput() ?? focusedInputRef.current;
@@ -65,7 +82,8 @@ export function RisingSheetScreen({
         if (!nativeScroll) return;
         input.measureInWindow((_inputX, inputY, _inputWidth, inputHeight) => {
             nativeScroll.measureInWindow((_scrollX, scrollY, _scrollWidth, scrollHeight) => {
-                const visibleBottom = Math.min(scrollY + scrollHeight, keyboardTopRef.current ?? Infinity) - SPACING.base;
+                const footerClearance = footer ? footerReserved : 0;
+                const visibleBottom = Math.min(scrollY + scrollHeight, keyboardTopRef.current ?? Infinity) - footerClearance - SPACING.compact;
                 const overflow = inputY + inputHeight - visibleBottom;
                 if (overflow > 0) {
                     const nextOffset = scrollOffsetRef.current + overflow;
@@ -74,7 +92,7 @@ export function RisingSheetScreen({
                 }
             });
         });
-    }, []);
+    }, [footer, footerReserved]);
 
     const registerFocusedInput = useCallback((input: TextInput | null) => {
         focusedInputRef.current = input;
@@ -116,46 +134,23 @@ export function RisingSheetScreen({
 
     return (
         <KeyboardAvoidingView
-            style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}
+            style={[styles.root, { backgroundColor: colors.background }]}
             behavior={keyboardAvoiding && Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            <View style={[styles.header, { backgroundColor: isDark ? colors.card : colors.background }]}>
-                <View style={styles.headerLine}>
-                    {onBack ? (
-                        <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Back to previous step"
-                            onPress={onBack}
-                            hitSlop={8}
-                            style={[styles.back, { backgroundColor: colors.control, borderColor: colors.controlBorder }]}
-                        >
-                            <Ionicons name="arrow-back" size={20} color={colors.foreground} />
-                        </Pressable>
-                    ) : <View style={styles.backPlaceholder} />}
-                    <Text style={[styles.brand, { color: colors.foreground }]}>StrathSpace</Text>
-                    <View style={styles.backPlaceholder} />
-                </View>
-                {showProgress ? (
-                    <>
-                        <Text style={[styles.progressTitle, { color: colors.mutedForeground }]}>{progressLabel}</Text>
-                        <OnboardingProgressBar
-                            stepIndex={stepIndex}
-                            appearance="rising"
-                            phaseIndex={progressIndex}
-                            phaseCount={progressCount}
-                            progressLabel={`${progressLabel}, chapter ${progressIndex + 1} of ${progressCount}`}
-                        />
-                    </>
-                ) : null}
-            </View>
-
             <RisingKeyboardFocusContext.Provider value={keyboardFocus}>
             <Animated.View entering={sheetEntry} style={[styles.sheet, { backgroundColor: colors.sheet }]}>
+                <View style={styles.sheetBody}>
                 <ScrollView
                     key={String(beatKey)}
                     ref={scrollRef}
                     style={styles.scroll}
-                    contentContainerStyle={[styles.scrollContent, { paddingBottom: SPACING.section + keyboardScrollSpace }]}
+                    contentContainerStyle={[
+                        styles.scrollContent,
+                        {
+                            paddingTop: headerChromeHeight + SPACING.comfortable,
+                            paddingBottom: SPACING.section + keyboardScrollSpace + (footer ? footerReserved : 0),
+                        },
+                    ]}
                     onScroll={(event) => { scrollOffsetRef.current = event.nativeEvent.contentOffset.y; }}
                     scrollEventThrottle={16}
                     keyboardShouldPersistTaps="handled"
@@ -194,11 +189,58 @@ export function RisingSheetScreen({
                     </Animated.View>
                 </ScrollView>
                 {footer ? (
-                    <View style={[styles.footer, { backgroundColor: colors.sheet, paddingBottom: Math.max(insets.bottom, SPACING.base) }]}>
+                    <View
+                        key={`footer-${String(beatKey)}`}
+                        pointerEvents="box-none"
+                        onLayout={(event) => {
+                            setFooterLayout({ beat: beatKey, height: event.nativeEvent.layout.height });
+                        }}
+                        style={[styles.floatingFooter, { paddingBottom: footerBottomInset, paddingHorizontal: SPACING.screenX }]}
+                    >
                         {footer}
                     </View>
-                ) : <View style={{ height: Math.max(insets.bottom, SPACING.base) }} />}
+                ) : <View style={{ height: footerBottomInset }} />}
+                </View>
             </Animated.View>
+
+            <View pointerEvents="box-none" style={styles.headerOverlay}>
+                <RisingHeaderProgressiveBlur height={headerBlurHeight} />
+                <View
+                    key={`header-${String(beatKey)}`}
+                    onLayout={(event) => {
+                        setHeaderLayout({ beat: beatKey, height: event.nativeEvent.layout.height });
+                    }}
+                    style={[styles.header, { paddingTop: insets.top + SPACING.compact }]}
+                >
+                    <View style={styles.headerLine}>
+                        {onBack ? (
+                            <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Back to previous step"
+                                onPress={onBack}
+                                hitSlop={8}
+                                style={[styles.back, { backgroundColor: colors.risingGlassOverlay, borderColor: colors.controlBorder }]}
+                            >
+                                <Ionicons name="arrow-back" size={20} color={colors.foreground} />
+                            </Pressable>
+                        ) : <View style={styles.backPlaceholder} />}
+                        <Text style={[styles.brand, { color: colors.foreground }]}>StrathSpace</Text>
+                        <View style={styles.backPlaceholder} />
+                    </View>
+                    {showProgress ? (
+                        <>
+                            <Text style={[styles.progressTitle, { color: colors.mutedForeground }]}>{progressLabel}</Text>
+                            <OnboardingProgressBar
+                                stepIndex={stepIndex}
+                                appearance="rising"
+                                phaseIndex={progressIndex}
+                                phaseCount={progressCount}
+                                progressLabel={`${progressLabel}, chapter ${progressIndex + 1} of ${progressCount}`}
+                            />
+                        </>
+                    ) : null}
+                </View>
+            </View>
             </RisingKeyboardFocusContext.Provider>
         </KeyboardAvoidingView>
     );
@@ -206,15 +248,23 @@ export function RisingSheetScreen({
 
 const styles = StyleSheet.create({
     root: { flex: 1 },
-    header: { paddingHorizontal: SPACING.screenX, paddingTop: SPACING.compact, paddingBottom: SPACING.section, gap: SPACING.tight },
+    headerOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 20,
+    },
+    header: { paddingHorizontal: SPACING.screenX, paddingBottom: SPACING.section, gap: SPACING.tight },
     headerLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     back: { width: HEIGHTS.touchMin, height: HEIGHTS.touchMin, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.full, borderWidth: StyleSheet.hairlineWidth },
     backPlaceholder: { width: HEIGHTS.touchMin, height: HEIGHTS.touchMin },
     brand: { ...TYPOGRAPHY.title, fontWeight: '700' },
     progressTitle: { ...TYPOGRAPHY.caption, textAlign: 'center' },
     sheet: { flex: 1, borderTopLeftRadius: RADIUS.sheet, borderTopRightRadius: RADIUS.sheet, overflow: 'hidden' },
+    sheetBody: { flex: 1, position: 'relative' },
     scroll: { flex: 1 },
-    scrollContent: { flexGrow: 1, paddingHorizontal: SPACING.section, paddingTop: SPACING.comfortable, paddingBottom: SPACING.section },
+    scrollContent: { flexGrow: 1, paddingHorizontal: SPACING.section, paddingBottom: SPACING.section },
     summary: { flexDirection: 'row', alignItems: 'center', borderRadius: RADIUS.row, borderWidth: StyleSheet.hairlineWidth, padding: SPACING.compact, marginBottom: SPACING.section },
     summaryCopy: { flex: 1, gap: SPACING.micro },
     summaryLabel: { ...TYPOGRAPHY.caption },
@@ -226,5 +276,11 @@ const styles = StyleSheet.create({
     title: { ...TYPOGRAPHY.display, textAlign: 'center' },
     subtitle: { ...TYPOGRAPHY.callout, textAlign: 'center' },
     body: { gap: SPACING.compact },
-    footer: { paddingHorizontal: SPACING.section, paddingTop: SPACING.compact },
+    floatingFooter: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        paddingTop: SPACING.compact,
+    },
 });

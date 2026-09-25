@@ -7,6 +7,7 @@ import { handlePhase2Request } from "./phase2-api";
 import { setQuestionnaireDatabaseForTests, type QuestionnaireDatabase } from "./db";
 import { applyQuestionnaireMigration, seedQuestionnaireCatalogue } from "./migration";
 import * as service from "./phase2-service";
+import { REQUIRED_ANSWER_COUNT, REQUIRED_QUESTION_IDS } from "./contracts";
 import { createTestDatabase, legacyTestSchema } from "./test-database";
 
 let database: QuestionnaireDatabase;
@@ -45,15 +46,15 @@ test("migration and catalogue seed are additive, immutable, and idempotent", asy
     await database.query("DELETE FROM q_questions");
     await database.query("DELETE FROM q_categories");
     const seedOnly = await seedQuestionnaireCatalogue(database);
-    assert.equal(seedOnly.publishedQuestions, 100);
+    assert.equal(seedOnly.publishedQuestions, 109);
     const questions = await database.query<{ count: number } & import("pg").QueryResultRow>(
         "SELECT count(*)::int AS count FROM q_questions",
     );
-    assert.equal(questions.rows[0].count, 100);
+    assert.equal(questions.rows[0].count, 109);
     const pools = await database.query("SELECT pool, count(*)::int AS count FROM q_questions GROUP BY pool ORDER BY pool");
     assert.deepEqual(pools.rows, [
         { pool: "replacement", count: 40 },
-        { pool: "sensitive", count: 20 },
+        { pool: "sensitive", count: 29 },
         { pool: "starter", count: 40 },
     ]);
     await assert.rejects(
@@ -130,7 +131,7 @@ test("preferences validate adult calendar dates and keep DOB outside preference 
     assert.equal("birthDate" in stored.rows[0].preferences, false);
 });
 
-test("answers resume to twenty, default private, validate options, skip, conflict, edit, and delete", async () => {
+test("answers resume from twenty to thirty-two, default public, validate options, skip, conflict, edit, and delete", async () => {
     let revision = 0;
     const skipped = await service.skipQuestion("user-a", { questionId: "q100:1" });
     assert.equal(skipped.answerCount, 0);
@@ -143,9 +144,34 @@ test("answers resume to twenty, default private, validate options, skip, conflic
     }
     const resumed = await service.status("user-a");
     assert.equal(resumed.answerCount, 20);
-    assert.equal(resumed.complete, true);
-    const privateRows = await database.query<{ public: boolean } & import("pg").QueryResultRow>("SELECT public FROM q_answers WHERE user_id = 'user-a'");
-    assert.equal(privateRows.rows.every((row) => row.public === false), true);
+    assert.equal(resumed.complete, false);
+    assert.equal(resumed.required, REQUIRED_ANSWER_COUNT);
+    assert.deepEqual(resumed.requiredQuestionIds, REQUIRED_QUESTION_IDS);
+    for (let index = 21; index <= 32; index += 1) {
+        const result = await service.saveAnswer("user-a", {
+            questionId: `q${String(index).padStart(3, "0")}:1`, answerId: "0", acceptable: ["0"], weight: 10, revision,
+        });
+        revision = result.revision;
+    }
+    assert.equal((await service.status("user-a")).answerCount, 20);
+    assert.equal((await service.status("user-a")).complete, false);
+    for (const questionId of REQUIRED_QUESTION_IDS.slice(20)) {
+        const result = await service.saveAnswer("user-a", {
+            questionId, answerId: "0", acceptable: ["0", "1"], weight: 10, revision,
+        });
+        revision = result.revision;
+    }
+    assert.equal((await service.status("user-a")).complete, true);
+    const publicRows = await database.query<{ public: boolean } & import("pg").QueryResultRow>("SELECT public FROM q_answers WHERE user_id = 'user-a'");
+    assert.equal(publicRows.rows.every((row) => row.public === true), true);
+
+    await database.query("UPDATE q_answers SET public = false WHERE user_id = 'user-a' AND question_id = 'q001:1'");
+    const legacyPrivate = await database.query<{ public: boolean } & import("pg").QueryResultRow>("SELECT public FROM q_answers WHERE user_id = 'user-a' AND question_id = 'q001:1'");
+    assert.equal(legacyPrivate.rows[0].public, false);
+
+    await assert.rejects(service.saveAnswer("user-a", {
+        questionId: "q001:1", answerId: "0", acceptable: ["0"], weight: 10, public: false, revision,
+    }));
 
     await assert.rejects(service.saveAnswer("user-a", {
         questionId: "q001:1", answerId: "missing", acceptable: ["0"], weight: 1, revision,
@@ -155,13 +181,27 @@ test("answers resume to twenty, default private, validate options, skip, conflic
     }), (error: service.DomainError) => error.status === 409);
 
     const edited = await service.saveAnswer("user-a", {
-        questionId: "q001:1", answerId: "1", acceptable: ["1"], weight: 50, public: true, revision,
+        questionId: "q001:1", answerId: "1", acceptable: ["1"], weight: 50, revision,
     });
     assert.equal(edited.revision, revision + 1);
+    const republished = await database.query<{ public: boolean } & import("pg").QueryResultRow>("SELECT public FROM q_answers WHERE user_id = 'user-a' AND question_id = 'q001:1'");
+    assert.equal(republished.rows[0].public, true);
     const removed = await service.deleteAnswer("user-a", { questionId: "q020:1", revision: edited.revision });
     assert.equal(removed.deleted, true);
-    assert.equal(removed.answerCount, 19);
+    assert.equal(removed.answerCount, 31);
     assert.equal((await service.status("user-a")).revision, edited.revision + 1);
+});
+
+test("a non-disclosure answer completes its question but contributes no preference data", async () => {
+    await service.saveAnswer("user-a", {
+        questionId: "q101:1", answerId: "2", acceptable: ["2", "0"], weight: 250,
+        explanation: "Do not publish this note", revision: 0,
+    });
+    const saved = await database.query<{ answer_id: string; acceptable: string[]; weight: number; explanation: string } & import("pg").QueryResultRow>(
+        "SELECT answer_id, acceptable, weight, explanation FROM q_answers WHERE user_id = 'user-a' AND question_id = 'q101:1'",
+    );
+    assert.deepEqual(saved.rows[0], { answer_id: "2", acceptable: ["2"], weight: 0, explanation: "" });
+    assert.equal((await service.status("user-a")).answerCount, 1);
 });
 
 test("one user's catalogue response never contains another user's answer", async () => {

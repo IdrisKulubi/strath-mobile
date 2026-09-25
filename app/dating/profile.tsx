@@ -16,8 +16,8 @@ export default function QuestionnaireProfileScreen() {
       <Feedback error={status.error} />
       {status.data ? (
         <>
-          <Progress value={Math.min(status.data.answerCount, 20)} total={20} label={`${status.data.answerCount} answers saved`} />
-          <Copy muted>Your answers are private unless you publish them.</Copy>
+          <Progress value={Math.min(status.data.answerCount, status.data.required)} total={status.data.required} label={`${status.data.answerCount} required answers saved`} />
+          <Copy muted>New and edited answers appear on your profile. Answers previously saved as private stay private until you edit them.</Copy>
           {status.data.complete ? <Notice tone="success">Questionnaire complete. You can edit or add answers at any time.</Notice> : null}
         </>
       ) : null}

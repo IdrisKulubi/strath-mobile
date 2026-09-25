@@ -88,7 +88,7 @@ components:
 
 ### Approved onboarding direction (2026-09-24)
 
-The user selected **Option 1: Rising sheet** for the entire mobile onboarding redesign. Read the [onboarding design contract](docs/onboarding-redesign/design-contract.md) for the authoritative sequential interaction and [master tracker](docs/onboarding-redesign/master.md) for implementation status. This file remains the shared visual-token reference. For onboarding, the contract overrides older combined-form layouts: one active prompt, automatic follow-ups, named importance tap choices, and visible privacy/context beats. Implement only the requested phase. Existing components are not evidence that a redesign phase is complete.
+The user selected **Option 1: Rising sheet** for the entire mobile onboarding redesign. Read the [onboarding design contract](docs/onboarding-redesign/design-contract.md) for the authoritative sequential interaction and [master tracker](docs/onboarding-redesign/master.md) for implementation status. This file remains the shared visual-token reference. For onboarding, the contract overrides older combined-form layouts: one active prompt, automatic follow-ups, named importance tap choices, and optional context in the normal sequence. Implement only the requested phase. Existing components are not evidence that a redesign phase is complete.
 
 StrathSpace mobile is **dark-first, warm, and tactile**. Surfaces are near-black with a soft smoky backdrop on auth and onboarding; content often sits on a raised **sheet** with large top corners. Shapes are **pills and circles**. One **hot pink** filled control carries the main action per screen; links and headline accents use **primary text** pink on dark surfaces.
 
@@ -153,8 +153,8 @@ Spacing scale: 4, 8, 12, 16, 20, 24, 32, 40. Screen horizontal padding **20**; s
 
 ### Auth and onboarding
 
-1. Top: back (circle `control`) or centered app name (`title`).
-2. Optional smoky `background` above a **sheet** that rises with `sheet` top radius.
+1. Top: progressive blur overlay with back (translucent circle) or centered app name (`title`), plus optional progress. Sheet content scrolls beneath the fade.
+2. **Sheet** fills the viewport with `sheet` top radius; smoky `background` may show above the sheet edge on entry flows.
 3. **Brand badge** (56px `primary` circle + white icon) above headline.
 4. **Overline** + **display** (optional accent word) + **caption**.
 5. Form content (options, inputs, OTP).
@@ -214,9 +214,9 @@ For the approved Rising onboarding variant, use a raised `controlActive` row whe
 
 ### Secondary pill (pre-commit)
 
-The approved Rising onboarding action pill now uses this dark track treatment for both Continue and explicit save/consent actions: `controlActive` fill, `controlBorder` hairline, pink circular heart (or task icon) on the left, centered label, and paired chevrons on the right. It is a tap control; chevrons do not imply that a swipe is required. Preserve disabled, loading, and accessibility states.
+The approved Rising onboarding action pill now floats above the sheet on Continue and explicit save/consent steps. Use liquid glass (`GlassView` with `risingGlassTint` / blur fallback with `risingGlassOverlay`), `controlBorder` hairline, soft shadow, pink circular heart (or task icon) on the left, centered label, and paired chevrons on the right. It is a tap control; chevrons do not imply that a swipe is required. Preserve disabled, loading, and accessibility states.
 
-- Dark pill `controlActive` + border `controlBorder`, height 56.
+- Floating glass pill, height 56 minimum, inset from screen gutters; content scrolls beneath.
 - Pink heart circle on the left.
 - Label centered, `muted` when disabled, `foreground` when enabled.
 - Stays a tap action when the step becomes valid.

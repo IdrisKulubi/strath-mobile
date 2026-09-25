@@ -2598,5 +2598,134 @@
     "position": 99,
     "sensitive": true,
     "published": true
+  },
+  {
+    "id": "q101:1",
+    "categoryId": "values",
+    "prompt": "Do you have children?",
+    "options": [
+      { "id": "0", "label": "No" },
+      { "id": "1", "label": "Yes" },
+      { "id": "2", "label": "Prefer not to say" }
+    ],
+    "position": 100,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q083:2",
+    "categoryId": "values",
+    "prompt": "Would you like to have children in the future?",
+    "options": [
+      { "id": "0", "label": "Yes" },
+      { "id": "1", "label": "No" },
+      { "id": "2", "label": "Unsure" },
+      { "id": "3", "label": "Prefer not to say" }
+    ],
+    "position": 101,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q102:1",
+    "categoryId": "values",
+    "prompt": "What role does faith or spirituality play in your life?",
+    "options": [
+      { "id": "0", "label": "Central" },
+      { "id": "1", "label": "Some role" },
+      { "id": "2", "label": "Not part of my life" },
+      { "id": "3", "label": "Still exploring" },
+      { "id": "4", "label": "Prefer not to say" }
+    ],
+    "position": 102,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q084:2",
+    "categoryId": "values",
+    "prompt": "How important is shared religious practice with a partner?",
+    "options": [
+      { "id": "0", "label": "Essential" },
+      { "id": "1", "label": "Nice but optional" },
+      { "id": "2", "label": "Not important" },
+      { "id": "3", "label": "Prefer not to say" }
+    ],
+    "position": 103,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q085:2",
+    "categoryId": "values",
+    "prompt": "How do you feel about political differences in a relationship?",
+    "options": [
+      { "id": "0", "label": "Comfortable with differences" },
+      { "id": "1", "label": "Depends on the issue" },
+      { "id": "2", "label": "Prefer broadly similar views" },
+      { "id": "3", "label": "Need close alignment" },
+      { "id": "4", "label": "Prefer not to say" }
+    ],
+    "position": 104,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q086:2",
+    "categoryId": "values",
+    "prompt": "How often do you drink alcohol?",
+    "options": [
+      { "id": "0", "label": "Never" },
+      { "id": "1", "label": "Occasionally" },
+      { "id": "2", "label": "Most weeks" },
+      { "id": "3", "label": "More often" },
+      { "id": "4", "label": "Prefer not to say" }
+    ],
+    "position": 105,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q087:2",
+    "categoryId": "values",
+    "prompt": "Do you smoke or vape nicotine?",
+    "options": [
+      { "id": "0", "label": "No" },
+      { "id": "1", "label": "Occasionally" },
+      { "id": "2", "label": "Regularly" },
+      { "id": "3", "label": "Trying to stop" },
+      { "id": "4", "label": "Prefer not to say" }
+    ],
+    "position": 106,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q088:2",
+    "categoryId": "values",
+    "prompt": "How involved would you like extended family to be in your relationship?",
+    "options": [
+      { "id": "0", "label": "Very involved" },
+      { "id": "1", "label": "Involved with clear boundaries" },
+      { "id": "2", "label": "Mostly independent" },
+      { "id": "3", "label": "It depends on the situation" }
+    ],
+    "position": 107,
+    "sensitive": true,
+    "published": true
+  },
+  {
+    "id": "q100:2",
+    "categoryId": "values",
+    "prompt": "How should household responsibilities be shared?",
+    "options": [
+      { "id": "0", "label": "Roughly equally" },
+      { "id": "1", "label": "Based on time and capacity" },
+      { "id": "2", "label": "Through roles we agree on" },
+      { "id": "3", "label": "Decide together as needs change" }
+    ],
+    "position": 108,
+    "sensitive": true,
+    "published": true
   }
 ]

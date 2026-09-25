@@ -1,8 +1,8 @@
 import type { Question, QuestionnaireState } from './questionnaire';
 
 export const QUESTIONS_PER_BATCH = 5;
-export const ONBOARDING_ANSWER_TARGET = 20;
-export const QUESTION_BEAT_COUNT = 5;
+export const ONBOARDING_ANSWER_TARGET = 32;
+export const QUESTION_BEAT_COUNT = 4;
 export const EXPLANATION_MAX_LENGTH = 500;
 export const IMPORTANCE_CHOICES = [
   { value: 0, label: 'Not a big deal', description: 'I’m flexible about this' },
@@ -48,7 +48,7 @@ export function isCompleteQuestionDraft(optionIds: string[], answer: string, acc
 }
 
 export function batchNumber(answerCount: number) {
-  return Math.min(4, Math.floor(Math.min(answerCount, ONBOARDING_ANSWER_TARGET - 1) / QUESTIONS_PER_BATCH) + 1);
+  return Math.min(Math.ceil(ONBOARDING_ANSWER_TARGET / QUESTIONS_PER_BATCH), Math.floor(Math.min(answerCount, ONBOARDING_ANSWER_TARGET - 1) / QUESTIONS_PER_BATCH) + 1);
 }
 
 export function batchProgress(answerCount: number) {
@@ -56,22 +56,19 @@ export function batchProgress(answerCount: number) {
   return answerCount % QUESTIONS_PER_BATCH;
 }
 
-export function nextQuestion(questions: Question[], state: QuestionnaireState, includeSkipped = false) {
+export function nextQuestion(questions: Question[], state: QuestionnaireState) {
   const skipped = new Set(state.skipped);
-  return questions.find((question) => {
-    if (question.answer_id) return false;
-    if (!includeSkipped && skipped.has(question.id)) return false;
-    if (state.answerCount < ONBOARDING_ANSWER_TARGET && question.sensitive) return false;
-    return true;
-  }) ?? null;
+  const byId = new Map(questions.map((question) => [question.id, question]));
+  const requiredIds = state.requiredQuestionIds ?? questions.filter((question) => !question.sensitive).slice(0, state.required).map((question) => question.id);
+  const required = requiredIds.map((id) => byId.get(id)).filter((question): question is Question => Boolean(question && !question.answer_id));
+  if (!state.complete) return required.find((question) => !skipped.has(question.id)) ?? required[0] ?? null;
+  const superseded = new Set(['q083:1', 'q084:1', 'q085:1', 'q086:1', 'q087:1', 'q088:1', 'q100:1']);
+  const eligible = questions.filter((question) => !question.answer_id && !superseded.has(question.id));
+  return eligible.find((question) => !skipped.has(question.id)) ?? eligible[0] ?? null;
 }
 
 export function isBatchMilestone(answerCount: number) {
   return answerCount > 0 && answerCount < ONBOARDING_ANSWER_TARGET && answerCount % QUESTIONS_PER_BATCH === 0;
-}
-
-export function shouldPauseAfterAnswer(answerCount: number, didSave: boolean, previousCount: number) {
-  return didSave && answerCount > previousCount && isBatchMilestone(answerCount);
 }
 
 export type StoredQuestionDraft = {
@@ -81,7 +78,8 @@ export type StoredQuestionDraft = {
   answer: string;
   acceptable: string[];
   weight: number;
-  visible: boolean;
+  /** Kept only to restore drafts written before the public-answer flow. */
+  visible?: boolean;
   explanation: string;
   beat?: number;
   weightChosen?: boolean;
@@ -99,10 +97,10 @@ export function isUsableDraft(value: unknown, expected: Pick<StoredQuestionDraft
     && draft.acceptable.every((item) => typeof item === 'string')
     && typeof draft.weight === 'number'
     && IMPORTANCE_VALUES.includes(draft.weight)
-    && typeof draft.visible === 'boolean'
+    && (draft.visible === undefined || typeof draft.visible === 'boolean')
     && typeof draft.explanation === 'string'
     && draft.explanation.length <= EXPLANATION_MAX_LENGTH
-    && (draft.beat === undefined || (Number.isInteger(draft.beat) && draft.beat >= 0 && draft.beat < QUESTION_BEAT_COUNT))
+    && (draft.beat === undefined || (Number.isInteger(draft.beat) && draft.beat >= 0 && draft.beat <= QUESTION_BEAT_COUNT))
     && (draft.weightChosen === undefined || typeof draft.weightChosen === 'boolean')
     && (draft.visibilityChosen === undefined || typeof draft.visibilityChosen === 'boolean')
     && (draft.beat === undefined || draft.beat === 0 || Boolean(draft.answer))

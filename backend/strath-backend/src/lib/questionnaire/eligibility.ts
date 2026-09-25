@@ -1,4 +1,4 @@
-import { ageOn, type Preferences } from "./contracts";
+import { ageOn, REQUIRED_ANSWER_COUNT, type Preferences } from "./contracts";
 
 type ProfileSnapshot = {
     firstName: string;
@@ -50,7 +50,7 @@ export function isDiscoveryReady(candidate: Candidate) {
         && candidate.deletedReason === null
         && age >= 18
         && age <= 120
-        && candidate.answerCount >= 20
+        && candidate.answerCount >= REQUIRED_ANSWER_COUNT
         && candidate.preferences !== null
         && (candidate.profile.profileCompleted || candidate.profile.isComplete)
         && candidate.profile.isVisible

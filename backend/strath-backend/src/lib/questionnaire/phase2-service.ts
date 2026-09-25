@@ -2,6 +2,8 @@ import type { QueryResultRow } from "pg";
 
 import {
     REQUIRED_ANSWER_COUNT,
+    REQUIRED_QUESTION_IDS,
+    NEUTRAL_ANSWER_IDS,
     ageOn,
     answerInput,
     deleteAnswerInput,
@@ -78,10 +80,11 @@ async function loadStatus(userId: string, executor?: SqlExecutor) {
                 FROM q_answers answer
                 JOIN q_questions question ON question.id = answer.question_id
                 WHERE answer.user_id = state.user_id AND question.published
+                  AND answer.question_id = ANY($2::text[])
             ) AS answer_count
         FROM q_state state
         WHERE state.user_id = $1
-    `, [userId], executor);
+    `, [userId, REQUIRED_QUESTION_IDS], executor);
     return state;
 }
 
@@ -123,6 +126,7 @@ export async function status(userId: string) {
         skipped: state.skipped,
         answerCount: state.answer_count,
         required: REQUIRED_ANSWER_COUNT,
+        requiredQuestionIds: REQUIRED_QUESTION_IDS,
         complete: state.answer_count >= REQUIRED_ANSWER_COUNT,
     };
 }
@@ -152,7 +156,7 @@ export async function questions(userId: string) {
             ORDER BY question.position
         `, [userId]),
     ]);
-    return { questions: rows, state };
+    return { questions: rows.map((row) => ({ ...row, neutral_answer_id: NEUTRAL_ANSWER_IDS[String(row.id)] ?? null })), state };
 }
 
 export async function saveAnswer(userId: string, input: unknown) {
@@ -177,6 +181,10 @@ export async function saveAnswer(userId: string, input: unknown) {
             throw new DomainError("Choose answers from this question");
         }
 
+        const neutral = NEUTRAL_ANSWER_IDS[answer.questionId] === answer.answerId;
+        const acceptable = neutral ? [answer.answerId] : answer.acceptable;
+        const weight = neutral ? 0 : answer.weight;
+        const explanation = neutral ? "" : answer.explanation;
         await query(`
             INSERT INTO q_answers(
                 user_id, question_id, answer_id, acceptable, weight, public, explanation
@@ -188,7 +196,7 @@ export async function saveAnswer(userId: string, input: unknown) {
                 public = excluded.public,
                 explanation = excluded.explanation,
                 updated_at = now()
-        `, [userId, answer.questionId, answer.answerId, JSON.stringify(answer.acceptable), answer.weight, answer.public, answer.explanation], executor);
+        `, [userId, answer.questionId, answer.answerId, JSON.stringify(acceptable), weight, answer.public, explanation], executor);
         await query("UPDATE q_state SET revision = revision + 1, updated_at = now() WHERE user_id = $1", [userId], executor);
         await invalidateCompatibilityCache(userId, executor);
         const progress = await recordProgress(userId, executor);

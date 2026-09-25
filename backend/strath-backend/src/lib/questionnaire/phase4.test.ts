@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 
 import type { Score } from "./contracts";
+import { REQUIRED_QUESTION_IDS } from "./contracts";
 import { setQuestionnaireDatabaseForTests, type QuestionnaireDatabase } from "./db";
 import { health as checkEngineHealth, rank as callEngine } from "./engine-client";
 import { handlePhase4Request } from "./phase4-api";
@@ -44,11 +45,11 @@ async function seedMember(id: string, gender: "male" | "female", genders: string
         INSERT INTO q_state(user_id, revision, birth_date, preferences, completed_at)
         VALUES($1, 1, $2, $3, now())
     `, [id, birthDate, JSON.stringify(preferences(genders))]);
-    for (let index = 1; index <= 20; index += 1) {
+    for (const [index, questionId] of REQUIRED_QUESTION_IDS.entries()) {
         await database.query(`
             INSERT INTO q_answers(user_id, question_id, answer_id, acceptable, weight, public, explanation)
             VALUES($1, $2, '0', '["0", "1"]', 10, $3, $4)
-        `, [id, `q${String(index).padStart(3, "0")}:1`, index <= 2, `${id} explanation ${index}`]);
+        `, [id, questionId, index < 2, `${id} explanation ${index + 1}`]);
     }
 }
 
@@ -106,6 +107,26 @@ test("ranking is deterministic, evidence-aware, paginated, and privacy-safe", as
     for (const forbidden of ["birthDate", "latitude", "longitude", "acceptable", "answerId", "deletedReason"]) {
         assert.equal(serialized.includes(forbidden), false);
     }
+});
+
+test("non-disclosure answers stay out of scoring evidence", async () => {
+    await database.query("UPDATE q_answers SET answer_id = '2', acceptable = '[\"2\"]', weight = 0 WHERE user_id = 'viewer' AND question_id = 'q101:1'");
+    const inspectRank = async (viewer: { revision: number; answers: { questionVersionId: string }[] }, candidates: { id: string; revision: number }[]) => {
+        assert.equal(viewer.answers.some((answer) => answer.questionVersionId === "q101:1"), false);
+        return deterministicRank()(viewer, candidates);
+    };
+    const result = await phase4.discovery("viewer", 0, { rank: inspectRank });
+    assert.equal(result.items.length, 2);
+});
+
+test("optional answers cannot substitute for a missing required question in discovery", async () => {
+    await database.query("DELETE FROM q_answers WHERE user_id = 'candidate-a' AND question_id = 'q101:1'");
+    await database.query(`
+        INSERT INTO q_answers(user_id, question_id, answer_id, acceptable, weight, public)
+        VALUES('candidate-a', 'q021:1', '0', '["0"]', 10, true)
+    `);
+    const result = await phase4.discovery("viewer", 0, { rank: deterministicRank() });
+    assert.deepEqual(result.items.map((item) => item.id), ["candidate-b"]);
 });
 
 test("large eligible pools are scored in bounded batches before stable pagination", async () => {
@@ -196,11 +217,15 @@ test("revision changes during an engine request are rejected", async () => {
     );
 });
 
-test("comparison exposes only mutually public answers and invalidates immediately", async () => {
+test("comparison exposes a candidate's public answers regardless of the viewer's setting", async () => {
     const first = await phase4.comparison("viewer", "candidate-a", { rank: deterministicRank() });
     assert.equal(first.questions.length, 2);
     assert.equal(first.questions[0].yourExplanation, "viewer explanation 1");
     assert.equal("birthDate" in first.profile, false);
+
+    await database.query("UPDATE q_answers SET public = false WHERE user_id = 'viewer' AND question_id = 'q001:1'");
+    const viewerPrivate = await phase4.comparison("viewer", "candidate-a", { rank: deterministicRank() });
+    assert.deepEqual(viewerPrivate.questions.map((question) => question.id), ["q001:1", "q002:1"]);
 
     await database.query("UPDATE q_answers SET public = false WHERE user_id = 'candidate-a' AND question_id = 'q001:1'");
     await database.query("UPDATE q_state SET revision = revision + 1 WHERE user_id = 'candidate-a'");

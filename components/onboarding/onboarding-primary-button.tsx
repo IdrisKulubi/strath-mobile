@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
-import { View, StyleSheet, Pressable, Text as RNText } from 'react-native';
+import { Platform, View, StyleSheet, Pressable, Text as RNText } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -26,7 +28,8 @@ export function OnboardingPrimaryButton({
     appearance = 'standard',
 }: OnboardingPrimaryButtonProps) {
     const theme = useOnboardingTheme();
-    const { colors } = useTheme();
+    const { colors, isDark } = useTheme();
+    const useLiquidGlass = isLiquidGlassAvailable();
 
     const gradientColors = useMemo<[string, string]>(
         () => [theme.primary, theme.primaryHover],
@@ -34,6 +37,9 @@ export function OnboardingPrimaryButton({
     );
 
     if (appearance === 'rising') {
+        const glassTint = colors.risingGlassTint;
+        const glassOverlay = colors.risingGlassOverlay;
+
         return (
             <Pressable
                 onPress={onPress}
@@ -41,18 +47,41 @@ export function OnboardingPrimaryButton({
                 accessibilityRole="button"
                 accessibilityLabel={accessibilityLabel ?? label}
                 accessibilityState={{ disabled }}
-                style={[styles.risingButton, {
-                    backgroundColor: disabled ? colors.control : colors.controlActive,
-                    borderColor: colors.controlBorder,
-                }]}
+                style={({ pressed }) => [
+                    styles.risingHost,
+                    styles.risingShadow,
+                    {
+                        borderColor: colors.controlBorder,
+                        opacity: disabled ? 0.55 : pressed ? 0.92 : 1,
+                    },
+                ]}
             >
-                <View style={[styles.risingIconCircle, { backgroundColor: colors.primary, opacity: disabled ? 0.55 : 1 }]}>
-                    <Ionicons name={icon ?? 'heart'} size={20} color={colors.primaryForeground} />
-                </View>
-                <RNText numberOfLines={2} style={[styles.risingLabel, { color: disabled ? colors.mutedForeground : colors.foreground }]}>{label}</RNText>
-                <View style={styles.chevrons} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                    <Ionicons name="chevron-forward" size={17} color={disabled ? colors.mutedForeground : colors.foreground} style={styles.chevronOverlap} />
-                    <Ionicons name="chevron-forward" size={17} color={disabled ? colors.mutedForeground : colors.foreground} />
+                {useLiquidGlass ? (
+                    <GlassView
+                        glassEffectStyle="regular"
+                        tintColor={glassTint}
+                        colorScheme={isDark ? 'dark' : 'light'}
+                        style={[StyleSheet.absoluteFill, styles.glassSurface]}
+                    />
+                ) : (
+                    <>
+                        <BlurView
+                            intensity={Platform.OS === 'ios' ? 55 : 40}
+                            tint={isDark ? 'dark' : 'light'}
+                            style={[StyleSheet.absoluteFill, styles.glassSurface]}
+                        />
+                        <View style={[StyleSheet.absoluteFill, styles.glassSurface, { backgroundColor: glassOverlay }]} />
+                    </>
+                )}
+                <View style={styles.risingButton}>
+                    <View style={[styles.risingIconCircle, { backgroundColor: colors.primary, opacity: disabled ? 0.55 : 1 }]}>
+                        <Ionicons name={icon ?? 'heart'} size={20} color={colors.primaryForeground} />
+                    </View>
+                    <RNText numberOfLines={2} style={[styles.risingLabel, { color: disabled ? colors.mutedForeground : colors.foreground }]}>{label}</RNText>
+                    <View style={styles.chevrons} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                        <Ionicons name="chevron-forward" size={17} color={disabled ? colors.mutedForeground : colors.foreground} style={styles.chevronOverlap} />
+                        <Ionicons name="chevron-forward" size={17} color={disabled ? colors.mutedForeground : colors.foreground} />
+                    </View>
                 </View>
             </Pressable>
         );
@@ -118,7 +147,33 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         width: '100%',
     },
-    risingButton: { width: '100%', minHeight: HEIGHTS.primaryControl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: RADIUS.full, borderWidth: 1, paddingHorizontal: SPACING.micro, paddingVertical: SPACING.micro },
+    risingHost: {
+        width: '100%',
+        borderRadius: RADIUS.full,
+        borderWidth: StyleSheet.hairlineWidth,
+        minHeight: HEIGHTS.primaryControl,
+    },
+    risingShadow: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.22,
+        shadowRadius: 16,
+        elevation: 10,
+    },
+    glassSurface: {
+        borderRadius: RADIUS.full,
+        borderCurve: 'continuous',
+    },
+    risingButton: {
+        width: '100%',
+        minHeight: HEIGHTS.primaryControl,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: SPACING.micro,
+        paddingVertical: SPACING.micro,
+        zIndex: 1,
+    },
     risingIconCircle: { width: 44, height: 44, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center' },
     risingLabel: { flex: 1, textAlign: 'center', ...TYPOGRAPHY.body, fontWeight: '600', paddingHorizontal: SPACING.tight },
     chevrons: { width: 44, height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },

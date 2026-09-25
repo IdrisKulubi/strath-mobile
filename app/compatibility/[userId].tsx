@@ -42,13 +42,13 @@ export default function CompatibilityProfileScreen() {
             <Notice>Answer more questions to build enough shared evidence for a percentage.</Notice>
           ) : null}
 
-          <SectionLabel>Public answer comparison</SectionLabel>
-          <Copy muted>Only questions that both of you chose to publish appear here. Private answers may affect the overall percentage but are never listed.</Copy>
-          {comparison.data.questions.length === 0 ? <Notice>No answers are currently public for both of you.</Notice> : null}
+          <SectionLabel>Their answers</SectionLabel>
+          <Copy muted>Answers this person saved as public appear here. Earlier private answers still affect compatibility but remain hidden.</Copy>
+          {comparison.data.questions.length === 0 ? <Notice>This person has no public answers to show yet.</Notice> : null}
           {comparison.data.questions.map((question) => (
             <View key={question.id} style={[styles.answerCard, { borderColor: colors.border }]}>
               <Text style={[TYPOGRAPHY.body, styles.question, { color: colors.foreground }]}>{question.prompt}</Text>
-              <Copy><Text style={styles.answerLabel}>You: </Text>{question.options.find((option) => option.id === question.yours)?.label ?? 'Answer unavailable'}</Copy>
+              {question.yours ? <Copy><Text style={styles.answerLabel}>You: </Text>{question.options.find((option) => option.id === question.yours)?.label ?? 'Answer unavailable'}</Copy> : null}
               <Copy><Text style={styles.answerLabel}>{comparison.data?.profile.name}: </Text>{question.options.find((option) => option.id === question.theirs)?.label ?? 'Answer unavailable'}</Copy>
               {question.yourExplanation ? <Copy muted>Your note: {question.yourExplanation}</Copy> : null}
               {question.theirExplanation ? <Copy muted>Their note: {question.theirExplanation}</Copy> : null}
