@@ -63,6 +63,8 @@ export default function QuestionsScreen() {
         title="Discover is open"
         eyebrow={`${state.required} answers saved`}
         back
+        floatingFooter
+        footerButtonCount={3}
         footer={
           <StickyFooter
             primaryLabel="See your matches"
@@ -71,6 +73,8 @@ export default function QuestionsScreen() {
             onSecondaryPress={() => setReviewing(true)}
             tertiaryLabel="Answer another question"
             onTertiaryPress={() => setSelectedId(nextQuestion(questions, state)?.id ?? null)}
+            glassStack
+            floating
           />
         }
       >
@@ -96,27 +100,46 @@ export default function QuestionsScreen() {
     );
   }
 
+  const answeredQuestions = questions.filter((question) => question.answer_id);
+
   return (
     <Page
       title={reviewing ? 'Review your answers' : 'Questions unavailable'}
-      eyebrow={reviewing ? `${state.answerCount} saved` : undefined}
+      eyebrow={reviewing ? `${state.answerCount} of ${state.required} saved` : undefined}
       back={reviewing || state.complete}
+      onBackPress={reviewing ? () => { setReviewing(false); setSelectedId(null); } : undefined}
+      floatingFooter={reviewing && state.complete}
+      footerButtonCount={reviewing && state.complete ? 2 : 1}
+      footer={
+        reviewing && state.complete ? (
+          <StickyFooter
+            glassStack
+            floating
+            secondaryLabel="Back to summary"
+            onSecondaryPress={() => { setReviewing(false); setSelectedId(null); }}
+            primaryLabel="See your matches"
+            onPrimaryPress={() => router.replace('/dating' as never)}
+          />
+        ) : undefined
+      }
     >
-      {reviewing ? <Action label="Back to questions" onPress={() => { setReviewing(false); setSelectedId(null); }} /> : null}
-
       {reviewing ? (
-        <View style={{ gap: SPACING.compact }}>
-          {questions.filter((question) => question.answer_id).map((question, index) => (
-            <ReviewAnswerRow
-              key={question.id}
-              index={index + 1}
-              prompt={question.prompt}
-              isPublic={Boolean(question.public)}
-              onPress={() => { setSelectedId(question.id); setReviewing(false); }}
-            />
-          ))}
+        <>
+          <ChapterProgress answerCount={state.answerCount} />
+          <Copy muted>Tap any question to edit. Labels show what appears on your profile versus matching only.</Copy>
+          <View style={styles.reviewList}>
+            {answeredQuestions.map((question, index) => (
+              <ReviewAnswerRow
+                key={question.id}
+                index={index + 1}
+                prompt={question.prompt}
+                isPublic={Boolean(question.public)}
+                onPress={() => { setSelectedId(question.id); setReviewing(false); }}
+              />
+            ))}
+          </View>
           {state.answerCount === 0 ? <Notice>No answers yet. Complete the questions to see them here.</Notice> : null}
-        </View>
+        </>
       ) : (
         <>
           <Copy>We could not find the next required question. Try loading it again.</Copy>
@@ -373,6 +396,7 @@ function QuestionEditorPage({
 }
 
 const styles = StyleSheet.create({
+  reviewList: { gap: SPACING.compact },
   beatBody: { gap: SPACING.compact },
   helper: { ...TYPOGRAPHY.caption },
   textAction: { minHeight: 48, justifyContent: 'center', alignItems: 'center' },

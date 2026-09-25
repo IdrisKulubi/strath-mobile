@@ -17,7 +17,7 @@ export default function MessagesScreen() {
   }, [router]);
 
   return (
-    <Page title="Messages">
+    <Page title="Messages" floatingTabBar>
       <Copy>Your existing conversations and new mutual questionnaire matches appear together.</Copy>
       {conversations.isLoading ? <ActivityIndicator accessibilityLabel="Loading conversations" color={colors.primary} /> : null}
       <Feedback error={conversations.error} />

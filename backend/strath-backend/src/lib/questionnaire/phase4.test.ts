@@ -10,7 +10,7 @@ import { health as checkEngineHealth, rank as callEngine } from "./engine-client
 import { handlePhase4Request } from "./phase4-api";
 import * as phase4 from "./phase4-service";
 import { applyDiscoveryMigration, applyQuestionnaireMigration } from "./migration";
-import { DomainError } from "./phase2-service";
+import { DomainError, status as questionnaireStatus } from "./phase2-service";
 import { createTestDatabase, legacyTestSchema } from "./test-database";
 
 let database: QuestionnaireDatabase;
@@ -191,6 +191,32 @@ test("reciprocal eligibility independently excludes unsafe and incompatible cand
     assert.deepEqual(await visibleIds(), ["candidate-b"]);
     await database.query("UPDATE q_state SET preferences = $1 WHERE user_id = 'candidate-a'", [JSON.stringify({ ...preferences(["female"]), city: "Mombasa" })]);
     assert.deepEqual(await visibleIds(), ["candidate-b"]);
+});
+
+test("discovery blockers match readiness for profile safety gates", async () => {
+    const ready = await questionnaireStatus("viewer");
+    assert.equal(ready.discovery.ready, true);
+    assert.deepEqual(ready.discovery.missing, []);
+
+    await database.query("UPDATE profiles SET face_verification_status = 'not_started' WHERE user_id = 'viewer'");
+    const unverified = await questionnaireStatus("viewer");
+    assert.equal(unverified.discovery.ready, false);
+    assert.deepEqual(unverified.discovery.missing, ["verification"]);
+
+    await database.query("UPDATE profiles SET face_verification_status = 'verified', is_visible = false WHERE user_id = 'viewer'");
+    const hidden = await questionnaireStatus("viewer");
+    assert.equal(hidden.discovery.ready, false);
+    assert.deepEqual(hidden.discovery.missing, ["visibility"]);
+
+    await database.query("UPDATE profiles SET is_visible = true, discovery_paused = true WHERE user_id = 'viewer'");
+    const paused = await questionnaireStatus("viewer");
+    assert.equal(paused.discovery.ready, false);
+    assert.deepEqual(paused.discovery.missing, ["paused"]);
+
+    await database.query("UPDATE profiles SET discovery_paused = false, profile_completed = false, is_complete = false WHERE user_id = 'viewer'");
+    const incomplete = await questionnaireStatus("viewer");
+    assert.equal(incomplete.discovery.ready, false);
+    assert.deepEqual(incomplete.discovery.missing, ["profile"]);
 });
 
 test("valid revision cache survives outage and stale cache never does", async () => {

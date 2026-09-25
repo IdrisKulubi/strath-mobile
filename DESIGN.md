@@ -163,8 +163,10 @@ Spacing scale: 4, 8, 12, 16, 20, 24, 32, 40. Screen horizontal padding **20**; s
 ### In-app (Discover, messages, profile)
 
 - Same tokens and components; **left-aligned** `title` / `body` hierarchy.
+- Primary and **dating** tab shells use the floating liquid-glass tab bar (`StrathGlassTabBar`): inset pill, blur/glass fill, sliding active highlight, icon + label.
 - No sheet lift or textured backdrop unless a full-screen modal flow.
 - Still **one pink-filled control** per screen when a commit action exists.
+- Questionnaire completion (“Discover is open”): floating liquid-glass pill stack — tertiary (neutral glass border), secondary (pink glass border), primary (“See your matches”, pink glass border, strongest shadow); no solid pink fill on this screen.
 
 ## Component catalogue
 

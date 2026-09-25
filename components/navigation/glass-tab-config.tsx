@@ -31,6 +31,13 @@ export function getVisibleTabRoutes(isV2Enabled: boolean) {
     return isV2Enabled ? V2_TAB_ROUTES : V1_TAB_ROUTES;
 }
 
+export const DATING_TAB_ROUTES: VisibleTabRoute[] = [
+    { name: 'index', href: '/dating', label: 'Discover', icon: 'compass' },
+    { name: 'likes', href: '/dating/likes', label: 'Likes', icon: 'heart' },
+    { name: 'messages', href: '/dating/messages', label: 'Messages', icon: 'chatbubbles' },
+    { name: 'profile', href: '/dating/profile', label: 'Profile', icon: 'person' },
+];
+
 export const HIDDEN_TAB_ROUTES = [
     { name: 'explore', href: '/(tabs)/explore' },
     { name: 'drops', href: '/(tabs)/drops' },

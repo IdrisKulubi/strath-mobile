@@ -10,6 +10,8 @@ export { OnboardingScreenShell } from './onboarding-screen-shell';
 export { useRisingBeatController } from './use-rising-beat-controller';
 export { RisingInlineFeedback } from './rising-inline-feedback';
 export { RisingTextField } from './rising-text-field';
+export { RisingDateField } from './rising-date-field';
+export { RisingAgeRangeSlider } from './rising-age-range-slider';
 export { PhoneNumberStep } from './phone-number-step';
 export { WelcomeSplash } from './WelcomeSplash';
 export { TermsAcceptance } from './TermsAcceptance';

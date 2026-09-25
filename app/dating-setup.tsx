@@ -1,18 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, View } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { OnboardingChoiceRow, OnboardingPrimaryButton, OnboardingScreenShell, RisingInlineFeedback, RisingTextField, useRisingBeatController } from '@/components/onboarding';
+import { OnboardingChoiceRow, OnboardingPrimaryButton, OnboardingScreenShell, RisingAgeRangeSlider, RisingDateField, RisingInlineFeedback, RisingTextField, useRisingBeatController } from '@/components/onboarding';
 import { Text } from '@/components/ui/text';
 import { useImageUpload } from '@/hooks/use-image-upload';
 import { useTheme } from '@/hooks/use-theme';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { useIdentity, useQuestionnaire, useQuestionnaireMutation, type QuestionnaireState } from '@/lib/questionnaire';
+import {
+  clearDatingSetupDraft,
+  DATING_SETUP_DRAFT_VERSION,
+  type DatingSetupDraft,
+  markSetupResumeDismissed,
+  readDatingSetupDraft,
+  saveDatingSetupDraft,
+} from '@/lib/dating-setup-draft';
 import { ageRangeError, birthDateError, radiusError } from '@/lib/onboarding-input-validation';
 
 type OwnProfile = {
@@ -32,29 +38,6 @@ const genders = [['male', 'Man'], ['female', 'Woman'], ['other', 'Non-binary or 
 const interests = [['male', 'Men'], ['female', 'Women'], ['other', 'Non-binary or other identities']] as const;
 const intentions = ['Long-term relationship', 'Dating and exploring', 'Something casual', 'Still figuring it out'];
 const LAST_BEAT = 11;
-const DRAFT_VERSION = 1;
-
-type SetupDraft = {
-  version: number;
-  beat: number;
-  name: string;
-  birthDate: string;
-  gender: string;
-  genderInterests: string[];
-  minAge: string;
-  maxAge: string;
-  city: string;
-  intention: string;
-  bio: string;
-  photos: string[];
-  university: string;
-  course: string;
-  yearOfStudy: string;
-  coordinates: { latitude: number; longitude: number } | null;
-  radius: string;
-};
-
-const draftKey = (userId: string) => `dating_setup_draft_v1_${userId}`;
 
 export default function DatingSetupScreen() {
   const { colors } = useTheme();
@@ -70,7 +53,6 @@ export default function DatingSetupScreen() {
   const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState('');
   const [birthDate, setBirthDate] = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [gender, setGender] = useState('');
   const [genderInterests, setGenderInterests] = useState<string[]>([]);
   const [minAge, setMinAge] = useState('18');
@@ -101,14 +83,7 @@ export default function DatingSetupScreen() {
     const userId = identity.data;
     let cancelled = false;
     void (async () => {
-      let draft: SetupDraft | null = null;
-      try {
-        const raw = await SecureStore.getItemAsync(draftKey(userId));
-        if (raw) {
-          const parsed = JSON.parse(raw) as SetupDraft;
-          if (parsed.version === DRAFT_VERSION) draft = parsed;
-        }
-      } catch { /* Saved server state remains usable if a local draft is corrupt. */ }
+      const draft = await readDatingSetupDraft(userId);
       if (cancelled) return;
       setName(draft?.name ?? profile?.first_name ?? '');
       jump(draft ? Math.max(0, Math.min(LAST_BEAT, draft.beat)) : profile?.first_name?.trim() ? 1 : 0);
@@ -148,10 +123,31 @@ export default function DatingSetupScreen() {
   }, [loaded, ownProfile.data, questionnaire.data, identity.data, jump]);
 
   useEffect(() => {
-    if (!loaded || !dirty || !identity.data) return;
+    if (!loaded || !identity.data) return;
+    if (beat === 0 && !dirty) return;
     const userId = identity.data;
-    const draft: SetupDraft = { version: DRAFT_VERSION, beat, name, birthDate, gender, genderInterests, minAge, maxAge, city, intention, bio, photos, university, course, yearOfStudy, coordinates, radius };
-    const timer = setTimeout(() => { void SecureStore.setItemAsync(draftKey(userId), JSON.stringify(draft)).catch(() => {}); }, 300);
+    const draft: DatingSetupDraft = {
+      version: DATING_SETUP_DRAFT_VERSION,
+      beat,
+      name,
+      birthDate,
+      gender,
+      genderInterests,
+      minAge,
+      maxAge,
+      city,
+      intention,
+      bio,
+      photos,
+      university,
+      course,
+      yearOfStudy,
+      coordinates,
+      radius,
+    };
+    const timer = setTimeout(() => {
+      void saveDatingSetupDraft(userId, draft).catch(() => {});
+    }, 300);
     return () => clearTimeout(timer);
   }, [loaded, dirty, identity.data, beat, name, birthDate, gender, genderInterests, minAge, maxAge, city, intention, bio, photos, university, course, yearOfStudy, coordinates, radius]);
 
@@ -240,7 +236,7 @@ export default function DatingSetupScreen() {
       setSaved(true);
       setDirty(false);
       if (identity.data) {
-        try { await SecureStore.deleteItemAsync(draftKey(identity.data)); } catch { /* Server save is still authoritative. */ }
+        await clearDatingSetupDraft(identity.data);
       }
       setVerificationReset(result.verificationReset);
     } catch (saveError) {
@@ -252,9 +248,7 @@ export default function DatingSetupScreen() {
 
   const maximumBirthDate = new Date();
   maximumBirthDate.setFullYear(maximumBirthDate.getFullYear() - 18);
-  const selectedDate = /^\d{4}-\d{2}-\d{2}$/.test(birthDate)
-    ? new Date(`${birthDate}T12:00:00`)
-    : new Date(2000, 0, 1);
+  const minimumBirthDate = new Date(maximumBirthDate.getFullYear() - 102, 0, 1);
 
   const titles = [
     'What should we call you?',
@@ -305,7 +299,15 @@ export default function DatingSetupScreen() {
     : beat === 11 ? valid
     : false;
   const needsContinue = [0, 1, 3, 4, 5, 6, 8, 9, 10, 11].includes(beat);
-  const handleBack = () => beat === 0 ? router.back() : back();
+  const handleBack = () => {
+    if (beat === 0) {
+      markSetupResumeDismissed();
+      if (router.canGoBack()) router.back();
+      else router.replace('/dating' as never);
+      return;
+    }
+    back();
+  };
   const handleContinue = () => {
     setLocalError(null);
     if (!canAdvance) {
@@ -353,27 +355,31 @@ export default function DatingSetupScreen() {
               {Platform.OS === 'web' ? (
                 <RisingTextField label="Birth date (YYYY-MM-DD)" value={birthDate} onChangeText={(value) => { setBirthDate(value); setSaved(false); setDirty(true); }} placeholder="1998-04-23" error={fieldError ?? undefined} />
               ) : (
-                <>
-                  <Pressable accessibilityRole="button" accessibilityLabel="Choose date of birth" onPress={() => setShowDatePicker(true)} style={[styles.dateButton, { backgroundColor: colors.control, borderColor: fieldError ? colors.destructive : colors.controlBorder }]}>
-                    <Text style={[styles.dateText, { color: birthDate ? colors.foreground : colors.mutedForeground }]}>{birthDate || 'Choose your birth date'}</Text>
-                  </Pressable>
-                  {showDatePicker ? <DateTimePicker value={selectedDate} mode="date" maximumDate={maximumBirthDate} minimumDate={new Date(maximumBirthDate.getFullYear() - 102, 0, 1)} onChange={(_, date) => {
-                    if (Platform.OS !== 'ios') setShowDatePicker(false);
-                    if (date) { setBirthDate(formatLocalDate(date)); setSaved(false); setDirty(true); }
-                  }} /> : null}
-                  {showDatePicker && Platform.OS === 'ios' ? <Pressable accessibilityRole="button" onPress={() => setShowDatePicker(false)} style={styles.linkTouch}><Text style={[styles.link, { color: colors.primaryText }]}>Use this birth date</Text></Pressable> : null}
-                  {fieldError ? <RisingInlineFeedback tone="error" message={fieldError} /> : null}
-                </>
+                <RisingDateField
+                  value={birthDate}
+                  onChange={(iso) => { setBirthDate(iso); setSaved(false); setDirty(true); }}
+                  maximumDate={maximumBirthDate}
+                  minimumDate={minimumBirthDate}
+                  error={fieldError ?? undefined}
+                  initiallyOpen={!birthDate}
+                />
               )}
             </View>
           ) : null}
           {beat === 2 ? genders.map(([id, label]) => <OnboardingChoiceRow key={id} appearance="rising" option={{ value: id, label }} selected={gender === id} onPress={() => { setGender(id); setSaved(false); setDirty(true); advance(); }} />) : null}
           {beat === 3 ? interests.map(([id, label]) => <OnboardingChoiceRow key={id} appearance="rising" selectionMode="multiple" option={{ value: id, label }} selected={genderInterests.includes(id)} onPress={() => { setGenderInterests((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]); setSaved(false); setDirty(true); }} />) : null}
           {beat === 4 ? (
-            <View style={styles.beatBody}>
-              <RisingTextField label="Minimum age" value={minAge} onChangeText={(value) => { setMinAge(value); setSaved(false); setDirty(true); }} keyboardType="number-pad" />
-              <RisingTextField label="Maximum age" value={maxAge} onChangeText={(value) => { setMaxAge(value); setSaved(false); setDirty(true); }} keyboardType="number-pad" error={fieldError ?? undefined} />
-            </View>
+            <RisingAgeRangeSlider
+              minAge={minAge}
+              maxAge={maxAge}
+              onChange={(min, max) => {
+                setMinAge(min);
+                setMaxAge(max);
+                setSaved(false);
+                setDirty(true);
+              }}
+              error={fieldError ?? undefined}
+            />
           ) : null}
           {beat === 5 ? <RisingTextField label="City" value={city} onChangeText={(value) => { setCity(value); setSaved(false); setDirty(true); }} autoCapitalize="words" /> : null}
           {beat === 6 ? (
@@ -430,16 +436,10 @@ export default function DatingSetupScreen() {
   );
 }
 
-function formatLocalDate(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
 const styles = StyleSheet.create({
   beatBody: { gap: SPACING.compact },
   center: { alignItems: 'center', gap: SPACING.base },
   hint: { ...TYPOGRAPHY.caption, textAlign: 'center' },
-  dateButton: { minHeight: 56, borderWidth: 1, borderRadius: RADIUS.row, justifyContent: 'center', paddingHorizontal: SPACING.base },
-  dateText: { ...TYPOGRAPHY.body },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.compact },
   photoItem: { width: '47%', minWidth: 120, gap: SPACING.tight },
   photo: { width: '100%', aspectRatio: 1, borderRadius: RADIUS.row },

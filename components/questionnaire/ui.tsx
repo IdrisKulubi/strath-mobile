@@ -12,8 +12,10 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
+import { stickyFooterScrollPadding } from '@/components/questionnaire/sticky-footer';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { useTheme } from '@/hooks/use-theme';
 import { compatibilityLabel, type Person } from '@/lib/questionnaire';
@@ -23,41 +25,88 @@ export function Page({
   eyebrow,
   children,
   back = false,
+  onBackPress,
   footer,
   header,
   hideTitle = false,
+  floatingTabBar = false,
+  floatingFooter = false,
+  footerReserveTabBar = false,
+  footerButtonCount = 1,
+  footerTertiaryLink = false,
 }: {
   title: string;
   eyebrow?: string;
   children: React.ReactNode;
   back?: boolean;
+  /** When set, overrides default router back for the ghost Back control */
+  onBackPress?: () => void;
   footer?: React.ReactNode;
   header?: React.ReactNode;
   hideTitle?: boolean;
+  /** Reserve scroll space for the floating glass tab bar (dating shell). */
+  floatingTabBar?: boolean;
+  /** Footer overlays scroll content (e.g. glass setup CTA). */
+  floatingFooter?: boolean;
+  /** Match StickyFooter `reserveTabBar` when computing scroll inset. */
+  footerReserveTabBar?: boolean;
+  /** Pill count in floating footer (excludes link-style tertiary). */
+  footerButtonCount?: number;
+  /** Reserve space for a link-style tertiary above footer pills. */
+  footerTertiaryLink?: boolean;
 }) {
   const { colors } = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const floatingTabPad = floatingTabBar ? getGlassTabBarHeight(insets.bottom) : 0;
+  const scrollBottomPad = floatingFooter && footer
+    ? stickyFooterScrollPadding(insets.bottom, footerReserveTabBar, footerButtonCount, footerTertiaryLink)
+    : floatingTabPad
+      ? SPACING.xl + floatingTabPad
+      : footer
+        ? SPACING.xl
+        : undefined;
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          style={styles.flex}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[styles.page, footer ? styles.pageWithFooter : null]}
-          contentInsetAdjustmentBehavior="automatic"
-          showsVerticalScrollIndicator={false}
-        >
-          {header}
-          {back ? <Action label="Back" tone="ghost" onPress={() => router.canGoBack() ? router.back() : router.replace('/dating' as never)} /> : null}
-          {!hideTitle ? (
-            <View style={styles.headingGroup}>
-              {eyebrow ? <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>{eyebrow}</Text> : null}
-              <Text accessibilityRole="header" style={[styles.title, { color: colors.foreground }]}>{title}</Text>
-            </View>
-          ) : null}
-          {children}
-        </ScrollView>
-        {footer}
+        <View style={styles.flex}>
+          <ScrollView
+            style={styles.flex}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={[
+              styles.page,
+              footer && !floatingFooter ? styles.pageWithFooter : null,
+              scrollBottomPad !== undefined ? { paddingBottom: scrollBottomPad } : null,
+            ]}
+            contentInsetAdjustmentBehavior="automatic"
+            showsVerticalScrollIndicator={false}
+          >
+            {header}
+            {back ? (
+              <Action
+                label="Back"
+                tone="ghost"
+                onPress={() => {
+                  if (onBackPress) {
+                    onBackPress();
+                    return;
+                  }
+                  if (router.canGoBack()) router.back();
+                  else router.replace('/dating' as never);
+                }}
+              />
+            ) : null}
+            {!hideTitle ? (
+              <View style={styles.headingGroup}>
+                {eyebrow ? <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>{eyebrow}</Text> : null}
+                <Text accessibilityRole="header" style={[styles.title, { color: colors.foreground }]}>{title}</Text>
+              </View>
+            ) : null}
+            {children}
+          </ScrollView>
+          {footer}
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

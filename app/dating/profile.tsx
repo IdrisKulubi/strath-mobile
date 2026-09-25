@@ -11,7 +11,7 @@ export default function QuestionnaireProfileScreen() {
   const queryClient = useQueryClient();
   const status = useQuestionnaire<QuestionnaireState>('status');
   return (
-    <Page title="Your profile">
+    <Page title="Your profile" floatingTabBar>
       {status.isPending ? <Loading label="Loading your questionnaire progress" /> : null}
       <Feedback error={status.error} />
       {status.data ? (
