@@ -1,5 +1,10 @@
 /** Seed the catalogue into an existing questionnaire schema. No DDL or backfill. */
+import { resolve } from "node:path";
+import { config } from "dotenv";
+
 import { getPool, transaction, type QuestionnaireDatabase } from "../lib/questionnaire/db";
+
+config({ path: resolve(process.cwd(), ".env.local") });
 import { catalogue } from "../lib/questionnaire/catalogue";
 import { seedQuestionnaireCatalogue } from "../lib/questionnaire/migration";
 

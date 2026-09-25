@@ -68,7 +68,7 @@ Use theme/token imports, not per-screen hardcoded colors. Retain the selected vi
 - Typical beat transition: 180–220ms, ease-out, opacity and at most 12px vertical translation. Sheet enters from below once when entering the flow.
 - Selected answer remains visible long enough to register before the next beat. No arbitrary dwell, typing simulation, or bounce.
 - Single-choice: tap, show selected state/haptic, then advance exactly once. Back restores the previous selection and draft.
-- Partner multi-select: hide the person's own answer row and previous-answer summary on this beat, while retaining their answer in the acceptable-answer payload. Show only the other catalogue options. A Select all row uses the same checkbox and selected styling as those options; tapping it again clears the additional choices. Continue remains available with no additional option selected.
+- Partner multi-select: the person's own answer and acceptable partner answers are independent choices. Show every substantive option, including the option they chose for themselves, with an enabled checkbox. A new answer starts with no partner options selected; require at least one before Continue. For the children question, Yes, No, and Unsure all appear even after the person answers No for themselves. Omit Select all for two-option questions; on longer lists, show it as a checkbox row and let another tap clear all. Keep previously saved selections when editing, and clear them only if the personal answer changes. Disclosure-only options such as “Prefer not to say” do not appear as partner choices.
 - Text/date/range entry: use clear native controls and Continue after valid input. No automatic advance mid-typing.
 - The optional note follows importance directly in the normal sequence; it can be left blank. Saving makes the answer and any note public.
 - Save & continue is the explicit commit for a complete compatibility answer. Prevent duplicate submits. Failure keeps every draft field and offers Retry.
@@ -96,11 +96,11 @@ Do not force returning users through completed steps or remove their existing co
 | Beat | Copy intent | Interaction |
 | --- | --- | --- |
 | Your answer | “How often would you like to hear from someone you’re dating?” | Tap one existing catalogue option; advance |
-| Partner preference | “What would work for you in a partner?” / “Choose any other answers that would work, or continue.” | Multi-select other catalogue options or use a checkable Select all row; Continue |
+| Partner preference | “What would work for you in a partner?” / “Choose the answers you would accept in a partner. Pick at least one, even if it differs from your answer.” | Multi-select one or more substantive catalogue options, independently of the personal answer; Continue |
 | Importance | “How much does this matter?” | Tap a named choice; advance |
 | Optional context and save | “Want to add a little context?” | Optional input, public-answer disclosure, visible Save & continue |
 
-Existing saved answers restore their actual values. Legacy private answers remain private until their owners edit and save them. Old unfinished drafts resume at the closest current beat; the save action makes the result public and the copy says so beforehand.
+Existing saved answers restore their actual values. Legacy private answers remain private until their owners edit and save them. Older unfinished drafts that automatically inserted the person's own answer return to the partner beat with no selections so the person can choose explicitly; newer drafts keep their choices. The save action makes the result public and the copy says so beforehand.
 
 ### Importance mapping
 
