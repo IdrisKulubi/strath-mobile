@@ -7,6 +7,26 @@ import { useTheme } from "@/hooks/use-theme";
 
 const PREVIEWS = [
     {
+        route: "/ui-preview/onboarding-rising",
+        label: "Rising sheet onboarding",
+        description: "Interactive answer beats and motion",
+    },
+    {
+        route: "/ui-preview/onboarding-rising?mode=loading",
+        label: "Rising sheet · loading",
+        description: "Loading state with content placeholders",
+    },
+    {
+        route: "/ui-preview/onboarding-rising?mode=error",
+        label: "Rising sheet · error",
+        description: "Retry state in the same sheet",
+    },
+    {
+        route: "/ui-preview/onboarding-rising?mode=long",
+        label: "Rising sheet · long text",
+        description: "Check wrapping and smaller screens",
+    },
+    {
         route: "/ui-preview/missions",
         label: "🎯 Mission Card",
         description: "All 6 mission states + interactive simulator",
@@ -25,7 +45,7 @@ export default function UIPreviewIndex() {
                 <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Component sandbox</Text>
             </View>
             <ScrollView contentContainerStyle={styles.list}>
-                {PREVIEWS.map((p) => (
+                {PREVIEWS.filter((preview) => __DEV__ || !preview.route.includes('onboarding-rising')).map((p) => (
                     <Pressable
                         key={p.route}
                         onPress={() => router.push(p.route as any)}

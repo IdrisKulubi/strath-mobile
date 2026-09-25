@@ -1,9 +1,19 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Switch, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 
-import { Action, Copy, Feedback, Field, Loading, Notice, Page, Progress, SectionLabel } from '@/components/questionnaire/ui';
+import { BeatReveal } from '@/components/questionnaire/beat-reveal';
+import { TextLink } from '@/components/questionnaire/expandable-row';
+import { ImportanceSlider } from '@/components/questionnaire/importance-slider';
+import { MoreSheet } from '@/components/questionnaire/more-sheet';
+import { ChipRow, OptionChip, OptionRow } from '@/components/questionnaire/option-row';
+import { QuestionTopBar } from '@/components/questionnaire/question-top-bar';
+import { ReviewAnswerRow } from '@/components/questionnaire/review-answer-row';
+import { ChapterProgress, chapterNumberFromAnswerCount } from '@/components/questionnaire/segmented-progress';
+import { StickyFooter } from '@/components/questionnaire/sticky-footer';
+import { Action, Copy, Feedback, Loading, Notice, Page, SectionLabel } from '@/components/questionnaire/ui';
 import { useTheme } from '@/hooks/use-theme';
 import { isApiError, isNetworkError } from '@/lib/api-client';
 import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
@@ -21,6 +31,7 @@ export default function QuestionsScreen() {
   const [includeSkipped, setIncludeSkipped] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [pausedAt, setPausedAt] = useState<number | null>(null);
+  const milestoneHaptic = useRef(false);
 
   const current = useMemo(() => {
     if (!questionnaire.data) return null;
@@ -28,14 +39,29 @@ export default function QuestionsScreen() {
       ?? nextQuestion(questionnaire.data.questions, questionnaire.data.state, includeSkipped);
   }, [includeSkipped, questionnaire.data, selectedId]);
 
+  useEffect(() => {
+    if (!pausedAt || milestoneHaptic.current) return;
+    milestoneHaptic.current = true;
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [pausedAt]);
+
   async function refreshAfter(questionId: string, answerCount?: number) {
     setHistory((items) => [...items.filter((id) => id !== questionId), questionId]);
     setSelectedId(null);
-    if (answerCount && isBatchMilestone(answerCount)) setPausedAt(answerCount);
+    if (answerCount && isBatchMilestone(answerCount)) {
+      milestoneHaptic.current = false;
+      setPausedAt(answerCount);
+    }
     await questionnaire.refetch();
   }
 
-  if (questionnaire.isPending) return <Page title="What matters to you" back><Loading /></Page>;
+  if (questionnaire.isPending) {
+    return (
+      <Page title="What matters to you" back>
+        <Loading />
+      </Page>
+    );
+  }
   if (questionnaire.isError || !questionnaire.data) {
     return (
       <Page title="What matters to you" back>
@@ -48,80 +74,126 @@ export default function QuestionsScreen() {
   const { state, questions } = questionnaire.data;
   const batch = batchNumber(state.answerCount);
   const progress = batchProgress(state.answerCount);
+  const hasAnswers = state.answerCount > 0;
+  const canRevisitSkipped = questions.length > 0 && !includeSkipped && state.skipped.length > 0;
+  const shouldRetry = questions.length === 0 || (!hasAnswers && !canRevisitSkipped);
 
   if (pausedAt) {
+    const chapter = pausedAt / 5;
     return (
-      <Page title={`Batch ${pausedAt / 5} complete`} eyebrow="Questions saved" back>
-        <Progress value={pausedAt} total={20} label={`${pausedAt} of 20 answers saved`} />
-        <Copy>Your answers are safely stored. Take a break or continue with the next five.</Copy>
-        <Action label="Continue to the next batch" tone="primary" onPress={() => setPausedAt(null)} />
-        <Action label="Return to profile" onPress={() => router.replace('/dating/profile' as never)} />
+      <Page
+        title={`Chapter ${chapter} done`}
+        eyebrow="Questions saved"
+        back
+        footer={
+          <StickyFooter
+            primaryLabel="Keep going"
+            onPrimaryPress={() => setPausedAt(null)}
+            secondaryLabel="Take a break"
+            onSecondaryPress={() => router.replace('/dating' as never)}
+          />
+        }
+      >
+        <ChapterProgress answerCount={pausedAt} />
+        <Copy>Your answers are safely stored. Pick up with the next five whenever you are ready.</Copy>
       </Page>
     );
   }
 
   if (state.complete && !selectedId && !reviewing) {
     return (
-      <Page title="Your questionnaire is ready" eyebrow="20 answers saved" back>
-        <Progress value={20} total={20} label="20 of 20 answers saved" />
-        <Notice tone="success">You can keep answering to improve comparisons, or review anything you have shared.</Notice>
-        <Action label="Return to Discover" tone="primary" onPress={() => router.replace('/dating' as never)} />
-        <Action label="Review your answers" onPress={() => setReviewing(true)} />
-        <Action label="Answer another question" onPress={() => setSelectedId(nextQuestion(questions, state, includeSkipped)?.id ?? null)} />
+      <Page
+        title="Discover is open"
+        eyebrow="20 answers saved"
+        back
+        footer={
+          <StickyFooter
+            primaryLabel="See your matches"
+            onPrimaryPress={() => router.replace('/dating' as never)}
+            secondaryLabel="Review answers"
+            onSecondaryPress={() => setReviewing(true)}
+          />
+        }
+      >
+        <ChapterProgress answerCount={20} />
+        <Copy>You can keep answering to improve comparisons, or review anything you have shared.</Copy>
+        <Action label="Answer another question" tone="ghost" onPress={() => setSelectedId(nextQuestion(questions, state, includeSkipped)?.id ?? null)} />
       </Page>
     );
   }
 
+  if (current && !reviewing) {
+    return (
+      <QuestionEditorPage
+        key={`${current.id}:${state.revision}`}
+        question={current}
+        revision={state.revision}
+        batchProgress={progress}
+        chapterLabel={`Chapter ${chapterNumberFromAnswerCount(state.answerCount + 1)} · batch ${batch} of 4`}
+        previousQuestionId={history.at(-1) ?? null}
+        onPrevious={(questionId) => { setHistory((items) => items.slice(0, -1)); setSelectedId(questionId); }}
+        onDone={(answerCount) => refreshAfter(current.id, answerCount)}
+      />
+    );
+  }
+
   return (
-    <Page title={reviewing ? 'Review your answers' : 'What matters to you'} eyebrow={reviewing ? `${state.answerCount} saved` : `Batch ${batch} of 4`} back>
-      {!reviewing ? (
-        <>
-          <Progress value={progress} total={5} label={`${progress} of 5 saved in this batch · ${state.answerCount} total`} />
-          <Copy muted>Private answers still shape your percentage. They are never shown individually unless you publish them.</Copy>
-        </>
-      ) : null}
-      <Action label={reviewing ? 'Continue answering' : 'Review saved answers'} onPress={() => { setReviewing((value) => !value); setSelectedId(null); }} />
+    <Page
+      title={reviewing ? 'Review your answers' : questions.length === 0 ? 'Questions unavailable' : canRevisitSkipped ? 'Pick up where you left off' : hasAnswers ? 'All caught up' : 'Questions unavailable'}
+      eyebrow={reviewing ? `${state.answerCount} saved` : undefined}
+      back
+    >
+      {reviewing ? <Action label="Back to questions" onPress={() => { setReviewing(false); setSelectedId(null); }} /> : null}
 
       {reviewing ? (
         <View style={{ gap: SPACING.compact }}>
           {questions.filter((question) => question.answer_id).map((question, index) => (
-            <Action
+            <ReviewAnswerRow
               key={question.id}
-              label={`${index + 1}. ${question.prompt}${question.public ? ' · Public' : ' · Private'}`}
+              index={index + 1}
+              prompt={question.prompt}
+              isPublic={Boolean(question.public)}
               onPress={() => { setSelectedId(question.id); setReviewing(false); }}
             />
           ))}
           {state.answerCount === 0 ? <Notice>No answers yet. Complete the first batch to see them here.</Notice> : null}
         </View>
-      ) : current ? (
-        <QuestionEditor
-          key={`${current.id}:${state.revision}`}
-          question={current}
-          revision={state.revision}
-          previousQuestionId={history.at(-1) ?? null}
-          onPrevious={(questionId) => { setHistory((items) => items.slice(0, -1)); setSelectedId(questionId); }}
-          onDone={(answerCount) => refreshAfter(current.id, answerCount)}
-        />
       ) : (
         <>
-          <Notice>{includeSkipped ? 'You have answered every available non-sensitive question.' : 'The remaining questions were skipped. You can revisit them whenever you are ready.'}</Notice>
-          {!includeSkipped ? <Action label="Revisit skipped questions" onPress={() => setIncludeSkipped(true)} /> : null}
-          <Action label="Review saved answers" onPress={() => setReviewing(true)} />
+          <Copy>
+            {questions.length === 0
+              ? 'We could not find any questions to show. Try loading them again.'
+              : canRevisitSkipped
+                ? 'You have seen every available question. Revisit the ones you skipped whenever you are ready.'
+                : hasAnswers
+                  ? 'You have answered every available question. Your saved answers are ready to review.'
+                  : 'There are no starter questions to answer right now. Try loading them again.'}
+          </Copy>
+          {canRevisitSkipped ? <Action label="Revisit skipped questions" tone="primary" onPress={() => setIncludeSkipped(true)} /> : null}
+          {shouldRetry
+            ? <Action label="Try loading questions again" tone="primary" onPress={() => { void questionnaire.refetch(); }} />
+            : null}
+          {hasAnswers ? <Action label="Review saved answers" onPress={() => setReviewing(true)} /> : null}
+          <TextLink label="Return to Discover" onPress={() => router.replace('/dating' as never)} />
         </>
       )}
     </Page>
   );
 }
 
-function QuestionEditor({
+function QuestionEditorPage({
   question,
   revision,
+  batchProgress: batchProgressValue,
+  chapterLabel,
   previousQuestionId,
   onPrevious,
   onDone,
 }: {
   question: Question;
   revision: number;
+  batchProgress: number;
+  chapterLabel: string;
   previousQuestionId: string | null;
   onPrevious: (questionId: string) => void;
   onDone: (answerCount?: number) => Promise<void>;
@@ -137,15 +209,22 @@ function QuestionEditor({
   const [visible, setVisible] = useState(question.public ?? false);
   const [explanation, setExplanation] = useState(question.explanation ?? '');
   const [draftLoaded, setDraftLoaded] = useState(false);
-  const [draftSaved, setDraftSaved] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
   const [localError, setLocalError] = useState<unknown>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const userEdited = useRef(false);
   const userId = identity.data ?? '';
   const key = `questionnaire-draft:${userId}:${question.id.replace(':', '-')}`;
 
   useEffect(() => {
     let active = true;
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      if (active) setDraftLoaded(true);
+    }, 2000);
     void SecureStore.getItemAsync(key).then(async (raw) => {
-      if (!raw || !active) return;
+      if (!raw || !active || timedOut || userEdited.current) return;
       try {
         const parsed: unknown = JSON.parse(raw);
         if (isUsableDraft(parsed, { userId, questionId: question.id, revision })) {
@@ -154,21 +233,22 @@ function QuestionEditor({
           setWeight(parsed.weight);
           setVisible(parsed.visible);
           setExplanation(parsed.explanation);
+          setDraftRestored(true);
         } else {
           await SecureStore.deleteItemAsync(key);
         }
       } catch {
         await SecureStore.deleteItemAsync(key);
       }
-    }).catch(() => {}).finally(() => { if (active) setDraftLoaded(true); });
-    return () => { active = false; };
+    }).catch(() => {}).finally(() => { if (active) { clearTimeout(timeout); setDraftLoaded(true); } });
+    return () => { active = false; clearTimeout(timeout); };
   }, [key, question.id, revision, userId]);
 
   useEffect(() => {
     if (!draftLoaded || !userId) return;
     const draft: StoredQuestionDraft = { userId, questionId: question.id, revision, answer, acceptable, weight, visible, explanation };
     const timer = setTimeout(() => {
-      void SecureStore.setItemAsync(key, JSON.stringify(draft)).then(() => setDraftSaved(true)).catch(() => {});
+      void SecureStore.setItemAsync(key, JSON.stringify(draft)).catch(() => {});
     }, 300);
     return () => clearTimeout(timer);
   }, [acceptable, answer, draftLoaded, explanation, key, question.id, revision, userId, visible, weight]);
@@ -176,12 +256,27 @@ function QuestionEditor({
   const busy = save.isPending || remove.isPending || skip.isPending;
   const conflict = isApiError(localError) && localError.status === 409;
   const offline = isNetworkError(localError);
+  const hasAnswer = Boolean(answer);
+  const showAcceptBeat = hasAnswer;
+  const showWeightBeat = hasAnswer && acceptable.length > 0;
+
+  function selectAnswer(optionId: string) {
+    userEdited.current = true;
+    setAnswer(optionId);
+    setAcceptable((items) => items.includes(optionId) ? items : [...items, optionId]);
+  }
+
+  function selectAllAcceptable() {
+    userEdited.current = true;
+    setAcceptable(question.options.map((option) => option.id));
+  }
 
   async function submit() {
     try {
       setLocalError(null);
       const result = await save.mutateAsync({ questionId: question.id, answerId: answer, acceptable, weight, public: visible, explanation, revision });
       await SecureStore.deleteItemAsync(key).catch(() => {});
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await onDone(result.answerCount);
     } catch (error) {
       setLocalError(error);
@@ -204,55 +299,107 @@ function QuestionEditor({
       setLocalError(null);
       const result = await remove.mutateAsync({ questionId: question.id, revision });
       await SecureStore.deleteItemAsync(key).catch(() => {});
+      setMoreOpen(false);
       await onDone(result.answerCount);
     } catch (error) {
       setLocalError(error);
     }
   }
 
+  const footer = (
+    <StickyFooter
+      primaryLabel={save.isPending ? 'Saving…' : 'Save and next'}
+      primaryLoading={save.isPending}
+      primaryDisabled={busy || !answer || acceptable.length === 0}
+      onPrimaryPress={() => { void submit(); }}
+      secondaryLabel="More"
+      onSecondaryPress={() => setMoreOpen(true)}
+    />
+  );
+
   return (
-    <View style={{ gap: SPACING.base }}>
-      <Text accessibilityRole="header" style={[TYPOGRAPHY.title, { color: colors.foreground }]}>{question.prompt}</Text>
-      {question.sensitive ? <Notice>This optional question is outside the starter sequence. Skip it if you prefer.</Notice> : null}
+    <Page title="What matters to you" eyebrow={chapterLabel} hideTitle footer={footer} header={(
+      <QuestionTopBar
+        batchProgress={batchProgressValue}
+        batchLabel={`${batchProgressValue} of 5 in this batch`}
+        skipDisabled={busy}
+        onSkip={() => { void skipQuestion(); }}
+      />
+    )}>
+      <View style={{ gap: SPACING.section }}>
+        <Text accessibilityRole="header" style={[TYPOGRAPHY.display, { color: colors.foreground }]}>{question.prompt}</Text>
+        {question.sensitive ? <Notice>This optional question is outside the starter sequence. Skip it if you prefer.</Notice> : null}
+        {draftRestored && !busy ? <Copy muted>Restored your draft.</Copy> : null}
 
-      <SectionLabel>Your answer</SectionLabel>
-      {question.options.map((option) => <Action key={option.id} label={option.label} selected={answer === option.id} disabled={busy || !draftLoaded} onPress={() => setAnswer(option.id)} />)}
-
-      <SectionLabel>Answers you would accept</SectionLabel>
-      <Copy muted>Select every answer that would work for you.</Copy>
-      {question.options.map((option) => (
-        <Action
-          key={option.id}
-          label={option.label}
-          selected={acceptable.includes(option.id)}
-          disabled={busy || !draftLoaded}
-          onPress={() => setAcceptable((items) => items.includes(option.id) ? items.filter((id) => id !== option.id) : [...items, option.id])}
-        />
-      ))}
-
-      <SectionLabel>How important is this?</SectionLabel>
-      {([[0, 'Not important'], [1, 'A little important'], [10, 'Somewhat important'], [50, 'Very important'], [250, 'Extremely important']] as const).map(([value, label]) => (
-        <Action key={value} label={label} selected={weight === value} disabled={busy || !draftLoaded} onPress={() => setWeight(value)} />
-      ))}
-
-      <View style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.base }}>
-        <View style={{ flex: 1, gap: SPACING.micro }}>
-          <Text style={[TYPOGRAPHY.body, { color: colors.foreground, fontWeight: '600' }]}>Show this answer on my profile</Text>
-          <Text style={[TYPOGRAPHY.caption, { color: colors.mutedForeground }]}>Only people who also publish their answer can compare it.</Text>
+        <View style={{ gap: SPACING.compact }}>
+          {question.options.map((option) => (
+            <OptionRow
+              key={option.id}
+              label={option.label}
+              selected={answer === option.id}
+              disabled={busy}
+              onPress={() => selectAnswer(option.id)}
+            />
+          ))}
         </View>
-        <Switch accessibilityLabel="Show this answer on my profile" value={visible} disabled={busy || !draftLoaded} onValueChange={setVisible} />
+
+        {showAcceptBeat ? (
+          <BeatReveal>
+            <View style={{ gap: SPACING.compact }}>
+              <SectionLabel>Who else works for you?</SectionLabel>
+              <Copy muted>We start with your answer. Tap anyone else you would match with.</Copy>
+              <Action label="Anyone" tone="ghost" disabled={busy} onPress={selectAllAcceptable} />
+              <ChipRow>
+                {question.options.map((option) => (
+                  <OptionChip
+                    key={option.id}
+                    label={option.label}
+                    selected={acceptable.includes(option.id)}
+                    locked={option.id === answer}
+                    disabled={busy}
+                    onPress={() => {
+                      userEdited.current = true;
+                      if (option.id === answer) return;
+                      setAcceptable((items) => items.includes(option.id) ? items.filter((id) => id !== option.id) : [...items, option.id]);
+                    }}
+                  />
+                ))}
+              </ChipRow>
+            </View>
+          </BeatReveal>
+        ) : null}
+
+        {showWeightBeat ? (
+          <BeatReveal>
+            <View style={{ gap: SPACING.compact }}>
+              <SectionLabel>How much does it matter?</SectionLabel>
+              <ImportanceSlider value={weight} disabled={busy} onChange={(next) => { userEdited.current = true; setWeight(next); }} />
+            </View>
+          </BeatReveal>
+        ) : null}
+
+        {busy ? <Notice>{save.isPending ? 'Saving your answer…' : remove.isPending ? 'Deleting your answer…' : 'Loading another question…'}</Notice> : null}
+        <Feedback error={localError ?? remove.error ?? skip.error} />
+        {offline ? <Notice>Your selections are still saved on this phone. Reconnect, then try again.</Notice> : null}
+        {conflict ? <Action label="Load the latest saved answer" onPress={() => { void onDone(); }} /> : null}
       </View>
 
-      <Field label="Optional explanation" value={explanation} onChangeText={setExplanation} multiline placeholder="Add context in your own words" />
-      {draftSaved && !busy ? <Copy muted>Draft saved on this phone.</Copy> : null}
-      {busy ? <Notice>{save.isPending ? 'Saving your answer…' : remove.isPending ? 'Deleting your answer…' : 'Loading another question…'}</Notice> : null}
-      <Feedback error={localError ?? remove.error ?? skip.error} />
-      {offline ? <Notice>Your selections are still saved on this phone. Reconnect, then try again.</Notice> : null}
-      {conflict ? <Action label="Load the latest saved answer" onPress={() => { void onDone(); }} /> : null}
-      <Action label={save.isPending ? 'Saving answer…' : 'Save and continue'} tone="primary" disabled={busy || !draftLoaded || !answer || acceptable.length === 0} onPress={() => { void submit(); }} />
-      <Action label="Skip and show another question" disabled={busy} onPress={() => { void skipQuestion(); }} />
-      {previousQuestionId ? <Action label="Back to previous question" tone="ghost" disabled={busy} onPress={() => onPrevious(previousQuestionId)} /> : null}
-      {question.answer_id ? <Action label="Delete this answer" tone="danger" disabled={busy} onPress={() => { void deleteAnswer(); }} /> : null}
-    </View>
+      <MoreSheet
+        visible={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        visibleOnProfile={visible}
+        onVisibleChange={(value) => { userEdited.current = true; setVisible(value); }}
+        explanation={explanation}
+        onExplanationChange={(value) => { userEdited.current = true; setExplanation(value); }}
+        busy={busy}
+        showPrevious={Boolean(previousQuestionId)}
+        onPrevious={() => {
+          setMoreOpen(false);
+          if (previousQuestionId) onPrevious(previousQuestionId);
+        }}
+        showDelete={Boolean(question.answer_id)}
+        onDelete={() => { void deleteAnswer(); }}
+      />
+    </Page>
   );
 }

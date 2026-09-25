@@ -18,12 +18,14 @@ import { useOnboardingTheme } from '@/lib/onboarding-theme';
 import { OnboardingHeader } from './onboarding-header';
 import { OnboardingProgressBar } from './onboarding-progress-bar';
 import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
+import { RisingSheetScreen } from './rising-sheet-screen';
 
-interface OnboardingScreenShellProps {
+export interface OnboardingScreenShellProps {
     stepIndex: number;
     stepLabel?: string;
     onBack?: () => void;
     title: React.ReactNode;
+    headingAccessory?: React.ReactNode;
     subtitle?: string;
     children: React.ReactNode;
     footer?: React.ReactNode;
@@ -32,9 +34,24 @@ interface OnboardingScreenShellProps {
     contentContainerStyle?: StyleProp<ViewStyle>;
     /** Vertically center the main block — best for short forms like birthday/name. */
     centerContent?: boolean;
+    presentation?: 'standard' | 'rising';
+    beatKey?: string | number;
+    progressLabel?: string;
+    progressIndex?: number;
+    progressCount?: number;
+    showProgress?: boolean;
+    sheetEntrance?: boolean;
+    previousAnswer?: { label: string; value: string; onEdit?: () => void };
 }
 
-export function OnboardingScreenShell({
+export function OnboardingScreenShell(props: OnboardingScreenShellProps) {
+    if (props.presentation === 'rising') {
+        return <RisingSheetScreen {...props} />;
+    }
+    return <StandardOnboardingScreenShell {...props} />;
+}
+
+function StandardOnboardingScreenShell({
     stepIndex,
     stepLabel,
     onBack,

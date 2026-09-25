@@ -18,25 +18,46 @@ import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { useTheme } from '@/hooks/use-theme';
 import { compatibilityLabel, type Person } from '@/lib/questionnaire';
 
-export function Page({ title, eyebrow, children, back = false }: { title: string; eyebrow?: string; children: React.ReactNode; back?: boolean }) {
+export function Page({
+  title,
+  eyebrow,
+  children,
+  back = false,
+  footer,
+  header,
+  hideTitle = false,
+}: {
+  title: string;
+  eyebrow?: string;
+  children: React.ReactNode;
+  back?: boolean;
+  footer?: React.ReactNode;
+  header?: React.ReactNode;
+  hideTitle?: boolean;
+}) {
   const { colors } = useTheme();
   const router = useRouter();
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
+          style={styles.flex}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.page}
+          contentContainerStyle={[styles.page, footer ? styles.pageWithFooter : null]}
           contentInsetAdjustmentBehavior="automatic"
           showsVerticalScrollIndicator={false}
         >
+          {header}
           {back ? <Action label="Back" tone="ghost" onPress={() => router.canGoBack() ? router.back() : router.replace('/dating' as never)} /> : null}
-          <View style={styles.headingGroup}>
-            {eyebrow ? <Text style={[styles.eyebrow, { color: colors.primary }]}>{eyebrow}</Text> : null}
-            <Text accessibilityRole="header" style={[styles.title, { color: colors.foreground }]}>{title}</Text>
-          </View>
+          {!hideTitle ? (
+            <View style={styles.headingGroup}>
+              {eyebrow ? <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>{eyebrow}</Text> : null}
+              <Text accessibilityRole="header" style={[styles.title, { color: colors.foreground }]}>{title}</Text>
+            </View>
+          ) : null}
           {children}
         </ScrollView>
+        {footer}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -58,6 +79,7 @@ export function Action({
   disabled = false,
   selected = false,
   tone = 'secondary',
+  selectionMode,
   accessibilityHint,
 }: {
   label: string;
@@ -65,6 +87,7 @@ export function Action({
   disabled?: boolean;
   selected?: boolean;
   tone?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  selectionMode?: 'single' | 'multiple';
   accessibilityHint?: string;
 }) {
   const { colors } = useTheme();
@@ -81,21 +104,31 @@ export function Action({
   const textColor = primary ? colors.primaryForeground : danger ? colors.destructive : colors.foreground;
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={selectionMode === 'single' ? 'radio' : selectionMode === 'multiple' ? 'checkbox' : 'button'}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled, selected }}
+      accessibilityState={{ disabled, ...(selectionMode ? { checked: selected } : { selected }) }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.action,
         {
           borderColor: danger ? colors.destructive : selected ? colors.primary : ghost ? 'transparent' : colors.border,
+          borderWidth: selected && selectionMode ? 2 : 1,
           backgroundColor,
           opacity: disabled ? 0.45 : pressed ? 0.72 : 1,
         },
       ]}
     >
-      <Text style={[styles.actionText, { color: textColor }]}>{label}</Text>
+      <Text style={[styles.actionText, selectionMode && styles.choiceText, { color: textColor }]}>{label}</Text>
+      {selectionMode ? (
+        <View style={[
+          styles.choiceIndicator,
+          selectionMode === 'single' && styles.radioIndicator,
+          { borderColor: selected ? colors.primary : colors.mutedForeground, backgroundColor: selected ? colors.primary : 'transparent' },
+        ]}>
+          {selected ? <Text style={[styles.choiceCheck, { color: colors.primaryForeground }]}>✓</Text> : null}
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -200,13 +233,18 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   safeArea: { flex: 1 },
   page: { width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: SPACING.screenX, paddingTop: SPACING.base, paddingBottom: 56, gap: SPACING.base },
+  pageWithFooter: { paddingBottom: SPACING.large },
   headingGroup: { gap: SPACING.micro, marginBottom: SPACING.tight },
-  eyebrow: { ...TYPOGRAPHY.label, letterSpacing: 0.7, textTransform: 'uppercase' },
+  eyebrow: { ...TYPOGRAPHY.callout, fontWeight: '500' },
   title: { ...TYPOGRAPHY.display, maxWidth: 560 },
   copy: { ...TYPOGRAPHY.body, maxWidth: 640 },
   sectionLabel: { ...TYPOGRAPHY.title, marginTop: SPACING.tight },
-  action: { minHeight: 48, paddingHorizontal: SPACING.base, paddingVertical: SPACING.compact, borderRadius: RADIUS.md, borderWidth: 1, justifyContent: 'center' },
+  action: { minHeight: 48, paddingHorizontal: SPACING.base, paddingVertical: SPACING.compact, borderRadius: RADIUS.md, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.compact },
   actionText: { ...TYPOGRAPHY.body, fontWeight: '600' },
+  choiceText: { flex: 1 },
+  choiceIndicator: { width: 24, height: 24, borderWidth: 2, borderRadius: RADIUS.sm, alignItems: 'center', justifyContent: 'center' },
+  radioIndicator: { borderRadius: RADIUS.full },
+  choiceCheck: { fontSize: 16, lineHeight: 20, fontWeight: '700' },
   field: { gap: SPACING.tight },
   fieldLabel: { ...TYPOGRAPHY.body, fontWeight: '600' },
   input: { minHeight: 52, borderWidth: 1, borderRadius: RADIUS.md, paddingHorizontal: SPACING.base, paddingVertical: SPACING.compact, ...TYPOGRAPHY.body },

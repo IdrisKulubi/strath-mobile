@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/text';
 import { useOnboardingTheme } from '@/lib/onboarding-theme';
 import { RADIUS } from '@/lib/design-tokens';
+import { useTheme } from '@/hooks/use-theme';
 
 interface OnboardingPrimaryButtonProps {
     label: string;
@@ -13,6 +14,7 @@ interface OnboardingPrimaryButtonProps {
     disabled?: boolean;
     accessibilityLabel?: string;
     icon?: keyof typeof Ionicons.glyphMap;
+    appearance?: 'standard' | 'rising';
 }
 
 export function OnboardingPrimaryButton({
@@ -21,13 +23,33 @@ export function OnboardingPrimaryButton({
     disabled = false,
     accessibilityLabel,
     icon = 'arrow-forward',
+    appearance = 'standard',
 }: OnboardingPrimaryButtonProps) {
     const theme = useOnboardingTheme();
+    const { colors } = useTheme();
 
     const gradientColors = useMemo<[string, string]>(
         () => [theme.primary, theme.primaryHover],
         [theme.primary, theme.primaryHover],
     );
+
+    if (appearance === 'rising') {
+        return (
+            <Pressable
+                onPress={onPress}
+                disabled={disabled}
+                accessibilityRole="button"
+                accessibilityLabel={accessibilityLabel ?? label}
+                accessibilityState={{ disabled }}
+                style={({ pressed }) => [styles.button, styles.risingButton, {
+                    backgroundColor: disabled ? colors.control : colors.primary,
+                    opacity: pressed && !disabled ? 0.88 : 1,
+                }]}
+            >
+                <Text style={[styles.label, { color: disabled ? colors.mutedForeground : colors.primaryForeground }]}>{label}</Text>
+            </Pressable>
+        );
+    }
 
     if (disabled) {
         return (
@@ -89,6 +111,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         width: '100%',
     },
+    risingButton: { minHeight: 56, height: undefined, paddingVertical: 12 },
     darkButton: {
         flexDirection: 'row',
         paddingHorizontal: 8,
