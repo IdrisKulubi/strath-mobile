@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   safeArea: { flex: 1 },
   page: { width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: SPACING.screenX, paddingTop: SPACING.base, paddingBottom: 56, gap: SPACING.base },
-  pageWithFooter: { paddingBottom: SPACING.large },
+  pageWithFooter: { paddingBottom: SPACING.xl },
   headingGroup: { gap: SPACING.micro, marginBottom: SPACING.tight },
   eyebrow: { ...TYPOGRAPHY.callout, fontWeight: '500' },
   title: { ...TYPOGRAPHY.display, maxWidth: 560 },

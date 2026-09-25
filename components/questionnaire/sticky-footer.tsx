@@ -12,6 +12,8 @@ export function StickyFooter({
   primaryLoading,
   secondaryLabel,
   onSecondaryPress,
+  tertiaryLabel,
+  onTertiaryPress,
   reserveTabBar = false,
 }: {
   primaryLabel: string;
@@ -20,6 +22,8 @@ export function StickyFooter({
   primaryLoading?: boolean;
   secondaryLabel?: string;
   onSecondaryPress?: () => void;
+  tertiaryLabel?: string;
+  onTertiaryPress?: () => void;
   /** Extra space when footer sits above the dating tab bar */
   reserveTabBar?: boolean;
 }) {
@@ -38,6 +42,38 @@ export function StickyFooter({
         },
       ]}
     >
+      {tertiaryLabel && onTertiaryPress ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onTertiaryPress}
+          style={({ pressed }) => [
+            styles.outline,
+            {
+              borderColor: colors.controlBorder,
+              backgroundColor: colors.control,
+              opacity: pressed ? 0.88 : 1,
+            },
+          ]}
+        >
+          <Text style={[styles.buttonText, { color: colors.foreground }]}>{tertiaryLabel}</Text>
+        </Pressable>
+      ) : null}
+      {secondaryLabel && onSecondaryPress ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onSecondaryPress}
+          style={({ pressed }) => [
+            styles.outline,
+            {
+              borderColor: colors.primary,
+              backgroundColor: 'transparent',
+              opacity: pressed ? 0.88 : 1,
+            },
+          ]}
+        >
+          <Text style={[styles.buttonText, { color: colors.primaryText }]}>{secondaryLabel}</Text>
+        </Pressable>
+      ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ disabled }}
@@ -51,18 +87,9 @@ export function StickyFooter({
         {primaryLoading ? (
           <ActivityIndicator color={colors.primaryForeground} accessibilityLabel={primaryLabel} />
         ) : (
-          <Text style={[styles.primaryText, { color: colors.primaryForeground }]}>{primaryLabel}</Text>
+          <Text style={[styles.buttonText, { color: colors.primaryForeground }]}>{primaryLabel}</Text>
         )}
       </Pressable>
-      {secondaryLabel && onSecondaryPress ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={onSecondaryPress}
-          style={({ pressed }) => [styles.secondary, { opacity: pressed ? 0.7 : 1 }]}
-        >
-          <Text style={[styles.secondaryText, { color: colors.mutedForeground }]}>{secondaryLabel}</Text>
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -80,7 +107,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: SPACING.base,
   },
-  primaryText: { ...TYPOGRAPHY.body, fontWeight: '700' },
-  secondary: { minHeight: HEIGHTS.touchMin, alignItems: 'center', justifyContent: 'center' },
-  secondaryText: { ...TYPOGRAPHY.callout, fontWeight: '600' },
+  outline: {
+    minHeight: HEIGHTS.primaryControl,
+    borderRadius: RADIUS.pill,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.base,
+  },
+  buttonText: { ...TYPOGRAPHY.body, fontWeight: '700', textAlign: 'center' },
 });

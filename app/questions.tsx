@@ -14,7 +14,7 @@ import { OnboardingChoiceRow, OnboardingPrimaryButton, OnboardingScreenShell, Ri
 import { Text } from '@/components/ui/text';
 import { isApiError, isNetworkError } from '@/lib/api-client';
 import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
-import { createInteractionGate, EXPLANATION_MAX_LENGTH, IMPORTANCE_CHOICES, isCompleteQuestionDraft, isUsableDraft, nextQuestion, selectOwnAnswer, toggleAcceptable, toggleAllAcceptable, type StoredQuestionDraft } from '@/lib/questionnaire-flow';
+import { createInteractionGate, EXPLANATION_MAX_LENGTH, IMPORTANCE_CHOICES, isCompleteQuestionDraft, isUsableDraft, nextQuestion, partnerChoiceLayout, resumePartnerDraft, toggleAcceptable, toggleAllAcceptable, type StoredQuestionDraft } from '@/lib/questionnaire-flow';
 import { useIdentity, useQuestionnaire, useQuestionnaireMutation, type Question, type QuestionnaireState } from '@/lib/questionnaire';
 
 type Payload = { questions: Question[]; state: QuestionnaireState };
@@ -69,12 +69,13 @@ export default function QuestionsScreen() {
             onPrimaryPress={() => router.replace('/dating' as never)}
             secondaryLabel="Review answers"
             onSecondaryPress={() => setReviewing(true)}
+            tertiaryLabel="Answer another question"
+            onTertiaryPress={() => setSelectedId(nextQuestion(questions, state)?.id ?? null)}
           />
         }
       >
         <ChapterProgress answerCount={state.required} />
         <Copy>You can keep answering to improve comparisons, or review anything you have shared.</Copy>
-        <Action label="Answer another question" tone="ghost" onPress={() => setSelectedId(nextQuestion(questions, state)?.id ?? null)} />
       </Page>
     );
   }
@@ -153,9 +154,11 @@ function QuestionEditorPage({
   const save = useQuestionnaireMutation<SaveResult>('answers', 'PUT');
   const remove = useQuestionnaireMutation<{ deleted: boolean; revision: number; answerCount: number }>('answers', 'DELETE');
   const [answer, setAnswer] = useState(question.answer_id ?? '');
-  const [acceptable, setAcceptable] = useState<string[]>(question.answer_id
-    ? selectOwnAnswer(question.answer_id, (question.acceptable ?? []).filter((id) => id !== question.neutral_answer_id || id === question.answer_id)).acceptable
-    : question.acceptable ?? []);
+  const [acceptable, setAcceptable] = useState<string[]>(
+    question.answer_id === question.neutral_answer_id
+      ? question.acceptable ?? []
+      : (question.acceptable ?? []).filter((id) => id !== question.neutral_answer_id),
+  );
   const [weight, setWeight] = useState(question.weight ?? 10);
   const [weightChosen, setWeightChosen] = useState(question.weight !== null && Boolean(question.answer_id));
   const [explanation, setExplanation] = useState(question.explanation ?? '');
@@ -168,8 +171,12 @@ function QuestionEditorPage({
   const userId = identity.data ?? '';
   const key = `questionnaire-draft:${userId}:${question.id.replace(':', '-')}`;
   const optionIds = useMemo(() => question.options.map((option) => option.id), [question.options]);
-  const partnerOptions = useMemo(() => question.options.filter((option) => option.id !== answer && option.id !== question.neutral_answer_id), [answer, question.options, question.neutral_answer_id]);
+  const { visibleOptions: partnerOptions, showSelectAll } = useMemo(
+    () => partnerChoiceLayout(question.options, question.neutral_answer_id),
+    [question.options, question.neutral_answer_id],
+  );
   const isNeutral = answer !== '' && answer === question.neutral_answer_id;
+  const partnerOptionIds = useMemo(() => partnerOptions.map((option) => option.id), [partnerOptions]);
   const allPartnerOptionsSelected = partnerOptions.length > 0 && partnerOptions.every((option) => acceptable.includes(option.id));
   const optionLabel = (id: string) => question.options.find((option) => option.id === id)?.label ?? id;
 
@@ -192,12 +199,15 @@ function QuestionEditorPage({
       try {
         const parsed: unknown = JSON.parse(raw);
         if (isUsableDraft(parsed, { userId, questionId: question.id, revision, optionIds })) {
+          const resumed = resumePartnerDraft(parsed, question.neutral_answer_id);
           setAnswer(parsed.answer);
-          setAcceptable(parsed.answer ? selectOwnAnswer(parsed.answer, parsed.acceptable.filter((id) => id !== question.neutral_answer_id || id === parsed.answer)).acceptable : parsed.acceptable);
+          setAcceptable(parsed.answer === question.neutral_answer_id
+            ? resumed.acceptable
+            : resumed.acceptable.filter((id) => id !== question.neutral_answer_id));
           setWeight(parsed.weight);
           setExplanation(parsed.explanation);
           setWeightChosen(parsed.weightChosen ?? Boolean(question.answer_id || (parsed.beat ?? 0) >= 3));
-          jump(Math.min(parsed.beat ?? 0, 3));
+          jump(resumed.beat);
           setDraftRestored(true);
         } else {
           await SecureStore.deleteItemAsync(key);
@@ -211,7 +221,7 @@ function QuestionEditorPage({
 
   useEffect(() => {
     if (!draftLoaded || !userId) return;
-    const draft: StoredQuestionDraft = { userId, questionId: question.id, revision, answer, acceptable, weight, explanation, beat, weightChosen };
+    const draft: StoredQuestionDraft = { userId, questionId: question.id, revision, answer, acceptable, partnerChoicesExplicit: true, weight, explanation, beat, weightChosen };
     const timer = setTimeout(() => { void SecureStore.setItemAsync(key, JSON.stringify(draft)).catch(() => {}); }, 300);
     return () => clearTimeout(timer);
   }, [acceptable, answer, beat, draftLoaded, explanation, key, question.id, revision, userId, weight, weightChosen]);
@@ -219,14 +229,13 @@ function QuestionEditorPage({
   const busy = save.isPending || remove.isPending;
   const conflict = isApiError(localError) && localError.status === 409;
   const offline = isNetworkError(localError);
-  const canSave = isNeutral || (isCompleteQuestionDraft(optionIds, answer, acceptable, weight, explanation) && weightChosen);
+  const canSave = isNeutral || (isCompleteQuestionDraft(partnerOptionIds, answer, acceptable, weight, explanation) && weightChosen);
 
   function chooseAnswer(optionId: string) {
     if (busy || !choiceGate.current.tryEnter()) return;
     userEdited.current = true;
-    const selected = selectOwnAnswer(optionId, acceptable.filter((id) => id !== question.neutral_answer_id));
-    setAnswer(selected.answer);
-    setAcceptable(optionId === question.neutral_answer_id ? [optionId] : selected.acceptable);
+    setAnswer(optionId);
+    if (optionId !== answer) setAcceptable(optionId === question.neutral_answer_id ? [optionId] : []);
     setLocalError(null);
     if (optionId === question.neutral_answer_id) {
       setWeight(0);
@@ -279,14 +288,14 @@ function QuestionEditorPage({
   const previousAnswer = beat <= 1 || isNeutral ? undefined : {
     label: beat === 2 ? 'Partner answers' : 'Importance',
     value: beat === 2
-      ? acceptable.filter((id) => id !== answer).map(optionLabel).join(', ') || 'No additional answers'
+      ? acceptable.map(optionLabel).join(', ')
       : IMPORTANCE_CHOICES.find((choice) => choice.value === weight)?.label ?? '',
     onEdit: busy ? undefined : () => jump(beat - 1),
   };
   const titles = [question.prompt, 'What would work for you in a partner?', 'How much does this matter?', isNeutral ? 'Keep this to yourself?' : 'Want to add a little context?'];
   const subtitles = [
     'Choose the answer that feels most like you. Saved answers appear on your profile.',
-    'Choose any other answers that would work for a partner, or continue.',
+    'Choose the answers you would accept in a partner. Pick at least one, even if it differs from your answer.',
     'Choose the importance that feels right to you.',
     isNeutral ? 'This choice appears on your profile but does not affect matching. Save to continue.' : 'Optional. Add a note in your own words. Your answer and note will be visible to people viewing your profile.',
   ];
@@ -323,7 +332,7 @@ function QuestionEditorPage({
         <OnboardingPrimaryButton
           appearance="rising"
           label={beat === 3 ? save.isPending ? 'Saving…' : 'Save and continue' : 'Continue'}
-          disabled={busy || (beat === 1 ? acceptable.length === 0 : !canSave)}
+          disabled={busy || (beat === 1 ? !acceptable.some((id) => partnerOptionIds.includes(id)) : !canSave)}
           onPress={beat === 1 ? advance : () => { void submit(); }}
         />
       ) : undefined}
@@ -341,8 +350,8 @@ function QuestionEditorPage({
           ) : null}
           {beat === 1 ? (
             <>
-              {partnerOptions.length > 0 ? <OnboardingChoiceRow appearance="rising" selectionMode="multiple" option={{ value: 'select-all', label: 'Select all' }} selected={allPartnerOptionsSelected} disabled={busy} onPress={() => { userEdited.current = true; setAcceptable((items) => toggleAllAcceptable([answer, ...partnerOptions.map((option) => option.id)], answer, items)); }} /> : null}
-              {partnerOptions.map((option) => <OnboardingChoiceRow key={option.id} appearance="rising" selectionMode="multiple" option={{ value: option.id, label: option.label }} selected={acceptable.includes(option.id)} disabled={busy} onPress={() => { userEdited.current = true; setAcceptable((items) => toggleAcceptable(option.id, answer, items)); }} />)}
+              {showSelectAll ? <OnboardingChoiceRow appearance="rising" selectionMode="multiple" option={{ value: 'select-all', label: 'Select all' }} selected={allPartnerOptionsSelected} disabled={busy} onPress={() => { userEdited.current = true; setAcceptable((items) => toggleAllAcceptable(partnerOptionIds, items)); }} /> : null}
+              {partnerOptions.map((option) => <OnboardingChoiceRow key={option.id} appearance="rising" selectionMode="multiple" option={{ value: option.id, label: option.label }} selected={acceptable.includes(option.id)} disabled={busy} onPress={() => { userEdited.current = true; setAcceptable((items) => toggleAcceptable(option.id, items)); }} />)}
             </>
           ) : null}
           {beat === 2 ? IMPORTANCE_CHOICES.map((choice) => <OnboardingChoiceRow key={choice.value} appearance="rising" option={{ value: String(choice.value), label: choice.label, description: choice.description }} selected={weightChosen && weight === choice.value} disabled={busy} onPress={() => chooseWeight(choice.value)} />) : null}

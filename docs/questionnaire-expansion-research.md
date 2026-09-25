@@ -1,6 +1,6 @@
 # Compatibility questionnaire expansion: 20 → 32
 
-Status: **implemented in the mobile and backend code; database seeding and deployment pending**  
+Status: **implemented in the mobile and backend code; user-confirmed catalogue seed complete; deployment status unverified**  
 Prepared: 2026-09-25
 
 ## Recommendation
@@ -51,4 +51,4 @@ The user authorized enabling all 32 questions on 2026-09-25. The implementation 
 
 The backend counts only those 32 question IDs for completion and discovery. People who previously saved the first 20 remain at 20/32 and continue with the children question. Neutral responses save with weight zero, no accepted-partner preferences, and no optional note; the matching engine omits them from scoring evidence. New and edited answers remain public, while existing private answers are not republished. The mobile flow keeps the same Rising-sheet design and shows seven progress segments for 32 answers.
 
-The catalogue is seeded explicitly, not during app startup. For rollout, seed the nine added entries into the intended database using the existing `seed:questionnaire-catalogue -- --apply` procedure **before** activating the updated backend and mobile flow; check that 109 entries are published. No production seed or deployment has been run in this task. Device appearance and onboarding interaction remain for the user's mobile test.
+The catalogue is seeded explicitly, not during app startup. The user reported running the seed successfully: the intended database went from 100 to 109 published questions. The updated backend and mobile code must still be active for the flow to appear; deployment status has not been independently verified. Device appearance and onboarding interaction remain for the user's mobile test.

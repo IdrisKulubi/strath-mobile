@@ -26,22 +26,26 @@ export function createInteractionGate() {
   };
 }
 
-export function selectOwnAnswer(optionId: string, acceptable: string[]) {
-  return { answer: optionId, acceptable: acceptable.includes(optionId) ? acceptable : [...acceptable, optionId] };
-}
-
-export function toggleAcceptable(optionId: string, ownAnswer: string, acceptable: string[]) {
-  if (optionId === ownAnswer) return acceptable;
+export function toggleAcceptable(optionId: string, acceptable: string[]) {
   return acceptable.includes(optionId) ? acceptable.filter((id) => id !== optionId) : [...acceptable, optionId];
 }
 
-export function toggleAllAcceptable(optionIds: string[], ownAnswer: string, acceptable: string[]) {
-  return optionIds.every((id) => acceptable.includes(id)) ? [ownAnswer] : [...optionIds];
+export function toggleAllAcceptable(optionIds: string[], acceptable: string[]) {
+  return optionIds.every((id) => acceptable.includes(id)) ? [] : [...optionIds];
+}
+
+/** Partner choices are independent of the person's answer; disclosure-only choices are excluded. */
+export function partnerChoiceLayout(options: Question['options'], neutralAnswerId: string | null) {
+  const visibleOptions = options.filter((option) => option.id !== neutralAnswerId);
+  return {
+    visibleOptions,
+    showSelectAll: visibleOptions.length > 2,
+  };
 }
 
 export function isCompleteQuestionDraft(optionIds: string[], answer: string, acceptable: string[], weight: number, explanation: string) {
   const allowed = new Set(optionIds);
-  return allowed.has(answer) && acceptable.length > 0 && acceptable.includes(answer)
+  return allowed.has(answer) && acceptable.length > 0
     && acceptable.length <= allowed.size && acceptable.every((id) => allowed.has(id))
     && new Set(acceptable).size === acceptable.length
     && IMPORTANCE_VALUES.includes(weight) && explanation.trim().length <= EXPLANATION_MAX_LENGTH;
@@ -77,6 +81,8 @@ export type StoredQuestionDraft = {
   revision: number;
   answer: string;
   acceptable: string[];
+  /** Distinguishes explicit partner selections from older drafts that inserted the own answer automatically. */
+  partnerChoicesExplicit?: boolean;
   weight: number;
   /** Kept only to restore drafts written before the public-answer flow. */
   visible?: boolean;
@@ -85,6 +91,13 @@ export type StoredQuestionDraft = {
   weightChosen?: boolean;
   visibilityChosen?: boolean;
 };
+
+export function resumePartnerDraft(draft: StoredQuestionDraft, neutralAnswerId: string | null) {
+  if (draft.partnerChoicesExplicit || !draft.answer || draft.answer === neutralAnswerId) {
+    return { acceptable: draft.acceptable, beat: Math.min(draft.beat ?? 0, 3) };
+  }
+  return { acceptable: [], beat: 1 };
+}
 
 export function isUsableDraft(value: unknown, expected: Pick<StoredQuestionDraft, 'userId' | 'questionId' | 'revision'> & { optionIds?: string[] }): value is StoredQuestionDraft {
   if (!value || typeof value !== 'object') return false;
@@ -95,6 +108,7 @@ export function isUsableDraft(value: unknown, expected: Pick<StoredQuestionDraft
     && typeof draft.answer === 'string'
     && Array.isArray(draft.acceptable)
     && draft.acceptable.every((item) => typeof item === 'string')
+    && (draft.partnerChoicesExplicit === undefined || typeof draft.partnerChoicesExplicit === 'boolean')
     && typeof draft.weight === 'number'
     && IMPORTANCE_VALUES.includes(draft.weight)
     && (draft.visible === undefined || typeof draft.visible === 'boolean')

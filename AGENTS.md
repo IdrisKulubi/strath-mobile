@@ -26,7 +26,7 @@ Use the same shared visual language elsewhere in the mobile app, but the rising-
 - Do not start the next phase automatically after completing the requested phase. Finish with the result, validation, remaining limits, and next phase.
 - Current user instructions can change scope or design. Record an explicit design change in the contract and decision log; never treat these files as higher priority than the user's request.
 - Compatibility answers saved or edited after the 2026-09-25 design change are public. Do not republish answers that people previously saved as private; the user explicitly chose to leave those private until their owners edit them.
-- In the partner-answer beat, hide the person's own answer from the list and the previous-answer summary. It remains included in matching data. Present Select all as the same selectable checkbox row as the other partner options.
+- In the partner-answer beat, treat the person's own answer and acceptable partner answers as independent. Show every substantive catalogue option, including the person's own answer, as a selectable checkbox; exclude only disclosure-only options such as “Prefer not to say.” Start new partner answers with nothing selected and require at least one selection before Continue. Existing saved partner selections remain selected when edited, but changing the personal answer clears them so the person chooses again. Show Select all for lists longer than two; it must be reversible.
 
 ## Verification
 
