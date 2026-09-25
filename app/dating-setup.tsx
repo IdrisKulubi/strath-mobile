@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { OnboardingChoiceRow, OnboardingPrimaryButton, OnboardingScreenShell, RisingAgeRangeSlider, RisingDateField, RisingInlineFeedback, RisingTextField, useRisingBeatController } from '@/components/onboarding';
+import { OnboardingChoiceRow, OnboardingPrimaryButton, OnboardingScreenShell, RisingAgeRangeSlider, RisingDateField, RisingDistanceSlider, RisingInlineFeedback, RisingLocationCityStep, RisingTextField, useRisingBeatController } from '@/components/onboarding';
 import { Text } from '@/components/ui/text';
 import { useImageUpload } from '@/hooks/use-image-upload';
 import { useTheme } from '@/hooks/use-theme';
@@ -19,7 +19,10 @@ import {
   readDatingSetupDraft,
   saveDatingSetupDraft,
 } from '@/lib/dating-setup-draft';
+import type { Profile } from '@/hooks/use-profile';
+import { formatCityFromPlacemark } from '@/lib/location-format';
 import { ageRangeError, birthDateError, radiusError } from '@/lib/onboarding-input-validation';
+import { hasVerifiedFace } from '@/lib/profile-access';
 
 type OwnProfile = {
   profile: {
@@ -38,6 +41,17 @@ const genders = [['male', 'Man'], ['female', 'Woman'], ['other', 'Non-binary or 
 const interests = [['male', 'Men'], ['female', 'Women'], ['other', 'Non-binary or other identities']] as const;
 const intentions = ['Long-term relationship', 'Dating and exploring', 'Something casual', 'Still figuring it out'];
 const LAST_BEAT = 11;
+
+function isFaceVerifiedForNextStep(
+  profile: OwnProfile['profile'] | null | undefined,
+  verificationReset: boolean,
+) {
+  if (verificationReset || !profile) return false;
+  return hasVerifiedFace({
+    faceVerificationStatus: profile.face_verification_status as Profile['faceVerificationStatus'],
+    faceVerificationRequired: true,
+  });
+}
 
 export default function DatingSetupScreen() {
   const { colors } = useTheme();
@@ -73,8 +87,26 @@ export default function DatingSetupScreen() {
   const [failedPhotoUri, setFailedPhotoUri] = useState<string | null>(null);
   const [failedReplacementIndex, setFailedReplacementIndex] = useState<number | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const saveInFlight = useRef(false);
   const photoUploadInFlight = useRef(false);
+  const postSaveNavigated = useRef(false);
+  const [continuingAfterSave, setContinuingAfterSave] = useState(false);
+
+  const goToPostSetupStep = useCallback((
+    verificationReset: boolean,
+    profile: OwnProfile['profile'] | null | undefined,
+  ) => {
+    if (postSaveNavigated.current) return;
+    postSaveNavigated.current = true;
+    setContinuingAfterSave(true);
+    if (isFaceVerifiedForNextStep(profile, verificationReset)) {
+      router.replace('/questions' as never);
+      return;
+    }
+    router.replace({ pathname: '/verification', params: { returnTo: '/questions' } });
+  }, [router]);
 
   useEffect(() => {
     if (loaded || !questionnaire.data || !ownProfile.data || !identity.data) return;
@@ -195,17 +227,34 @@ export default function DatingSetupScreen() {
   }
 
   async function requestLocation() {
+    setLocationLoading(true);
+    setLocationError(null);
+    setError(null);
     try {
-      setError(null);
       const permission = await Location.requestForegroundPermissionsAsync();
-      if (!permission.granted) throw new Error('Location was not shared. Your city still works for discovery.');
+      if (!permission.granted) {
+        setLocationError('Location was not shared. You can type your city below instead.');
+        return;
+      }
       const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const reverseResults = await Location.reverseGeocodeAsync({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+      const resolvedCity = formatCityFromPlacemark(reverseResults[0]);
+      if (!resolvedCity) {
+        setLocationError('We could not read a city from your location. Type your city below.');
+        return;
+      }
       setCoordinates(location.coords);
-      setSaved(false); setDirty(true);
-    } catch (locationError) {
-      setCoordinates(null);
-      setSaved(false); setDirty(true);
-      setError(locationError);
+      setCity(resolvedCity);
+      if (!radius.trim()) setRadius('25');
+      setSaved(false);
+      setDirty(true);
+    } catch {
+      setLocationError('We could not fetch your location right now. Try again or type your city.');
+    } finally {
+      setLocationLoading(false);
     }
   }
 
@@ -239,12 +288,36 @@ export default function DatingSetupScreen() {
         await clearDatingSetupDraft(identity.data);
       }
       setVerificationReset(result.verificationReset);
+      const refetched = await ownProfile.refetch();
+      goToPostSetupStep(
+        result.verificationReset,
+        refetched.data?.profile ?? ownProfile.data?.profile ?? null,
+      );
     } catch (saveError) {
       setError(saveError);
+      setContinuingAfterSave(false);
+      postSaveNavigated.current = false;
     } finally {
       saveInFlight.current = false;
     }
   }
+
+  useEffect(() => {
+    if (postSaveNavigated.current) return;
+    if (!loaded || beat !== 11 || dirty || busy || saveInFlight.current) return;
+    if (!ownProfile.data?.profile) return;
+    if (saved || continuingAfterSave) return;
+    goToPostSetupStep(false, ownProfile.data.profile);
+  }, [
+    beat,
+    busy,
+    continuingAfterSave,
+    dirty,
+    goToPostSetupStep,
+    loaded,
+    ownProfile.data?.profile,
+    saved,
+  ]);
 
   const maximumBirthDate = new Date();
   maximumBirthDate.setFullYear(maximumBirthDate.getFullYear() - 18);
@@ -270,7 +343,7 @@ export default function DatingSetupScreen() {
     'Choose the option that fits you.',
     'Select every option that applies. We will not infer this from your gender.',
     'Choose the ages you are comfortable meeting.',
-    'A city is needed even when you use distance.',
+    'Share location for closer matches, or type your city below.',
     'You can continue with city only. Location is optional.',
     'Pick what fits today. You can change it later.',
     'A few details help someone start a conversation.',
@@ -333,8 +406,8 @@ export default function DatingSetupScreen() {
       footer={loaded && needsContinue ? (
         <OnboardingPrimaryButton
           appearance="rising"
-          label={beat === 11 ? busy ? 'Saving…' : saved ? 'Saved' : 'Save profile and preferences' : 'Continue'}
-          disabled={busy || (beat === 11 && saved) || !canAdvance}
+          label={beat === 11 ? busy ? 'Saving…' : continuingAfterSave ? 'Continuing…' : 'Save profile and preferences' : 'Continue'}
+          disabled={busy || (beat === 11 && continuingAfterSave) || !canAdvance}
           onPress={handleContinue}
         />
       ) : undefined}
@@ -381,12 +454,41 @@ export default function DatingSetupScreen() {
               error={fieldError ?? undefined}
             />
           ) : null}
-          {beat === 5 ? <RisingTextField label="City" value={city} onChangeText={(value) => { setCity(value); setSaved(false); setDirty(true); }} autoCapitalize="words" /> : null}
+          {beat === 5 ? (
+            <RisingLocationCityStep
+              city={city}
+              hasLocation={Boolean(coordinates)}
+              locationLabel={coordinates ? city : undefined}
+              loading={locationLoading}
+              error={locationError ?? undefined}
+              onRequestLocation={() => { void requestLocation(); }}
+              onCityChange={(value) => {
+                setCity(value);
+                setSaved(false);
+                setDirty(true);
+                setLocationError(null);
+              }}
+              onManualCityEdit={() => {
+                setCoordinates(null);
+                setLocationError(null);
+              }}
+            />
+          ) : null}
           {beat === 6 ? (
             <View style={styles.beatBody}>
               <OnboardingChoiceRow appearance="rising" option={{ value: 'city', label: 'Use my city only', description: 'No location permission needed' }} selected={!coordinates} onPress={() => { setCoordinates(null); setSaved(false); setDirty(true); setError(null); }} />
               <OnboardingChoiceRow appearance="rising" option={{ value: 'distance', label: 'Use my current location', description: 'Add a distance limit for discovery' }} selected={Boolean(coordinates)} onPress={() => { void requestLocation(); }} />
-              {coordinates ? <RisingTextField label="Maximum distance in kilometres" value={radius} onChangeText={(value) => { setRadius(value); setSaved(false); setDirty(true); }} keyboardType="number-pad" error={fieldError ?? undefined} /> : null}
+              {coordinates ? (
+                <RisingDistanceSlider
+                  radiusKm={radius}
+                  onChange={(value) => {
+                    setRadius(value);
+                    setSaved(false);
+                    setDirty(true);
+                  }}
+                  error={fieldError ?? undefined}
+                />
+              ) : null}
               <Text style={[styles.hint, { color: colors.mutedForeground }]}>Filters are never widened silently.</Text>
             </View>
           ) : null}
@@ -418,13 +520,8 @@ export default function DatingSetupScreen() {
           {beat === 11 ? (
             <View style={styles.beatBody}>
               <Text style={[styles.hint, { color: colors.mutedForeground }]}>{photos.length} photo{photos.length === 1 ? '' : 's'} · {bio.trim().length} introduction characters{university ? ` · ${university}` : ''}</Text>
-              {saved ? <RisingInlineFeedback message="Profile and preferences saved." /> : null}
-              {verificationReset ? <RisingInlineFeedback message="Your photos changed. Complete face verification again before discovery." /> : null}
-              {saved || (ownProfile.data?.profile && !dirty) ? (
-                <View style={styles.beatBody}>
-                  <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/verification', params: { returnTo: '/questions' } })} style={styles.linkTouch}><Text style={[styles.link, { color: colors.primaryText }]}>Complete face verification</Text></Pressable>
-                  <Pressable accessibilityRole="button" onPress={() => router.push('/questions' as never)} style={styles.linkTouch}><Text style={[styles.link, { color: colors.primaryText }]}>Continue to questions</Text></Pressable>
-                </View>
+              {verificationReset && !continuingAfterSave ? (
+                <RisingInlineFeedback message="Your photos changed. Complete face verification again before discovery." />
               ) : null}
             </View>
           ) : null}
