@@ -3,8 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { MOTION } from '@/lib/design-tokens';
 
 /** Cancels a pending advance on Back, jump, or unmount. Repeated taps cannot skip beats. */
-export function useRisingBeatController(lastBeat: number, reducedMotion: boolean) {
-    const [beat, setBeat] = useState(0);
+export function useRisingBeatController(lastBeat: number, reducedMotion: boolean, initialBeat = 0) {
+    const [beat, setBeat] = useState(() => Math.max(0, Math.min(lastBeat, initialBeat)));
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const locked = useRef(false);
 

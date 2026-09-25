@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { GoogleLogo } from '@/components/icons/google-logo';
@@ -36,9 +36,12 @@ export function RisingAuthEntry({ googleLoading, appleLoading, demoLoading, appl
       title="Make room for something real"
       subtitle="Sign in to build your profile and meet people who fit your rhythm."
       headingAccessory={
-        <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-          <Ionicons name="heart-outline" size={26} color={colors.primaryForeground} />
-        </View>
+        <Image
+          accessibilityLabel="StrathSpace"
+          source={require('@/assets/images/logos/LOGO.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
       }
       contentContainerStyle={styles.authBeat}
     >
@@ -107,7 +110,7 @@ export function RisingAuthEntry({ googleLoading, appleLoading, demoLoading, appl
 const styles = StyleSheet.create({
   authBeat: { justifyContent: 'center' },
   content: { gap: SPACING.compact, width: '100%' },
-  badge: { width: 56, height: 56, borderRadius: RADIUS.full, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' },
+  logo: { width: 96, height: 96, alignSelf: 'center' },
   provider: { minHeight: 56, width: '100%', borderRadius: RADIUS.full, justifyContent: 'center', paddingHorizontal: SPACING.base },
   providerInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.compact, minHeight: 56 },
   providerLabel: { ...TYPOGRAPHY.body, fontWeight: '600' },

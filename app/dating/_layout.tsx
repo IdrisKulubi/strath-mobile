@@ -4,14 +4,18 @@ import { Compass, Heart, MessageCircle, User } from 'lucide-react-native';
 
 import { Action, Feedback, Loading, Page } from '@/components/questionnaire/ui';
 import { useTheme } from '@/hooks/use-theme';
-import { useExperience } from '@/lib/questionnaire';
+import { useExperience, useQuestionnaire, type QuestionnaireState } from '@/lib/questionnaire';
 
 export default function DatingLayout() {
   const { colors } = useTheme();
   const experience = useExperience();
+  const status = useQuestionnaire<QuestionnaireState>('status', Boolean(experience.data?.collection));
   if (experience.isPending) return <Page title="Strathspace"><Loading label="Opening your dating experience" /></Page>;
   if (experience.isError) return <Page title="Strathspace"><Feedback error={experience.error} /><Action label="Try again" tone="primary" onPress={() => { void experience.refetch(); }} /></Page>;
   if (!experience.data?.shell) return <Redirect href="/(tabs)" />;
+  if (experience.data.collection && status.isPending) return <Page title="Strathspace"><Loading label="Loading your question progress" /></Page>;
+  if (experience.data.collection && status.isError) return <Page title="Strathspace"><Feedback error={status.error} /><Action label="Try again" tone="primary" onPress={() => { void status.refetch(); }} /></Page>;
+  if (experience.data.collection && status.data && status.data.answerCount > 0 && !status.data.complete) return <Redirect href="/questions" />;
   return (
     <Tabs screenOptions={{
       headerShown: false,

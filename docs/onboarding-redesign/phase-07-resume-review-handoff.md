@@ -1,6 +1,6 @@
 # Phase 07: Resume, milestones, review, and discovery handoff
 
-Status: Not started
+Status: In progress
 Dependencies: 03, 04, 05, 06
 Updated: 2026-09-24
 
@@ -21,7 +21,7 @@ app/index.tsx; app/_layout.tsx; app/onboarding/index.tsx; app/questions.tsx; app
 ## Checklist
 
 - [ ] Connect chapter completion and resume behavior across auth, setup, profile, verification, and questions using actual persisted status.
-- [ ] Make four groups of five questions feel like short chapters with calm milestone feedback and a clear take-a-break path.
+- [x] Keep progress grouped visually in four sets of five while questions advance consecutively; no chapter pause, skip, or take-a-break action.
 - [ ] Provide answer review/edit and deletion with correct eligibility updates; preserve previous conversations when discovery is paused.
 - [ ] Verify new/returning users, partial/complete/legacy users, notification links, and app restarts do not loop or revisit completed steps unnecessarily.
 - [ ] Deliver a truthful ready state and discovery CTA only when server gates pass. Keep pending/offline recovery actionable.
@@ -29,7 +29,7 @@ app/index.tsx; app/_layout.tsx; app/onboarding/index.tsx; app/questions.tsx; app
 
 ## Acceptance
 
-- [ ] Restart at each chapter, failed save, session expiry, edit/delete, skipped answers, and completion thresholds are verified.
+- [ ] Restart across five-answer milestones, failed save, session expiry, edit/delete, previously skipped answers, and completion thresholds is verified without an in-app break path.
 - [ ] Discovery cannot be entered from a cosmetic completion state; existing chats remain available as required.
 - [ ] An end-to-end recording demonstrates coherent motion and navigation across chapters.
 
@@ -39,11 +39,11 @@ No redesign of discovery, messaging, or the rest of the product beyond necessary
 
 ## Evidence and handoff
 
-- Changed files/commit: None.
-- Checks run and results: Not run; planning only.
+- Changed files/commit: The user-requested mandatory-continuation correction touched `app/questions.tsx`, `app/dating/_layout.tsx`, `app/_layout.tsx`, `lib/questionnaire-flow.ts`, and the focused flow test. No commit created.
+- Checks run and results: Seven focused questionnaire-flow tests passed; targeted ESLint passed. Scoped TypeScript still reports three unrelated existing diagnostics; changed files have no diagnostics.
 - Screenshots/recording and device/theme: None.
-- Remaining blockers or unavailable checks: Not assessed.
-- Deviations from the approved contract: None.
-- Next action: Start this phase after its dependencies are Done and the user requests it.
+- Remaining blockers or unavailable checks: User-owned mobile retest and the other Phase 07 checklist items remain.
+- Deviations from the approved contract: The user changed the questionnaire from optional pauses to mandatory continuous completion; the contract now records that decision.
+- Next action: Continue the remaining Phase 07 work when requested after the Phase 06 mobile appearance retest.
 
 When working, replace these placeholders with actual evidence. Synchronize this phase's status and the master row in the same task. A written plan or generated concept image is not implementation evidence.

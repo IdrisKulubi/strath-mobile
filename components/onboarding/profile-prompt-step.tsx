@@ -1,27 +1,20 @@
 import React, { useMemo, useState } from 'react';
 import {
     Keyboard,
-    KeyboardAvoidingView,
-    Platform,
     Pressable,
     StyleSheet,
     TextInput,
     View,
 } from 'react-native';
-import Animated, { FadeInDown, FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui/text';
 import { PROMPT_OPTIONS } from '@/constants/profile-options';
-import { MOTION, Palette, RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { Palette, RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { useOnboardingTheme, withOnboardingAlpha } from '@/lib/onboarding-theme';
 
 import { OnboardingChoiceRow } from './onboarding-choice-row';
-import { OnboardingHeader } from './onboarding-header';
 import { OnboardingPrimaryButton } from './onboarding-primary-button';
-import { OnboardingProgressBar } from './onboarding-progress-bar';
-import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
 import { OnboardingScreenShell } from './onboarding-screen-shell';
 
 const LEGACY_PROMPT_IDS = new Set(['dating_style', 'confession', 'favorite_way']);
@@ -45,8 +38,6 @@ export function ProfilePromptStep({
     onBack,
 }: ProfilePromptStepProps) {
     const theme = useOnboardingTheme();
-    const insets = useSafeAreaInsets();
-    const reducedMotion = useReducedMotion();
 
     const [phase, setPhase] = useState<'pick' | 'answer'>(
         prompts[0]?.promptId && prompts[0]?.response ? 'answer' : 'pick',
@@ -63,10 +54,6 @@ export function ProfilePromptStep({
         () => PROMPT_CHOICES.find((prompt) => prompt.id === selectedPromptId)?.label ?? '',
         [selectedPromptId],
     );
-
-    const topEntering = reducedMotion ? undefined : FadeInDown.delay(60).duration(MOTION.short);
-    const mainEntering = reducedMotion ? undefined : FadeInUp.delay(100).duration(MOTION.short);
-    const footerEntering = reducedMotion ? undefined : FadeInUp.delay(160).duration(MOTION.short);
 
     const handleBack = () => {
         Keyboard.dismiss();
@@ -109,7 +96,12 @@ export function ProfilePromptStep({
     if (phase === 'pick') {
         return (
             <OnboardingScreenShell
+                presentation="rising"
                 stepIndex={globalStepIndex}
+                beatKey="profile-prompt-pick"
+                progressLabel="Your profile"
+                progressIndex={2}
+                progressCount={3}
                 onBack={handleBack}
                 title="Pick a prompt"
                 subtitle="Choose one — you'll write a short answer next."
@@ -131,125 +123,46 @@ export function ProfilePromptStep({
     }
 
     return (
-        <KeyboardAvoidingView
-            style={[
-                styles.answerContainer,
-                {
-                    paddingTop: insets.top + SPACING.compact,
-                    paddingBottom: Math.max(insets.bottom, SPACING.base),
-                },
-            ]}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+        <OnboardingScreenShell
+            presentation="rising"
+            stepIndex={globalStepIndex}
+            beatKey="profile-prompt-answer"
+            progressLabel="Your profile"
+            progressIndex={2}
+            progressCount={3}
+            onBack={handleBack}
+            title="Write your answer"
+            subtitle="A specific detail makes it easier to start a conversation."
+            scrollable
+            keyboardAvoiding
+            footer={<OnboardingPrimaryButton appearance="rising" label="Continue" onPress={handleContinue} disabled={!canContinueAnswer} />}
         >
-            <OnboardingScreenBackdrop />
-
-            <Pressable style={styles.answerBody} onPress={Keyboard.dismiss} accessible={false}>
-                <Animated.View entering={topEntering} style={styles.topSection}>
-                    <OnboardingProgressBar stepIndex={globalStepIndex} />
-                    <OnboardingHeader
-                        stepIndex={globalStepIndex}
-                        onBack={handleBack}
-                    />
-                </Animated.View>
-
-                <Animated.View entering={mainEntering} style={styles.answerMain}>
-                    <Text style={[styles.answerTitle, { color: theme.foreground }]}>
-                        Write your answer
+            <View style={styles.answerMain}>
+                <View style={[styles.promptChip, { backgroundColor: withOnboardingAlpha(theme.primary, theme.isDark ? 0.16 : 0.08) }]}>
+                    <Text style={[styles.promptChipText, { color: theme.foreground }]}>{selectedPromptLabel}</Text>
+                </View>
+                <TextInput
+                    value={response}
+                    onChangeText={(text) => { setResponse(text.slice(0, PROMPT_RESPONSE_MAX_LENGTH)); setShowAnswerError(false); }}
+                    placeholder="Write something real and specific..."
+                    placeholderTextColor={theme.mutedForeground}
+                    multiline
+                    autoFocus
+                    textAlignVertical="top"
+                    accessibilityLabel="Prompt answer"
+                    style={[styles.answerInput, { color: theme.foreground, backgroundColor: theme.surface, borderColor: showAnswerError ? errorColor : theme.border }]}
+                />
+                <View style={styles.answerMeta}>
+                    <Text style={[styles.helperText, { color: showAnswerError ? errorColor : theme.mutedForeground }]}>
+                        {trimmedResponse.length < PROMPT_RESPONSE_MIN_LENGTH ? `At least ${PROMPT_RESPONSE_MIN_LENGTH} characters` : 'Looks good'}
                     </Text>
-
-                    <View
-                        style={[
-                            styles.promptChip,
-                            {
-                                backgroundColor: withOnboardingAlpha(
-                                    theme.primary,
-                                    theme.isDark ? 0.16 : 0.08,
-                                ),
-                            },
-                        ]}
-                    >
-                        <Text
-                            style={[styles.promptChipText, { color: theme.foreground }]}
-                            numberOfLines={2}
-                        >
-                            {selectedPromptLabel}
-                        </Text>
-                    </View>
-
-                    <TextInput
-                        value={response}
-                        onChangeText={(text) => {
-                            setResponse(text.slice(0, PROMPT_RESPONSE_MAX_LENGTH));
-                            if (showAnswerError) {
-                                setShowAnswerError(false);
-                            }
-                        }}
-                        placeholder="Write something real and specific..."
-                        placeholderTextColor={theme.mutedForeground}
-                        multiline
-                        autoFocus
-                        blurOnSubmit={false}
-                        textAlignVertical="top"
-                        accessibilityLabel="Prompt answer"
-                        style={[
-                            styles.answerInput,
-                            {
-                                color: theme.foreground,
-                                backgroundColor: theme.surface,
-                                borderColor: showAnswerError ? errorColor : theme.border,
-                            },
-                        ]}
-                    />
-
-                    <View style={styles.answerMeta}>
-                        <Text
-                            style={[
-                                styles.helperText,
-                                {
-                                    color: showAnswerError ? errorColor : theme.mutedForeground,
-                                },
-                            ]}
-                        >
-                            {trimmedResponse.length < PROMPT_RESPONSE_MIN_LENGTH
-                                ? `At least ${PROMPT_RESPONSE_MIN_LENGTH} characters`
-                                : 'Looks good'}
-                        </Text>
-
-                        <View style={styles.metaActions}>
-                            <Text style={[styles.helperText, { color: theme.mutedForeground }]}>
-                                {`${trimmedResponse.length}/${PROMPT_RESPONSE_MAX_LENGTH}`}
-                            </Text>
-                            <Pressable
-                                onPress={Keyboard.dismiss}
-                                accessibilityRole="button"
-                                accessibilityLabel="Done editing"
-                                hitSlop={8}
-                                style={[
-                                    styles.doneChip,
-                                    {
-                                        backgroundColor: theme.surfaceMuted,
-                                        borderColor: theme.border,
-                                    },
-                                ]}
-                            >
-                                <Text style={[styles.doneChipText, { color: theme.foreground }]}>
-                                    Done
-                                </Text>
-                            </Pressable>
-                        </View>
-                    </View>
-                </Animated.View>
-
-                <Animated.View entering={footerEntering} style={styles.footer}>
-                    <OnboardingPrimaryButton
-                        label="Continue"
-                        onPress={handleContinue}
-                        disabled={!canContinueAnswer}
-                    />
-                </Animated.View>
-            </Pressable>
-        </KeyboardAvoidingView>
+                    <Text style={[styles.helperText, { color: theme.mutedForeground }]}>{`${trimmedResponse.length}/${PROMPT_RESPONSE_MAX_LENGTH}`}</Text>
+                </View>
+                <Pressable onPress={Keyboard.dismiss} accessibilityRole="button" accessibilityLabel="Done editing" style={styles.doneChip}>
+                    <Text style={[styles.doneChipText, { color: theme.foreground }]}>Done editing</Text>
+                </Pressable>
+            </View>
+        </OnboardingScreenShell>
     );
 }
 

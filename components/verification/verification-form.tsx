@@ -13,6 +13,9 @@ import { VerificationStatsBlock } from './verification-stats-block';
 import { VerificationStepCard } from './verification-step-card';
 
 interface VerificationFormProps {
+    beat: 0 | 1;
+    cameraError: string | null;
+    onBackToPhotos: () => void;
     profilePhotoUrls: string[];
     profileSummary: string;
     selfieUri: string | null;
@@ -27,6 +30,9 @@ interface VerificationFormProps {
 }
 
 export function VerificationForm({
+    beat,
+    cameraError,
+    onBackToPhotos,
     profilePhotoUrls,
     profileSummary,
     selfieUri,
@@ -47,13 +53,14 @@ export function VerificationForm({
             <View style={styles.hero}>
                
                 <Text variant="h3" style={{ color: theme.colors.foreground }}>
-                    Verify your face
+                    {beat === 0 ? 'A quick check to build trust' : 'Take your verification selfie'}
                 </Text>
                 <Text variant="p" style={{ color: theme.colors.mutedForeground, marginTop: 0 }}>
-                    One quick selfie so other users know your profile is real.
+                    {beat === 0 ? 'We compare one selfie with your profile photos. We ask for camera access only when you choose to take it.' : 'Face the camera in good light. You can retake the photo before submitting.'}
                 </Text>
             </View>
 
+            {beat === 0 ? (
             <VerificationStepCard
                 title="Profile photos"
                 meta={profileSummary}
@@ -74,6 +81,7 @@ export function VerificationForm({
                             key={`${photo}-${index}`}
                             source={{ uri: photo }}
                             style={styles.profileThumb}
+                            accessibilityLabel={`Profile photo ${index + 1}`}
                             accessibilityIgnoresInvertColors
                         />
                     ))}
@@ -90,12 +98,19 @@ export function VerificationForm({
                     <Text>{needsMorePhotos ? 'Add profile photos' : 'Edit profile photos'}</Text>
                 </Button>
             </VerificationStepCard>
+            ) : null}
 
+            {beat === 1 ? (
+            <>
+            <Pressable accessibilityRole="button" accessibilityLabel="Back to profile photos" onPress={onBackToPhotos}>
+                <Text style={{ color: theme.colors.primary }}>Back to photos</Text>
+            </Pressable>
             <VerificationStepCard title="Selfie" meta="Good light, face centered">
                 {selfieUri ? (
                     <Image
                         source={{ uri: selfieUri }}
                         style={styles.selfiePreview}
+                        accessibilityLabel="Verification selfie preview"
                         accessibilityIgnoresInvertColors
                     />
                 ) : (
@@ -122,7 +137,11 @@ export function VerificationForm({
                     </Button>
                 ) : null}
             </VerificationStepCard>
+            {cameraError ? <Text accessibilityRole="alert" style={{ color: theme.colors.destructive }}>{cameraError}</Text> : null}
+            </>
+            ) : null}
 
+            {beat === 1 ? (
             <View style={theme.statusCard}>
                 <View style={styles.statusHeader}>
                     {isProcessing ? (
@@ -143,6 +162,7 @@ export function VerificationForm({
                     variant="inline"
                 />
             </View>
+            ) : null}
         </>
     );
 }

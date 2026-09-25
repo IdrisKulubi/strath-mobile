@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SqlExecutor } from "./db";
 import { z } from "zod";
 import { query, transaction } from "./db";
-import { ageOn, ALGORITHM, answerInput, preferenceInput, publicScore, scoreSchema, sortScores, type EnginePerson, type Score } from "./contracts";
+import { ageOn, ALGORITHM, answerInput, preferenceInput, publicScore, REQUIRED_ANSWER_COUNT, REQUIRED_QUESTION_IDS, scoreSchema, sortScores, type EnginePerson, type Score } from "./contracts";
 import { card, eligible, ready, type Candidate } from "./eligibility";
 import { rank } from "./engine-client";
 
@@ -11,8 +11,8 @@ const idSchema=z.string().min(1).max(128);
 async function ensureState(id:string,c?:SqlExecutor){await query('INSERT INTO q_state(user_id) VALUES($1) ON CONFLICT DO NOTHING',[id],c);}
 export async function status(id:string){
  await ensureState(id);
- const [s]=await query<{revision:number;birth_date:string|null;preferences:import("./contracts").Preferences|null;skipped:string[];count:number}>(`SELECT revision,birth_date::text,preferences,skipped,(SELECT count(*)::int FROM q_answers a JOIN q_questions q ON q.id=a.question_id AND q.published WHERE a.user_id=s.user_id) AS count FROM q_state s WHERE user_id=$1`,[id]);
- return {...s,required:20,complete:s.count>=20};
+ const [s]=await query<{revision:number;birth_date:string|null;preferences:import("./contracts").Preferences|null;skipped:string[];count:number}>(`SELECT revision,birth_date::text,preferences,skipped,(SELECT count(*)::int FROM q_answers a JOIN q_questions q ON q.id=a.question_id AND q.published WHERE a.user_id=s.user_id AND a.question_id=ANY($2::text[])) AS count FROM q_state s WHERE user_id=$1`,[id,REQUIRED_QUESTION_IDS]);
+ return {...s,required:REQUIRED_ANSWER_COUNT,complete:s.count>=REQUIRED_ANSWER_COUNT};
 }
 export async function questions(id:string){
  const s=await status(id);
@@ -65,11 +65,11 @@ export async function preferences(id:string,body:unknown){
 }
 export async function candidates(viewer:string,only?:string,c?:SqlExecutor):Promise<Candidate[]>{
  return query<Candidate>(`SELECT u.id,u.deleted_at,s.revision,s.birth_date::text,s.preferences,jsonb_build_object('first_name',p.first_name,'gender',p.gender,'about_me',p.about_me,'bio',p.bio,'photos',p.photos,'profile_completed',p.profile_completed,'is_complete',p.is_complete,'is_visible',p.is_visible,'discovery_paused',p.discovery_paused,'anonymous',p.anonymous,'face_verification_status',p.face_verification_status,'incognito_mode',p.incognito_mode,'visibility_mode',p.visibility_mode) AS profile,
- (SELECT count(*)::int FROM q_answers a JOIN q_questions q ON q.id=a.question_id AND q.published WHERE a.user_id=u.id) AS answer_count,
+ (SELECT count(*)::int FROM q_answers a JOIN q_questions q ON q.id=a.question_id AND q.published WHERE a.user_id=u.id AND a.question_id=ANY($3::text[])) AS answer_count,
  EXISTS(SELECT 1 FROM q_decisions d WHERE d.actor_id=u.id AND d.target_id=$1 AND d.decision='like') AS incoming_like
  FROM "user" u JOIN profiles p ON p.user_id=u.id JOIN q_state s ON s.user_id=u.id
  WHERE ($2::text IS NULL OR u.id=$2) AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$1 AND b.blocked_id=u.id) OR (b.blocked_id=$1 AND b.blocker_id=u.id))
- ORDER BY u.id LIMIT 10001`,[viewer,only??null],c);
+ ORDER BY u.id LIMIT 10001`,[viewer,only??null,REQUIRED_QUESTION_IDS],c);
 }
 async function pair(id:string,target:string,c?:SqlExecutor){
  if(id===target)throw new DomainError('Choose another profile');
@@ -112,7 +112,7 @@ export async function discovery(id:string,page=0){
  const all=await candidates(id);
  if(all.length>10000)throw new DomainError('Discovery is temporarily at capacity. Please try again.',503);
  const viewer=all.find(x=>x.id===id);
- if(!viewer||!ready(viewer))throw new DomainError('Complete your profile, preferences, face verification and 20 answers to discover people.',428);
+ if(!viewer||!ready(viewer))throw new DomainError(`Complete your profile, preferences, face verification and ${REQUIRED_ANSWER_COUNT} answers to discover people.`,428);
  const hidden=await query(`SELECT target_id AS id FROM q_decisions WHERE actor_id=$1 UNION SELECT CASE WHEN user_a=$1 THEN user_b ELSE user_a END FROM q_connections WHERE user_a=$1 OR user_b=$1`,[id]);
  const excluded=new Set(hidden.map(x=>x.id));
  const pool=all.filter(x=>!excluded.has(x.id)&&eligible(viewer,x));

@@ -2,7 +2,7 @@ import type { QueryResultRow } from "pg";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
-import { ALGORITHM, publicScore, sortScores, type EnginePerson, type Score } from "./contracts";
+import { ALGORITHM, NEUTRAL_ANSWER_IDS, REQUIRED_ANSWER_COUNT, REQUIRED_QUESTION_IDS, publicScore, sortScores, type EnginePerson, type Score } from "./contracts";
 import { query, transaction } from "./db";
 import { rank as rankWithEngine } from "./engine-client";
 import { isDiscoveryReady, isReciprocallyEligible, publicProfile, type Candidate } from "./eligibility";
@@ -65,7 +65,8 @@ async function loadCandidates(viewerId: string) {
             (SELECT count(*)::int
                 FROM q_answers answer
                 JOIN q_questions question ON question.id = answer.question_id AND question.published
-                WHERE answer.user_id = account.id) AS "answerCount",
+               WHERE answer.user_id = account.id
+                 AND answer.question_id = ANY($3::text[])) AS "answerCount",
             profile.first_name AS "firstName",
             profile.gender,
             coalesce(profile.about_me, profile.bio, '') AS introduction,
@@ -94,7 +95,8 @@ async function loadCandidates(viewerId: string) {
           AND (SELECT count(*)
                FROM q_answers answer
                JOIN q_questions question ON question.id = answer.question_id AND question.published
-               WHERE answer.user_id = account.id) >= 20
+               WHERE answer.user_id = account.id
+                 AND answer.question_id = ANY($3::text[])) >= $4
           AND NOT EXISTS (
             SELECT 1 FROM blocks block
             WHERE (block.blocker_id = $1 AND block.blocked_id = account.id)
@@ -102,7 +104,7 @@ async function loadCandidates(viewerId: string) {
         )
         ORDER BY account.id
         LIMIT $2
-    `, [viewerId, MAX_POOL_SIZE + 2]);
+    `, [viewerId, MAX_POOL_SIZE + 2, REQUIRED_QUESTION_IDS, REQUIRED_ANSWER_COUNT]);
     if (rows.length > MAX_POOL_SIZE + 1) {
         throw new DomainError("Discovery has too many eligible accounts to rank safely. Please try again later.", 503);
     }
@@ -151,7 +153,8 @@ async function enginePeople(candidates: Candidate[]) {
     return candidates.map((candidate): EnginePerson => ({
         id: candidate.id,
         revision: candidate.revision,
-        answers: answers.filter((answer) => answer.userId === candidate.id).map((answer) => ({
+        answers: answers.filter((answer) => answer.userId === candidate.id
+            && NEUTRAL_ANSWER_IDS[answer.questionVersionId] !== answer.answerId).map((answer) => ({
             questionVersionId: answer.questionVersionId,
             answerId: answer.answerId,
             acceptableAnswerIds: answer.acceptableAnswerIds,
@@ -274,7 +277,7 @@ export async function discovery(userId: string, page = 0, dependencies: Phase4De
     const initial = await loadCandidates(userId);
     const viewer = initial.find((candidate) => candidate.id === userId);
     if (!viewer || !isDiscoveryReady(viewer)) {
-        throw new DomainError("Complete your profile, preferences, face verification and 20 answers to discover people.", 428);
+        throw new DomainError(`Complete your profile, preferences, face verification and ${REQUIRED_ANSWER_COUNT} answers to discover people.`, 428);
     }
     const excluded = await phase5ExcludedIds(userId);
     const eligible = initial.filter((candidate) => !excluded.has(candidate.id) && isReciprocallyEligible(viewer, candidate));
@@ -319,20 +322,20 @@ export async function comparison(userId: string, targetId: string, dependencies:
         id: string;
         prompt: string;
         options: { id: string; label: string }[];
-        yours: string;
+        yours: string | null;
         theirs: string;
-        yourExplanation: string;
+        yourExplanation: string | null;
         theirExplanation: string;
     } & QueryResultRow>(`
         SELECT question.id, question.prompt, question.options,
                viewer_answer.answer_id AS yours, candidate_answer.answer_id AS theirs,
                viewer_answer.explanation AS "yourExplanation",
                candidate_answer.explanation AS "theirExplanation"
-        FROM q_answers viewer_answer
-        JOIN q_answers candidate_answer ON candidate_answer.question_id = viewer_answer.question_id
-        JOIN q_questions question ON question.id = viewer_answer.question_id AND question.published
-        WHERE viewer_answer.user_id = $1 AND candidate_answer.user_id = $2
-          AND viewer_answer.public AND candidate_answer.public
+        FROM q_answers candidate_answer
+        JOIN q_questions question ON question.id = candidate_answer.question_id AND question.published
+        LEFT JOIN q_answers viewer_answer
+          ON viewer_answer.question_id = candidate_answer.question_id AND viewer_answer.user_id = $1
+        WHERE candidate_answer.user_id = $2 AND candidate_answer.public
         ORDER BY question.position
     `, [userId, targetId]);
 

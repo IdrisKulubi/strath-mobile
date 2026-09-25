@@ -126,6 +126,11 @@ export const Palette = {
     tabIconSelected: '#C41258',
     success: '#2D9A62',
     warning: '#C47A1A',
+    risingGlassTint: 'rgba(255, 255, 255, 0.42)',
+    risingGlassOverlay: 'rgba(255, 255, 255, 0.68)',
+    risingHeaderScrim0: 'rgba(245, 242, 244, 0.94)',
+    risingHeaderScrim1: 'rgba(245, 242, 244, 0.62)',
+    risingHeaderScrim2: 'rgba(245, 242, 244, 0.28)',
   },
   dark: {
     background: '#0D0B0D',
@@ -155,6 +160,11 @@ export const Palette = {
     tabIconSelected: '#E0186A',
     success: '#3DB87A',
     warning: '#E0A040',
+    risingGlassTint: 'rgba(30, 21, 43, 0.38)',
+    risingGlassOverlay: 'rgba(30, 21, 43, 0.52)',
+    risingHeaderScrim0: 'rgba(13, 11, 13, 0.92)',
+    risingHeaderScrim1: 'rgba(13, 11, 13, 0.68)',
+    risingHeaderScrim2: 'rgba(13, 11, 13, 0.32)',
   },
 } as const;
 

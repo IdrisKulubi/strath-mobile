@@ -7,7 +7,7 @@ export type Experience = { collection: boolean; matching: boolean; shell: boolea
 export type Compatibility = { status: 'ready' | 'insufficient_evidence'; score: number | null; sharedCount: number; evidenceCount: number };
 export type Person = { id: string; name: string; age: number; city: string; bio: string; photos: string[]; intentions: string[]; compatibility?: Compatibility };
 export type Preferences = { genders: string[]; minAge: number; maxAge: number; city: string; radiusKm: number | null; latitude: number | null; longitude: number | null; intentions: string[] };
-export type QuestionnaireState = { answerCount: number; required: number; complete: boolean; revision: number; birthDate: string | null; preferences: Preferences | null; skipped: string[] };
+export type QuestionnaireState = { answerCount: number; required: number; requiredQuestionIds: string[]; complete: boolean; revision: number; birthDate: string | null; preferences: Preferences | null; skipped: string[] };
 export type DiscoveryResponse = { items: Person[]; page: number; pageSize: number; totalEligible: number; hasMore: boolean };
 export type LikesResponse = { received: Person[]; sent: Person[] };
 export type DecisionResponse = { mutual: boolean; matchId?: string };
@@ -18,9 +18,9 @@ export type PublicComparison = {
     id: string;
     prompt: string;
     options: { id: string; label: string }[];
-    yours: string;
+    yours: string | null;
     theirs: string;
-    yourExplanation: string;
+    yourExplanation: string | null;
     theirExplanation: string;
   }[];
 };
@@ -32,6 +32,7 @@ export type Question = {
   category: string;
   pool: 'starter' | 'replacement' | 'sensitive';
   sensitive: boolean;
+  neutral_answer_id: string | null;
   options: { id: string; label: string }[];
   answer_id: string | null;
   acceptable: string[] | null;

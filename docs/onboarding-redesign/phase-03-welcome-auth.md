@@ -1,6 +1,6 @@
 # Phase 03: Welcome, account, and consent
 
-Status: In review (implementation correction awaiting user mobile retest)
+Status: Done (user confirmed sign-in on mobile)
 Dependencies: 01, 02
 Updated: 2026-09-24
 
@@ -43,8 +43,9 @@ No authentication-provider replacement or consent-policy changes.
 - Screenshots/recording and device/theme: The user supplied a dark-mode sign-in screenshot on 2026-09-24. It showed empty outlined header circles, an unstyled Google action, excessive empty space, and legal text stranded at the bottom. No new device capture is claimed after the correction.
 - Corrective change: Header spacers no longer draw circles; the Google/demo actions now use fixed visual containers and explicit horizontal rows; legal links sit directly under provider choices; auth failures use inline feedback without duplicate danger toasts. Targeted lint, changed-file TypeScript, and diff checks passed after the fix.
 - Apple sign-in follow-up: The next user screenshot showed `Unimplemented component: <ViewManagerAdapter_ExpoAppleAuthentication>` where the native Apple button was placed. The app now renders a regular Apple sign-in control on iOS, checks `AppleAuthentication.isAvailableAsync()` when tapped, and calls the existing native Apple handler only when available. An unavailable runtime gets inline guidance instead of an unimplemented native view. Android behavior is unchanged. Targeted lint, changed-file TypeScript, and diff checks passed; a new device result is not yet available.
-- Remaining validation: The user owns a mobile retest of the corrected sign-in layout and Google/Apple/demo behavior. Also pending are legal links, dark/light contrast, large text, screen-reader focus, and return-session behavior. Keep this phase In review until the reported visual defect is confirmed resolved.
+- Logo mark: The sign-in heading now shows `assets/images/logos/LOGO.png` in place of the pink heart badge. A new device capture is not yet available.
+- Mobile acceptance: The user confirmed the sign-in is done on 2026-09-24 and authorized progression. This confirms the reported entry-screen issue is resolved for their tested path; legal links, alternate themes, screen-reader behavior, and other provider outcomes remain broader Phase 08 checks rather than claimed results here.
 - Deviations from the approved contract: No email/password, recovery, or OTP UI was added because the supported app flow does not expose those routes. No new consent policy or server write was introduced.
-- Next action: Resolve any findings from the user's mobile retest, then mark Phase 03 Done and proceed to Phase 04 when requested.
+- Next action: Phase 04, explicitly authorized by the user's request to progress.
 
 When working, replace these placeholders with actual evidence. Synchronize this phase's status and the master row in the same task. A written plan or generated concept image is not implementation evidence.

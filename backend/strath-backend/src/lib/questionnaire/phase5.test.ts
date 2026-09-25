@@ -18,6 +18,7 @@ import {
 import { applyConnectionsMigration, applyDiscoveryMigration, applyQuestionnaireMigration } from "./migration";
 import { DomainError } from "./phase2-service";
 import { createTestDatabase, legacyTestSchema } from "./test-database";
+import { REQUIRED_QUESTION_IDS } from "./contracts";
 
 let database: QuestionnaireDatabase;
 let closeDatabase: () => Promise<void>;
@@ -49,11 +50,11 @@ async function seedMember(id: string, gender: "male" | "female", genders: string
         INSERT INTO q_state(user_id, revision, birth_date, preferences, completed_at)
         VALUES($1, 1, '1995-06-15', $2, now())
     `, [id, JSON.stringify(preferences(genders))]);
-    for (let index = 1; index <= 20; index += 1) {
+    for (const questionId of REQUIRED_QUESTION_IDS) {
         await database.query(`
             INSERT INTO q_answers(user_id, question_id, answer_id, acceptable, weight, public)
             VALUES($1, $2, '0', '["0", "1"]', 10, false)
-        `, [id, `q${String(index).padStart(3, "0")}:1`]);
+        `, [id, questionId]);
     }
 }
 

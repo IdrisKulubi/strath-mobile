@@ -1,11 +1,11 @@
 # Onboarding redesign: master tracker
 
 Approved design: **Option 1: Rising sheet**.
-Last updated: **2026-09-24**.
-Current stage: **Phase 03 sign-in layout and Apple runtime fallback corrected after user screenshots; mobile retest pending.**
-Implementation phases Done: **2 / 8**.
-Active phase: **Phase 03 In review**.
-Next eligible task: **Confirm Phase 03 mobile layout, then Phase 04: About you and partner preferences**.
+Last updated: **2026-09-25**.
+Current stage: **32-question expansion implemented in code; catalogue seeding, deployment, and user mobile retest pending.**
+Implementation phases Done: **5 / 8**.
+Active phase: **06: In review; 07: In progress from the requested continuation fix**.
+Next eligible task: **Seed the intended database before rollout; then complete remaining Phase 07 checks and user mobile review**.
 
 This is a manually maintained tracker updated by Codex during each phase task, not a background monitor or scheduled automation.
 
@@ -24,11 +24,11 @@ Scope is the whole mobile onboarding journey: welcome/account/consent, about you
 | --- | --- | --- | --- | --- |
 | [01: Journey inventory and behavior map](phase-01-journey-audit.md) | Map every active onboarding path and existing data contract before changing UI. | None | Done | [Route/data map and acceptance matrix](journey-map.md); static code trace, direct TypeScript check and 3/3 flow tests; native captures unavailable |
 | [02: Rising sheet foundation and motion](phase-02-sheet-foundation.md) | Build the shared visual and interaction primitives before migrating whole flows. | 01 | Done | Opt-in Rising sheet, choice/progress/action/feedback primitives, guarded beat controller, development preview; targeted lint and file-scoped TypeScript clean; user mobile review pending |
-| [03: Welcome, account, and consent](phase-03-welcome-auth.md) | Apply the approved experience to entry, supported auth, and legal consent. | 01, 02 | In review | User screenshot exposed broken sign-in layout; corrective UI changes and static checks complete, awaiting user mobile retest |
-| [04: About you and partner preferences](phase-04-profile-preferences.md) | Replace dense setup forms with guided personal-detail and preference beats. | 01, 02, 03 | Not started | Checklist pending; no implementation evidence |
-| [05: Profile expression, photos, and verification](phase-05-photos-verification.md) | Bring photos, bio/prompts, and verification into the same guided experience. | 01, 02, 04 | Not started | Checklist pending; no implementation evidence |
-| [06: Compatibility answers as guided beats](phase-06-compatibility-beats.md) | Replace the current questionnaire layout with the approved sequential Rising sheet interaction. | 01, 02, 05 | Not started | Checklist pending; no implementation evidence |
-| [07: Resume, milestones, review, and discovery handoff](phase-07-resume-review-handoff.md) | Make the redesigned chapters behave as one resumable journey. | 03, 04, 05, 06 | Not started | Checklist pending; no implementation evidence |
+| [03: Welcome, account, and consent](phase-03-welcome-auth.md) | Apply the approved experience to entry, supported auth, and legal consent. | 01, 02 | Done | Corrective sign-in changes accepted by user on mobile; static checks passed; broader device matrix remains Phase 08 |
+| [04: About you and partner preferences](phase-04-profile-preferences.md) | Replace dense setup forms with guided personal-detail and preference beats. | 01, 02, 03 | Done | Both setup paths use guided Phase 04 beats; explicit preferences, adult/age/radius validation, location fallback, scoped draft restore; static checks passed; user mobile review pending |
+| [05: Profile expression, photos, and verification](phase-05-photos-verification.md) | Bring photos, bio/prompts, and verification into the same guided experience. | 01, 02, 04 | Done | Profile beats, upload progress/retry/replace, explicit save, verification preface and status-truthful routing; static checks passed; user mobile review pending |
+| [06: Compatibility answers as guided beats](phase-06-compatibility-beats.md) | Replace the current questionnaire layout with the approved sequential Rising sheet interaction. | 01, 02, 05 | In review | Four beats, mandatory 32-answer flow, public new/edited answers, neutral sensitive responses, and checkable Select all; user mobile retest pending |
+| [07: Resume, milestones, review, and discovery handoff](phase-07-resume-review-handoff.md) | Make the redesigned chapters behave as one resumable journey. | 03, 04, 05, 06 | In progress | User-requested continuous questionnaire and in-progress dating-tab redirect implemented; remaining cross-route resume/review/handoff checks pending |
 | [08: Accessibility, regression checks, and staged rollout](phase-08-qa-rollout.md) | Verify the whole implementation, close defects, and prepare controlled release. | 01–07 | Not started | Checklist pending; no implementation evidence |
 
 ## Status rules
@@ -61,8 +61,9 @@ Documentation completion is separate from implementation completion.
 | Finding | Treatment | Owner |
 | --- | --- | --- |
 | Existing older onboarding and newer dating-setup/questionnaire entry paths coexist | Trace actual cohort routing; do not assume all users follow both | 01 |
-| Existing importance weights are 0, 1, 10, 50, 250; image shows three rows | Keep five named tap choices and values; verify score semantics | 01, 06 |
-| More currently contains profile visibility and optional explanation | Bring these into the normal beat sequence | 06 |
+| Existing importance weights are 0, 1, 10, 50, 250; image shows three rows | Five named tap choices now retain exact values; device review remains | User, 08 |
+| More previously contained profile visibility and optional explanation | Privacy choice was removed by user decision; optional context remains a normal Rising beat | 06 |
+| Previously saved private answers | Keep private until their owners edit and save again; do not run a mass publication migration | 06 |
 | Image contains invented privacy/save copy | Written contract and verified server behavior win | All |
 | Existing staged/uncommitted changes already touch design and questionnaire code | Preserve them; inspect diffs before each implementation task | All |
 | Native device, screen-reader, camera, and motion evidence not yet collected | User will test the mobile app; keep pending checks visible and never claim unrun checks passed | User, 08 |
@@ -70,10 +71,12 @@ Documentation completion is separate from implementation completion.
 | Auth entry and consent are now Rising sheet screens; account creation still precedes explicit onboarding consent as in the original flow | Validate product/legal sequence on device and retain existing policy until a separate decision | User, 08 |
 | Shell-enabled users may be redirected from legacy onboarding/waitlist because the global gate's allowlist omits those paths | Verify on device before sending traffic to the new journey | 07, 08 |
 | Questionnaire flags stage the questionnaire cohort, not the new visual design for legacy onboarding | Phase 02 preview stays isolated; decide a reversible UI rollout before route migration | 02, 03, 08 |
-| Legacy profile setup is in-memory, while question drafts are user/question/revision-scoped SecureStore entries | Preserve state and design explicit resume behavior | 04, 06, 07 |
+| Legacy details and questionnaire setup use user-scoped drafts; Phase 06 question drafts now also retain beat and explicit choice state | Verify route-level resume and handoff on device without treating drafts as saved | 07 |
+| Phase 05 stores uploaded photo URLs and prompt drafts in the legacy user-scoped draft; setup draft already stored photo URLs | Verify full route restoration on device in Phase 07 | 07 |
+| Questionnaire setup now presents bio, photos, optional education, and save as separate beats | Two-write API save order preserved; verify layout and camera on device | User, 08 |
 | Native baseline captures unavailable; whole-repo lint has 175 existing errors and 52 warnings | User owns device review; isolate new lint issues from baseline | User, 08 |
 
-These are planning findings, not proof of defects or blanket blockers to starting Phase 01.
+These findings are tracked for later phases and user-owned device testing.
 
 ## How each task updates this tracker
 
@@ -97,6 +100,18 @@ Routine choices within an authorized phase do not require renewed permission. Th
 | 2026-09-24 | Phase 03 welcome, account, and consent | First-launch intro, auth provider entry, post-auth welcome, and explicit consent moved to Rising sheet; existing auth services and redirects retained | Targeted lint passed; zero Phase 03 TypeScript diagnostics (71 unrelated repository diagnostics); diff check passed; mobile checks user-owned | Phase 04 when requested; reopen Phase 03 for user-reported issues |
 | 2026-09-24 | Phase 03 user screenshot correction | Fixed empty header circles, provider button layout, excess spacing, and detached legal links; consolidated auth errors inline | User screenshot documented the failure; targeted lint, changed-file TypeScript, and diff checks passed after the correction; no retest claimed | User mobile retest; keep Phase 03 In review until confirmed |
 | 2026-09-24 | Phase 03 Apple sign-in follow-up | User screenshot showed an unimplemented native Apple button view; replaced it with a standard control that gates the existing Apple handler on native availability | Targeted lint, changed-file TypeScript, and diff checks passed; no device sign-in claim | User mobile retest; Phase 03 remains In review |
+| 2026-09-24 | Phase 03 acceptance and Phase 04 start | User confirmed sign-in is done and authorized progression | User-confirmed mobile sign-in path; Phase 03 Done | Implement Phase 04 |
+| 2026-09-24 | Phase 04 about you and preferences | Guided beats added to both setup paths; scoped SecureStore drafts, adult and range validation, and city fallback preserve existing payloads | Targeted lint passed; zero Phase 04 TypeScript diagnostics (71 unrelated); 5/5 focused tests; diff check passed; device review user-owned | Phase 05 when requested; reopen Phase 04 for user-reported issues |
+| 2026-09-24 | Phase 05 profile expression, photos, and verification | Split setup profile into four beats; migrated legacy photos/prompt and save to Rising; added upload progress, retry, replace, scoped resume; added verification explanation and status-truthful completion | Targeted lint passed; no changed-file TypeScript diagnostics; diff check passed; native checks user-owned | Phase 06 when requested; reopen Phase 05 for user-reported mobile issues |
+| 2026-09-24 | Phase 06 compatibility answers | Replaced stacked answer form with five Rising beats, exact tap weights, explicit visibility/context, reversible partner select-all, guarded save/skip/delete, and beat-aware drafts | 8/8 flow tests and targeted lint passed; no Phase 06 TypeScript diagnostics; three unrelated scoped baseline errors remain; device review user-owned | Phase 07 when requested; reopen Phase 06 for user-reported mobile issues |
+| 2026-09-24 | Phase 06 keyboard follow-up | User screenshot showed optional context hidden by the iOS keyboard; shared Rising sheet now scrolls the focused field above the keyboard and pinned action; design guidance updated | Targeted lint passed; no changed-file TypeScript diagnostics; mobile retest user-owned | User retests typing on device; Phase 07 remains next |
+| 2026-09-24 | Rising control reference adopted | User approved dark option rows and the dark heart-and-chevron bottom pill; shared Rising choice/button components and persistent guidance updated; reference image saved in the repository | Targeted lint passed; no changed-file TypeScript diagnostics; device appearance review user-owned | Use these controls throughout remaining onboarding; Phase 07 remains next |
+| 2026-09-24 | Phase 06 screenshot correction | User screenshot showed loose option labels, a detached heart/chevrons, and a clipped previous-answer card. Rising rows and action now use direct native styles; the action has its own explicit row layout; each beat resets scroll position by remounting its scroll view | Targeted ESLint and diff check passed; no changed-file TypeScript diagnostics, while whole-project TypeScript retains unrelated errors; device result is pending | User retests Phase 06 appearance on mobile; proceed to Phase 07 after acceptance |
+| 2026-09-24 | Mandatory questionnaire continuation | User removed chapter breaks, skipping, and taking a break. Question saves now advance directly; earlier skips return to the queue; incomplete accounts with saved answers return to questions from dating tabs | 7/7 focused flow tests and targeted ESLint passed; no changed-file TypeScript diagnostics, while scoped TypeScript retains three unrelated errors; diff check passed; mobile retest pending | User checks the 5/20 transition and completion on device |
+| 2026-09-25 | Public compatibility answers | Removed privacy-choice beat; new/edited answers save as public; profile comparison shows all of a person's public answers; existing private answers remain private until edited | 7/7 mobile flow, 8/8 answer API, and 11/11 discovery/comparison tests passed; targeted mobile and backend ESLint passed; scoped mobile TypeScript retains three unrelated errors; user-owned device retest pending | User checks four-beat flow and profile answers on device |
+| 2026-09-25 | Partner-choice clarity | Removed own answer row and summary on partner beat; replaced Anyone works for me with a Select all checkbox row matching other options; payload still includes own answer, including restored older data | 7/7 focused flow tests and targeted ESLint passed; scoped TypeScript retains three unrelated errors; diff check passed; user-owned mobile retest pending | User checks the partner-choice screen on device |
+| 2026-09-25 | Questionnaire expansion research | Researched long-term compatibility topics and drafted a [12-question expansion](../questionnaire-expansion-research.md) covering children, marriage, faith, politics, alcohol, nicotine, relationship structure, money, family, and household roles; live 20-answer gate remains unchanged | Compared existing 100-question catalogue and current matching/onboarding contracts with primary relationship studies; proposal and source links recorded | Review question wording and sensitive-response behavior, then implement the 32-question journey as a separate build task |
+| 2026-09-25 | Enable 32 required answers | Added nine immutable catalogue versions and reused three existing questions; required exact 32 IDs for completion/discovery; existing 20-answer users resume at question 21; neutral disclosures are excluded from scoring; mobile copy and progress updated | Mobile flow 8/8, backend questionnaire 9/9, discovery 13/13, connections 10/10; targeted lint and backend TypeScript passed; mobile scoped TypeScript retains three unrelated baseline errors; database seed and user device test pending | Seed catalogue to 109 published questions before deployment, then user checks the 20→21 transition and completion on device |
 
 Append one row per implementation task, including partial work and remaining checks.
 

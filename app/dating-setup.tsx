@@ -1,15 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
+import { useReducedMotion } from 'react-native-reanimated';
 
-import { Action, Copy, Feedback, Field, Loading, Notice, Page, SectionLabel } from '@/components/questionnaire/ui';
+import { OnboardingChoiceRow, OnboardingPrimaryButton, OnboardingScreenShell, RisingInlineFeedback, RisingTextField, useRisingBeatController } from '@/components/onboarding';
+import { Text } from '@/components/ui/text';
 import { useImageUpload } from '@/hooks/use-image-upload';
 import { useTheme } from '@/hooks/use-theme';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
-import { useQuestionnaire, useQuestionnaireMutation, type QuestionnaireState } from '@/lib/questionnaire';
+import { useIdentity, useQuestionnaire, useQuestionnaireMutation, type QuestionnaireState } from '@/lib/questionnaire';
+import { ageRangeError, birthDateError, radiusError } from '@/lib/onboarding-input-validation';
 
 type OwnProfile = {
   profile: {
@@ -27,15 +31,42 @@ type OwnProfile = {
 const genders = [['male', 'Man'], ['female', 'Woman'], ['other', 'Non-binary or another identity']] as const;
 const interests = [['male', 'Men'], ['female', 'Women'], ['other', 'Non-binary or other identities']] as const;
 const intentions = ['Long-term relationship', 'Dating and exploring', 'Something casual', 'Still figuring it out'];
+const LAST_BEAT = 11;
+const DRAFT_VERSION = 1;
+
+type SetupDraft = {
+  version: number;
+  beat: number;
+  name: string;
+  birthDate: string;
+  gender: string;
+  genderInterests: string[];
+  minAge: string;
+  maxAge: string;
+  city: string;
+  intention: string;
+  bio: string;
+  photos: string[];
+  university: string;
+  course: string;
+  yearOfStudy: string;
+  coordinates: { latitude: number; longitude: number } | null;
+  radius: string;
+};
+
+const draftKey = (userId: string) => `dating_setup_draft_v1_${userId}`;
 
 export default function DatingSetupScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const reducedMotion = useReducedMotion();
+  const { beat, advance, back, jump } = useRisingBeatController(LAST_BEAT, reducedMotion);
+  const identity = useIdentity();
   const questionnaire = useQuestionnaire<QuestionnaireState>('status');
   const ownProfile = useQuestionnaire<OwnProfile>('profile');
   const savePreferences = useQuestionnaireMutation<{ saved: true; revision: number }>('preferences', 'PUT');
   const saveProfile = useQuestionnaireMutation<{ saved: true; verificationReset: boolean }>('profile', 'PUT');
-  const { uploadImage, isUploading } = useImageUpload();
+  const { uploadImage, isUploading, progress: uploadProgress, stage: uploadStage } = useImageUpload();
   const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -55,59 +86,115 @@ export default function DatingSetupScreen() {
   const [radius, setRadius] = useState('25');
   const [error, setError] = useState<unknown>(null);
   const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [verificationReset, setVerificationReset] = useState(false);
+  const [failedPhotoUri, setFailedPhotoUri] = useState<string | null>(null);
+  const [failedReplacementIndex, setFailedReplacementIndex] = useState<number | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const saveInFlight = useRef(false);
+  const photoUploadInFlight = useRef(false);
 
   useEffect(() => {
-    if (loaded || !questionnaire.data || !ownProfile.data) return;
+    if (loaded || !questionnaire.data || !ownProfile.data || !identity.data) return;
     const profile = ownProfile.data.profile;
     const preferences = questionnaire.data.preferences;
+    const userId = identity.data;
     let cancelled = false;
-    queueMicrotask(() => {
+    void (async () => {
+      let draft: SetupDraft | null = null;
+      try {
+        const raw = await SecureStore.getItemAsync(draftKey(userId));
+        if (raw) {
+          const parsed = JSON.parse(raw) as SetupDraft;
+          if (parsed.version === DRAFT_VERSION) draft = parsed;
+        }
+      } catch { /* Saved server state remains usable if a local draft is corrupt. */ }
       if (cancelled) return;
-      setName(profile?.first_name ?? '');
-      setGender(profile?.gender ?? '');
-      setBio(profile?.about_me ?? '');
-      setPhotos(profile?.photos ?? []);
-      setUniversity(profile?.university ?? '');
-      setCourse(profile?.course ?? '');
-      setYearOfStudy(profile?.year_of_study ? String(profile.year_of_study) : '');
-      setBirthDate(questionnaire.data?.birthDate ?? '');
+      setName(draft?.name ?? profile?.first_name ?? '');
+      jump(draft ? Math.max(0, Math.min(LAST_BEAT, draft.beat)) : profile?.first_name?.trim() ? 1 : 0);
+      setGender(draft?.gender ?? profile?.gender ?? '');
+      setBio(draft?.bio ?? profile?.about_me ?? '');
+      setPhotos(draft?.photos ?? profile?.photos ?? []);
+      setUniversity(draft?.university ?? profile?.university ?? '');
+      setCourse(draft?.course ?? profile?.course ?? '');
+      setYearOfStudy(draft?.yearOfStudy ?? (profile?.year_of_study ? String(profile.year_of_study) : ''));
+      setBirthDate(draft?.birthDate ?? questionnaire.data?.birthDate ?? '');
       if (preferences) {
-        setGenderInterests(preferences.genders);
-        setMinAge(String(preferences.minAge));
-        setMaxAge(String(preferences.maxAge));
-        setCity(preferences.city);
-        setIntention(preferences.intentions[0] ?? '');
-        if (preferences.latitude !== null && preferences.longitude !== null && preferences.radiusKm !== null) {
+        setGenderInterests(draft?.genderInterests ?? preferences.genders);
+        setMinAge(draft?.minAge ?? String(preferences.minAge));
+        setMaxAge(draft?.maxAge ?? String(preferences.maxAge));
+        setCity(draft?.city ?? preferences.city);
+        setIntention(draft?.intention ?? preferences.intentions[0] ?? '');
+        if (draft) {
+          setCoordinates(draft.coordinates);
+          setRadius(draft.radius);
+        } else if (preferences.latitude !== null && preferences.longitude !== null && preferences.radiusKm !== null) {
           setCoordinates({ latitude: preferences.latitude, longitude: preferences.longitude });
           setRadius(String(preferences.radiusKm));
         }
+      } else if (draft) {
+        setGenderInterests(draft.genderInterests);
+        setMinAge(draft.minAge);
+        setMaxAge(draft.maxAge);
+        setCity(draft.city);
+        setIntention(draft.intention);
+        setCoordinates(draft.coordinates);
+        setRadius(draft.radius);
       }
+      setDirty(Boolean(draft));
       setLoaded(true);
-    });
+    })();
     return () => { cancelled = true; };
-  }, [loaded, ownProfile.data, questionnaire.data]);
+  }, [loaded, ownProfile.data, questionnaire.data, identity.data, jump]);
+
+  useEffect(() => {
+    if (!loaded || !dirty || !identity.data) return;
+    const userId = identity.data;
+    const draft: SetupDraft = { version: DRAFT_VERSION, beat, name, birthDate, gender, genderInterests, minAge, maxAge, city, intention, bio, photos, university, course, yearOfStudy, coordinates, radius };
+    const timer = setTimeout(() => { void SecureStore.setItemAsync(draftKey(userId), JSON.stringify(draft)).catch(() => {}); }, 300);
+    return () => clearTimeout(timer);
+  }, [loaded, dirty, identity.data, beat, name, birthDate, gender, genderInterests, minAge, maxAge, city, intention, bio, photos, university, course, yearOfStudy, coordinates, radius]);
 
   const busy = savePreferences.isPending || saveProfile.isPending || isUploading;
   const valid = Boolean(
-    name.trim() && /^\d{4}-\d{2}-\d{2}$/.test(birthDate) && gender && genderInterests.length
+    name.trim() && !birthDateError(birthDate) && gender && genderInterests.length
     && city.trim() && intention && bio.trim().length >= 10 && photos.length
-    && Number(minAge) >= 18 && Number(maxAge) >= Number(minAge),
+    && !ageRangeError(minAge, maxAge) && (!coordinates || !radiusError(radius))
+    && (!yearOfStudy || (Number.isInteger(Number(yearOfStudy)) && Number(yearOfStudy) >= 1 && Number(yearOfStudy) <= 12)),
   );
 
-  async function addPhoto() {
+  async function addPhoto(replaceIndex: number | null = null) {
     try {
       setError(null);
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) throw new Error('Photo access is needed to choose a profile photo. You can enable it in device settings.');
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.85 });
-      if (!result.canceled) {
-        const url = await uploadImage(result.assets[0].uri);
-        setPhotos((items) => [...items, url].slice(0, 6));
-        setSaved(false);
-      }
+      if (!result.canceled && result.assets[0]?.uri) await uploadPhoto(result.assets[0].uri, replaceIndex);
     } catch (uploadError) {
       setError(uploadError);
+    }
+  }
+
+  async function uploadPhoto(uri: string, replaceIndex: number | null = null) {
+    if (photoUploadInFlight.current) return;
+    photoUploadInFlight.current = true;
+    setFailedPhotoUri(null);
+    setFailedReplacementIndex(null);
+    try {
+      const url = await uploadImage(uri);
+      setPhotos((items) => {
+        if (items.includes(url)) return items;
+        if (replaceIndex !== null && replaceIndex < items.length) return items.map((photo, index) => index === replaceIndex ? url : photo);
+        return [...items, url].slice(0, 6);
+      });
+      setSaved(false); setDirty(true);
+      setError(null);
+    } catch (uploadError) {
+      setFailedPhotoUri(uri);
+      setFailedReplacementIndex(replaceIndex);
+      setError(uploadError);
+    } finally {
+      photoUploadInFlight.current = false;
     }
   }
 
@@ -118,16 +205,20 @@ export default function DatingSetupScreen() {
       if (!permission.granted) throw new Error('Location was not shared. Your city still works for discovery.');
       const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       setCoordinates(location.coords);
-      setSaved(false);
+      setSaved(false); setDirty(true);
     } catch (locationError) {
+      setCoordinates(null);
+      setSaved(false); setDirty(true);
       setError(locationError);
     }
   }
 
   async function save() {
+    if (saveInFlight.current || !valid) return;
+    saveInFlight.current = true;
     try {
       setError(null);
-      setSaved(false);
+      setSaved(false); setDirty(true);
       setVerificationReset(false);
       await savePreferences.mutateAsync({
         birthDate,
@@ -147,9 +238,15 @@ export default function DatingSetupScreen() {
         yearOfStudy: yearOfStudy ? Number(yearOfStudy) : null,
       });
       setSaved(true);
+      setDirty(false);
+      if (identity.data) {
+        try { await SecureStore.deleteItemAsync(draftKey(identity.data)); } catch { /* Server save is still authoritative. */ }
+      }
       setVerificationReset(result.verificationReset);
     } catch (saveError) {
       setError(saveError);
+    } finally {
+      saveInFlight.current = false;
     }
   }
 
@@ -159,98 +256,195 @@ export default function DatingSetupScreen() {
     ? new Date(`${birthDate}T12:00:00`)
     : new Date(2000, 0, 1);
 
+  const titles = [
+    'What should we call you?',
+    'When is your birthday?',
+    'How do you describe your gender?',
+    'Who would you like to meet?',
+    'What age range feels right?',
+    'Which city are you in?',
+    'Would you like to use distance?',
+    'What are you looking for?',
+    'Introduce yourself',
+    'Show yourself in photos',
+    'Anything about your studies?',
+    'Your profile is ready to save',
+  ];
+  const subtitles = [
+    'Your name appears on your profile.',
+    'Your birth date stays private. You must be at least 18.',
+    'Choose the option that fits you.',
+    'Select every option that applies. We will not infer this from your gender.',
+    'Choose the ages you are comfortable meeting.',
+    'A city is needed even when you use distance.',
+    'You can continue with city only. Location is optional.',
+    'Pick what fits today. You can change it later.',
+    'A few details help someone start a conversation.',
+    'Add at least one recent photo. The first one is your main photo.',
+    'This is optional. You can leave it blank.',
+    'Check your details, then save to continue.',
+  ];
+  const chapterIndex = beat <= 2 ? 0 : beat <= 7 ? 1 : 2;
+  const chapterLabel = chapterIndex === 0 ? 'About you' : chapterIndex === 1 ? 'Your preferences' : 'Your profile';
+  const previousAnswer = beat === 0 ? undefined : {
+    label: ['Your name', 'Birth date', 'Gender', 'Who you want to meet', 'Age range', 'City', 'Distance', 'Intention', 'Introduction', 'Photos', 'Studies'][beat - 1],
+    value: [name, birthDate, genders.find(([id]) => id === gender)?.[1] ?? '', genderInterests.map((id) => interests.find(([value]) => value === id)?.[1] ?? id).join(', '), `${minAge}–${maxAge}`, city, coordinates ? `${radius} km` : 'City only', intention, bio, `${photos.length} added`, university || 'Skipped'][beat - 1],
+    onEdit: () => jump(beat - 1),
+  };
+  const fieldError = beat === 1 && birthDate ? birthDateError(birthDate) : beat === 4 ? ageRangeError(minAge, maxAge) : beat === 6 && coordinates ? radiusError(radius) : null;
+  const submissionError = error ? error instanceof Error ? error.message : 'Something went wrong. Please try again.' : null;
+  const canAdvance = beat === 0 ? Boolean(name.trim())
+    : beat === 1 ? !birthDateError(birthDate)
+    : beat === 3 ? genderInterests.length > 0
+    : beat === 4 ? !ageRangeError(minAge, maxAge)
+    : beat === 5 ? Boolean(city.trim())
+    : beat === 6 ? !coordinates || !radiusError(radius)
+    : beat === 8 ? bio.trim().length >= 10
+    : beat === 9 ? photos.length > 0 && !isUploading && !failedPhotoUri
+    : beat === 10 ? !yearOfStudy || (Number.isInteger(Number(yearOfStudy)) && Number(yearOfStudy) >= 1 && Number(yearOfStudy) <= 12)
+    : beat === 11 ? valid
+    : false;
+  const needsContinue = [0, 1, 3, 4, 5, 6, 8, 9, 10, 11].includes(beat);
+  const handleBack = () => beat === 0 ? router.back() : back();
+  const handleContinue = () => {
+    setLocalError(null);
+    if (!canAdvance) {
+      setLocalError(fieldError ?? 'Complete this step to continue.');
+      return;
+    }
+    if (beat === 11) { void save(); return; }
+    advance();
+  };
+
   return (
-    <Page title="Build your dating profile" eyebrow="Profile setup" back>
-      <Copy muted>Your birth date and precise location stay private. Education is optional.</Copy>
-      {!loaded ? <Loading label="Loading your saved profile" /> : null}
-      <Feedback error={questionnaire.error ?? ownProfile.error ?? error} />
-      {(questionnaire.isError || ownProfile.isError) ? <Action label="Try loading again" onPress={() => { void questionnaire.refetch(); void ownProfile.refetch(); }} /> : null}
-
-      {loaded ? (
-        <>
-          <SectionLabel>About you</SectionLabel>
-          <Field label="First name" value={name} onChangeText={(value) => { setName(value); setSaved(false); }} />
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Date of birth</Text>
-            {Platform.OS === 'web' ? (
-              <Field label="Date of birth (YYYY-MM-DD)" value={birthDate} onChangeText={(value) => { setBirthDate(value); setSaved(false); }} placeholder="1998-04-23" />
-            ) : (
-              <>
-                <Pressable accessibilityRole="button" accessibilityLabel="Choose date of birth" onPress={() => setShowDatePicker(true)} style={[styles.dateButton, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                  <Text style={[TYPOGRAPHY.body, { color: birthDate ? colors.foreground : colors.mutedForeground }]}>{birthDate || 'Choose your birth date'}</Text>
-                </Pressable>
-                {showDatePicker ? (
-                  <DateTimePicker
-                    value={selectedDate}
-                    mode="date"
-                    maximumDate={maximumBirthDate}
-                    minimumDate={new Date(maximumBirthDate.getFullYear() - 102, 0, 1)}
-                    onChange={(_, date) => {
-                      if (Platform.OS !== 'ios') setShowDatePicker(false);
-                      if (date) { setBirthDate(date.toISOString().slice(0, 10)); setSaved(false); }
-                    }}
-                  />
-                ) : null}
-                {showDatePicker && Platform.OS === 'ios' ? <Action label="Use this birth date" onPress={() => setShowDatePicker(false)} /> : null}
-              </>
-            )}
-          </View>
-          <SectionLabel>Your gender</SectionLabel>
-          {genders.map(([id, label]) => <Action key={id} label={label} selected={gender === id} onPress={() => { setGender(id); setSaved(false); }} />)}
-          <Field label="Introduction" value={bio} onChangeText={(value) => { setBio(value); setSaved(false); }} multiline placeholder="A few details that help someone start a real conversation" />
-
-          <SectionLabel>Who you want to meet</SectionLabel>
-          <Copy muted>Select every option that applies.</Copy>
-          {interests.map(([id, label]) => (
-            <Action key={id} label={label} selected={genderInterests.includes(id)} onPress={() => { setGenderInterests((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]); setSaved(false); }} />
-          ))}
-          <View style={styles.twoColumns}>
-            <View style={styles.column}><Field label="Minimum age" value={minAge} onChangeText={(value) => { setMinAge(value); setSaved(false); }} keyboardType="numeric" /></View>
-            <View style={styles.column}><Field label="Maximum age" value={maxAge} onChangeText={(value) => { setMaxAge(value); setSaved(false); }} keyboardType="numeric" /></View>
-          </View>
-          <Field label="City" value={city} onChangeText={(value) => { setCity(value); setSaved(false); }} />
-          <Copy muted>If you do not share location, discovery uses your city. Filters are never widened silently.</Copy>
-          <Action label={coordinates ? 'Use city only' : 'Add a distance filter'} onPress={() => coordinates ? setCoordinates(null) : void requestLocation()} />
-          {coordinates ? <Field label="Maximum distance in kilometres" value={radius} onChangeText={(value) => { setRadius(value); setSaved(false); }} keyboardType="numeric" /> : null}
-          <SectionLabel>Relationship intention</SectionLabel>
-          {intentions.map((item) => <Action key={item} label={item} selected={intention === item} onPress={() => { setIntention(item); setSaved(false); }} />)}
-
-          <SectionLabel>Profile photos</SectionLabel>
-          <Copy muted>Add up to six recent photos. Changing photos resets face verification for safety.</Copy>
-          <View style={styles.photoGrid}>
-            {photos.map((uri, index) => (
-              <View key={uri} style={styles.photoItem}>
-                <Image source={{ uri }} accessibilityLabel={`Profile photo ${index + 1}`} style={styles.photo} />
-                <Action label={`Delete photo ${index + 1}`} tone="danger" disabled={busy} onPress={() => { setPhotos((items) => items.filter((item) => item !== uri)); setSaved(false); }} />
-              </View>
-            ))}
-          </View>
-          <Action label={isUploading ? 'Uploading photo…' : 'Add a photo'} disabled={busy || photos.length >= 6} onPress={() => { void addPhoto(); }} />
-
-          <SectionLabel>Education (optional)</SectionLabel>
-          <Field label="University" value={university} onChangeText={(value) => { setUniversity(value); setSaved(false); }} />
-          <Field label="Course" value={course} onChangeText={(value) => { setCourse(value); setSaved(false); }} />
-          <Field label="Year of study" value={yearOfStudy} onChangeText={(value) => { setYearOfStudy(value); setSaved(false); }} keyboardType="numeric" />
-
-          {saved ? <Notice tone="success">Profile and preferences saved.</Notice> : null}
-          {verificationReset ? <Notice>Because your photos changed, complete face verification again before discovery.</Notice> : null}
-          {busy ? <Notice>{isUploading ? 'Uploading your photo…' : 'Saving your profile…'}</Notice> : null}
-          <Action label={busy ? 'Saving profile…' : 'Save profile and preferences'} tone="primary" disabled={busy || !valid} onPress={() => { void save(); }} />
-          <Action label="Complete face verification" disabled={!saved && !ownProfile.data?.profile} onPress={() => router.push({ pathname: '/verification', params: { returnTo: '/questions' } })} />
-          <Action label="Continue to questions" disabled={!saved && !ownProfile.data?.profile} onPress={() => router.push('/questions' as never)} />
-        </>
-      ) : null}
-    </Page>
+    <OnboardingScreenShell
+      presentation="rising"
+      stepIndex={beat}
+      beatKey={beat}
+      progressLabel={chapterLabel}
+      progressIndex={chapterIndex}
+      progressCount={3}
+      onBack={handleBack}
+      title={!loaded ? 'Getting your details ready' : titles[beat]}
+      subtitle={!loaded ? 'Your saved details will appear here.' : subtitles[beat]}
+      previousAnswer={loaded ? previousAnswer : undefined}
+      footer={loaded && needsContinue ? (
+        <OnboardingPrimaryButton
+          appearance="rising"
+          label={beat === 11 ? busy ? 'Saving…' : saved ? 'Saved' : 'Save profile and preferences' : 'Continue'}
+          disabled={busy || (beat === 11 && saved) || !canAdvance}
+          onPress={handleContinue}
+        />
+      ) : undefined}
+    >
+      {!loaded ? (
+        <View style={styles.center}><ActivityIndicator color={colors.primary} />
+          {(questionnaire.isError || ownProfile.isError) ? (
+            <Pressable accessibilityRole="button" onPress={() => { void questionnaire.refetch(); void ownProfile.refetch(); }} style={styles.linkTouch}>
+              <Text style={[styles.link, { color: colors.primaryText }]}>Try loading again</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : (
+        <View style={styles.beatBody}>
+          {beat === 0 ? <RisingTextField label="First name" value={name} onChangeText={(value) => { setName(value); setSaved(false); setDirty(true); }} autoCapitalize="words" autoComplete="given-name" returnKeyType="done" /> : null}
+          {beat === 1 ? (
+            <View style={styles.beatBody}>
+              {Platform.OS === 'web' ? (
+                <RisingTextField label="Birth date (YYYY-MM-DD)" value={birthDate} onChangeText={(value) => { setBirthDate(value); setSaved(false); setDirty(true); }} placeholder="1998-04-23" error={fieldError ?? undefined} />
+              ) : (
+                <>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Choose date of birth" onPress={() => setShowDatePicker(true)} style={[styles.dateButton, { backgroundColor: colors.control, borderColor: fieldError ? colors.destructive : colors.controlBorder }]}>
+                    <Text style={[styles.dateText, { color: birthDate ? colors.foreground : colors.mutedForeground }]}>{birthDate || 'Choose your birth date'}</Text>
+                  </Pressable>
+                  {showDatePicker ? <DateTimePicker value={selectedDate} mode="date" maximumDate={maximumBirthDate} minimumDate={new Date(maximumBirthDate.getFullYear() - 102, 0, 1)} onChange={(_, date) => {
+                    if (Platform.OS !== 'ios') setShowDatePicker(false);
+                    if (date) { setBirthDate(formatLocalDate(date)); setSaved(false); setDirty(true); }
+                  }} /> : null}
+                  {showDatePicker && Platform.OS === 'ios' ? <Pressable accessibilityRole="button" onPress={() => setShowDatePicker(false)} style={styles.linkTouch}><Text style={[styles.link, { color: colors.primaryText }]}>Use this birth date</Text></Pressable> : null}
+                  {fieldError ? <RisingInlineFeedback tone="error" message={fieldError} /> : null}
+                </>
+              )}
+            </View>
+          ) : null}
+          {beat === 2 ? genders.map(([id, label]) => <OnboardingChoiceRow key={id} appearance="rising" option={{ value: id, label }} selected={gender === id} onPress={() => { setGender(id); setSaved(false); setDirty(true); advance(); }} />) : null}
+          {beat === 3 ? interests.map(([id, label]) => <OnboardingChoiceRow key={id} appearance="rising" selectionMode="multiple" option={{ value: id, label }} selected={genderInterests.includes(id)} onPress={() => { setGenderInterests((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]); setSaved(false); setDirty(true); }} />) : null}
+          {beat === 4 ? (
+            <View style={styles.beatBody}>
+              <RisingTextField label="Minimum age" value={minAge} onChangeText={(value) => { setMinAge(value); setSaved(false); setDirty(true); }} keyboardType="number-pad" />
+              <RisingTextField label="Maximum age" value={maxAge} onChangeText={(value) => { setMaxAge(value); setSaved(false); setDirty(true); }} keyboardType="number-pad" error={fieldError ?? undefined} />
+            </View>
+          ) : null}
+          {beat === 5 ? <RisingTextField label="City" value={city} onChangeText={(value) => { setCity(value); setSaved(false); setDirty(true); }} autoCapitalize="words" /> : null}
+          {beat === 6 ? (
+            <View style={styles.beatBody}>
+              <OnboardingChoiceRow appearance="rising" option={{ value: 'city', label: 'Use my city only', description: 'No location permission needed' }} selected={!coordinates} onPress={() => { setCoordinates(null); setSaved(false); setDirty(true); setError(null); }} />
+              <OnboardingChoiceRow appearance="rising" option={{ value: 'distance', label: 'Use my current location', description: 'Add a distance limit for discovery' }} selected={Boolean(coordinates)} onPress={() => { void requestLocation(); }} />
+              {coordinates ? <RisingTextField label="Maximum distance in kilometres" value={radius} onChangeText={(value) => { setRadius(value); setSaved(false); setDirty(true); }} keyboardType="number-pad" error={fieldError ?? undefined} /> : null}
+              <Text style={[styles.hint, { color: colors.mutedForeground }]}>Filters are never widened silently.</Text>
+            </View>
+          ) : null}
+          {beat === 7 ? intentions.map((item) => <OnboardingChoiceRow key={item} appearance="rising" option={{ value: item, label: item }} selected={intention === item} onPress={() => { setIntention(item); setSaved(false); setDirty(true); advance(); }} />) : null}
+          {beat === 8 ? (
+            <View style={styles.beatBody}>
+              <RisingTextField label="Introduction" value={bio} onChangeText={(value) => { setBio(value); setSaved(false); setDirty(true); }} multiline placeholder="A few details that help someone start a conversation" error={bio && bio.trim().length < 10 ? 'Write at least 10 characters.' : undefined} />
+              <Text style={[styles.hint, { color: colors.mutedForeground }]}>{bio.trim().length} characters · at least 10 needed</Text>
+            </View>
+          ) : null}
+          {beat === 9 ? (
+            <View style={styles.beatBody}>
+              <Text style={[styles.hint, { color: colors.mutedForeground }]}>Add up to six recent photos. Changing photos resets face verification.</Text>
+              <View style={styles.photoGrid}>{photos.map((uri, index) => <View key={`${uri}:${index}`} style={styles.photoItem}><Image source={{ uri }} accessibilityLabel={`Profile photo ${index + 1}`} style={styles.photo} /><Pressable accessibilityRole="button" accessibilityLabel={`Replace photo ${index + 1}`} disabled={isUploading} onPress={() => { void addPhoto(index); }} style={styles.linkTouch}><Text style={[styles.link, { color: colors.primaryText }]}>Replace</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Delete photo ${index + 1}`} disabled={isUploading} onPress={() => { setPhotos((items) => items.filter((_, itemIndex) => itemIndex !== index)); setSaved(false); setDirty(true); }} style={styles.linkTouch}><Text style={[styles.link, { color: colors.destructive }]}>Delete</Text></Pressable></View>)}</View>
+              <Pressable accessibilityRole="button" onPress={() => { void addPhoto(); }} disabled={busy || photos.length >= 6} style={[styles.secondaryAction, { backgroundColor: colors.control, borderColor: colors.controlBorder }]}><Text style={[styles.secondaryText, { color: colors.foreground }]}>{isUploading ? 'Uploading photo…' : 'Add a photo'}</Text></Pressable>
+              {isUploading ? <RisingInlineFeedback message={uploadStage === 'uploading' ? uploadProgress !== null ? `Uploading photo: ${uploadProgress}%` : 'Uploading photo…' : 'Preparing photo for upload…'} /> : null}
+              {failedPhotoUri && !isUploading ? <Pressable accessibilityRole="button" onPress={() => { void uploadPhoto(failedPhotoUri, failedReplacementIndex); }} style={styles.linkTouch}><Text style={[styles.link, { color: colors.primaryText }]}>Retry failed photo</Text></Pressable> : null}
+              <Text style={[styles.hint, { color: colors.mutedForeground }]}>{photos.length} of 6 photos ready</Text>
+            </View>
+          ) : null}
+          {beat === 10 ? (
+            <View style={styles.beatBody}>
+              <Text style={[styles.hint, { color: colors.mutedForeground }]}>Education is optional.</Text>
+              <RisingTextField label="University" value={university} onChangeText={(value) => { setUniversity(value); setSaved(false); setDirty(true); }} />
+              <RisingTextField label="Course" value={course} onChangeText={(value) => { setCourse(value); setSaved(false); setDirty(true); }} />
+              <RisingTextField label="Year of study" value={yearOfStudy} onChangeText={(value) => { setYearOfStudy(value); setSaved(false); setDirty(true); }} keyboardType="number-pad" error={yearOfStudy && (!Number.isInteger(Number(yearOfStudy)) || Number(yearOfStudy) < 1 || Number(yearOfStudy) > 12) ? 'Use a year from 1 to 12.' : undefined} />
+            </View>
+          ) : null}
+          {beat === 11 ? (
+            <View style={styles.beatBody}>
+              <Text style={[styles.hint, { color: colors.mutedForeground }]}>{photos.length} photo{photos.length === 1 ? '' : 's'} · {bio.trim().length} introduction characters{university ? ` · ${university}` : ''}</Text>
+              {saved ? <RisingInlineFeedback message="Profile and preferences saved." /> : null}
+              {verificationReset ? <RisingInlineFeedback message="Your photos changed. Complete face verification again before discovery." /> : null}
+              {saved || (ownProfile.data?.profile && !dirty) ? (
+                <View style={styles.beatBody}>
+                  <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/verification', params: { returnTo: '/questions' } })} style={styles.linkTouch}><Text style={[styles.link, { color: colors.primaryText }]}>Complete face verification</Text></Pressable>
+                  <Pressable accessibilityRole="button" onPress={() => router.push('/questions' as never)} style={styles.linkTouch}><Text style={[styles.link, { color: colors.primaryText }]}>Continue to questions</Text></Pressable>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+          {localError ? <RisingInlineFeedback tone="error" message={localError} /> : null}
+          {submissionError ? <RisingInlineFeedback tone="error" message={submissionError} /> : null}
+        </View>
+      )}
+    </OnboardingScreenShell>
   );
 }
 
+function formatLocalDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 const styles = StyleSheet.create({
-  fieldGroup: { gap: SPACING.tight },
-  fieldLabel: { ...TYPOGRAPHY.body, fontWeight: '600' },
-  dateButton: { minHeight: 52, justifyContent: 'center', borderWidth: 1, borderRadius: RADIUS.md, paddingHorizontal: SPACING.base },
-  twoColumns: { flexDirection: 'row', gap: SPACING.compact },
-  column: { flex: 1 },
+  beatBody: { gap: SPACING.compact },
+  center: { alignItems: 'center', gap: SPACING.base },
+  hint: { ...TYPOGRAPHY.caption, textAlign: 'center' },
+  dateButton: { minHeight: 56, borderWidth: 1, borderRadius: RADIUS.row, justifyContent: 'center', paddingHorizontal: SPACING.base },
+  dateText: { ...TYPOGRAPHY.body },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.compact },
-  photoItem: { width: '47%', minWidth: 144, gap: SPACING.tight },
-  photo: { width: '100%', aspectRatio: 1, borderRadius: RADIUS.md },
+  photoItem: { width: '47%', minWidth: 120, gap: SPACING.tight },
+  photo: { width: '100%', aspectRatio: 1, borderRadius: RADIUS.row },
+  secondaryAction: { minHeight: 56, borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center' },
+  secondaryText: { ...TYPOGRAPHY.body, fontWeight: '600' },
+  linkTouch: { minHeight: 44, justifyContent: 'center', alignItems: 'center' },
+  link: { ...TYPOGRAPHY.body, fontWeight: '600' },
 });

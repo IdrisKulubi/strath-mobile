@@ -4,10 +4,11 @@ import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, w
 
 import { useTheme } from '@/hooks/use-theme';
 import { MOTION, RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { ONBOARDING_ANSWER_TARGET } from '@/lib/questionnaire-flow';
 
 const CHAPTER_SIZE = 5;
-const CHAPTER_COUNT = 4;
-const TOTAL_ANSWERS = 20;
+const CHAPTER_COUNT = Math.ceil(ONBOARDING_ANSWER_TARGET / CHAPTER_SIZE);
+const TOTAL_ANSWERS = ONBOARDING_ANSWER_TARGET;
 
 export function ChapterProgress({
   answerCount,
@@ -33,7 +34,7 @@ export function ChapterProgress({
       <View style={styles.chapterTrack} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: TOTAL_ANSWERS, now: clamped }}>
         {Array.from({ length: CHAPTER_COUNT }, (_, chapterIndex) => {
           const chapterStart = chapterIndex * CHAPTER_SIZE;
-          const isComplete = clamped >= chapterStart + CHAPTER_SIZE;
+          const isComplete = clamped >= Math.min(chapterStart + CHAPTER_SIZE, TOTAL_ANSWERS);
           const isCurrent = clamped >= chapterStart && clamped < chapterStart + CHAPTER_SIZE;
           const active = isComplete || isCurrent;
           const trackColor = colors.controlBorder;

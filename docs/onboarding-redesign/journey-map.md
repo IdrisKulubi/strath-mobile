@@ -2,6 +2,8 @@
 
 Audited: 2026-09-24. Source: current workspace code, including pre-existing staged changes. This maps code paths, not live production traffic. An active route is one referenced by current navigation or registered in the Expo app tree; deployment flags determine which users actually see questionnaire screens.
 
+This is a historical audit. For the implemented questionnaire behavior after 2026-09-25, use [the design contract](design-contract.md): twenty mandatory consecutive answers, no privacy-choice beat, new and edited answers public, and previously saved private answers preserved until edited.
+
 ## Route and cohort decisions
 
 1. Before root navigation, `app/_layout.tsx` shows `LaunchExperience`: first-launch brand intro and intro slides if the intro-complete flag is absent, or a returning-user splash otherwise. On completion, root `/` loads a SecureStore auth token. No token routes to `/(auth)/login`. A matching cached profile routes immediately using `getProfileRoute`; its server refresh runs in the background. Without a cache, `GET /api/user/me` determines route. Network failure falls through to `/(tabs)`, while explicit profile-not-found goes to `/onboarding`. Auth expiry is handled centrally. Sources: `app/_layout.tsx`, `components/intro/launch-experience.tsx`, `app/index.tsx`, `lib/profile-access.ts`, `lib/session-cache.ts`.

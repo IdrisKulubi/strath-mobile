@@ -9,6 +9,7 @@ export type { OnboardingChoiceOption } from './onboarding-choice-row';
 export { OnboardingScreenShell } from './onboarding-screen-shell';
 export { useRisingBeatController } from './use-rising-beat-controller';
 export { RisingInlineFeedback } from './rising-inline-feedback';
+export { RisingTextField } from './rising-text-field';
 export { PhoneNumberStep } from './phone-number-step';
 export { WelcomeSplash } from './WelcomeSplash';
 export { TermsAcceptance } from './TermsAcceptance';

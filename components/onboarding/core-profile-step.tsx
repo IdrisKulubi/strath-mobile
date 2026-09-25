@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
+import { useReducedMotion } from 'react-native-reanimated';
 
 import { Text } from '@/components/ui/text';
 import {
@@ -17,6 +18,7 @@ import { useOnboardingTheme, withOnboardingAlpha } from '@/lib/onboarding-theme'
 import { OnboardingChoiceRow } from './onboarding-choice-row';
 import { OnboardingPrimaryButton } from './onboarding-primary-button';
 import { OnboardingScreenShell } from './onboarding-screen-shell';
+import { useRisingBeatController } from './use-rising-beat-controller';
 
 interface CoreProfileData {
     age: number | string;
@@ -32,6 +34,8 @@ interface CoreProfileStepProps {
     onUpdate: (updates: Partial<CoreProfileData>) => void;
     onComplete: () => void;
     onBackToEssentials: () => void;
+    initialBirthDate?: string;
+    onBirthDateChange?: (value: string) => void;
 }
 
 const getZodiacSign = (month: number, day: number): string => {
@@ -80,10 +84,14 @@ export function CoreProfileStep({
     onUpdate,
     onComplete,
     onBackToEssentials,
+    initialBirthDate,
+    onBirthDateChange,
 }: CoreProfileStepProps) {
     const theme = useOnboardingTheme();
-    const [subStep, setSubStep] = useState(0);
-    const [birthday, setBirthday] = useState<Date | null>(null);
+    const reducedMotion = useReducedMotion();
+    const resumeBeat = data.relationshipGoal ? 3 : data.lookingFor ? 2 : data.gender ? 1 : 0;
+    const { beat: subStep, advance, back } = useRisingBeatController(3, reducedMotion, resumeBeat);
+    const [birthday, setBirthday] = useState<Date | null>(initialBirthDate ? new Date(`${initialBirthDate}T12:00:00`) : null);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [underAgeError, setUnderAgeError] = useState(false);
 
@@ -122,7 +130,7 @@ export function CoreProfileStep({
             return;
         }
 
-        setSubStep((current) => current - 1);
+        back();
     };
 
     const handleBirthdayChange = (_event: unknown, selectedDate?: Date) => {
@@ -135,6 +143,7 @@ export function CoreProfileStep({
         }
 
         setBirthday(selectedDate);
+        onBirthDateChange?.(`${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`);
         const age = calculateAge(selectedDate);
         const zodiac = getZodiacSign(selectedDate.getMonth() + 1, selectedDate.getDate());
         onUpdate({ age, zodiacSign: zodiac });
@@ -149,19 +158,19 @@ export function CoreProfileStep({
         }
 
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setSubStep(1);
+        advance();
     };
 
     const handleGenderSelect = (gender: string) => {
         onUpdate({ gender });
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setTimeout(() => setSubStep(2), 220);
+        advance();
     };
 
     const handleMatchPreferenceSelect = (lookingFor: string) => {
         onUpdate({ lookingFor });
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setTimeout(() => setSubStep(3), 220);
+        advance();
     };
 
     const handleDatingGoalSelect = (relationshipGoal: string) => {
@@ -189,7 +198,13 @@ export function CoreProfileStep({
 
     return (
         <OnboardingScreenShell
+            presentation="rising"
+            sheetEntrance={false}
             stepIndex={globalStepIndex}
+            beatKey={subStep}
+            progressLabel={subStep <= 1 ? 'About you' : 'Your preferences'}
+            progressIndex={subStep <= 1 ? 0 : 1}
+            progressCount={4}
             stepLabel={coreProfileStepLabel(subStep)}
             onBack={handleBack}
             title={stepCopy.title}
@@ -199,6 +214,7 @@ export function CoreProfileStep({
             footer={
                 subStep === 0 || subStep === 3 ? (
                     <OnboardingPrimaryButton
+                        appearance="rising"
                         label="Continue"
                         onPress={handleContinue}
                         disabled={!canContinue}
@@ -278,6 +294,7 @@ export function CoreProfileStep({
                 <View style={styles.choiceList}>
                     {GENDER_IDENTITY_OPTIONS.map((option) => (
                         <OnboardingChoiceRow
+                            appearance="rising"
                             key={option.value}
                             option={option}
                             selected={data.gender === option.value}
@@ -291,6 +308,7 @@ export function CoreProfileStep({
                 <View style={styles.choiceList}>
                     {MATCH_PREFERENCE_OPTIONS.map((option) => (
                         <OnboardingChoiceRow
+                            appearance="rising"
                             key={option.value}
                             option={option}
                             selected={data.lookingFor === option.value}
@@ -304,6 +322,7 @@ export function CoreProfileStep({
                 <View style={styles.choiceList}>
                     {DATING_GOAL_OPTIONS.map((option) => (
                         <OnboardingChoiceRow
+                            appearance="rising"
                             key={option.value}
                             option={option}
                             selected={data.relationshipGoal === option.value}
