@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 
@@ -22,16 +22,41 @@ type SaveResult = { saved: true; revision: number; answerCount: number; complete
 
 export default function QuestionsScreen() {
   const router = useRouter();
+  const { review, extra } = useLocalSearchParams<{ review?: string; extra?: string }>();
+  const wantsReview = review === '1';
+  const wantsExtra = extra === '1';
+  const skipDiscoverRedirect = wantsReview || wantsExtra;
   const questionnaire = useQuestionnaire<Payload>('questions');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
+  const completeRedirected = useRef(false);
+
+  const autoReviewing = wantsReview && Boolean(questionnaire.data?.state.complete);
+  const bootstrapExtraQuestionId = useMemo(() => {
+    if (!questionnaire.data || !wantsExtra || !questionnaire.data.state.complete) return null;
+    return nextQuestion(questionnaire.data.questions, questionnaire.data.state)?.id ?? null;
+  }, [questionnaire.data, wantsExtra]);
+  const effectiveSelectedId = selectedId ?? bootstrapExtraQuestionId;
+  const isReviewing = reviewing || autoReviewing;
+
+  useEffect(() => {
+    if (completeRedirected.current) return;
+    if (!questionnaire.data) return;
+    const { state } = questionnaire.data;
+    if (!state.complete || effectiveSelectedId || isReviewing || skipDiscoverRedirect) return;
+    completeRedirected.current = true;
+    router.replace('/dating' as never);
+  }, [effectiveSelectedId, isReviewing, questionnaire.data, router, skipDiscoverRedirect]);
 
   const current = useMemo(() => {
     if (!questionnaire.data) return null;
-    return questionnaire.data.questions.find((question) => question.id === selectedId)
-      ?? nextQuestion(questionnaire.data.questions, questionnaire.data.state);
-  }, [questionnaire.data, selectedId]);
+    if (effectiveSelectedId) {
+      return questionnaire.data.questions.find((question) => question.id === effectiveSelectedId) ?? null;
+    }
+    if (isReviewing) return null;
+    return nextQuestion(questionnaire.data.questions, questionnaire.data.state);
+  }, [effectiveSelectedId, isReviewing, questionnaire.data]);
 
   async function refreshAfter(questionId: string) {
     setHistory((items) => [...items.filter((id) => id !== questionId), questionId]);
@@ -57,34 +82,15 @@ export default function QuestionsScreen() {
 
   const { state, questions } = questionnaire.data;
 
-  if (state.complete && !selectedId && !reviewing) {
+  if (state.complete && !effectiveSelectedId && !isReviewing && !skipDiscoverRedirect) {
     return (
-      <Page
-        title="Discover is open"
-        eyebrow={`${state.required} answers saved`}
-        back
-        floatingFooter
-        footerButtonCount={3}
-        footer={
-          <StickyFooter
-            primaryLabel="See your matches"
-            onPrimaryPress={() => router.replace('/dating' as never)}
-            secondaryLabel="Review answers"
-            onSecondaryPress={() => setReviewing(true)}
-            tertiaryLabel="Answer another question"
-            onTertiaryPress={() => setSelectedId(nextQuestion(questions, state)?.id ?? null)}
-            glassStack
-            floating
-          />
-        }
-      >
-        <ChapterProgress answerCount={state.required} />
-        <Copy>You can keep answering to improve comparisons, or review anything you have shared.</Copy>
+      <Page title="What matters to you">
+        <Loading label="Opening Discover" />
       </Page>
     );
   }
 
-  if (current && !reviewing) {
+  if (current && !isReviewing) {
     return (
       <QuestionEditorPage
         key={`${current.id}:${state.revision}`}
@@ -104,26 +110,29 @@ export default function QuestionsScreen() {
 
   return (
     <Page
-      title={reviewing ? 'Review your answers' : 'Questions unavailable'}
-      eyebrow={reviewing ? `${state.answerCount} of ${state.required} saved` : undefined}
-      back={reviewing || state.complete}
-      onBackPress={reviewing ? () => { setReviewing(false); setSelectedId(null); } : undefined}
-      floatingFooter={reviewing && state.complete}
-      footerButtonCount={reviewing && state.complete ? 2 : 1}
+      title={isReviewing ? 'Review your answers' : 'Questions unavailable'}
+      eyebrow={isReviewing ? `${state.answerCount} of ${state.required} saved` : undefined}
+      back={isReviewing || state.complete}
+      onBackPress={isReviewing ? () => {
+        if (wantsReview) router.replace('/dating' as never);
+        else { setReviewing(false); setSelectedId(null); }
+      } : undefined}
+      floatingFooter={isReviewing && state.complete}
+      footerButtonCount={isReviewing && state.complete ? 2 : 1}
       footer={
-        reviewing && state.complete ? (
+        isReviewing && state.complete ? (
           <StickyFooter
             glassStack
             floating
-            secondaryLabel="Back to summary"
-            onSecondaryPress={() => { setReviewing(false); setSelectedId(null); }}
+            secondaryLabel="Back to Discover"
+            onSecondaryPress={() => router.replace('/dating' as never)}
             primaryLabel="See your matches"
             onPrimaryPress={() => router.replace('/dating' as never)}
           />
         ) : undefined
       }
     >
-      {reviewing ? (
+      {isReviewing ? (
         <>
           <ChapterProgress answerCount={state.answerCount} />
           <Copy muted>Tap any question to edit. Labels show what appears on your profile versus matching only.</Copy>

@@ -22,6 +22,7 @@ import {
 import type { Profile } from '@/hooks/use-profile';
 import { formatCityFromPlacemark } from '@/lib/location-format';
 import { ageRangeError, birthDateError, radiusError } from '@/lib/onboarding-input-validation';
+import { questionnaireHubPath } from '@/lib/questionnaire-navigation';
 import { hasVerifiedFace } from '@/lib/profile-access';
 
 type OwnProfile = {
@@ -97,15 +98,17 @@ export default function DatingSetupScreen() {
   const goToPostSetupStep = useCallback((
     verificationReset: boolean,
     profile: OwnProfile['profile'] | null | undefined,
+    questionnaireComplete: boolean,
   ) => {
     if (postSaveNavigated.current) return;
     postSaveNavigated.current = true;
     setContinuingAfterSave(true);
+    const hubPath = questionnaireHubPath(questionnaireComplete);
     if (isFaceVerifiedForNextStep(profile, verificationReset)) {
-      router.replace('/questions' as never);
+      router.replace(hubPath as never);
       return;
     }
-    router.replace({ pathname: '/verification', params: { returnTo: '/questions' } });
+    router.replace({ pathname: '/verification', params: { returnTo: hubPath } });
   }, [router]);
 
   useEffect(() => {
@@ -292,6 +295,7 @@ export default function DatingSetupScreen() {
       goToPostSetupStep(
         result.verificationReset,
         refetched.data?.profile ?? ownProfile.data?.profile ?? null,
+        Boolean(questionnaire.data?.complete),
       );
     } catch (saveError) {
       setError(saveError);
@@ -307,7 +311,7 @@ export default function DatingSetupScreen() {
     if (!loaded || beat !== 11 || dirty || busy || saveInFlight.current) return;
     if (!ownProfile.data?.profile) return;
     if (saved || continuingAfterSave) return;
-    goToPostSetupStep(false, ownProfile.data.profile);
+    goToPostSetupStep(false, ownProfile.data.profile, Boolean(questionnaire.data?.complete));
   }, [
     beat,
     busy,
@@ -316,6 +320,7 @@ export default function DatingSetupScreen() {
     goToPostSetupStep,
     loaded,
     ownProfile.data?.profile,
+    questionnaire.data?.complete,
     saved,
   ]);
 

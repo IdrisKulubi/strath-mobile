@@ -22,7 +22,14 @@ export default function QuestionnaireProfileScreen() {
         </>
       ) : null}
       <Action label="Edit profile and preferences" tone="primary" onPress={() => router.push('/dating-setup' as never)} />
-      <Action label="Answer and manage questions" onPress={() => router.push('/questions' as never)} />
+      <Action
+        label="Answer and manage questions"
+        onPress={() => router.push(
+          status.data?.complete
+            ? { pathname: '/questions', params: { review: '1' } }
+            : '/questions',
+        )}
+      />
       <Action label="Face verification" onPress={() => router.push({ pathname: '/verification', params: { returnTo: '/dating/profile' } })} />
       <Action label="Privacy and safety settings" onPress={() => router.push('/settings')} />
       <Action label="Sign out" tone="ghost" onPress={() => { void clearSession().then(() => { queryClient.clear(); router.replace('/(auth)/login'); }); }} />

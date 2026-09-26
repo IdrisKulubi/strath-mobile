@@ -107,7 +107,7 @@ export default function DiscoverScreen() {
           <ChapterProgress answerCount={STARTER_TARGET} />
           <Notice tone="success">Your questionnaire is ready.</Notice>
           <Copy muted>Compatible discovery is disabled for this account. No profiles are being fabricated or ranked.</Copy>
-          <Action label="Review your answers" onPress={() => router.push('/questions' as never)} />
+          <Action label="Review your answers" onPress={() => router.push({ pathname: '/questions', params: { review: '1' } } as never)} />
           <Action label="Update discovery preferences" onPress={() => router.push('/discovery-filters' as never)} />
         </>
       ) : (
@@ -129,7 +129,7 @@ export default function DiscoverScreen() {
 
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push('/questions' as never)}
+            onPress={() => router.push({ pathname: '/questions', params: { extra: '1' } } as never)}
             style={[styles.outlineButton, { borderColor: colors.controlBorder, backgroundColor: colors.control }]}
           >
             <Text style={[styles.outlineButtonText, { color: colors.foreground }]}>Improve your matches</Text>
