@@ -12,6 +12,7 @@ import {
     skipQuestionInput,
     type Preferences,
 } from "./contracts";
+import { discoveryBlockers, type Candidate } from "./eligibility";
 import { query, transaction, type SqlExecutor } from "./db";
 
 export class DomainError extends Error {
@@ -117,8 +118,74 @@ async function recordProgress(userId: string, executor: SqlExecutor) {
     return before;
 }
 
+async function loadDiscoveryCandidate(userId: string, state: QuestionnaireStateRow): Promise<Candidate> {
+    const [profile] = await query<{
+        firstName: string;
+        gender: string | null;
+        introduction: string;
+        photos: unknown;
+        profileCompleted: boolean;
+        isComplete: boolean;
+        isVisible: boolean;
+        discoveryPaused: boolean;
+        anonymous: boolean;
+        faceVerificationStatus: string;
+        incognitoMode: boolean;
+        visibilityMode: string;
+        deletedAt: Date | null;
+        deletedReason: string | null;
+    } & QueryResultRow>(`
+        SELECT
+            account.deleted_at AS "deletedAt",
+            account.deleted_reason AS "deletedReason",
+            coalesce(profile.first_name, '') AS "firstName",
+            profile.gender,
+            coalesce(profile.about_me, profile.bio, '') AS introduction,
+            coalesce(profile.photos::jsonb, '[]'::jsonb) AS photos,
+            coalesce(profile.profile_completed, false) AS "profileCompleted",
+            coalesce(profile.is_complete, false) AS "isComplete",
+            coalesce(profile.is_visible, false) AS "isVisible",
+            coalesce(profile.discovery_paused, false) AS "discoveryPaused",
+            coalesce(profile.anonymous, false) AS anonymous,
+            coalesce(profile.face_verification_status, 'not_started') AS "faceVerificationStatus",
+            coalesce(profile.incognito_mode, false) AS "incognitoMode",
+            coalesce(profile.visibility_mode, 'standard') AS "visibilityMode"
+        FROM "user" account
+        LEFT JOIN profiles profile ON profile.user_id = account.id
+        WHERE account.id = $1
+    `, [userId]);
+    const photos = Array.isArray(profile?.photos) ? profile.photos.filter((item): item is string => typeof item === "string") : [];
+    const snapshot = {
+        firstName: profile?.firstName ?? "",
+        gender: profile?.gender ?? null,
+        introduction: profile?.introduction ?? "",
+        photos,
+        profileCompleted: profile?.profileCompleted ?? false,
+        isComplete: profile?.isComplete ?? false,
+        isVisible: profile?.isVisible ?? false,
+        discoveryPaused: profile?.discoveryPaused ?? false,
+        anonymous: profile?.anonymous ?? false,
+        faceVerificationStatus: profile?.faceVerificationStatus ?? "not_started",
+        incognitoMode: profile?.incognitoMode ?? false,
+        visibilityMode: profile?.visibilityMode ?? "standard",
+    };
+    return {
+        id: userId,
+        revision: state.revision,
+        birthDate: state.birth_date,
+        preferences: state.preferences,
+        answerCount: state.answer_count,
+        deletedAt: profile?.deletedAt ?? null,
+        deletedReason: profile?.deletedReason ?? null,
+        incomingLike: false,
+        profile: snapshot,
+    };
+}
+
 export async function status(userId: string) {
     const state = await loadStatus(userId);
+    const candidate = await loadDiscoveryCandidate(userId, state);
+    const missing = discoveryBlockers(candidate);
     return {
         revision: state.revision,
         birthDate: state.birth_date,
@@ -128,6 +195,10 @@ export async function status(userId: string) {
         required: REQUIRED_ANSWER_COUNT,
         requiredQuestionIds: REQUIRED_QUESTION_IDS,
         complete: state.answer_count >= REQUIRED_ANSWER_COUNT,
+        discovery: {
+            ready: missing.length === 0 && candidate.deletedAt === null && candidate.deletedReason === null,
+            missing,
+        },
     };
 }
 

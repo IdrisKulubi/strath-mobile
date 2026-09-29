@@ -63,7 +63,7 @@ Documentation completion is separate from implementation completion.
 | Existing older onboarding and newer dating-setup/questionnaire entry paths coexist | Trace actual cohort routing; do not assume all users follow both | 01 |
 | Existing importance weights are 0, 1, 10, 50, 250; image shows three rows | Five named tap choices now retain exact values; device review remains | User, 08 |
 | More previously contained profile visibility and optional explanation | Privacy choice was removed by user decision; optional context remains a normal Rising beat | 06 |
-| Previously saved private answers | Keep private until their owners edit and save again; do not run a mass publication migration | 06 |
+| Previously saved private answers | Superseded on 2026-09-30: show all saved answers to published questions in profile details, including older private rows; no mass database rewrite is required | 06 / profile details |
 | Image contains invented privacy/save copy | Written contract and verified server behavior win | All |
 | Existing staged/uncommitted changes already touch design and questionnaire code | Preserve them; inspect diffs before each implementation task | All |
 | Native device, screen-reader, camera, and motion evidence not yet collected | User will test the mobile app; keep pending checks visible and never claim unrun checks passed | User, 08 |
@@ -127,3 +127,17 @@ Not scheduled or executed. Phase 08 prepares and verifies the release procedure.
 - “Continue with the next onboarding phase.”
 - “Show what is done and what remains in the onboarding redesign.”
 - “Fix the issue in Phase 6 and update its verification evidence.”
+
+## Separate profile task: 2026-09-29
+
+The user reported the redesign finished and explicitly requested the profile section next. Implemented the active dating profile overview and a dedicated sectioned editor; see [profile design, research, and acceptance checklist](../profile-redesign.md). This is separate from the historical onboarding phase checklist above. Changed-file lint and nine questionnaire regressions pass; existing TypeScript diagnostics remain outside the new profile code. Native profile acceptance is pending. Next action is device review of profile reading, editing, photo management, and save/return behavior.
+
+## Separate Discover portrait task: 2026-09-29
+
+The user approved Portrait Option 1 and requested implementation. Discover/Like cards now share a browsable portrait gallery and explicit profile navigation. Other-person details now organize identity, education, bio, compatibility and public answers with persistent actions. Explicit public education fields were added to the backend response. See [implementation evidence and native acceptance checklist](../discovery-concepts/README.md). Targeted lint, backend TypeScript, 25 backend discovery/connection tests and 9 questionnaire flow tests pass. Four unrelated mobile type diagnostics remain. Browser preview commands timed out; mobile appearance and gestures remain pending. No onboarding phase advancement or backend deployment occurred.
+
+2026-09-30 device correction: the user's profile screenshot showed that the first viewport hid the bio/tabs and lifted Like/Pass above a large blank area. The details hero is now shorter, photo progress is visible, photo tap opens the gallery, and the footer no longer reserves a tab bar that is absent on this route. Targeted lint and diff checks pass; scoped TypeScript retains four diagnostics in unrelated files. Updated device visual acceptance remains pending.
+
+2026-09-30 second device correction: the subsequent screenshot still showed concatenated tabs and missing button surfaces. Removed callback styles from the affected profile controls in favor of direct style arrays, retained explicit pressed feedback for main actions, placed short photo segments between Back/More circles, and tightened the About/education layout to the reference. Photos now opens the gallery sheet. Four changed components pass ESLint; scoped TypeScript has the same four unrelated diagnostics; diff check passes. iPhone visual/interaction acceptance remains pending; do not infer it from code checks.
+
+2026-09-30 answer visibility decision: the user explicitly chose to display older saved answers previously marked private as well as new answers. The profile comparison endpoint now returns every saved answer to a published questionnaire question without using the old visibility flag. Profile details render the whole answer list with prompts, selected answers, optional notes, and the viewer's own answer where present. The three-answer cap and private-answer copy are removed from profile and review screens. Existing birth date/authentication/draft and matching-internal exclusions remain. Phase 04 comparison tests 15/15 and targeted ESLint pass; mobile scoped TypeScript retains four unrelated diagnostics. Updated backend deployment and device check remain pending.

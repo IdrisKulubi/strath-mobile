@@ -1,6 +1,9 @@
 import { ageOn, REQUIRED_ANSWER_COUNT, type Preferences } from "./contracts";
 
 type ProfileSnapshot = {
+    university?: string | null;
+    course?: string | null;
+    yearOfStudy?: number | null;
     firstName: string;
     gender: string | null;
     introduction: string;
@@ -44,19 +47,34 @@ function acceptsLocation(person: Preferences, other: Preferences, distance: numb
     return person.city.trim().toLocaleLowerCase() === other.city.trim().toLocaleLowerCase();
 }
 
-export function isDiscoveryReady(candidate: Candidate) {
+export type DiscoveryBlocker =
+    | "answers"
+    | "birthDate"
+    | "preferences"
+    | "profile"
+    | "verification"
+    | "visibility"
+    | "paused"
+    | "anonymous";
+
+export function discoveryBlockers(candidate: Candidate): DiscoveryBlocker[] {
+    const missing: DiscoveryBlocker[] = [];
     const age = ageOn(candidate.birthDate ?? "");
+    if (!candidate.birthDate || age < 18 || age > 120) missing.push("birthDate");
+    if (candidate.answerCount < REQUIRED_ANSWER_COUNT) missing.push("answers");
+    if (candidate.preferences === null) missing.push("preferences");
+    if (!(candidate.profile.profileCompleted || candidate.profile.isComplete)) missing.push("profile");
+    if (candidate.profile.faceVerificationStatus !== "verified") missing.push("verification");
+    if (!candidate.profile.isVisible) missing.push("visibility");
+    if (candidate.profile.discoveryPaused) missing.push("paused");
+    if (candidate.profile.anonymous) missing.push("anonymous");
+    return missing;
+}
+
+export function isDiscoveryReady(candidate: Candidate) {
     return candidate.deletedAt === null
         && candidate.deletedReason === null
-        && age >= 18
-        && age <= 120
-        && candidate.answerCount >= REQUIRED_ANSWER_COUNT
-        && candidate.preferences !== null
-        && (candidate.profile.profileCompleted || candidate.profile.isComplete)
-        && candidate.profile.isVisible
-        && !candidate.profile.discoveryPaused
-        && !candidate.profile.anonymous
-        && candidate.profile.faceVerificationStatus === "verified";
+        && discoveryBlockers(candidate).length === 0;
 }
 
 export function isReciprocallyEligible(viewer: Candidate, candidate: Candidate) {
@@ -89,6 +107,9 @@ export function publicProfile(candidate: Candidate) {
         intentions: candidate.preferences?.intentions ?? [],
         bio: candidate.profile.introduction,
         photos: candidate.profile.photos,
+        university: candidate.profile.university ?? null,
+        course: candidate.profile.course ?? null,
+        yearOfStudy: candidate.profile.yearOfStudy ?? null,
     };
 }
 

@@ -10,7 +10,7 @@ import { health as checkEngineHealth, rank as callEngine } from "./engine-client
 import { handlePhase4Request } from "./phase4-api";
 import * as phase4 from "./phase4-service";
 import { applyDiscoveryMigration, applyQuestionnaireMigration } from "./migration";
-import { DomainError } from "./phase2-service";
+import { DomainError, status as questionnaireStatus } from "./phase2-service";
 import { createTestDatabase, legacyTestSchema } from "./test-database";
 
 let database: QuestionnaireDatabase;
@@ -109,6 +109,19 @@ test("ranking is deterministic, evidence-aware, paginated, and privacy-safe", as
     }
 });
 
+test("comparison exposes education and every saved questionnaire answer", async () => {
+    await database.query("UPDATE profiles SET university = 'Strathmore University', course = 'BCOM', year_of_study = 3 WHERE user_id = 'candidate-a'");
+    const result = await phase4.comparison("viewer", "candidate-a", { rank: deterministicRank() });
+    assert.equal(result.profile.university, 'Strathmore University');
+    assert.equal(result.profile.course, 'BCOM');
+    assert.equal(result.profile.yearOfStudy, 3);
+    assert.equal(result.questions.length, REQUIRED_QUESTION_IDS.length);
+    assert.deepEqual(Object.keys(result.profile).sort(), ['age', 'bio', 'city', 'course', 'id', 'intentions', 'name', 'photos', 'university', 'yearOfStudy'].sort());
+    const discovery = await phase4.discovery("viewer", 0, { rank: deterministicRank() });
+    assert.equal(discovery.items.find((person) => person.id === 'candidate-a')?.university, 'Strathmore University');
+    assert.equal(discovery.items.find((person) => person.id === 'candidate-b')?.university, null);
+});
+
 test("non-disclosure answers stay out of scoring evidence", async () => {
     await database.query("UPDATE q_answers SET answer_id = '2', acceptable = '[\"2\"]', weight = 0 WHERE user_id = 'viewer' AND question_id = 'q101:1'");
     const inspectRank = async (viewer: { revision: number; answers: { questionVersionId: string }[] }, candidates: { id: string; revision: number }[]) => {
@@ -193,6 +206,32 @@ test("reciprocal eligibility independently excludes unsafe and incompatible cand
     assert.deepEqual(await visibleIds(), ["candidate-b"]);
 });
 
+test("discovery blockers match readiness for profile safety gates", async () => {
+    const ready = await questionnaireStatus("viewer");
+    assert.equal(ready.discovery.ready, true);
+    assert.deepEqual(ready.discovery.missing, []);
+
+    await database.query("UPDATE profiles SET face_verification_status = 'not_started' WHERE user_id = 'viewer'");
+    const unverified = await questionnaireStatus("viewer");
+    assert.equal(unverified.discovery.ready, false);
+    assert.deepEqual(unverified.discovery.missing, ["verification"]);
+
+    await database.query("UPDATE profiles SET face_verification_status = 'verified', is_visible = false WHERE user_id = 'viewer'");
+    const hidden = await questionnaireStatus("viewer");
+    assert.equal(hidden.discovery.ready, false);
+    assert.deepEqual(hidden.discovery.missing, ["visibility"]);
+
+    await database.query("UPDATE profiles SET is_visible = true, discovery_paused = true WHERE user_id = 'viewer'");
+    const paused = await questionnaireStatus("viewer");
+    assert.equal(paused.discovery.ready, false);
+    assert.deepEqual(paused.discovery.missing, ["paused"]);
+
+    await database.query("UPDATE profiles SET discovery_paused = false, profile_completed = false, is_complete = false WHERE user_id = 'viewer'");
+    const incomplete = await questionnaireStatus("viewer");
+    assert.equal(incomplete.discovery.ready, false);
+    assert.deepEqual(incomplete.discovery.missing, ["profile"]);
+});
+
 test("valid revision cache survives outage and stale cache never does", async () => {
     await phase4.discovery("viewer", 0, { rank: deterministicRank(91) });
     const unavailable = async () => { throw new Error("offline"); };
@@ -217,20 +256,21 @@ test("revision changes during an engine request are rejected", async () => {
     );
 });
 
-test("comparison exposes a candidate's public answers regardless of the viewer's setting", async () => {
+test("comparison exposes legacy private answers without exposing unrelated profile data", async () => {
     const first = await phase4.comparison("viewer", "candidate-a", { rank: deterministicRank() });
-    assert.equal(first.questions.length, 2);
+    assert.equal(first.questions.length, REQUIRED_QUESTION_IDS.length);
     assert.equal(first.questions[0].yourExplanation, "viewer explanation 1");
     assert.equal("birthDate" in first.profile, false);
 
     await database.query("UPDATE q_answers SET public = false WHERE user_id = 'viewer' AND question_id = 'q001:1'");
     const viewerPrivate = await phase4.comparison("viewer", "candidate-a", { rank: deterministicRank() });
-    assert.deepEqual(viewerPrivate.questions.map((question) => question.id), ["q001:1", "q002:1"]);
+    assert.equal(viewerPrivate.questions.length, REQUIRED_QUESTION_IDS.length);
 
     await database.query("UPDATE q_answers SET public = false WHERE user_id = 'candidate-a' AND question_id = 'q001:1'");
     await database.query("UPDATE q_state SET revision = revision + 1 WHERE user_id = 'candidate-a'");
     const second = await phase4.comparison("viewer", "candidate-a", { rank: deterministicRank() });
-    assert.deepEqual(second.questions.map((question) => question.id), ["q002:1"]);
+    assert.deepEqual(second.questions.map((question) => question.id), first.questions.map((question) => question.id));
+    assert.equal(second.questions[0].theirExplanation, "candidate-a explanation 1");
 });
 
 test("public API requires matching flag and never accepts caller-supplied identity", async () => {

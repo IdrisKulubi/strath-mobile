@@ -27,7 +27,7 @@ export default function LikesScreen() {
   };
 
   return (
-    <Page title="Likes">
+    <Page title="Likes" floatingTabBar>
       <Copy>People who liked you and likes you sent appear here without a paywall.</Copy>
       {!enabled ? <Notice>Likes open when questionnaire matching is enabled for your account.</Notice> : null}
       {enabled ? (

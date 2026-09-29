@@ -7,6 +7,7 @@ import { useExperience, useIdentity } from '@/lib/questionnaire';
 const questionnaireRoutes = [
   '/dating',
   '/dating-setup',
+  '/dating-profile-edit',
   '/dating-chat',
   '/compatibility',
   '/discovery-filters',

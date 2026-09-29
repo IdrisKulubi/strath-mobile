@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,52 +11,102 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
+import { stickyFooterScrollPadding } from '@/components/questionnaire/sticky-footer';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { useTheme } from '@/hooks/use-theme';
-import { compatibilityLabel, type Person } from '@/lib/questionnaire';
+import { type Person } from '@/lib/questionnaire';
+import { PortraitCard } from '@/components/questionnaire/portrait-card';
 
 export function Page({
   title,
   eyebrow,
   children,
   back = false,
+  onBackPress,
   footer,
   header,
   hideTitle = false,
+  floatingTabBar = false,
+  floatingFooter = false,
+  footerReserveTabBar = false,
+  footerButtonCount = 1,
+  footerTertiaryLink = false,
 }: {
   title: string;
   eyebrow?: string;
   children: React.ReactNode;
   back?: boolean;
+  /** When set, overrides default router back for the ghost Back control */
+  onBackPress?: () => void;
   footer?: React.ReactNode;
   header?: React.ReactNode;
   hideTitle?: boolean;
+  /** Reserve scroll space for the floating glass tab bar (dating shell). */
+  floatingTabBar?: boolean;
+  /** Footer overlays scroll content (e.g. glass setup CTA). */
+  floatingFooter?: boolean;
+  /** Match StickyFooter `reserveTabBar` when computing scroll inset. */
+  footerReserveTabBar?: boolean;
+  /** Pill count in floating footer (excludes link-style tertiary). */
+  footerButtonCount?: number;
+  /** Reserve space for a link-style tertiary above footer pills. */
+  footerTertiaryLink?: boolean;
 }) {
   const { colors } = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const floatingTabPad = floatingTabBar ? getGlassTabBarHeight(insets.bottom) : 0;
+  const scrollBottomPad = floatingFooter && footer
+    ? stickyFooterScrollPadding(insets.bottom, footerReserveTabBar, footerButtonCount, footerTertiaryLink)
+    : floatingTabPad
+      ? SPACING.xl + floatingTabPad
+      : footer
+        ? SPACING.xl
+        : undefined;
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          style={styles.flex}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[styles.page, footer ? styles.pageWithFooter : null]}
-          contentInsetAdjustmentBehavior="automatic"
-          showsVerticalScrollIndicator={false}
-        >
-          {header}
-          {back ? <Action label="Back" tone="ghost" onPress={() => router.canGoBack() ? router.back() : router.replace('/dating' as never)} /> : null}
-          {!hideTitle ? (
-            <View style={styles.headingGroup}>
-              {eyebrow ? <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>{eyebrow}</Text> : null}
-              <Text accessibilityRole="header" style={[styles.title, { color: colors.foreground }]}>{title}</Text>
-            </View>
-          ) : null}
-          {children}
-        </ScrollView>
-        {footer}
+        <View style={styles.flex}>
+          <ScrollView
+            style={styles.flex}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={[
+              styles.page,
+              footer && !floatingFooter ? styles.pageWithFooter : null,
+              scrollBottomPad !== undefined ? { paddingBottom: scrollBottomPad } : null,
+            ]}
+            contentInsetAdjustmentBehavior="automatic"
+            showsVerticalScrollIndicator={false}
+          >
+            {header}
+            {back ? (
+              <Action
+                label="Back"
+                tone="ghost"
+                onPress={() => {
+                  if (onBackPress) {
+                    onBackPress();
+                    return;
+                  }
+                  if (router.canGoBack()) router.back();
+                  else router.replace('/dating' as never);
+                }}
+              />
+            ) : null}
+            {!hideTitle ? (
+              <View style={styles.headingGroup}>
+                {eyebrow ? <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>{eyebrow}</Text> : null}
+                <Text accessibilityRole="header" style={[styles.title, { color: colors.foreground }]}>{title}</Text>
+              </View>
+            ) : null}
+            {children}
+          </ScrollView>
+          {footer}
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -140,6 +189,8 @@ export function Field({
   multiline = false,
   keyboardType = 'default',
   placeholder,
+  disabled = false,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -147,6 +198,8 @@ export function Field({
   multiline?: boolean;
   keyboardType?: 'default' | 'numeric';
   placeholder?: string;
+  disabled?: boolean;
+  maxLength?: number;
 }) {
   const { colors } = useTheme();
   return (
@@ -154,6 +207,9 @@ export function Field({
       <Text style={[styles.fieldLabel, { color: colors.foreground }]}>{label}</Text>
       <TextInput
         accessibilityLabel={label}
+        accessibilityState={{ disabled }}
+        editable={!disabled}
+        maxLength={maxLength}
         value={value}
         onChangeText={onChangeText}
         multiline={multiline}
@@ -211,22 +267,7 @@ export function Loading({ label = 'Loading your questionnaire' }: { label?: stri
 }
 
 export function PersonCard({ person }: { person: Person }) {
-  const { colors } = useTheme();
-  const router = useRouter();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`View ${person.name}'s profile`}
-      onPress={() => router.push(`/compatibility/${person.id}` as never)}
-      style={[styles.person, { borderBottomColor: colors.border }]}
-    >
-      {person.photos[0] ? <Image accessibilityLabel={`${person.name}'s profile photo`} source={{ uri: person.photos[0] }} style={styles.personPhoto} /> : null}
-      <Text style={[styles.personName, { color: colors.foreground }]}>{person.name}, {person.age}</Text>
-      <Copy muted>{person.city} · {person.intentions.join(', ')}</Copy>
-      {person.compatibility ? <Copy>{compatibilityLabel(person.compatibility)}</Copy> : null}
-      <Copy>{person.bio}</Copy>
-    </Pressable>
-  );
+  return <PortraitCard person={person} />;
 }
 
 const styles = StyleSheet.create({
@@ -256,7 +297,4 @@ const styles = StyleSheet.create({
   notice: { borderWidth: 1, borderRadius: RADIUS.md, padding: SPACING.base },
   noticeText: { ...TYPOGRAPHY.callout },
   loading: { minHeight: 96, alignItems: 'center', justifyContent: 'center', gap: SPACING.compact },
-  person: { gap: SPACING.tight, paddingBottom: SPACING.section, borderBottomWidth: StyleSheet.hairlineWidth },
-  personPhoto: { width: '100%', height: 300, borderRadius: RADIUS.lg },
-  personName: { ...TYPOGRAPHY.title },
 });

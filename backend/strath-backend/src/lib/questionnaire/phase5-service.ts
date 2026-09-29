@@ -11,6 +11,9 @@ const decisionInput = z.object({ targetId: idSchema, decision: z.enum(["like", "
 const unmatchInput = z.object({ matchId: idSchema }).strict();
 
 type CandidateRow = QueryResultRow & {
+    university: string | null;
+    course: string | null;
+    yearOfStudy: number | null;
     id: string;
     revision: number;
     birthDate: string | null;
@@ -63,6 +66,7 @@ async function loadCandidates(viewerId: string, ids: string[], executor?: SqlExe
                 JOIN q_questions question ON question.id = answer.question_id AND question.published
                 WHERE answer.user_id = account.id) AS "answerCount",
                profile.first_name AS "firstName", profile.gender,
+               profile.university, profile.course, profile.year_of_study AS "yearOfStudy",
                coalesce(profile.about_me, profile.bio, '') AS introduction,
                coalesce(profile.photos::jsonb, '[]'::jsonb) AS photos,
                coalesce(profile.profile_completed, false) AS "profileCompleted",
@@ -96,6 +100,9 @@ async function loadCandidates(viewerId: string, ids: string[], executor?: SqlExe
         deletedReason: row.deletedReason,
         incomingLike: row.incomingLike,
         profile: {
+            university: row.university,
+            course: row.course,
+            yearOfStudy: row.yearOfStudy,
             firstName: row.firstName,
             gender: row.gender,
             introduction: row.introduction,

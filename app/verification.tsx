@@ -36,7 +36,7 @@ import { useToast } from '@/components/ui/toast';
 export default function VerificationScreen() {
     const router = useRouter();
     const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
-    const returnPath = returnTo === '/questions' || returnTo === '/dating/profile' || returnTo === '/dating-setup'
+    const returnPath = returnTo === '/questions' || returnTo === '/dating' || returnTo === '/dating/profile' || returnTo === '/dating-setup'
         ? returnTo
         : '/(tabs)';
     const queryClient = useQueryClient();

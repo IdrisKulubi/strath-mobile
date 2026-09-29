@@ -16,6 +16,9 @@ type RankFunction = (viewer: EnginePerson, candidates: EnginePerson[]) => Promis
 export type Phase4Dependencies = { rank?: RankFunction };
 
 type CandidateRow = QueryResultRow & {
+    university: string | null;
+    course: string | null;
+    yearOfStudy: number | null;
     id: string;
     revision: number;
     birthDate: string | null;
@@ -68,6 +71,7 @@ async function loadCandidates(viewerId: string) {
                WHERE answer.user_id = account.id
                  AND answer.question_id = ANY($3::text[])) AS "answerCount",
             profile.first_name AS "firstName",
+            profile.university, profile.course, profile.year_of_study AS "yearOfStudy",
             profile.gender,
             coalesce(profile.about_me, profile.bio, '') AS introduction,
             coalesce(profile.photos::jsonb, '[]'::jsonb) AS photos,
@@ -118,6 +122,9 @@ async function loadCandidates(viewerId: string) {
         deletedReason: row.deletedReason,
         incomingLike: false,
         profile: {
+            university: row.university,
+            course: row.course,
+            yearOfStudy: row.yearOfStudy,
             firstName: row.firstName,
             gender: row.gender,
             introduction: row.introduction,
@@ -335,7 +342,7 @@ export async function comparison(userId: string, targetId: string, dependencies:
         JOIN q_questions question ON question.id = candidate_answer.question_id AND question.published
         LEFT JOIN q_answers viewer_answer
           ON viewer_answer.question_id = candidate_answer.question_id AND viewer_answer.user_id = $1
-        WHERE candidate_answer.user_id = $2 AND candidate_answer.public
+        WHERE candidate_answer.user_id = $2
         ORDER BY question.position
     `, [userId, targetId]);
 
