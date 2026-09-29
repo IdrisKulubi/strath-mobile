@@ -10,7 +10,7 @@ import { Action, Copy, Feedback, Loading, Notice, Page, PersonCard, SectionLabel
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { isApiError } from '@/lib/api-client';
-import { firstDiscoveryStep } from '@/lib/discovery-readiness';
+import { discoveryReadinessFromStatus, firstDiscoveryStep } from '@/lib/discovery-readiness';
 import { HEIGHTS, RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { useExperience, useQuestionnaire, type DiscoveryResponse, type QuestionnaireState } from '@/lib/questionnaire';
 import { ONBOARDING_ANSWER_TARGET } from '@/lib/questionnaire-flow';
@@ -23,17 +23,13 @@ function gatePrimaryLabel(count: number) {
   return `Continue: ${remaining} to go`;
 }
 
-function defaultDiscovery(status: QuestionnaireState | undefined) {
-  return status?.discovery ?? { ready: false, missing: status?.complete ? [] : ['answers'] };
-}
-
 export default function DiscoverScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const [page, setPage] = useState(0);
   const experience = useExperience();
   const status = useQuestionnaire<QuestionnaireState>('status', Boolean(experience.data?.collection));
-  const discoveryMeta = defaultDiscovery(status.data);
+  const discoveryMeta = discoveryReadinessFromStatus(status.data);
   const discoveryEnabled = Boolean(experience.data?.matching && status.data?.complete && discoveryMeta.ready);
   const discovery = useQuestionnaire<DiscoveryResponse>(`discovery?page=${page}`, discoveryEnabled);
   const count = status.data?.answerCount ?? 0;
@@ -62,7 +58,7 @@ export default function DiscoverScreen() {
     />
   ) : null;
 
-  const setupFooter = status.data?.complete && !discoveryMeta.ready && experience.data?.collection ? (
+  const setupFooter = status.data?.complete && discoveryMeta.missing.length > 0 && experience.data?.collection ? (
     <StickyFooter
       primaryLabel={setupStep?.label ?? 'Finish setup'}
       onPrimaryPress={() => router.push((setupStep?.href ?? '/dating-setup') as never)}

@@ -1,4 +1,12 @@
-import type { DiscoveryBlocker } from '@/lib/questionnaire';
+import type { DiscoveryBlocker, QuestionnaireState } from '@/lib/questionnaire';
+
+export function discoveryReadinessFromStatus(status: QuestionnaireState | undefined) {
+  const missing = status?.discovery?.missing ?? (status?.complete ? [] : ['answers']);
+  return {
+    ready: missing.length === 0,
+    missing,
+  };
+}
 
 export const DISCOVERY_BLOCKER_ORDER: DiscoveryBlocker[] = [
   'answers',

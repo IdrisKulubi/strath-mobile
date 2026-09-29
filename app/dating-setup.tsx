@@ -159,7 +159,8 @@ export default function DatingSetupScreen() {
 
   useEffect(() => {
     if (!loaded || !identity.data) return;
-    if (beat === 0 && !dirty) return;
+    if (!dirty) return;
+    if (continuingAfterSave || postSaveNavigated.current) return;
     const userId = identity.data;
     const draft: DatingSetupDraft = {
       version: DATING_SETUP_DRAFT_VERSION,
@@ -184,7 +185,28 @@ export default function DatingSetupScreen() {
       void saveDatingSetupDraft(userId, draft).catch(() => {});
     }, 300);
     return () => clearTimeout(timer);
-  }, [loaded, dirty, identity.data, beat, name, birthDate, gender, genderInterests, minAge, maxAge, city, intention, bio, photos, university, course, yearOfStudy, coordinates, radius]);
+  }, [
+    loaded,
+    dirty,
+    continuingAfterSave,
+    identity.data,
+    beat,
+    name,
+    birthDate,
+    gender,
+    genderInterests,
+    minAge,
+    maxAge,
+    city,
+    intention,
+    bio,
+    photos,
+    university,
+    course,
+    yearOfStudy,
+    coordinates,
+    radius,
+  ]);
 
   const busy = savePreferences.isPending || saveProfile.isPending || isUploading;
   const valid = Boolean(
@@ -266,7 +288,7 @@ export default function DatingSetupScreen() {
     saveInFlight.current = true;
     try {
       setError(null);
-      setSaved(false); setDirty(true);
+      setSaved(false);
       setVerificationReset(false);
       await savePreferences.mutateAsync({
         birthDate,
@@ -287,6 +309,7 @@ export default function DatingSetupScreen() {
       });
       setSaved(true);
       setDirty(false);
+      markSetupResumeDismissed();
       if (identity.data) {
         await clearDatingSetupDraft(identity.data);
       }
