@@ -189,6 +189,8 @@ export function Field({
   multiline = false,
   keyboardType = 'default',
   placeholder,
+  disabled = false,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -196,6 +198,8 @@ export function Field({
   multiline?: boolean;
   keyboardType?: 'default' | 'numeric';
   placeholder?: string;
+  disabled?: boolean;
+  maxLength?: number;
 }) {
   const { colors } = useTheme();
   return (
@@ -203,6 +207,9 @@ export function Field({
       <Text style={[styles.fieldLabel, { color: colors.foreground }]}>{label}</Text>
       <TextInput
         accessibilityLabel={label}
+        accessibilityState={{ disabled }}
+        editable={!disabled}
+        maxLength={maxLength}
         value={value}
         onChangeText={onChangeText}
         multiline={multiline}

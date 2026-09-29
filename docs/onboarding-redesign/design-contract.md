@@ -129,3 +129,7 @@ Verify screen readers, large text, keyboard avoidance, small devices, Android Ba
 The user will test the mobile app directly. Codex should expose testable preview states and complete relevant static checks, then record device appearance, motion, accessibility, and interaction checks as user-owned pending validation. Do not claim a device check or capture happened when it did not. A phase's implementation may be marked Done after its code and static acceptance are complete; user device acceptance remains an explicit open item through Phase 08 or until the user reports results.
 
 See [master tracker](master.md) for phased implementation and evidence.
+
+## Post-onboarding profile scope (2026-09-29)
+
+The user requested a separate redesign of the returning-user profile after completing their onboarding redesign. Its readable overview and sectioned editor follow the shared visual tokens; the Rising sequence remains onboarding-specific. See [profile design and evidence](../profile-redesign.md). This does not change questionnaire privacy, eligibility, or onboarding sequencing.

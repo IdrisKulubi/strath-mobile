@@ -127,3 +127,7 @@ Not scheduled or executed. Phase 08 prepares and verifies the release procedure.
 - “Continue with the next onboarding phase.”
 - “Show what is done and what remains in the onboarding redesign.”
 - “Fix the issue in Phase 6 and update its verification evidence.”
+
+## Separate profile task: 2026-09-29
+
+The user reported the redesign finished and explicitly requested the profile section next. Implemented the active dating profile overview and a dedicated sectioned editor; see [profile design, research, and acceptance checklist](../profile-redesign.md). This is separate from the historical onboarding phase checklist above. Changed-file lint and nine questionnaire regressions pass; existing TypeScript diagnostics remain outside the new profile code. Native profile acceptance is pending. Next action is device review of profile reading, editing, photo management, and save/return behavior.
