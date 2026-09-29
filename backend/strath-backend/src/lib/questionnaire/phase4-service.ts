@@ -342,7 +342,7 @@ export async function comparison(userId: string, targetId: string, dependencies:
         JOIN q_questions question ON question.id = candidate_answer.question_id AND question.published
         LEFT JOIN q_answers viewer_answer
           ON viewer_answer.question_id = candidate_answer.question_id AND viewer_answer.user_id = $1
-        WHERE candidate_answer.user_id = $2 AND candidate_answer.public
+        WHERE candidate_answer.user_id = $2
         ORDER BY question.position
     `, [userId, targetId]);
 

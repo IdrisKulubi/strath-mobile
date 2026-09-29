@@ -135,14 +135,13 @@ export default function QuestionsScreen() {
       {isReviewing ? (
         <>
           <ChapterProgress answerCount={state.answerCount} />
-          <Copy muted>Tap any question to edit. Labels show what appears on your profile versus matching only.</Copy>
+          <Copy muted>Tap any question to edit. Your saved answers appear on your profile.</Copy>
           <View style={styles.reviewList}>
             {answeredQuestions.map((question, index) => (
               <ReviewAnswerRow
                 key={question.id}
                 index={index + 1}
                 prompt={question.prompt}
-                isPublic={Boolean(question.public)}
                 onPress={() => { setSelectedId(question.id); setReviewing(false); }}
               />
             ))}

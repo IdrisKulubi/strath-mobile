@@ -20,7 +20,7 @@ The editor has Photos / About / Details sections, one explicit save action, and 
 - Read and save through `/api/v2/questionnaire/profile`, preserving its name, gender, bio, photos, university, course, and year contract. No legacy `/api/user/me` writes.
 - Existing `/discovery-filters` owns preferences, age range, city, intentions, and radius. Existing `/questions?review=1`, `/verification`, and `/settings` own their respective flows.
 - `/dating-profile-edit` is allowlisted in the questionnaire route gate and included in its TypeScript check.
-- New/edited compatibility answers remain public; old private answers are not republished. No answer mutation occurs in the profile editor.
+- All saved compatibility answers to published questions appear on the profile, including older answers once marked private, per the 2026-09-30 user decision. No answer mutation occurs in the profile editor.
 - Photo changes retain the server's verification reset and explain the next action. Server discovery eligibility remains authoritative.
 - New `Field` options disable native text entry during save/upload and apply the API's text-length limits; existing callers retain their current behavior.
 

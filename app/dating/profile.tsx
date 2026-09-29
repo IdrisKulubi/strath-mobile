@@ -58,7 +58,7 @@ export default function QuestionnaireProfileScreen() {
     <ProfileSection title="Make it yours">
       <ProfileRow icon="options-outline" title="Dating preferences" detail={preferences ? `${preferences.minAge}–${preferences.maxAge} years · ${preferences.city}` : 'Who you’d like to meet'} onPress={() => router.push('/discovery-filters')} />
       <ProfileRow icon="chatbubbles-outline" title="Compatibility answers" detail={status.data ? `${status.data.answerCount} answers saved · ${status.data.complete ? 'Review or add more' : 'Continue answering'}` : 'Your answers and what matters to you'} onPress={() => router.push(status.data?.complete ? { pathname: '/questions', params: { review: '1' } } : '/questions')} />
-      <Text style={[styles.caption, { color: colors.mutedForeground }]}>New and edited answers are public. Previously private answers stay private until you edit and save them.</Text>
+      <Text style={[styles.caption, { color: colors.mutedForeground }]}>Your saved questionnaire answers appear on your profile.</Text>
       <Feedback error={status.error} />
       {status.isError ? <Action label="Reload preferences and progress" onPress={() => { void status.refetch(); }} /> : null}
     </ProfileSection>

@@ -109,13 +109,13 @@ test("ranking is deterministic, evidence-aware, paginated, and privacy-safe", as
     }
 });
 
-test("public profiles expose only the explicit education fields alongside public answers", async () => {
+test("comparison exposes education and every saved questionnaire answer", async () => {
     await database.query("UPDATE profiles SET university = 'Strathmore University', course = 'BCOM', year_of_study = 3 WHERE user_id = 'candidate-a'");
     const result = await phase4.comparison("viewer", "candidate-a", { rank: deterministicRank() });
     assert.equal(result.profile.university, 'Strathmore University');
     assert.equal(result.profile.course, 'BCOM');
     assert.equal(result.profile.yearOfStudy, 3);
-    assert.equal(result.questions.length, 2);
+    assert.equal(result.questions.length, REQUIRED_QUESTION_IDS.length);
     assert.deepEqual(Object.keys(result.profile).sort(), ['age', 'bio', 'city', 'course', 'id', 'intentions', 'name', 'photos', 'university', 'yearOfStudy'].sort());
     const discovery = await phase4.discovery("viewer", 0, { rank: deterministicRank() });
     assert.equal(discovery.items.find((person) => person.id === 'candidate-a')?.university, 'Strathmore University');
@@ -256,20 +256,21 @@ test("revision changes during an engine request are rejected", async () => {
     );
 });
 
-test("comparison exposes a candidate's public answers regardless of the viewer's setting", async () => {
+test("comparison exposes legacy private answers without exposing unrelated profile data", async () => {
     const first = await phase4.comparison("viewer", "candidate-a", { rank: deterministicRank() });
-    assert.equal(first.questions.length, 2);
+    assert.equal(first.questions.length, REQUIRED_QUESTION_IDS.length);
     assert.equal(first.questions[0].yourExplanation, "viewer explanation 1");
     assert.equal("birthDate" in first.profile, false);
 
     await database.query("UPDATE q_answers SET public = false WHERE user_id = 'viewer' AND question_id = 'q001:1'");
     const viewerPrivate = await phase4.comparison("viewer", "candidate-a", { rank: deterministicRank() });
-    assert.deepEqual(viewerPrivate.questions.map((question) => question.id), ["q001:1", "q002:1"]);
+    assert.equal(viewerPrivate.questions.length, REQUIRED_QUESTION_IDS.length);
 
     await database.query("UPDATE q_answers SET public = false WHERE user_id = 'candidate-a' AND question_id = 'q001:1'");
     await database.query("UPDATE q_state SET revision = revision + 1 WHERE user_id = 'candidate-a'");
     const second = await phase4.comparison("viewer", "candidate-a", { rank: deterministicRank() });
-    assert.deepEqual(second.questions.map((question) => question.id), ["q002:1"]);
+    assert.deepEqual(second.questions.map((question) => question.id), first.questions.map((question) => question.id));
+    assert.equal(second.questions[0].theirExplanation, "candidate-a explanation 1");
 });
 
 test("public API requires matching flag and never accepts caller-supplied identity", async () => {

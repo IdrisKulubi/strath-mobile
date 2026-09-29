@@ -2,7 +2,7 @@
 
 Audited: 2026-09-24. Source: current workspace code, including pre-existing staged changes. This maps code paths, not live production traffic. An active route is one referenced by current navigation or registered in the Expo app tree; deployment flags determine which users actually see questionnaire screens.
 
-This is a historical audit. For the implemented questionnaire behavior after 2026-09-25, use [the design contract](design-contract.md): twenty mandatory consecutive answers, no privacy-choice beat, new and edited answers public, and previously saved private answers preserved until edited.
+This is a historical audit. For current questionnaire behavior, use [the design contract](design-contract.md): thirty-two mandatory consecutive answers, no privacy-choice beat, and every saved answer to a published question visible in profile details, including older answers once marked private under the superseded rule.
 
 ## Route and cohort decisions
 

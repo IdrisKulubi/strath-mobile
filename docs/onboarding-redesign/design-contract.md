@@ -22,7 +22,7 @@ Correct these concept-image artifacts during implementation:
 - Use the existing system font and real StrathSpace branding; no invented slogan or serif wordmark.
 - A subtle smoky header is sufficient; no scenic mountain/moon wallpaper is required.
 - Selection feedback is not a successful server save. Never say “saved” until the API confirms.
-- Do not publish answers that were saved privately before the 2026-09-25 change. Their owners may make them public by editing and saving them again.
+- Show saved questionnaire answers in profile details, including answers marked private before the 2026-09-25 change, following the user's 2026-09-30 decision.
 - Four illustrated screens are moments within one answer, not four completed chapters.
 - The three illustrated importance choices are not permission to collapse five stored weights.
 
@@ -42,7 +42,7 @@ Once compatibility questions begin, the thirty-two required answers are mandator
 
 The 32-question expansion was implemented in code on 2026-09-25. Sensitive non-disclosure choices count as answered but contribute no matching evidence. Catalogue seeding and deployment remain separate release steps; the user owns mobile validation.
 
-Compatibility answers and optional notes saved from this flow are public by default. Tell the user this in the flow without adding a privacy-choice beat. A profile viewer can see every answer the profile owner saved as public, even if the viewer did not answer the same question. Previously private answers remain private until the owner edits and saves them again. This change does not expose private birth dates, authentication details, or unpublished drafts.
+Compatibility answers and optional notes saved from this flow appear on the owner's profile. Tell the user this in the flow without adding a privacy-choice beat. A profile viewer can see every saved answer to a published questionnaire question, even if the viewer did not answer the same question. The user's 2026-09-30 decision also includes older saved answers marked private. This does not expose birth dates, authentication details, unfinished drafts, partner-acceptance choices, or scoring weights.
 
 ## Visual system
 
@@ -100,7 +100,7 @@ Do not force returning users through completed steps or remove their existing co
 | Importance | “How much does this matter?” | Tap a named choice; advance |
 | Optional context and save | “Want to add a little context?” | Optional input, public-answer disclosure, visible Save & continue |
 
-Existing saved answers restore their actual values. Legacy private answers remain private until their owners edit and save them. Older unfinished drafts that automatically inserted the person's own answer return to the partner beat with no selections so the person can choose explicitly; newer drafts keep their choices. The save action makes the result public and the copy says so beforehand.
+Existing saved answers restore their actual values and appear in profile details, including legacy answers marked private under the older design. Older unfinished drafts that automatically inserted the person's own answer return to the partner beat with no selections so the person can choose explicitly; newer drafts keep their choices. The save action makes the result visible on the profile and the copy says so beforehand.
 
 ### Importance mapping
 

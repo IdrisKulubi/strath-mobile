@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight, GraduationCap, Heart, HeartHandshake, MapPin, MessageCircle, MoreHorizontal, Shield, X } from 'lucide-react-native';
@@ -11,6 +14,102 @@ import { PROFILE_PHOTO, RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens'
 import { compatibilityLabel, useQuestionnaire, useQuestionnaireMutation, type DecisionResponse, type PublicComparison } from '@/lib/questionnaire';
 
 type ProfileTab = 'About' | 'Photos' | 'Answers';
+
+function LiquidFill({ tint, overlay }: { tint: string; overlay: string }) {
+  const { isDark } = useTheme();
+  if (isLiquidGlassAvailable()) {
+    return (
+      <GlassView
+        glassEffectStyle="regular"
+        isInteractive
+        tintColor={tint}
+        colorScheme={isDark ? 'dark' : 'light'}
+        style={[StyleSheet.absoluteFill, styles.glassSurface]}
+      />
+    );
+  }
+  return (
+    <>
+      <BlurView
+        intensity={Platform.OS === 'ios' ? 64 : 44}
+        tint={isDark ? 'dark' : 'light'}
+        style={[StyleSheet.absoluteFill, styles.glassSurface]}
+      />
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.glassSurface, { backgroundColor: overlay }]} />
+    </>
+  );
+}
+
+function FloatingGlassButton({
+  label,
+  disabled,
+  pressed,
+  onPress,
+  onPressIn,
+  onPressOut,
+  tint,
+  overlay,
+  borderColor,
+  shadowColor,
+  prominent,
+  circle,
+  children,
+}: {
+  label: string;
+  disabled?: boolean;
+  pressed?: boolean;
+  onPress: () => void;
+  onPressIn: () => void;
+  onPressOut: () => void;
+  tint: string;
+  overlay: string;
+  borderColor: string;
+  shadowColor: string;
+  prominent?: boolean;
+  circle?: boolean;
+  children: React.ReactNode;
+}) {
+  const { colors } = useTheme();
+  const shape: StyleProp<ViewStyle> = circle ? styles.pass : styles.like;
+  return (
+    <View
+      style={[
+        circle ? styles.passLift : styles.likeLift,
+        {
+          boxShadow: prominent
+            ? `0px 16px 28px ${shadowColor}`
+            : `0px 10px 18px ${shadowColor}`,
+        },
+      ]}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        disabled={disabled}
+        accessibilityState={{ disabled }}
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        style={[
+          styles.glassButton,
+          shape,
+          {
+            borderColor,
+            opacity: disabled ? 0.45 : pressed ? 0.82 : 1,
+          },
+        ]}
+      >
+        <LiquidFill tint={tint} overlay={overlay} />
+        <LinearGradient
+          pointerEvents="none"
+          colors={[colors.glassSheen, 'transparent']}
+          style={styles.gloss}
+        />
+        <View style={circle ? styles.passContent : styles.likeContent}>{children}</View>
+      </Pressable>
+    </View>
+  );
+}
 
 export default function CompatibilityProfileScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
@@ -29,7 +128,6 @@ function ProfileDetails({ userId }: { userId: string }) {
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [reason, setReason] = useState('');
-  const [showAllAnswers, setShowAllAnswers] = useState(false);
   const [matchId, setMatchId] = useState<string | null>(null);
   const [footerHeight, setFooterHeight] = useState(110);
   const [compactHeader, setCompactHeader] = useState(false);
@@ -42,13 +140,10 @@ function ProfileDetails({ userId }: { userId: string }) {
   const back = () => router.canGoBack() ? router.back() : router.replace('/dating' as never);
   const jump = (y: number, animated = false) => scroll.current?.scrollTo({ y: Math.max(0, y - 72), animated });
   const questions = comparison.data?.questions ?? [];
-  const visibleQuestions = showAllAnswers ? questions : questions.slice(0, 3);
   const educationLine = person
     ? [person.university, person.course, person.yearOfStudy ? `Year ${person.yearOfStudy}` : null].filter(Boolean).join(' · ')
     : '';
   const footerBottomPad = SPACING.base;
-
-  const answersScrollY = () => sections.current.bodyTop + sections.current.answersInBody;
 
   const selectTab = (tab: ProfileTab) => {
     setActiveTab(tab);
@@ -122,27 +217,33 @@ function ProfileDetails({ userId }: { userId: string }) {
 
           {activeTab === 'Answers' ? <View style={styles.section} onLayout={(event) => { sections.current.answersInBody = event.nativeEvent.layout.y; }}>
             <View style={[styles.section, styles.divider, { borderTopColor: colors.controlBorder }]}>
+              <View style={styles.answersHeading}>
+                <SectionLabel>Their answers</SectionLabel>
+                <Text style={[styles.answersCount, { color: colors.mutedForeground }]}>{questions.length} answered</Text>
+              </View>
+              <Copy muted>Read what {person.name} chose for each question. Your answer appears below when you answered it too.</Copy>
+              {!questions.length ? <Copy muted>No questionnaire answers to show yet.</Copy> : null}
+              {questions.map((question, index) => <View key={question.id} style={[styles.answer, { borderBottomColor: colors.controlBorder }]}>
+                <Text style={[styles.answerNumber, { color: colors.primaryText }]}>QUESTION {index + 1} OF {questions.length}</Text>
+                <Text style={[TYPOGRAPHY.headline, { color: colors.foreground }]}>{question.prompt}</Text>
+                <View style={[styles.answerValue, { backgroundColor: colors.control }]}>
+                  <Text style={[TYPOGRAPHY.caption, { color: colors.mutedForeground }]}>{person.name} answered</Text>
+                  <Text style={[styles.selectedAnswer, { color: colors.foreground }]}>{question.options.find((option) => option.id === question.theirs)?.label ?? 'Answer unavailable'}</Text>
+                  {question.theirExplanation ? <Copy muted>{question.theirExplanation}</Copy> : null}
+                </View>
+                {question.yours ? <View style={styles.yourAnswer}>
+                  <Text style={[TYPOGRAPHY.caption, { color: colors.mutedForeground }]}>You answered</Text>
+                  <Text style={[TYPOGRAPHY.callout, { color: colors.foreground }]}>{question.options.find((option) => option.id === question.yours)?.label ?? 'Answer unavailable'}</Text>
+                  {question.yourExplanation ? <Copy muted>{question.yourExplanation}</Copy> : null}
+                </View> : null}
+              </View>)}
+            </View>
+
+            <View style={[styles.section, styles.divider, { borderTopColor: colors.controlBorder }]}>
               <SectionLabel>Your compatibility</SectionLabel>
               <View style={styles.row}><HeartHandshake size={25} color={colors.primaryText} /><Text style={[styles.score, { color: colors.foreground }]}>{compatibilityLabel(comparison.data?.compatibility)}</Text></View>
               <Copy muted>Based on both people’s answers. This is not a prediction of relationship success.</Copy>
               {comparison.data?.compatibility.status === 'insufficient_evidence' ? <Notice>Answer more questions to build enough shared evidence for a percentage.</Notice> : null}
-            </View>
-
-            <View style={[styles.section, styles.divider, { borderTopColor: colors.controlBorder }]}>
-              <SectionLabel>Public answers</SectionLabel>
-              <Copy muted>Get to know their views and see how your answers compare.</Copy>
-              {!questions.length ? <Copy muted>No public answers to show yet. Private answers stay hidden.</Copy> : null}
-              {visibleQuestions.map((question) => <View key={question.id} style={[styles.answer, { borderBottomColor: colors.controlBorder }]}>
-                <Text style={[TYPOGRAPHY.headline, { color: colors.foreground }]}>{question.prompt}</Text>
-                <View style={[styles.answerValue, { backgroundColor: colors.control }]}>
-                  <Text style={[TYPOGRAPHY.caption, { color: colors.mutedForeground }]}>{person.name}</Text>
-                  <Copy>{question.options.find((option) => option.id === question.theirs)?.label ?? 'Answer unavailable'}</Copy>
-                  {question.theirExplanation ? <Copy muted>{question.theirExplanation}</Copy> : null}
-                </View>
-                {question.yours ? <Copy muted>You: {question.options.find((option) => option.id === question.yours)?.label ?? 'Answer unavailable'}</Copy> : null}
-                {question.yourExplanation ? <Copy muted>Your note: {question.yourExplanation}</Copy> : null}
-              </View>)}
-              {questions.length > 3 ? <Action label={showAllAnswers ? 'Show fewer answers' : `View all ${questions.length} public answers`} tone="ghost" onPress={() => { setShowAllAnswers((value) => !value); if (showAllAnswers) jump(answersScrollY()); }} /> : null}
             </View>
 
             {matchId ? <Notice tone="success">It’s a match! You both liked each other. You can start messaging now.</Notice> : decision.isSuccess ? <Notice>Your like was saved.</Notice> : null}
@@ -174,20 +275,40 @@ function ProfileDetails({ userId }: { userId: string }) {
       <Text numberOfLines={1} accessibilityRole="header" style={[styles.compactName, { color: colors.foreground }]}>{person.name}, {person.age}</Text>
       <PhotoButton label="Profile safety options" onPress={openSafety}><MoreHorizontal size={23} color={colors.foreground} /></PhotoButton>
     </View> : null}
-    {person && !safetyOpen ? <View onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)} style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.controlBorder, paddingBottom: footerBottomPad }]}>
+    {person && !safetyOpen ? <View pointerEvents="box-none" onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)} style={[styles.footer, { paddingBottom: footerBottomPad }]}>
       <Feedback error={decision.error} />
-      <View style={styles.footerRow}>
-        {!matchId ? <Pressable accessibilityRole="button" accessibilityLabel={`Pass on ${person.name}`} disabled={decision.isPending || decision.isSuccess} accessibilityState={{ disabled: decision.isPending || decision.isSuccess }}
+      <View pointerEvents="box-none" style={styles.footerRow}>
+        {!matchId ? <FloatingGlassButton
+          label={`Pass on ${person.name}`}
+          circle
+          disabled={decision.isPending || decision.isSuccess}
+          pressed={pressedControl === 'pass'}
+          tint={colors.actionGlassTint}
+          overlay={colors.actionGlassOverlay}
+          borderColor={colors.actionGlassBorder}
+          shadowColor={colors.glassShadow}
           onPress={() => decision.mutate({ targetId: userId, decision: 'pass' }, { onSuccess: () => router.replace('/dating' as never) })}
-          onPressIn={() => setPressedControl('pass')} onPressOut={() => setPressedControl(null)}
-          style={[styles.pass, { backgroundColor: colors.control, borderColor: colors.controlBorder, opacity: decision.isPending || decision.isSuccess ? 0.45 : pressedControl === 'pass' ? 0.6 : 1 }]}><X size={24} color={colors.foreground} /></Pressable> : null}
-        <Pressable accessibilityRole="button" accessibilityLabel={matchId ? 'Send a message' : `Like ${person.name}`} disabled={!matchId && (decision.isPending || decision.isSuccess)} accessibilityState={{ disabled: !matchId && (decision.isPending || decision.isSuccess) }}
+          onPressIn={() => setPressedControl('pass')}
+          onPressOut={() => setPressedControl(null)}
+        >
+          <X size={24} color={colors.foreground} />
+        </FloatingGlassButton> : null}
+        <FloatingGlassButton
+          label={matchId ? 'Send a message' : `Like ${person.name}`}
+          prominent
+          disabled={!matchId && (decision.isPending || decision.isSuccess)}
+          pressed={pressedControl === 'like'}
+          tint={colors.primaryGlassTint}
+          overlay={colors.primaryGlassOverlay}
+          borderColor={colors.primaryGlassBorder}
+          shadowColor={colors.primaryGlassShadow}
           onPress={() => matchId ? router.push({ pathname: '/dating-chat/[matchId]', params: { matchId } } as never) : decision.mutate({ targetId: userId, decision: 'like' }, { onSuccess: (result) => setMatchId(result.matchId ?? null) })}
-          onPressIn={() => setPressedControl('like')} onPressOut={() => setPressedControl(null)}
-          style={[styles.like, { backgroundColor: colors.primary, opacity: !matchId && (decision.isPending || decision.isSuccess) ? 0.6 : pressedControl === 'like' ? 0.7 : 1 }]}>
+          onPressIn={() => setPressedControl('like')}
+          onPressOut={() => setPressedControl(null)}
+        >
           {matchId ? <MessageCircle size={24} color={colors.primaryForeground} /> : <Heart size={24} color={colors.primaryForeground} fill={colors.primaryForeground} />}
           <Text style={[styles.likeLabel, { color: colors.primaryForeground }]}>{matchId ? 'Send a message' : decision.isPending ? 'Saving…' : decision.isSuccess ? 'Liked' : `Like ${person.name}`}</Text>
-        </Pressable>
+        </FloatingGlassButton>
       </View>
     </View> : null}
     </KeyboardAvoidingView>
@@ -226,12 +347,24 @@ const styles = StyleSheet.create({
   section: { gap: SPACING.base },
   divider: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: SPACING.base, marginTop: SPACING.tight },
   score: { ...TYPOGRAPHY.headline, flex: 1 },
+  answersHeading: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: SPACING.tight },
+  answersCount: { ...TYPOGRAPHY.caption },
   answer: { gap: SPACING.compact, paddingVertical: SPACING.base, borderBottomWidth: StyleSheet.hairlineWidth },
+  answerNumber: { ...TYPOGRAPHY.caption, fontWeight: '700', letterSpacing: 0.7 },
   answerValue: { borderRadius: RADIUS.md, padding: SPACING.base, gap: SPACING.tight },
+  selectedAnswer: { ...TYPOGRAPHY.body, fontWeight: '600' },
+  yourAnswer: { gap: SPACING.micro, paddingHorizontal: SPACING.tight },
   safetyLink: { flexDirection: 'row', alignItems: 'center', gap: SPACING.compact, minHeight: 56 },
-  footer: { position: 'absolute', bottom: 0, width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: SPACING.screenX, paddingTop: SPACING.compact, borderTopWidth: StyleSheet.hairlineWidth, gap: SPACING.tight, zIndex: 2 },
+  footer: { position: 'absolute', bottom: 0, width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: SPACING.screenX, paddingTop: SPACING.compact, gap: SPACING.tight, zIndex: 2 },
   footerRow: { flexDirection: 'row', width: '100%', gap: SPACING.compact, alignItems: 'center' },
-  pass: { width: 56, height: 56, borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.full, justifyContent: 'center', alignItems: 'center' },
-  like: { flex: 1, minHeight: 56, borderRadius: RADIUS.full, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACING.base, paddingVertical: SPACING.compact, gap: SPACING.compact },
+  passLift: { width: 56, height: 56, borderRadius: RADIUS.full },
+  likeLift: { flex: 1, borderRadius: RADIUS.full },
+  glassButton: { borderWidth: 1, overflow: 'hidden', borderCurve: 'continuous' },
+  glassSurface: { borderRadius: RADIUS.full, borderCurve: 'continuous' },
+  gloss: { position: 'absolute', top: 0, left: 0, right: 0, height: '46%' },
+  pass: { width: 56, height: 56, borderRadius: RADIUS.full },
+  passContent: { flex: 1, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
+  like: { flex: 1, minHeight: 56, borderRadius: RADIUS.full },
+  likeContent: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACING.base, paddingVertical: SPACING.compact, gap: SPACING.compact, zIndex: 1 },
   likeLabel: { ...TYPOGRAPHY.headline, flexShrink: 1, textAlign: 'center' },
 });
