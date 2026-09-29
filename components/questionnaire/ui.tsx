@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,7 +17,8 @@ import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
 import { stickyFooterScrollPadding } from '@/components/questionnaire/sticky-footer';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { useTheme } from '@/hooks/use-theme';
-import { compatibilityLabel, type Person } from '@/lib/questionnaire';
+import { type Person } from '@/lib/questionnaire';
+import { PortraitCard } from '@/components/questionnaire/portrait-card';
 
 export function Page({
   title,
@@ -267,22 +267,7 @@ export function Loading({ label = 'Loading your questionnaire' }: { label?: stri
 }
 
 export function PersonCard({ person }: { person: Person }) {
-  const { colors } = useTheme();
-  const router = useRouter();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`View ${person.name}'s profile`}
-      onPress={() => router.push(`/compatibility/${person.id}` as never)}
-      style={[styles.person, { borderBottomColor: colors.border }]}
-    >
-      {person.photos[0] ? <Image accessibilityLabel={`${person.name}'s profile photo`} source={{ uri: person.photos[0] }} style={styles.personPhoto} /> : null}
-      <Text style={[styles.personName, { color: colors.foreground }]}>{person.name}, {person.age}</Text>
-      <Copy muted>{person.city} · {person.intentions.join(', ')}</Copy>
-      {person.compatibility ? <Copy>{compatibilityLabel(person.compatibility)}</Copy> : null}
-      <Copy>{person.bio}</Copy>
-    </Pressable>
-  );
+  return <PortraitCard person={person} />;
 }
 
 const styles = StyleSheet.create({
@@ -312,7 +297,4 @@ const styles = StyleSheet.create({
   notice: { borderWidth: 1, borderRadius: RADIUS.md, padding: SPACING.base },
   noticeText: { ...TYPOGRAPHY.callout },
   loading: { minHeight: 96, alignItems: 'center', justifyContent: 'center', gap: SPACING.compact },
-  person: { gap: SPACING.tight, paddingBottom: SPACING.section, borderBottomWidth: StyleSheet.hairlineWidth },
-  personPhoto: { width: '100%', height: 300, borderRadius: RADIUS.lg },
-  personName: { ...TYPOGRAPHY.title },
 });

@@ -54,6 +54,16 @@ export const MOTION = {
   easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
 } as const;
 
+/** Photo overlays retain contrast independently of the selected app theme. */
+export const PROFILE_PHOTO = {
+  foreground: '#F7F3F5',
+  background: '#0D0B0D',
+  control: 'rgba(13, 11, 13, 0.76)',
+  scrim: 'rgba(13, 11, 13, 0.94)',
+  transparent: 'rgba(13, 11, 13, 0)',
+  track: 'rgba(247, 243, 245, 0.35)',
+} as const;
+
 /**
  * Direction B surface tokens for the always-dark Matchmaker Home.
  * These stay local to Home so the rest of the app can follow the selected theme.

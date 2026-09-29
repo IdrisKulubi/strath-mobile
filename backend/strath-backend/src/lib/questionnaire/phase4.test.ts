@@ -109,6 +109,19 @@ test("ranking is deterministic, evidence-aware, paginated, and privacy-safe", as
     }
 });
 
+test("public profiles expose only the explicit education fields alongside public answers", async () => {
+    await database.query("UPDATE profiles SET university = 'Strathmore University', course = 'BCOM', year_of_study = 3 WHERE user_id = 'candidate-a'");
+    const result = await phase4.comparison("viewer", "candidate-a", { rank: deterministicRank() });
+    assert.equal(result.profile.university, 'Strathmore University');
+    assert.equal(result.profile.course, 'BCOM');
+    assert.equal(result.profile.yearOfStudy, 3);
+    assert.equal(result.questions.length, 2);
+    assert.deepEqual(Object.keys(result.profile).sort(), ['age', 'bio', 'city', 'course', 'id', 'intentions', 'name', 'photos', 'university', 'yearOfStudy'].sort());
+    const discovery = await phase4.discovery("viewer", 0, { rank: deterministicRank() });
+    assert.equal(discovery.items.find((person) => person.id === 'candidate-a')?.university, 'Strathmore University');
+    assert.equal(discovery.items.find((person) => person.id === 'candidate-b')?.university, null);
+});
+
 test("non-disclosure answers stay out of scoring evidence", async () => {
     await database.query("UPDATE q_answers SET answer_id = '2', acceptable = '[\"2\"]', weight = 0 WHERE user_id = 'viewer' AND question_id = 'q101:1'");
     const inspectRank = async (viewer: { revision: number; answers: { questionVersionId: string }[] }, candidates: { id: string; revision: number }[]) => {

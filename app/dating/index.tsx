@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { SlidersHorizontal } from 'lucide-react-native';
 
 import { DiscoveryReadinessChecklist } from '@/components/questionnaire/discovery-readiness-checklist';
 import { ExpandableRow, TextLink } from '@/components/questionnaire/expandable-row';
@@ -27,6 +28,7 @@ export default function DiscoverScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const [page, setPage] = useState(0);
+  const [showFilters, setShowFilters] = useState(false);
   const experience = useExperience();
   const status = useQuestionnaire<QuestionnaireState>('status', Boolean(experience.data?.collection));
   const discoveryMeta = discoveryReadinessFromStatus(status.data);
@@ -78,6 +80,7 @@ export default function DiscoverScreen() {
       eyebrow="Matches built from your answers"
       footer={lockedFooter ?? setupFooter}
       floatingTabBar
+      hideTitle={discoveryEnabled}
       floatingFooter={Boolean(setupFooter)}
       footerReserveTabBar={Boolean(setupFooter)}
     >
@@ -108,7 +111,16 @@ export default function DiscoverScreen() {
         </>
       ) : (
         <>
-          <View style={[styles.filterCard, { backgroundColor: colors.control, borderColor: colors.controlBorder }]}>
+          <View style={styles.discoverHeader}>
+            <View style={styles.filterCopy}>
+              <Text accessibilityRole="header" style={[TYPOGRAPHY.display, { color: colors.foreground }]}>Discover</Text>
+              <Text style={[TYPOGRAPHY.callout, { color: colors.mutedForeground }]}>{discovery.data ? `${discovery.data.totalEligible} compatible ${discovery.data.totalEligible === 1 ? 'profile' : 'profiles'} for you` : 'People who fit your answers'}</Text>
+            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Show discovery filters" accessibilityState={{ expanded: showFilters }} onPress={() => setShowFilters((value) => !value)} style={[styles.filterToggle, { backgroundColor: colors.control }]}>
+              <SlidersHorizontal size={23} color={colors.foreground} />
+            </Pressable>
+          </View>
+          {showFilters ? <View style={[styles.filterCard, { backgroundColor: colors.control, borderColor: colors.controlBorder }]}>
             <View style={styles.filterCopy}>
               <Text style={[styles.filterTitle, { color: colors.foreground }]}>Your filters</Text>
               <Text style={[styles.filterBody, { color: colors.mutedForeground }]} numberOfLines={3}>{filterSummary}</Text>
@@ -121,14 +133,14 @@ export default function DiscoverScreen() {
             >
               <Text style={[styles.editPillText, { color: colors.foreground }]}>Edit</Text>
             </Pressable>
-          </View>
+          </View> : null}
 
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push({ pathname: '/questions', params: { extra: '1' } } as never)}
-            style={[styles.outlineButton, { borderColor: colors.controlBorder, backgroundColor: colors.control }]}
+            style={styles.improveLink}
           >
-            <Text style={[styles.outlineButtonText, { color: colors.foreground }]}>Improve your matches</Text>
+            <Text style={[TYPOGRAPHY.callout, { color: colors.primaryText }]}>Improve your matches</Text>
           </Pressable>
 
           {discovery.isPending ? <Loading label="Finding compatible people" /> : null}
@@ -187,6 +199,9 @@ export default function DiscoverScreen() {
 }
 
 const styles = StyleSheet.create({
+  discoverHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING.base },
+  filterToggle: { width: 48, height: 48, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center' },
+  improveLink: { minHeight: 48, justifyContent: 'center', alignSelf: 'flex-start' },
   filterCard: {
     borderRadius: RADIUS.row,
     borderWidth: StyleSheet.hairlineWidth,

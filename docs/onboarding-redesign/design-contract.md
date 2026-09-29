@@ -133,3 +133,11 @@ See [master tracker](master.md) for phased implementation and evidence.
 ## Post-onboarding profile scope (2026-09-29)
 
 The user requested a separate redesign of the returning-user profile after completing their onboarding redesign. Its readable overview and sectioned editor follow the shared visual tokens; the Rising sequence remains onboarding-specific. See [profile design and evidence](../profile-redesign.md). This does not change questionnaire privacy, eligibility, or onboarding sequencing.
+
+## Discover profile presentation decision (2026-09-29)
+
+The user explicitly selected **Option 1: Portrait** for Discover cards and other-person profile details. This is separate from Option 1: Rising sheet for onboarding. Use the [approved portrait board and implementation contract](../discovery-concepts/README.md): tall browsable photo cards, explicit profile navigation, full-screen photos, readable public details and persistent profile actions. Preserve matching and privacy contracts; generated sample content is never production profile data.
+
+The 2026-09-30 device review made the other-person profile target more precise: the first screen should read as the selected Portrait reference, with a full-bleed photo, slim photo segments, overlaid Back/More controls, identity near the photo bottom, intention, About me, available education, About/Photos/Answers tabs and a pinned Pass/Like row. Do not reserve Discover tab-bar height on this separate details route. Real profile text remains authoritative over fictional copy in the concept board.
+
+The follow-up reference requires circular Back/More controls with a short centered photo track between them, compact About/education text, equally spaced tabs with a short pink active underline, and a circular Pass beside the filled horizontal Like pill. Use direct native styles for these controls so NativeWind's inline-style handling cannot discard callback-defined layout or backgrounds. Photos opens the current photo gallery sheet.

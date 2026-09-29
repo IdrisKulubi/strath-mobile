@@ -1,6 +1,9 @@
 import { ageOn, REQUIRED_ANSWER_COUNT, type Preferences } from "./contracts";
 
 type ProfileSnapshot = {
+    university?: string | null;
+    course?: string | null;
+    yearOfStudy?: number | null;
     firstName: string;
     gender: string | null;
     introduction: string;
@@ -104,6 +107,9 @@ export function publicProfile(candidate: Candidate) {
         intentions: candidate.preferences?.intentions ?? [],
         bio: candidate.profile.introduction,
         photos: candidate.profile.photos,
+        university: candidate.profile.university ?? null,
+        course: candidate.profile.course ?? null,
+        yearOfStudy: candidate.profile.yearOfStudy ?? null,
     };
 }
 

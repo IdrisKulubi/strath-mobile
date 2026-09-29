@@ -86,6 +86,10 @@ components:
 
 ## Overview
 
+### Approved Discover direction (2026-09-29)
+
+The user selected **Portrait (Option 1)** for Discover cards and other-person profiles. Use [the portrait concept and implementation notes](docs/discovery-concepts/README.md). Browsable portrait imagery, readable photo scrims, an explicit View profile row and organized public details extend the existing in-app design. This does not replace the Rising onboarding contract.
+
 ### Approved onboarding direction (2026-09-24)
 
 The user selected **Option 1: Rising sheet** for the entire mobile onboarding redesign. Read the [onboarding design contract](docs/onboarding-redesign/design-contract.md) for the authoritative sequential interaction and [master tracker](docs/onboarding-redesign/master.md) for implementation status. This file remains the shared visual-token reference. For onboarding, the contract overrides older combined-form layouts: one active prompt, automatic follow-ups, named importance tap choices, and optional context in the normal sequence. Implement only the requested phase. Existing components are not evidence that a redesign phase is complete.
