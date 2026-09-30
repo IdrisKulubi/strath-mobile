@@ -38,7 +38,7 @@ export default function VerificationScreen() {
     const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
     const returnPath = returnTo === '/questions' || returnTo === '/dating' || returnTo === '/dating/profile' || returnTo === '/dating-setup'
         ? returnTo
-        : '/(tabs)';
+        : '/dating';
     const queryClient = useQueryClient();
     const { show } = useToast();
     const { data: profile, isLoading: isProfileLoading, refetch: refetchProfile } = useProfile();

@@ -38,7 +38,7 @@ async function handle(request: NextRequest, context: { params: Promise<{ path: s
         const session = await getSessionWithBearerFallback(request);
         const userId = session?.user?.id ?? null;
         const { path } = await context.params;
-        const featureFlags = userId ? flags(userId) : undefined;
+        const featureFlags = userId ? flags() : undefined;
         const body = ["POST", "PUT", "DELETE"].includes(request.method)
             ? await readBoundedJson(request)
             : undefined;

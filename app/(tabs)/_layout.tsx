@@ -81,7 +81,7 @@ function TabLayoutContent() {
     }, [colors.primary, colors.tabIconDefault, isDark, isMatchmakerHome]);
 
     useEffect(() => {
-        if (nextRoute && nextRoute !== '/(tabs)') {
+        if (nextRoute) {
             router.replace(nextRoute as never);
         }
     }, [nextRoute, router]);
@@ -100,7 +100,7 @@ function TabLayoutContent() {
         );
     }
 
-    if (isSuccess && nextRoute !== '/(tabs)') {
+    if (isSuccess && nextRoute) {
         return <Redirect href={nextRoute as never} />;
     }
 
@@ -114,7 +114,7 @@ function TabLayoutContent() {
             profileError.status === 404 &&
             profileError.message.toLowerCase().includes('profile not found')
         ) {
-            return <Redirect href="/onboarding" />;
+            return <Redirect href="/dating-setup" />;
         }
     }
 

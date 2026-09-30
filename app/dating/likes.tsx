@@ -57,7 +57,7 @@ export default function LikesScreen() {
             <Text style={[TYPOGRAPHY.title, { color: colors.foreground }]}>{person.name}, {person.age}</Text>
             <Copy muted>{person.city} · {person.intentions.join(', ')}</Copy>
             <View style={styles.actions}>
-              <Action label="View profile" onPress={() => router.push({ pathname: '/compatibility/[userId]', params: { userId: person.id } } as never)} />
+              <Action label="View profile" onPress={() => router.push({ pathname: '/compatibility/[userId]', params: { userId: person.id, ...(tab === 'sent' ? { like: 'sent' } : {}) } } as never)} />
               {tab === 'received' ? <Action label={decision.isPending ? 'Saving…' : 'Like back'} tone="primary" disabled={decision.isPending} onPress={() => likeBack(person)} /> : null}
             </View>
           </View>

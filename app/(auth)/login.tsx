@@ -50,11 +50,11 @@ async function routeAfterAuth(timeoutMs = 8000) {
         error.message.toLowerCase().includes('profile not found')
       ) {
         await setCachedProfile(storedAuth.userId, null);
-        return '/onboarding' as const;
+        return '/dating-setup' as const;
       }
 
       if (isNetworkError(error)) {
-        return '/(tabs)' as const;
+        return '/dating' as const;
       }
 
       if (isAuthExpiredError(error)) {
@@ -65,7 +65,7 @@ async function routeAfterAuth(timeoutMs = 8000) {
     }
   }
 
-  return '/onboarding' as const;
+  return '/dating-setup' as const;
 }
 
 export default function LoginScreen() {

@@ -53,6 +53,7 @@ function FloatingGlassButton({
   shadowColor,
   prominent,
   circle,
+  settled,
   children,
 }: {
   label: string;
@@ -67,6 +68,8 @@ function FloatingGlassButton({
   shadowColor: string;
   prominent?: boolean;
   circle?: boolean;
+  /** Already decided. Keeps the glass pill, but it is not an action. */
+  settled?: boolean;
   children: React.ReactNode;
 }) {
   const { colors } = useTheme();
@@ -85,8 +88,8 @@ function FloatingGlassButton({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={label}
-        disabled={disabled}
-        accessibilityState={{ disabled }}
+        disabled={disabled || settled}
+        accessibilityState={{ disabled: disabled || settled }}
         onPress={onPress}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
@@ -95,7 +98,7 @@ function FloatingGlassButton({
           shape,
           {
             borderColor,
-            opacity: disabled ? 0.45 : pressed ? 0.82 : 1,
+            opacity: settled ? 1 : disabled ? 0.45 : pressed ? 0.82 : 1,
           },
         ]}
       >
@@ -112,11 +115,12 @@ function FloatingGlassButton({
 }
 
 export default function CompatibilityProfileScreen() {
-  const { userId } = useLocalSearchParams<{ userId: string }>();
-  return <ProfileDetails key={userId} userId={userId} />;
+  const { userId, like } = useLocalSearchParams<{ userId: string; like?: string | string[] }>();
+  const likeSent = like === 'sent' || (Array.isArray(like) && like.includes('sent'));
+  return <ProfileDetails key={`${userId}:${likeSent ? 'sent' : 'open'}`} userId={userId} likeSent={likeSent} />;
 }
 
-function ProfileDetails({ userId }: { userId: string }) {
+function ProfileDetails({ userId, likeSent }: { userId: string; likeSent: boolean }) {
   const router = useRouter();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -278,7 +282,7 @@ function ProfileDetails({ userId }: { userId: string }) {
     {person && !safetyOpen ? <View pointerEvents="box-none" onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)} style={[styles.footer, { paddingBottom: footerBottomPad }]}>
       <Feedback error={decision.error} />
       <View pointerEvents="box-none" style={styles.footerRow}>
-        {!matchId ? <FloatingGlassButton
+        {!matchId && !likeSent ? <FloatingGlassButton
           label={`Pass on ${person.name}`}
           circle
           disabled={decision.isPending || decision.isSuccess}
@@ -294,9 +298,10 @@ function ProfileDetails({ userId }: { userId: string }) {
           <X size={24} color={colors.foreground} />
         </FloatingGlassButton> : null}
         <FloatingGlassButton
-          label={matchId ? 'Send a message' : `Like ${person.name}`}
+          label={matchId ? 'Send a message' : likeSent || decision.isSuccess ? `Like sent to ${person.name}` : `Like ${person.name}`}
           prominent
-          disabled={!matchId && (decision.isPending || decision.isSuccess)}
+          settled={likeSent || (decision.isSuccess && !matchId)}
+          disabled={!matchId && !likeSent && (decision.isPending || decision.isSuccess)}
           pressed={pressedControl === 'like'}
           tint={colors.primaryGlassTint}
           overlay={colors.primaryGlassOverlay}
@@ -307,7 +312,7 @@ function ProfileDetails({ userId }: { userId: string }) {
           onPressOut={() => setPressedControl(null)}
         >
           {matchId ? <MessageCircle size={24} color={colors.primaryForeground} /> : <Heart size={24} color={colors.primaryForeground} fill={colors.primaryForeground} />}
-          <Text style={[styles.likeLabel, { color: colors.primaryForeground }]}>{matchId ? 'Send a message' : decision.isPending ? 'Saving…' : decision.isSuccess ? 'Liked' : `Like ${person.name}`}</Text>
+          <Text style={[styles.likeLabel, { color: colors.primaryForeground }]}>{matchId ? 'Send a message' : decision.isPending ? 'Saving…' : likeSent || decision.isSuccess ? 'Like sent' : `Like ${person.name}`}</Text>
         </FloatingGlassButton>
       </View>
     </View> : null}

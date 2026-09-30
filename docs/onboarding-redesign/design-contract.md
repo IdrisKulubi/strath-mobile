@@ -4,6 +4,8 @@ Approved direction: **Option 1**, selected by the user on 2026-09-24.
 Scope: complete mobile onboarding, from entry and account creation through profile, preferences, photos, verification, compatibility answers, and discovery handoff.
 Delivery status: phased implementation tracked in [master.md](master.md).
 
+The 2026-09-30 rollout decision removes account-ID cohort filtering. Once the questionnaire schema and global collection/shell/matching switches are enabled, all authenticated accounts use the new setup and dating routes. Verification, waitlist, reciprocal discovery eligibility, and existing conversations retain their data rules.
+
 ## Authority and reference
 
 Use [DESIGN.md](../../DESIGN.md) for app-wide tokens and this document for onboarding behavior. This contract supersedes older onboarding layout instructions that show all answer fields together or hide follow-ups behind More. Preserve existing API and eligibility rules unless explicitly changed. The user's latest request takes precedence.

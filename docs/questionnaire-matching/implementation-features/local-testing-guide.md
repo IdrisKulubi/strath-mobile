@@ -49,10 +49,9 @@ QUESTIONNAIRE_SCHEMA_READY=true
 QUESTIONNAIRE_COLLECTION_ENABLED=true
 QUESTIONNAIRE_MATCHING_ENABLED=true
 QUESTIONNAIRE_SHELL_ENABLED=true
-QUESTIONNAIRE_USER_IDS=*
 ```
 
-Use `*` only with this isolated local database. Use explicit account IDs in shared or hosted environments.
+The questionnaire experience no longer checks `QUESTIONNAIRE_USER_IDS`. With these global switches enabled, every authenticated account uses the new experience.
 
 For a new empty database, create the existing Strathspace schema first:
 

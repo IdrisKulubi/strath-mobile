@@ -24,6 +24,7 @@ export function isQuestionnaireRoute(path: string) {
 }
 
 function replacementForLegacyRoute(path: string) {
+  if (path === '/onboarding') return '/dating-setup';
   const conversation = path.match(/^\/chat\/([^/]+)$/);
   if (conversation) return `/dating-chat/${conversation[1]}`;
   if (path === '/chats') return '/dating/messages';
@@ -41,7 +42,8 @@ export function QuestionnaireRouteGate({ children }: { children: React.ReactNode
   }, [path, refetchIdentity]);
 
   if (identityPending) return <Page title="Strathspace"><Loading label="Checking your account" /></Page>;
-  if (identityError || !identityData) return <>{children}</>;
+  if (identityError) return <Page title="Strathspace"><Feedback error={identity.error} /><Action label="Try again" tone="primary" onPress={() => { void refetchIdentity(); }} /></Page>;
+  if (!identityData) return <>{children}</>;
   if (experience.isPending) return <Page title="Strathspace"><Loading label="Opening your experience" /></Page>;
   if (experience.isError) {
     return (
@@ -51,6 +53,7 @@ export function QuestionnaireRouteGate({ children }: { children: React.ReactNode
       </Page>
     );
   }
-  if (!experience.data?.shell || isQuestionnaireRoute(path)) return <>{children}</>;
+  if (!experience.data?.shell) return <Page title="Strathspace"><Feedback error={new Error('The new experience is temporarily unavailable. Please try again.')} /><Action label="Try again" tone="primary" onPress={() => { void experience.refetch(); }} /></Page>;
+  if (isQuestionnaireRoute(path) || path === '/waitlist') return <>{children}</>;
   return <Redirect href={replacementForLegacyRoute(path) as never} />;
 }
