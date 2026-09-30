@@ -21,6 +21,9 @@ interface ChatInputProps {
     onBlur?: () => void;
     /** Home-indicator padding when keyboard is closed. Omit while typing. */
     bottomInset?: number;
+    /** Leave a controlled draft in place until the send request succeeds. */
+    clearOnSend?: boolean;
+    maxLength?: number;
     onMediaPress?: () => void;
     onGifPress?: () => void;
     onMusicPress?: () => void;
@@ -36,6 +39,8 @@ export function ChatInput({
     onFocus,
     onBlur,
     bottomInset = 0,
+    clearOnSend = true,
+    maxLength = 1000,
 }: ChatInputProps) {
     const { colors } = useTheme();
     const [internalMessage, setInternalMessage] = useState('');
@@ -50,7 +55,7 @@ export function ChatInput({
 
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onSend(trimmed);
-        setMessage('');
+        if (clearOnSend) setMessage('');
     };
 
     const canSend = message.trim().length > 0 && !isSending && !disabled;
@@ -77,16 +82,19 @@ export function ChatInput({
                         onFocus={onFocus}
                         onBlur={onBlur}
                         multiline
-                        maxLength={1000}
+                        maxLength={maxLength}
                         editable={!isSending && !disabled}
                         returnKeyType="default"
                     />
                 </View>
 
                 <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Send message"
+                    accessibilityState={{ disabled: !canSend }}
                     style={[
                         styles.sendButton,
-                        canSend && { backgroundColor: colors.primary },
+                        { backgroundColor: canSend ? colors.primary : colors.control },
                     ]}
                     onPress={handleSend}
                     disabled={!canSend}

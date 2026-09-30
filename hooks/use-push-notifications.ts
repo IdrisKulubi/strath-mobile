@@ -40,6 +40,7 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
         case NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH:
         case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
         case NOTIFICATION_TYPES.MATCH:
+        case NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH:
             return 'accent';
 
         case NOTIFICATION_TYPES.PAYMENT_EXPIRING:
@@ -181,18 +182,25 @@ export function usePushNotifications(options?: {
                     invalidateMessagingCaches(queryClient, data.matchId);
                 }
 
+                if (data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH) {
+                    queryClient.invalidateQueries({ queryKey: ['questionnaire'] });
+                    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                }
+
                 if (data.type === NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED) {
                     queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
                     queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
                 }
 
-                toast.show({
-                    message,
-                    variant: toastVariantFor(data.type),
-                    position: 'top',
-                    duration: 4000,
-                    showInModal: true,
-                });
+                if (data.type !== NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH) {
+                    toast.show({
+                        message,
+                        variant: toastVariantFor(data.type),
+                        position: 'top',
+                        duration: 4000,
+                        showInModal: true,
+                    });
+                }
             });
 
         notificationResponseListener.current =
@@ -202,6 +210,11 @@ export function usePushNotifications(options?: {
 
                 if (data.type === NOTIFICATION_TYPES.MESSAGE) {
                     invalidateMessagingCaches(queryClient, data.matchId);
+                }
+
+                if (data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH) {
+                    queryClient.invalidateQueries({ queryKey: ['questionnaire'] });
+                    queryClient.invalidateQueries({ queryKey: ['conversations'] });
                 }
 
                 if (data.type === NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED) {

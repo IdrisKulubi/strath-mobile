@@ -1,3 +1,5 @@
+/* Reanimated gesture shared values are mutable by design. */
+/* eslint-disable react-hooks/immutability */
 import React from 'react';
 import {
     View,
@@ -6,6 +8,7 @@ import {
     Pressable,
     Dimensions,
     FlatList,
+    Alert,
 } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
@@ -18,16 +21,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
-    withSpring,
     withTiming,
+    Easing,
+    useReducedMotion,
     runOnJS,
-    FadeIn,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { MOTION, RADIUS } from '@/lib/design-tokens';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const OPEN_EASING = Easing.out(Easing.cubic);
+const CLOSE_EASING = Easing.inOut(Easing.cubic);
 
 interface ArchivedConversationsSheetProps {
     visible: boolean;
@@ -46,22 +52,31 @@ export function ArchivedConversationsSheet({
     onUnarchive,
     onDelete,
 }: ArchivedConversationsSheetProps) {
-    const { isDark } = useTheme();
+    const { colors, isDark } = useTheme();
     const insets = useSafeAreaInsets();
+    const reducedMotion = useReducedMotion();
     const translateY = useSharedValue(SCREEN_HEIGHT);
+    const backdropOpacity = useSharedValue(0);
 
     React.useEffect(() => {
         if (visible) {
-            translateY.value = withSpring(0, { damping: 25, stiffness: 300 });
+            translateY.value = reducedMotion ? 0 : withTiming(0, { duration: MOTION.medium, easing: OPEN_EASING });
+            backdropOpacity.value = reducedMotion ? 1 : withTiming(1, { duration: MOTION.short });
         } else {
-            translateY.value = withTiming(SCREEN_HEIGHT, { duration: 250 });
+            translateY.value = SCREEN_HEIGHT;
+            backdropOpacity.value = 0;
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [visible]);
+    }, [visible, reducedMotion]);
 
     const closeSheet = () => {
-        translateY.value = withTiming(SCREEN_HEIGHT, { duration: 250 }, () => {
-            runOnJS(onClose)();
+        if (reducedMotion) {
+            onClose();
+            return;
+        }
+        backdropOpacity.value = withTiming(0, { duration: MOTION.short });
+        translateY.value = withTiming(SCREEN_HEIGHT, { duration: MOTION.short, easing: CLOSE_EASING }, (finished) => {
+            if (finished) runOnJS(onClose)();
         });
     };
 
@@ -73,9 +88,12 @@ export function ArchivedConversationsSheet({
         })
         .onEnd((event) => {
             if (event.translationY > 100 || event.velocityY > 500) {
-                closeSheet();
+                backdropOpacity.value = withTiming(0, { duration: MOTION.short });
+                translateY.value = withTiming(SCREEN_HEIGHT, { duration: MOTION.short, easing: CLOSE_EASING }, (finished) => {
+                    if (finished) runOnJS(onClose)();
+                });
             } else {
-                translateY.value = withSpring(0, { damping: 25, stiffness: 300 });
+                translateY.value = withTiming(0, { duration: MOTION.short, easing: OPEN_EASING });
             }
         });
 
@@ -84,10 +102,10 @@ export function ArchivedConversationsSheet({
     }));
 
     const backdropStyle = useAnimatedStyle(() => ({
-        opacity: withTiming(visible ? 1 : 0, { duration: 200 }),
+        opacity: backdropOpacity.value,
     }));
 
-    const renderItem = ({ item, index }: { item: Conversation; index: number }) => {
+    const renderItem = ({ item }: { item: Conversation }) => {
         const partnerName = item.partner.name || 'Unknown';
         const avatarUri = item.partner.image;
 
@@ -98,11 +116,11 @@ export function ArchivedConversationsSheet({
             : getRelativeTime(item.createdAt);
 
         return (
-            <Animated.View entering={FadeIn.delay(index * 50)}>
+            <View>
                 <Pressable
                     style={[
                         styles.conversationItem,
-                        { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc' }
+                        { backgroundColor: colors.control }
                     ]}
                     onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -127,17 +145,17 @@ export function ArchivedConversationsSheet({
                     <View style={styles.conversationContent}>
                         <View style={styles.conversationHeader}>
                             <Text
-                                style={[styles.conversationName, { color: isDark ? '#fff' : '#1a1a2e' }]}
+                                style={[styles.conversationName, { color: colors.foreground }]}
                                 numberOfLines={1}
                             >
                                 {partnerName}
                             </Text>
-                            <Text style={[styles.conversationTime, { color: isDark ? '#64748b' : '#9ca3af' }]}>
+                            <Text style={[styles.conversationTime, { color: colors.mutedForeground }]}>
                                 {lastMessageTime}
                             </Text>
                         </View>
                         <Text
-                            style={[styles.conversationPreview, { color: isDark ? '#94a3b8' : '#6b7280' }]}
+                            style={[styles.conversationPreview, { color: colors.mutedForeground }]}
                             numberOfLines={1}
                         >
                             {lastMessageText}
@@ -164,17 +182,22 @@ export function ArchivedConversationsSheet({
                                     { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.1)' }
                                 ]}
                                 onPress={() => {
-                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                    onDelete(item);
+                                    Alert.alert('Remove from inbox', `Remove your conversation with ${partnerName} from this device? The message history stays available if a new message arrives.`, [
+                                        { text: 'Cancel', style: 'cancel' },
+                                        { text: 'Remove', style: 'destructive', onPress: () => {
+                                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                            onDelete(item);
+                                        } },
+                                    ]);
                                 }}
                             >
                                 <Trash size={16} color="#ef4444" weight="bold" />
-                                <Text style={[styles.actionButtonText, { color: '#ef4444' }]}>Delete</Text>
+                                <Text style={[styles.actionButtonText, { color: '#ef4444' }]}>Remove</Text>
                             </Pressable>
                         </View>
                     </View>
                 </Pressable>
-            </Animated.View>
+            </View>
         );
     };
 
@@ -182,14 +205,14 @@ export function ArchivedConversationsSheet({
         <View style={styles.emptyContainer}>
             <View style={[
                 styles.emptyIcon,
-                { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)' }
+                { backgroundColor: colors.control }
             ]}>
-                <Archive size={48} color={isDark ? '#64748b' : '#9ca3af'} />
+                <Archive size={48} color={colors.mutedForeground} />
             </View>
-            <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
-                Nothing archived yet 📦
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                Nothing archived yet
             </Text>
-            <Text style={[styles.emptySubtitle, { color: isDark ? '#64748b' : '#9ca3af' }]}>
+            <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
                 Archived chats will appear here when you archive them
             </Text>
         </View>
@@ -198,7 +221,7 @@ export function ArchivedConversationsSheet({
     if (!visible) return null;
 
     return (
-        <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
+        <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={closeSheet}>
             <GestureHandlerRootView style={styles.modalContainer}>
                 {/* Backdrop */}
                 <Animated.View style={[styles.backdrop, backdropStyle]}>
@@ -211,7 +234,7 @@ export function ArchivedConversationsSheet({
                         style={[
                             styles.sheet,
                             {
-                                backgroundColor: isDark ? '#1a1a2e' : '#ffffff',
+                                backgroundColor: colors.sheet,
                                 paddingBottom: insets.bottom + 20,
                             },
                             sheetStyle,
@@ -221,31 +244,31 @@ export function ArchivedConversationsSheet({
                         <View style={styles.handleContainer}>
                             <View style={[
                                 styles.handle,
-                                { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.15)' }
+                                { backgroundColor: colors.controlBorder }
                             ]} />
                         </View>
 
                         {/* Header */}
                         <View style={styles.header}>
                             <View style={styles.headerLeft}>
-                                <Archive size={24} color={isDark ? '#fff' : '#1a1a2e'} weight="fill" />
-                                <Text style={[styles.headerTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+                                <Archive size={24} color={colors.foreground} weight="fill" />
+                                <Text style={[styles.headerTitle, { color: colors.foreground }]}>
                                     Archived Conversations
                                 </Text>
                             </View>
                             <Pressable
                                 style={[
                                     styles.closeButton,
-                                    { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)' }
+                                    { backgroundColor: colors.control }
                                 ]}
                                 onPress={closeSheet}
                             >
-                                <Ionicons name="close" size={20} color={isDark ? '#fff' : '#1a1a2e'} />
+                                <Ionicons name="close" size={20} color={colors.foreground} />
                             </Pressable>
                         </View>
 
                         {archivedConversations.length > 0 && (
-                            <Text style={[styles.countText, { color: isDark ? '#64748b' : '#9ca3af' }]}>
+                            <Text style={[styles.countText, { color: colors.mutedForeground }]}>
                                 {archivedConversations.length} archived {archivedConversations.length === 1 ? 'conversation' : 'conversations'}
                             </Text>
                         )}
@@ -271,7 +294,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     backdrop: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
     sheet: {
@@ -280,8 +303,8 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         maxHeight: SCREEN_HEIGHT * 0.85,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
+        borderTopLeftRadius: RADIUS.sheet,
+        borderTopRightRadius: RADIUS.sheet,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.1,

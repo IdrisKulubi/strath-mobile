@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { z } from 'zod';
 import { getAuthToken, getCurrentUserId } from '@/lib/auth-helpers';
+import { replaceOptimisticMessage } from '@/lib/chat-message-reconciliation';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -184,6 +185,7 @@ export function useChat(matchId: string, options?: UseChatOptions) {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [hasMoreMessages, setHasMoreMessages] = useState(false);
     const lastSendRef = useRef<{ content: string; clientRequestId: string } | null>(null);
+    const sendInFlightRef = useRef(false);
 
     useEffect(() => {
         getCurrentUserId().then(setCurrentUserId);
@@ -295,17 +297,24 @@ export function useChat(matchId: string, options?: UseChatOptions) {
                 optimisticMessage,
             ]);
 
-            return { previousMessages };
+            return { previousMessages, optimisticId: optimisticMessage.id };
         },
         onError: (_err, _content, context) => {
-            if (context?.previousMessages) {
-                queryClient.setQueryData(['chat', matchId], context.previousMessages);
-            }
+            if (!context) return;
+            queryClient.setQueryData<Message[]>(['chat', matchId], (current = []) =>
+                mergeMessages(context.previousMessages ?? [], current.filter((message) => message.id !== context.optimisticId)),
+            );
         },
-        onSuccess: () => {
+        onSuccess: (saved, _content, context) => {
+            if (context) {
+                queryClient.setQueryData<Message[]>(['chat', matchId], (current = []) =>
+                    replaceOptimisticMessage(current, context.optimisticId, saved),
+                );
+            }
             lastSendRef.current = null;
         },
         onSettled: () => {
+            sendInFlightRef.current = false;
             queryClient.invalidateQueries({ queryKey: ['chat', matchId] });
             queryClient.invalidateQueries({ queryKey: ['matches'] });
             queryClient.invalidateQueries({ queryKey: ['conversations'] });
@@ -326,7 +335,11 @@ export function useChat(matchId: string, options?: UseChatOptions) {
         refetch,
         loadOlderMessages,
         hasMoreMessages,
-        sendMessage: sendMessageMutation.mutate,
+        sendMessage: (content: string, options?: Parameters<typeof sendMessageMutation.mutate>[1]) => {
+            if (sendInFlightRef.current) return;
+            sendInFlightRef.current = true;
+            sendMessageMutation.mutate(content, options);
+        },
         isSending: sendMessageMutation.isPending,
         currentUserId,
         isAppActive,

@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight, GraduationCap, Heart, HeartHandshake, MapPin
 
 import { Action, Copy, Feedback, Field, Loading, Notice, SectionLabel } from '@/components/questionnaire/ui';
 import { PhotoButton, ProfileGallery } from '@/components/questionnaire/profile-gallery';
+import { useMatchAnnouncement } from '@/components/questionnaire/match-celebration';
 import { useTheme } from '@/hooks/use-theme';
 import { PROFILE_PHOTO, RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { compatibilityLabel, useQuestionnaire, useQuestionnaireMutation, type DecisionResponse, type PublicComparison } from '@/lib/questionnaire';
@@ -128,6 +129,7 @@ function ProfileDetails({ userId, likeSent }: { userId: string; likeSent: boolea
   const block = useQuestionnaireMutation<{ saved: true }>('block');
   const report = useQuestionnaireMutation<{ saved: true }>('report');
   const decision = useQuestionnaireMutation<DecisionResponse>('decisions');
+  const announceMatch = useMatchAnnouncement();
   const [confirmBlock, setConfirmBlock] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -307,7 +309,10 @@ function ProfileDetails({ userId, likeSent }: { userId: string; likeSent: boolea
           overlay={colors.primaryGlassOverlay}
           borderColor={colors.primaryGlassBorder}
           shadowColor={colors.primaryGlassShadow}
-          onPress={() => matchId ? router.push({ pathname: '/dating-chat/[matchId]', params: { matchId } } as never) : decision.mutate({ targetId: userId, decision: 'like' }, { onSuccess: (result) => setMatchId(result.matchId ?? null) })}
+          onPress={() => matchId ? router.push({ pathname: '/dating-chat/[matchId]', params: { matchId } } as never) : decision.mutate({ targetId: userId, decision: 'like' }, { onSuccess: (result) => {
+            setMatchId(result.matchId ?? null);
+            if (result.mutual && result.matchId) announceMatch({ matchId: result.matchId, name: person.name, photo: person.photos[0] ?? null });
+          } })}
           onPressIn={() => setPressedControl('like')}
           onPressOut={() => setPressedControl(null)}
         >

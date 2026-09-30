@@ -1,3 +1,5 @@
+/* Reanimated gesture shared values are mutable by design. */
+/* eslint-disable react-hooks/immutability */
 import React from 'react';
 import { View, Pressable, StyleSheet, Alert, Dimensions } from 'react-native';
 import { Text } from '@/components/ui/text';
@@ -16,7 +18,7 @@ import Animated, {
     Extrapolation,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Archive, BellSlash, Bell } from 'phosphor-react-native';
+import { Archive, BellSlash, Bell, Trash } from 'phosphor-react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 80;
@@ -73,8 +75,8 @@ export function ConversationCard({
 
     const handleDelete = () => {
         Alert.alert(
-            'Delete Conversation',
-            `Are you sure you want to delete your conversation with ${partnerName}? This cannot be undone.`,
+            'Remove from inbox',
+            `Remove your conversation with ${partnerName} from this device? The message history stays available if a new message arrives.`,
             [
                 { 
                     text: 'Cancel', 
@@ -84,7 +86,7 @@ export function ConversationCard({
                     }
                 },
                 {
-                    text: 'Delete',
+                    text: 'Remove',
                     style: 'destructive',
                     onPress: () => {
                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -113,13 +115,13 @@ export function ConversationCard({
             partnerName,
             'What would you like to do?',
             [
-                {
+                ...(onMute ? [{
                     text: isMuted ? 'Unmute Notifications' : 'Mute Notifications',
                     onPress: () => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         onMute?.(conversation);
                     },
-                },
+                }] : []),
                 {
                     text: 'Archive Chat',
                     onPress: () => {
@@ -128,7 +130,7 @@ export function ConversationCard({
                     },
                 },
                 {
-                    text: 'Delete Chat',
+                    text: 'Remove from inbox',
                     style: 'destructive',
                     onPress: handleDelete,
                 },
@@ -176,19 +178,25 @@ export function ConversationCard({
             {/* Swipe Actions */}
             <Animated.View style={[styles.actionsContainer, actionsStyle]}>
                 <Pressable
-                    style={[styles.actionButton, { backgroundColor: isMuted ? colors.warning : colors.accent }]}
+                    style={[styles.actionButton, { backgroundColor: onMute ? (isMuted ? colors.warning : colors.accent) : colors.destructive }]}
                     onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         translateX.value = withSpring(0);
-                        onMute?.(conversation);
+                        if (onMute) {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            onMute(conversation);
+                        } else {
+                            handleDelete();
+                        }
                     }}
                 >
-                    {isMuted ? (
+                    {!onMute ? (
+                        <Trash size={20} color={colors.primaryForeground} weight="bold" />
+                    ) : isMuted ? (
                         <Bell size={20} color={colors.primaryForeground} weight="bold" />
                     ) : (
                         <BellSlash size={20} color={colors.primaryForeground} weight="bold" />
                     )}
-                    <Text style={[styles.actionText, { color: colors.primaryForeground }]}>{isMuted ? 'Unmute' : 'Mute'}</Text>
+                    <Text style={[styles.actionText, { color: colors.primaryForeground }]}>{onMute ? (isMuted ? 'Unmute' : 'Mute') : 'Remove'}</Text>
                 </Pressable>
                 <Pressable
                     style={[styles.actionButton, styles.archiveButton, { backgroundColor: colors.success }]}

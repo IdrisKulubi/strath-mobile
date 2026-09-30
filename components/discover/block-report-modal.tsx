@@ -1,3 +1,5 @@
+/* Reanimated shared values are intentionally mutated by gesture worklets. */
+/* eslint-disable react-hooks/immutability */
 import React, { useState, useEffect, useCallback } from "react";
 import {
     View,
@@ -30,6 +32,7 @@ import { useBlockUser } from "@/hooks/use-block";
 import { useReportUser, REPORT_REASONS, ReportReason } from "@/hooks/use-report";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { RADIUS } from "@/lib/design-tokens";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const DISMISS_THRESHOLD = 100;
@@ -42,6 +45,9 @@ interface BlockReportModalProps {
     onClose: () => void;
     onSuccess: () => void;
     onSwitchMode: () => void;
+    /** The dating shell supplies its safety endpoints while reusing this UI. */
+    onBlockUser?: () => Promise<void>;
+    onReportUser?: (reason: ReportReason, details?: string) => Promise<void>;
 }
 
 export function BlockReportModal({
@@ -52,11 +58,16 @@ export function BlockReportModal({
     onClose,
     onSuccess,
     onSwitchMode,
+    onBlockUser,
+    onReportUser,
 }: BlockReportModalProps) {
-    const { isDark } = useTheme();
+    const { colors, isDark } = useTheme();
     const insets = useSafeAreaInsets();
-    const { mutate: blockUser, isPending: isBlocking } = useBlockUser();
-    const { mutate: reportUser, isPending: isReporting } = useReportUser();
+    const { mutate: blockUser, isPending: legacyBlocking } = useBlockUser();
+    const { mutate: reportUser, isPending: legacyReporting } = useReportUser();
+    const [customPending, setCustomPending] = useState(false);
+    const isBlocking = legacyBlocking || (mode === "block" && customPending);
+    const isReporting = legacyReporting || (mode === "report" && customPending);
 
     const [selectedReason, setSelectedReason] = useState<ReportReason | null>(null);
     const [details, setDetails] = useState("");
@@ -168,6 +179,17 @@ export function BlockReportModal({
     const handleBlock = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
         setErrorMessage(null);
+        if (onBlockUser) {
+            setCustomPending(true);
+            void onBlockUser().then(() => {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                setSuccessState("blocked");
+            }).catch((error) => {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                setErrorMessage(error instanceof Error ? error.message : "Failed to block user");
+            }).finally(() => setCustomPending(false));
+            return;
+        }
         blockUser(userId, {
             onSuccess: () => {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -187,6 +209,17 @@ export function BlockReportModal({
 
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
         setErrorMessage(null);
+        if (onReportUser) {
+            setCustomPending(true);
+            void onReportUser(selectedReason, details.trim() || undefined).then(() => {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                setSuccessState("reported");
+            }).catch((error) => {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                setErrorMessage(error instanceof Error ? error.message : "Failed to submit report");
+            }).finally(() => setCustomPending(false));
+            return;
+        }
         reportUser(
             {
                 reportedUserId: userId,
@@ -227,7 +260,7 @@ export function BlockReportModal({
     const blockEffects = [
         { icon: "eye-off", text: "You won't see each other again" },
         { icon: "chatbubble-ellipses", text: "They won't be able to message you" },
-        { icon: "shield-checkmark", text: "We'll block any other accounts they create" },
+        { icon: "shield-checkmark", text: "You can report the account if you also want us to review it" },
     ];
 
     const renderSuccessContent = () => (
@@ -243,12 +276,12 @@ export function BlockReportModal({
             </View>
 
             {/* Success Title */}
-            <Text style={[styles.successTitle, { color: isDark ? "#fff" : "#1a1a2e" }]}>
+            <Text style={[styles.successTitle, { color: colors.foreground }]}>
                 {successState === "blocked" ? `You've blocked ${userName}` : `You've reported ${userName}`}
             </Text>
 
             {/* Success Message */}
-            <Text style={[styles.successMessage, { color: isDark ? "#94a3b8" : "#6b7280" }]}>
+            <Text style={[styles.successMessage, { color: colors.mutedForeground }]}>
                 Thank you for helping keep the Strathspace community safe.
                 {successState === "reported" 
                     ? " We'll review your report and take appropriate action within 24 hours."
@@ -256,12 +289,9 @@ export function BlockReportModal({
             </Text>
 
             {/* What happens next */}
-            <View style={[styles.infoBox, { 
-                backgroundColor: isDark ? "rgba(16, 185, 129, 0.1)" : "rgba(16, 185, 129, 0.08)",
-                borderColor: isDark ? "rgba(16, 185, 129, 0.2)" : "rgba(16, 185, 129, 0.15)",
-            }]}>
-                <Ionicons name="information-circle" size={20} color="#10b981" />
-                <Text style={[styles.infoBoxText, { color: isDark ? "#a7f3d0" : "#065f46" }]}>
+            <View style={[styles.infoBox, { backgroundColor: colors.control, borderColor: colors.controlBorder }]}>
+                <Ionicons name="information-circle" size={20} color={colors.success} />
+                <Text style={[styles.infoBoxText, { color: colors.foreground }]}>
                     {successState === "blocked" 
                         ? "This action can be undone from your settings."
                         : "You'll receive an update once we've reviewed this report."}
@@ -289,7 +319,7 @@ export function BlockReportModal({
 
     const renderBlockContent = () => (
         <View style={styles.content}>
-            <Text style={[styles.title, { color: isDark ? "#fff" : "#1a1a2e" }]}>
+            <Text style={[styles.title, { color: colors.foreground }]}>
                 Block {userName}?
             </Text>
 
@@ -300,12 +330,8 @@ export function BlockReportModal({
                         style={[
                             styles.effectRow,
                             {
-                                backgroundColor: isDark
-                                    ? "rgba(255, 255, 255, 0.08)"
-                                    : "rgba(0, 0, 0, 0.04)",
-                                borderColor: isDark
-                                    ? "rgba(255, 255, 255, 0.1)"
-                                    : "rgba(0, 0, 0, 0.08)",
+                                backgroundColor: colors.control,
+                                borderColor: colors.controlBorder,
                             },
                         ]}
                     >
@@ -313,19 +339,17 @@ export function BlockReportModal({
                             style={[
                                 styles.iconCircle,
                                 {
-                                    backgroundColor: isDark
-                                        ? "rgba(236, 72, 153, 0.2)"
-                                        : "rgba(236, 72, 153, 0.1)",
+                                    backgroundColor: colors.controlActive,
                                 },
                             ]}
                         >
                             <Ionicons
                                 name={effect.icon as any}
                                 size={20}
-                                color={isDark ? "#f472b6" : "#ec4899"}
+                                color={colors.primaryText}
                             />
                         </View>
-                        <Text style={[styles.effectText, { color: isDark ? "#e2e8f0" : "#374151" }]}>
+                        <Text style={[styles.effectText, { color: colors.foreground }]}>
                             {effect.text}
                         </Text>
                     </View>
@@ -362,7 +386,7 @@ export function BlockReportModal({
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.secondaryLink} onPress={handleSwitchMode}>
-                <Text style={[styles.secondaryLinkText, { color: isDark ? "#94a3b8" : "#6b7280" }]}>
+                <Text style={[styles.secondaryLinkText, { color: colors.primaryText }]}>
                     Report instead
                 </Text>
             </TouchableOpacity>
@@ -372,16 +396,16 @@ export function BlockReportModal({
     const renderReportReasonStep = () => (
         <View style={styles.content}>
             <View style={styles.stepHeader}>
-                <View style={[styles.stepBadge, { backgroundColor: isDark ? "#ec4899" : "#f43f5e" }]}>
+                <View style={[styles.stepBadge, { backgroundColor: colors.primary }]}>
                     <Text style={styles.stepBadgeText}>1</Text>
                 </View>
-                <Text style={[styles.stepLabel, { color: isDark ? "#94a3b8" : "#6b7280" }]}>of 2</Text>
+                <Text style={[styles.stepLabel, { color: colors.mutedForeground }]}>of 2</Text>
             </View>
 
-            <Text style={[styles.title, { color: isDark ? "#fff" : "#1a1a2e" }]}>
+            <Text style={[styles.title, { color: colors.foreground }]}>
                 Report {userName}
             </Text>
-            <Text style={[styles.subtitle, { color: isDark ? "#94a3b8" : "#6b7280" }]}>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
                 Why are you reporting this person?
             </Text>
 
@@ -392,19 +416,8 @@ export function BlockReportModal({
                         style={[
                             styles.reasonRow,
                             {
-                                backgroundColor: isDark
-                                    ? selectedReason === reason.id
-                                        ? "rgba(236, 72, 153, 0.15)"
-                                        : "rgba(255, 255, 255, 0.06)"
-                                    : selectedReason === reason.id
-                                    ? "rgba(236, 72, 153, 0.1)"
-                                    : "rgba(0, 0, 0, 0.03)",
-                                borderColor:
-                                    selectedReason === reason.id
-                                        ? isDark ? "#ec4899" : "#f43f5e"
-                                        : isDark
-                                        ? "rgba(255, 255, 255, 0.1)"
-                                        : "rgba(0, 0, 0, 0.08)",
+                                backgroundColor: selectedReason === reason.id ? colors.controlActive : colors.control,
+                                borderColor: selectedReason === reason.id ? colors.primary : colors.controlBorder,
                                 borderWidth: selectedReason === reason.id ? 2 : 1,
                             },
                         ]}
@@ -419,7 +432,7 @@ export function BlockReportModal({
                             style={[
                                 styles.reasonText,
                                 {
-                                    color: isDark ? "#e2e8f0" : "#374151",
+                                    color: colors.foreground,
                                     fontWeight: selectedReason === reason.id ? "600" : "500",
                                 },
                             ]}
@@ -427,7 +440,7 @@ export function BlockReportModal({
                             {reason.label}
                         </Text>
                         {selectedReason === reason.id && (
-                            <Ionicons name="checkmark-circle" size={24} color={isDark ? "#ec4899" : "#f43f5e"} />
+                            <Ionicons name="checkmark-circle" size={24} color={colors.primaryText} />
                         )}
                     </TouchableOpacity>
                 ))}
@@ -456,7 +469,7 @@ export function BlockReportModal({
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.secondaryLink} onPress={handleSwitchMode}>
-                <Text style={[styles.secondaryLinkText, { color: isDark ? "#94a3b8" : "#6b7280" }]}>
+                <Text style={[styles.secondaryLinkText, { color: colors.primaryText }]}>
                     Block instead
                 </Text>
             </TouchableOpacity>
@@ -473,18 +486,18 @@ export function BlockReportModal({
                     }}
                     style={styles.backButton}
                 >
-                    <Ionicons name="arrow-back" size={24} color={isDark ? "#fff" : "#1a1a2e"} />
+                    <Ionicons name="arrow-back" size={24} color={colors.foreground} />
                 </TouchableOpacity>
-                <View style={[styles.stepBadge, { backgroundColor: isDark ? "#ec4899" : "#f43f5e" }]}>
+                <View style={[styles.stepBadge, { backgroundColor: colors.primary }]}>
                     <Text style={styles.stepBadgeText}>2</Text>
                 </View>
-                <Text style={[styles.stepLabel, { color: isDark ? "#94a3b8" : "#6b7280" }]}>of 2</Text>
+                <Text style={[styles.stepLabel, { color: colors.mutedForeground }]}>of 2</Text>
             </View>
 
-            <Text style={[styles.title, { color: isDark ? "#fff" : "#1a1a2e" }]}>
+            <Text style={[styles.title, { color: colors.foreground }]}>
                 Add details
             </Text>
-            <Text style={[styles.subtitle, { color: isDark ? "#94a3b8" : "#6b7280" }]}>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
                 Help us understand what happened (optional)
             </Text>
 
@@ -492,15 +505,15 @@ export function BlockReportModal({
                 style={[
                     styles.selectedReasonBadge,
                     {
-                        backgroundColor: isDark ? "rgba(236, 72, 153, 0.15)" : "rgba(236, 72, 153, 0.1)",
-                        borderColor: isDark ? "rgba(236, 72, 153, 0.3)" : "rgba(236, 72, 153, 0.2)",
+                        backgroundColor: colors.controlActive,
+                        borderColor: colors.primary,
                     },
                 ]}
             >
                 <Text style={styles.selectedReasonIcon}>
                     {REPORT_REASONS.find((r) => r.id === selectedReason)?.icon}
                 </Text>
-                <Text style={[styles.selectedReasonText, { color: isDark ? "#f472b6" : "#ec4899" }]}>
+                <Text style={[styles.selectedReasonText, { color: colors.primaryText }]}>
                     {REPORT_REASONS.find((r) => r.id === selectedReason)?.label}
                 </Text>
             </View>
@@ -509,13 +522,13 @@ export function BlockReportModal({
                 style={[
                     styles.detailsInput,
                     {
-                        backgroundColor: isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.03)",
-                        borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)",
-                        color: isDark ? "#fff" : "#1a1a2e",
+                        backgroundColor: colors.control,
+                        borderColor: colors.controlBorder,
+                        color: colors.foreground,
                     },
                 ]}
                 placeholder="Describe what happened..."
-                placeholderTextColor={isDark ? "#64748b" : "#9ca3af"}
+                placeholderTextColor={colors.mutedForeground}
                 multiline
                 numberOfLines={6}
                 textAlignVertical="top"
@@ -523,7 +536,7 @@ export function BlockReportModal({
                 onChangeText={setDetails}
                 maxLength={500}
             />
-            <Text style={[styles.charCount, { color: isDark ? "#64748b" : "#9ca3af" }]}>
+            <Text style={[styles.charCount, { color: colors.mutedForeground }]}>
                 {details.length}/500
             </Text>
 
@@ -556,7 +569,7 @@ export function BlockReportModal({
                 </LinearGradient>
             </TouchableOpacity>
 
-            <Text style={[styles.disclaimer, { color: isDark ? "#64748b" : "#9ca3af" }]}>
+            <Text style={[styles.disclaimer, { color: colors.mutedForeground }]}>
                 We take reports seriously and will review this within 24 hours.
             </Text>
         </View>
@@ -597,7 +610,7 @@ export function BlockReportModal({
                                     styles.sheet,
                                     sheetStyle,
                                     {
-                                        backgroundColor: isDark ? "rgba(15, 23, 42, 0.98)" : "#ffffff",
+                                        backgroundColor: colors.sheet,
                                         paddingBottom: insets.bottom + 20,
                                     },
                                 ]}
@@ -608,7 +621,7 @@ export function BlockReportModal({
                                         style={[
                                             styles.handle,
                                             handleIndicatorStyle,
-                                            { backgroundColor: isDark ? "#64748b" : "#cbd5e1" },
+                                            { backgroundColor: colors.controlBorder },
                                         ]}
                                     />
                                 </View>
@@ -618,7 +631,7 @@ export function BlockReportModal({
                                     style={styles.closeButton}
                                     onPress={successState ? handleDone : handleClose}
                                 >
-                                    <Ionicons name="close" size={24} color={isDark ? "#94a3b8" : "#6b7280"} />
+                                    <Ionicons name="close" size={24} color={colors.mutedForeground} />
                                 </TouchableOpacity>
 
                                 {/* Content */}
@@ -646,7 +659,7 @@ export function BlockReportModal({
 
 const styles = StyleSheet.create({
     backdrop: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: "rgba(0, 0, 0, 0.5)",
     },
     keyboardView: {
@@ -654,8 +667,8 @@ const styles = StyleSheet.create({
         justifyContent: "flex-end",
     },
     sheet: {
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
+        borderTopLeftRadius: RADIUS.sheet,
+        borderTopRightRadius: RADIUS.sheet,
         maxHeight: SCREEN_HEIGHT * 0.85,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: -4 },
