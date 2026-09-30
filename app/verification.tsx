@@ -68,7 +68,7 @@ export default function VerificationScreen() {
         () =>
             (profile?.photos ?? [])
                 .filter((photo: string | undefined | null): photo is string => !!photo)
-                .slice(0, 4),
+                .slice(0, 6),
         [profile?.photos],
     );
 
@@ -249,8 +249,7 @@ export default function VerificationScreen() {
             const result = await ImagePicker.launchCameraAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 cameraType: ImagePicker.CameraType.front,
-                allowsEditing: true,
-                aspect: [3, 4],
+                allowsEditing: false,
                 quality: 0.85,
             });
 

@@ -32,10 +32,6 @@ export function deriveProfilePhotoIssueSignals(results: FaceVerificationResult[]
     const rows = results ?? [];
     let unsupportedProfilePhotoCount = 0;
     for (const row of rows) {
-        if (row.decision === 'error') {
-            unsupportedProfilePhotoCount += 1;
-            continue;
-        }
         const flags = row.qualityFlags ?? [];
         if (flags.some((flag) => PHOTO_RELATED_QUALITY_FLAGS.has(flag))) {
             unsupportedProfilePhotoCount += 1;
@@ -130,9 +126,7 @@ export function getVerificationRetryGuidance(input: {
 
     const hasWeakPerPhotoSignals = input.results.some(
         (r) =>
-            r.decision === 'error' ||
-            r.decision === 'not_matched' ||
-            (r.qualityFlags?.length ?? 0) > 0,
+            (r.qualityFlags ?? []).some((flag) => PHOTO_RELATED_QUALITY_FLAGS.has(flag)),
     );
     const shouldOfferPhotosForMixedFailure =
         input.failureReasons.includes('insufficient_match_count') && hasWeakPerPhotoSignals;

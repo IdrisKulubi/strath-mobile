@@ -6,6 +6,8 @@ Delivery status: phased implementation tracked in [master.md](master.md).
 
 The 2026-09-30 rollout decision removes account-ID cohort filtering. Once the questionnaire schema and global collection/shell/matching switches are enabled, all authenticated accounts use the new setup and dating routes. Verification, waitlist, reciprocal discovery eligibility, and existing conversations retain their data rules.
 
+The 2026-09-30 verification fix explicitly extends Phase 05 beyond its original UI-only scope. Keep the requirement for at least two submitted profile photos and the 90 similarity auto-pass bar, but allow one strong match regardless of how many photos are present. Reject known multi-face target photos as evidence, review provider failures, and show retry guidance tied to actual failure signals. Reuse successful photo audits to reduce submit time. Reassess thresholds only with reviewed real-world outcomes.
+
 ## Authority and reference
 
 Use [DESIGN.md](../../DESIGN.md) for app-wide tokens and this document for onboarding behavior. This contract supersedes older onboarding layout instructions that show all answer fields together or hide follow-ups behind More. Preserve existing API and eligibility rules unless explicitly changed. The user's latest request takes precedence.

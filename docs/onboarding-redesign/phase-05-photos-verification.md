@@ -1,8 +1,8 @@
 # Phase 05: Profile expression, photos, and verification
 
-Status: Done
+Status: In review (verification correction)
 Dependencies: 01, 02, 04
-Updated: 2026-09-24
+Updated: 2026-09-30
 
 Read [design contract](design-contract.md) and [master tracker](master.md) before starting. This phase is a bounded implementation task; do not proceed to the next phase automatically.
 
@@ -34,7 +34,7 @@ components/onboarding/PhotoMoment.tsx; profile-prompt-step.tsx; app/dating-setup
 
 ## Scope boundary
 
-No face-verification provider, policy, or biometric-storage change.
+The original phase excluded provider and policy changes. The user's 2026-09-30 verification correction explicitly extends this scope; see [decision log](decision-log.md). Biometric storage is unchanged.
 
 ## Evidence and handoff
 
@@ -44,5 +44,15 @@ No face-verification provider, policy, or biometric-storage change.
 - Remaining blockers or unavailable checks: Native camera/permissions and visual layout cannot be confirmed statically. Reopen this phase if user mobile testing finds a defect.
 - Deviations from the approved contract: None.
 - Next action: Phase 06 is eligible when requested. Do not start it automatically.
+
+## 2026-09-30 verification correction
+
+- [x] Make one strong match at the existing 90 threshold sufficient for any profile with at least two submitted photos; consider up to six photos and stop after a pass.
+- [x] Exclude known multi-face target photos, keep low scores available for diagnostics without auto-approving them, and capture the full selfie without an editing crop.
+- [x] Route provider failures to review and avoid blaming profile photos for a generic comparison error.
+- [x] Parallelize photo-asset setup, reuse completed audits, and avoid a separate face-detection call before comparison on unaudited photos.
+- [ ] Validate acceptance rate, false accepts, and end-to-end latency on reviewed production attempts and a native device after deployment.
+
+Evidence: focused backend decision tests and mobile retry-guidance tests pass; backend TypeScript and targeted lint pass. Full mobile TypeScript still has pre-existing errors outside changed files. No production biometric samples or native device test were available. Keep this correction In review until real-device and production outcomes are checked.
 
 When working, replace these placeholders with actual evidence. Synchronize this phase's status and the master row in the same task. A written plan or generated concept image is not implementation evidence.

@@ -12,6 +12,13 @@ export interface FaceVerificationComparisonDecisionInput {
     qualityFlags: string[];
 }
 
+export function isStrongSingleFaceMatch(
+    result: { similarity: number | null; facesDetected: number },
+    similarityThreshold: number,
+) {
+    return result.facesDetected === 1 && (result.similarity ?? 0) >= similarityThreshold;
+}
+
 function getEvaluatedComparisonResults(results: FaceVerificationComparisonDecisionInput[]) {
     return results.filter((result) => result.decision !== "skipped");
 }
@@ -35,6 +42,11 @@ export function resolveFaceVerificationOutcome(input: {
             ? FACE_VERIFICATION_STATUSES.VERIFIED
             : evaluatedResults.length === 0
               ? FACE_VERIFICATION_STATUSES.RETRY_REQUIRED
+              : evaluatedResults.some((result) =>
+                    result.decision === "error" &&
+                    result.qualityFlags.some((flag) => !RETRYABLE_IMAGE_ERROR_FLAGS.has(flag)),
+                )
+                ? FACE_VERIFICATION_STATUSES.MANUAL_REVIEW
               : evaluatedResults.every((result) => result.decision === "error")
                 ? evaluatedResults.every((result) =>
                       result.qualityFlags.every((flag) => RETRYABLE_IMAGE_ERROR_FLAGS.has(flag)),

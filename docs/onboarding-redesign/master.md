@@ -1,11 +1,11 @@
 # Onboarding redesign: master tracker
 
 Approved design: **Option 1: Rising sheet**.
-Last updated: **2026-09-25**.
+Last updated: **2026-09-30**.
 Current stage: **Catalogue seed user-confirmed (100 → 109); binary partner-choice correction implemented; user mobile retest pending.**
-Implementation phases Done: **5 / 8**.
-Active phase: **06: In review; 07: In progress from the requested continuation fix**.
-Next eligible task: **Complete remaining Phase 07 checks and user mobile review; verify updated backend/mobile deployment**.
+Implementation phases Done: **4 / 8**.
+Active phase: **05: Verification correction in review; 06: In review; 07: In progress from the requested continuation fix**.
+Next eligible task: **Validate the Phase 05 correction on a native device and reviewed production attempts; complete remaining Phase 07 checks and user mobile review**.
 
 This is a manually maintained tracker updated by Codex during each phase task, not a background monitor or scheduled automation.
 
@@ -26,7 +26,7 @@ Scope is the whole mobile onboarding journey: welcome/account/consent, about you
 | [02: Rising sheet foundation and motion](phase-02-sheet-foundation.md) | Build the shared visual and interaction primitives before migrating whole flows. | 01 | Done | Opt-in Rising sheet, choice/progress/action/feedback primitives, guarded beat controller, development preview; targeted lint and file-scoped TypeScript clean; user mobile review pending |
 | [03: Welcome, account, and consent](phase-03-welcome-auth.md) | Apply the approved experience to entry, supported auth, and legal consent. | 01, 02 | Done | Corrective sign-in changes accepted by user on mobile; static checks passed; broader device matrix remains Phase 08 |
 | [04: About you and partner preferences](phase-04-profile-preferences.md) | Replace dense setup forms with guided personal-detail and preference beats. | 01, 02, 03 | Done | Both setup paths use guided Phase 04 beats; explicit preferences, adult/age/radius validation, location fallback, scoped draft restore; static checks passed; user mobile review pending |
-| [05: Profile expression, photos, and verification](phase-05-photos-verification.md) | Bring photos, bio/prompts, and verification into the same guided experience. | 01, 02, 04 | Done | Profile beats, upload progress/retry/replace, explicit save, verification preface and status-truthful routing; static checks passed; user mobile review pending |
+| [05: Profile expression, photos, and verification](phase-05-photos-verification.md) | Bring photos, bio/prompts, and verification into the same guided experience. | 01, 02, 04 | In review | 2026-09-30 accuracy/speed correction implemented and focused checks passed; native and production outcome validation pending |
 | [06: Compatibility answers as guided beats](phase-06-compatibility-beats.md) | Replace the current questionnaire layout with the approved sequential Rising sheet interaction. | 01, 02, 05 | In review | Four beats, mandatory 32-answer flow, public new/edited answers, neutral sensitive responses, and independent partner choices including Yes/No/Unsure; user mobile retest pending |
 | [07: Resume, milestones, review, and discovery handoff](phase-07-resume-review-handoff.md) | Make the redesigned chapters behave as one resumable journey. | 03, 04, 05, 06 | In progress | User-requested continuous questionnaire and in-progress dating-tab redirect implemented; remaining cross-route resume/review/handoff checks pending |
 | [08: Accessibility, regression checks, and staged rollout](phase-08-qa-rollout.md) | Verify the whole implementation, close defects, and prepare controlled release. | 01–07 | Not started | Checklist pending; no implementation evidence |
