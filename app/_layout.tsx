@@ -114,8 +114,7 @@ export default function RootLayout() {
 
     async function prepare() {
       try {
-        const [, slidesDone, authed] = await Promise.all([
-          new Promise<void>((resolve) => setTimeout(resolve, 350)),
+        const [slidesDone, authed] = await Promise.all([
           hasCompletedIntroSlides(),
           isAuthenticated(),
         ]);

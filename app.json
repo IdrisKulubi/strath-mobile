@@ -3,7 +3,7 @@
     "owner": "vehemgroup",
     "name": "strathSpace",
     "slug": "strathSpace",
-    "version": "2.0.3",
+    "version": "2.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "strathspace",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.strathspace.mobile",
-      "buildNumber": "12",
+      "buildNumber": "13",
       "usesAppleSignIn": true,
       "icon": {
         "light": "./assets/images/icon.png",
@@ -50,12 +50,13 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash.png",
+          "image": "./assets/images/logos/LOGO.png",
+          "imageWidth": 88,
           "resizeMode": "contain",
-          "backgroundColor": "#FAF6F8",
+          "backgroundColor": "#F5F2F4",
           "dark": {
-            "image": "./assets/images/splash.png",
-            "backgroundColor": "#0f0a14"
+            "image": "./assets/images/logos/LOGO.png",
+            "backgroundColor": "#0D0B0D"
           }
         }
       ],
