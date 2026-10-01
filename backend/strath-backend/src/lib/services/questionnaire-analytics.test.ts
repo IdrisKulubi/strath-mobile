@@ -103,3 +103,19 @@ test('empty periods and missing migrations report absence without invented conve
     assert.equal(missing.available,false);
     assert.deepEqual(missing.missing,['q_discovery_events']);
 });
+
+test('reviewer demo activity is excluded from questionnaire business analytics', async () => {
+    await member('demo-dates-main',32);
+    await database.query(`INSERT INTO q_questionnaire_events(user_id,event,answer_count,revision) VALUES('demo-dates-main','questionnaire_progress',32,1)`);
+    await database.query(`INSERT INTO q_discovery_events(user_id,event,candidate_count,duration_ms) VALUES('demo-dates-main','discovery_served',2,100)`);
+    await database.query(`INSERT INTO q_connection_events(user_id,event) VALUES('demo-dates-main','like_sent')`);
+    setQuestionnaireDatabaseForTests(database);
+    await recordRankingTelemetry('demo-dates-main',{source:'discovery',candidates:2,cacheHits:0,engineScored:2,engineBatches:1,failed:false,durationMs:100});
+    const result=await loadQuestionnaireAnalytics('all',database);
+    assert.equal(result.summary.entered,0);
+    assert.equal(result.summary.complete,0);
+    assert.equal(result.discovery.requests,0);
+    assert.equal(result.connections.likes,0);
+    assert.equal(result.ranking.requests,0);
+    assert.equal(result.daily.reduce((sum,day)=>sum+day.completed,0),0);
+});

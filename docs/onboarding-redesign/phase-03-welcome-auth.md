@@ -49,3 +49,9 @@ No authentication-provider replacement or consent-policy changes.
 - Next action: Phase 04, explicitly authorized by the user's request to progress.
 
 When working, replace these placeholders with actual evidence. Synchronize this phase's status and the master row in the same task. A written plan or generated concept image is not implementation evidence.
+
+## Reviewer demo correction (2026-10-01)
+
+The enabled Continue as demo path now uses an idempotent, feature-flagged backend provisioner instead of requiring a manually seeded reviewer account. It prepares the current 32-answer synthetic demo experience, isolates demo discovery/likes from real people and excludes identifiable demo activity from questionnaire analytics. Mobile session validation, timeout handling and error copy are corrected. See [reviewer demo access and release checks](../../backend/strath-backend/docs/reviewer-demo-access.md).
+
+41 backend regression tests and three mobile helper tests passed; the corrected demo/real-account connection test was rerun within 11 passing connection tests. Backend TypeScript and focused backend/mobile lint passed; changed mobile files have no TypeScript diagnostics, with unrelated baseline failures remaining. Live production verification was rejected by automatic approval review, so deployment and reviewer-device sign-in remain pending. This is a bounded Phase 03 follow-up; other onboarding phase statuses are unchanged.

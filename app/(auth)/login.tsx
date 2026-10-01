@@ -12,6 +12,7 @@ import { apiFetch, isApiError, isAuthExpiredError, isNetworkError } from '@/lib/
 import { getProfileRoute } from '@/lib/profile-access';
 import { setCachedProfile } from '@/lib/session-cache';
 import { devError, devLog } from '@/lib/dev-log';
+import { demoSignInError, parseDemoSession, type DemoSessionPayload } from '@/lib/demo-auth';
 
 async function waitForStoredAuth(timeoutMs = 3000) {
   const startedAt = Date.now();
@@ -211,47 +212,23 @@ export default function LoginScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDemoLoading(true);
     try {
-      await clearSession();
-
-      const SecureStore = await import('expo-secure-store');
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://www.strathspace.com';
-      const response = await fetch(`${apiUrl}/api/auth/demo`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const data = await apiFetch<DemoSessionPayload>('/api/auth/demo', {
+        method: 'POST', skipAuth: true, timeoutMs: 30000,
       });
-
-      if (!response.ok) {
-        throw new Error(`Demo auth failed (${response.status})`);
-      }
-
-      const data = await response.json();
-      const sessionToken = data?.data?.token;
-      const sessionUser = data?.data?.user;
-
-      if (!sessionToken || !sessionUser?.id) {
-        throw new Error('Demo auth did not return a session');
-      }
-
-      const sessionData = {
-        session: {
-          token: sessionToken,
-          userId: sessionUser.id,
-          expiresAt: data?.data?.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        user: sessionUser,
-      };
-
+      const sessionData = parseDemoSession(data);
+      const SecureStore = await import('expo-secure-store');
+      // A failed demo request must not clear an existing stored session.
+      await clearSession();
       await SecureStore.setItemAsync('strathspace_session', JSON.stringify(sessionData));
-      await SecureStore.setItemAsync('strathspace_session_token', sessionToken);
+      await SecureStore.setItemAsync('strathspace_session_token', sessionData.session.token);
+      await SecureStore.setItemAsync('strathspace_user_id', sessionData.user.id!);
 
       const nextRoute = await routeAfterAuth();
       toast.show({ message: 'Signed in as demo', variant: 'success' });
       router.replace(nextRoute as any);
     } catch (error) {
       devError('Demo auth error:', error);
-      setAuthError('Demo sign in failed. The demo session may need to be reseeded.');
+      setAuthError(demoSignInError(error));
     } finally {
       setDemoLoading(false);
       authInFlight.current = false;

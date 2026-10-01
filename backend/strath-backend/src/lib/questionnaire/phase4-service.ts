@@ -88,6 +88,7 @@ async function loadCandidates(viewerId: string) {
         JOIN profiles profile ON profile.user_id = account.id
         JOIN q_state state ON state.user_id = account.id
         WHERE account.deleted_at IS NULL
+          AND (($1 LIKE 'demo-dates-%') = (account.id LIKE 'demo-dates-%'))
           AND account.deleted_reason IS NULL
           AND state.birth_date <= current_date - interval '18 years'
           AND state.birth_date >= current_date - interval '120 years'

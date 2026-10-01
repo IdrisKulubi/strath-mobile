@@ -111,6 +111,17 @@ test("ranking is deterministic, evidence-aware, paginated, and privacy-safe", as
     }
 });
 
+test("reviewer demo discovery and profile comparisons stay separate from real accounts", async () => {
+    await seedMember("demo-dates-main", "female", ["male"]);
+    await seedMember("demo-dates-review-one", "male", ["female"]);
+    const regular = await phase4.discovery("viewer", 0, { rank: deterministicRank() });
+    assert.deepEqual(regular.items.map(item => item.id), ["candidate-a", "candidate-b"]);
+    const demo = await phase4.discovery("demo-dates-main", 0, { rank: deterministicRank() });
+    assert.deepEqual(demo.items.map(item => item.id), ["demo-dates-review-one"]);
+    await assert.rejects(() => phase4.comparison("viewer", "demo-dates-review-one", { rank: deterministicRank() }));
+    await assert.rejects(() => phase4.comparison("demo-dates-main", "candidate-a", { rank: deterministicRank() }));
+});
+
 test("ranking telemetry distinguishes engine scores, cache reuse and comparison calls", async () => {
     await phase4.discovery("viewer", 0, { rank: deterministicRank() });
     await phase4.discovery("viewer", 0, { rank: async () => { throw new Error("Cache should avoid engine work"); } });

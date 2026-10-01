@@ -1,0 +1,77 @@
+TAP version 13
+# Subtest: connections migration is additive and idempotent
+ok 1 - connections migration is additive and idempotent
+  ---
+  duration_ms: 2455.2968
+  type: 'test'
+  ...
+# Subtest: simultaneous reciprocal likes create one canonical connection and conversation
+ok 2 - simultaneous reciprocal likes create one canonical connection and conversation
+  ---
+  duration_ms: 1611.3567
+  type: 'test'
+  ...
+# Subtest: likes require current reciprocal eligibility and reveal incognito only after an incoming like
+ok 3 - likes require current reciprocal eligibility and reveal incognito only after an incoming like
+  ---
+  duration_ms: 2135.4422
+  type: 'test'
+  ...
+# Subtest: eligibility is rechecked before creating a connection
+ok 4 - eligibility is rechecked before creating a connection
+  ---
+  duration_ms: 2038.1957
+  type: 'test'
+  ...
+# Subtest: unmatching and blocking revoke every questionnaire chat operation without deleting history
+ok 5 - unmatching and blocking revoke every questionnaire chat operation without deleting history
+  ---
+  duration_ms: 2517.991
+  type: 'test'
+  ...
+# Subtest: blocking from profile or chat ends an active connection immediately
+ok 6 - blocking from profile or chat ends an active connection immediately
+  ---
+  duration_ms: 2141.0962
+  type: 'test'
+  ...
+# [questionnaire analytics] Ranking telemetry could not be saved
+# Subtest: feature flag protects likes and connection mutations
+ok 7 - feature flag protects likes and connection mutations
+  ---
+  duration_ms: 1708.4291
+  type: 'test'
+  ...
+# Subtest: disabling matching does not remove an already active conversation
+ok 8 - disabling matching does not remove an already active conversation
+  ---
+  duration_ms: 1664.4037
+  type: 'test'
+  ...
+# Subtest: legacy backfill preserves matches/messages and excludes inactive, blocked and missing conversations
+ok 9 - legacy backfill preserves matches/messages and excludes inactive, blocked and missing conversations
+  ---
+  duration_ms: 1510.6841
+  type: 'test'
+  ...
+# Subtest: account cleanup removes questionnaire data and ends connections while preserving messages
+ok 10 - account cleanup removes questionnaire data and ends connections while preserving messages
+  ---
+  duration_ms: 1594.9839
+  type: 'test'
+  ...
+# Subtest: reviewer samples cannot like real people and real people cannot like reviewer samples
+ok 11 - reviewer samples cannot like real people and real people cannot like reviewer samples
+  ---
+  duration_ms: 1820.3476
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 22870.0692

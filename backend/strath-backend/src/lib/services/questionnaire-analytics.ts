@@ -53,7 +53,7 @@ export async function loadQuestionnaireAnalytics(window: AnalyticsWindow, execut
         SELECT s.user_id, count(a.question_id)::int AS count,
             coalesce(max(a.updated_at), s.started_at) AS last_progress,
             min(r.step) FILTER (WHERE a.question_id IS NULL) AS next_step
-        FROM q_state s JOIN "user" u ON u.id = s.user_id AND u.deleted_at IS NULL AND u.deleted_reason IS NULL
+        FROM q_state s JOIN "user" u ON u.id = s.user_id AND u.deleted_at IS NULL AND u.deleted_reason IS NULL AND u.id NOT LIKE 'demo-dates-%'
         CROSS JOIN required r
         LEFT JOIN q_questions q ON q.id = r.id AND q.published
         LEFT JOIN q_answers a ON a.user_id = s.user_id AND a.question_id = q.id
@@ -83,21 +83,21 @@ export async function loadQuestionnaireAnalytics(window: AnalyticsWindow, execut
             'failed', count(*) FILTER (WHERE event = 'engine_unavailable'),
             'candidates', coalesce(sum(candidate_count), 0),
             'p95', percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms)) AS data
-            FROM q_discovery_events WHERE created_at >= ${cutoff}`, [values[0]]),
+            FROM q_discovery_events WHERE (user_id IS NULL OR user_id NOT LIKE 'demo-dates-%') AND created_at >= ${cutoff}`, [values[0]]),
         run<{ data: QuestionnaireAnalytics['connections'] } & QueryResultRow>(`WITH created AS (
-            SELECT * FROM q_connections WHERE origin = 'questionnaire' AND connected_at >= ${cutoff}
+            SELECT * FROM q_connections WHERE origin = 'questionnaire' AND user_a NOT LIKE 'demo-dates-%' AND user_b NOT LIKE 'demo-dates-%' AND connected_at >= ${cutoff}
         ) SELECT json_build_object('matches', (SELECT count(*) FROM created),
-            'active', (SELECT count(*) FROM q_connections WHERE origin = 'questionnaire' AND status = 'active'),
+            'active', (SELECT count(*) FROM q_connections WHERE origin = 'questionnaire' AND user_a NOT LIKE 'demo-dates-%' AND user_b NOT LIKE 'demo-dates-%' AND status = 'active'),
             'likes', count(*) FILTER (WHERE event = 'like_sent'), 'passes', count(*) FILTER (WHERE event = 'pass_saved'),
             'messages', count(*) FILTER (WHERE event = 'message_sent' AND EXISTS
                 (SELECT 1 FROM q_connections c WHERE c.match_id = e.match_id AND c.origin = 'questionnaire')),
             'messagingMatches', (SELECT count(*) FROM created c WHERE EXISTS
                 (SELECT 1 FROM q_connection_events e WHERE e.match_id = c.match_id AND e.event = 'message_sent')),
             'unmatched', count(*) FILTER (WHERE event = 'unmatched'), 'blocked', count(*) FILTER (WHERE event = 'blocked')) AS data
-            FROM q_connection_events e WHERE created_at >= ${cutoff}`, [values[0]]),
+            FROM q_connection_events e WHERE (user_id IS NULL OR user_id NOT LIKE 'demo-dates-%') AND created_at >= ${cutoff}`, [values[0]]),
         run<{ data: QuestionnaireAnalytics['cache'] } & QueryResultRow>(`WITH current AS (
             SELECT c.* FROM q_compatibility_cache c JOIN q_state a ON a.user_id = c.user_a AND a.revision = c.revision_a
-            JOIN q_state b ON b.user_id = c.user_b AND b.revision = c.revision_b WHERE c.algorithm_version = $1
+            JOIN q_state b ON b.user_id = c.user_b AND b.revision = c.revision_b WHERE c.algorithm_version = $1 AND c.user_a NOT LIKE 'demo-dates-%' AND c.user_b NOT LIKE 'demo-dates-%'
         ) SELECT json_build_object('pairs', count(*), 'ready', count(*) FILTER (WHERE status = 'ready'),
             'insufficient', count(*) FILTER (WHERE status = 'insufficient_evidence'), 'average', avg(score) FILTER (WHERE status = 'ready'),
             'profiles', (SELECT count(*) FROM (SELECT user_a FROM current UNION SELECT user_b FROM current) people)) AS data FROM current`, [ALGORITHM]),
@@ -106,11 +106,11 @@ export async function loadQuestionnaireAnalytics(window: AnalyticsWindow, execut
                 (now() AT TIME ZONE 'Africa/Nairobi')::date, interval '1 day')::date AS day
         ), completions AS (
             SELECT user_id, min(created_at) AS at FROM q_questionnaire_events
-            WHERE answer_count >= $2 AND user_id IS NOT NULL GROUP BY user_id
+            WHERE answer_count >= $2 AND user_id IS NOT NULL AND user_id NOT LIKE 'demo-dates-%' GROUP BY user_id
         ) SELECT day::text AS date,
-            (SELECT count(*)::int FROM q_state WHERE (started_at AT TIME ZONE 'Africa/Nairobi')::date = day) AS started,
+            (SELECT count(*)::int FROM q_state WHERE user_id NOT LIKE 'demo-dates-%' AND (started_at AT TIME ZONE 'Africa/Nairobi')::date = day) AS started,
             (SELECT count(*)::int FROM completions WHERE (at AT TIME ZONE 'Africa/Nairobi')::date = day) AS completed,
-            (SELECT count(*)::int FROM q_connections WHERE origin = 'questionnaire' AND (connected_at AT TIME ZONE 'Africa/Nairobi')::date = day) AS matches
+            (SELECT count(*)::int FROM q_connections WHERE origin = 'questionnaire' AND user_a NOT LIKE 'demo-dates-%' AND user_b NOT LIKE 'demo-dates-%' AND (connected_at AT TIME ZONE 'Africa/Nairobi')::date = day) AS matches
             FROM days ORDER BY day`, [window === 'all' ? 90 : window, REQUIRED_ANSWER_COUNT]),
     ]);
     result.available = true;
@@ -120,7 +120,7 @@ export async function loadQuestionnaireAnalytics(window: AnalyticsWindow, execut
     const [telemetryTable] = await run<{ present: boolean } & QueryResultRow>(`SELECT to_regclass('analytics_events') IS NOT NULL AS present`);
     if (telemetryTable.present) {
         const [ranking] = await run<{ data: QuestionnaireAnalytics['ranking'] } & QueryResultRow>(`WITH events AS (
-            SELECT metadata, created_at FROM analytics_events WHERE event_type = 'questionnaire_ranking'
+            SELECT metadata, created_at FROM analytics_events WHERE event_type = 'questionnaire_ranking' AND (user_id IS NULL OR user_id NOT LIKE 'demo-dates-%')
                 AND metadata->>'algorithmVersion' = $2
         ) SELECT json_build_object('available', (SELECT count(*) > 0 FROM events), 'since', (SELECT (min(created_at) AT TIME ZONE 'UTC')::text FROM events),
             'requests', count(*), 'candidates', coalesce(sum((metadata->>'candidates')::int), 0),
