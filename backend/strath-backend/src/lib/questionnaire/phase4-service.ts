@@ -7,6 +7,7 @@ import { query, transaction } from "./db";
 import { rank as rankWithEngine } from "./engine-client";
 import { isDiscoveryReady, isReciprocallyEligible, publicProfile, type Candidate } from "./eligibility";
 import { DomainError } from "./phase2-service";
+import { recordRankingTelemetry } from "./ranking-telemetry";
 
 const PAGE_SIZE = 20;
 const ENGINE_BATCH_SIZE = 25;
@@ -217,7 +218,8 @@ async function storeScore(viewer: Candidate, candidate: Candidate, score: Score)
     ]);
 }
 
-async function scores(viewer: Candidate, candidates: Candidate[], rank: RankFunction) {
+async function scores(viewer: Candidate, candidates: Candidate[], rank: RankFunction, source: "discovery" | "comparison" = "discovery") {
+    const startedAt = Date.now();
     if (candidates.length === 0) return [];
     const ids = candidates.map((candidate) => candidate.id);
     const cache = await query<CacheRow>(`
@@ -235,14 +237,20 @@ async function scores(viewer: Candidate, candidates: Candidate[], rank: RankFunc
         if (cached) complete.push(cached);
         else missing.push(candidate);
     }
-    if (missing.length === 0) return complete.sort(sortScores);
+    const metrics = { source, candidates: candidates.length, cacheHits: complete.length, engineScored: 0, engineBatches: 0, failed: false, durationMs: 0 };
+    if (missing.length === 0) {
+        await recordRankingTelemetry(viewer.id, { ...metrics, durationMs: Date.now() - startedAt });
+        return complete.sort(sortScores);
+    }
 
-    const [engineViewer] = await enginePeople([viewer]);
     try {
+        const [engineViewer] = await enginePeople([viewer]);
         for (let offset = 0; offset < missing.length; offset += ENGINE_BATCH_SIZE) {
             const batchCandidates = missing.slice(offset, offset + ENGINE_BATCH_SIZE);
             const batchPeople = await enginePeople(batchCandidates);
             const batchScores = await rank(engineViewer, batchPeople);
+            metrics.engineBatches += 1;
+            metrics.engineScored += batchScores.length;
             for (const score of batchScores) {
                 const candidate = batchCandidates.find((item) => item.id === score.candidateId);
                 if (!candidate) throw new Error("Engine returned an unknown candidate");
@@ -251,7 +259,10 @@ async function scores(viewer: Candidate, candidates: Candidate[], rank: RankFunc
             complete.push(...batchScores);
         }
     } catch {
+        metrics.failed = true;
         throw new DomainError("Matching is temporarily unavailable. Please try again.", 503);
+    } finally {
+        await recordRankingTelemetry(viewer.id, { ...metrics, durationMs: Date.now() - startedAt });
     }
     return complete.sort(sortScores);
 }
@@ -324,7 +335,7 @@ export async function comparison(userId: string, targetId: string, dependencies:
     const viewer = initial.find((candidate) => candidate.id === userId);
     const candidate = initial.find((item) => item.id === targetId);
     if (!viewer || !candidate || !isReciprocallyEligible(viewer, candidate)) throw new DomainError("Profile unavailable", 404);
-    const [score] = await scores(viewer, [candidate], dependencies.rank ?? rankWithEngine);
+    const [score] = await scores(viewer, [candidate], dependencies.rank ?? rankWithEngine, "comparison");
     const questions = await query<{
         id: string;
         prompt: string;

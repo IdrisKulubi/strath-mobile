@@ -74,6 +74,8 @@ beforeEach(async () => {
     await database.query(legacyTestSchema);
     await applyQuestionnaireMigration(database, questionnaireSql);
     await applyDiscoveryMigration(database, discoverySql);
+    await database.query(`CREATE TABLE analytics_events(id uuid PRIMARY KEY, event_type text NOT NULL,
+        user_id text, metadata jsonb, created_at timestamp NOT NULL DEFAULT (now() AT TIME ZONE 'UTC'))`);
     await seedMember("viewer", "female", ["male"]);
     await seedMember("candidate-a", "male", ["female"]);
     await seedMember("candidate-b", "male", ["female"]);
@@ -107,6 +109,32 @@ test("ranking is deterministic, evidence-aware, paginated, and privacy-safe", as
     for (const forbidden of ["birthDate", "latitude", "longitude", "acceptable", "answerId", "deletedReason"]) {
         assert.equal(serialized.includes(forbidden), false);
     }
+});
+
+test("ranking telemetry distinguishes engine scores, cache reuse and comparison calls", async () => {
+    await phase4.discovery("viewer", 0, { rank: deterministicRank() });
+    await phase4.discovery("viewer", 0, { rank: async () => { throw new Error("Cache should avoid engine work"); } });
+    await phase4.comparison("viewer", "candidate-a", { rank: deterministicRank() });
+    const { rows } = await database.query<{ metadata: Record<string, unknown> }>(
+        "SELECT metadata FROM analytics_events WHERE event_type = 'questionnaire_ranking' ORDER BY created_at");
+    assert.equal(rows.length, 3);
+    assert.equal(rows[0].metadata.engineScored, 2);
+    assert.equal(rows[0].metadata.cacheHits, 0);
+    assert.equal(rows[1].metadata.engineScored, 0);
+    assert.equal(rows[1].metadata.cacheHits, 2);
+    assert.equal(rows[2].metadata.source, 'comparison');
+    assert.equal(rows[2].metadata.cacheHits, 1);
+    assert.equal(JSON.stringify(rows).includes('answerId'), false);
+});
+
+test("failed ranking is measured and failed telemetry cannot break discovery", async () => {
+    await assert.rejects(() => phase4.discovery("viewer", 0, { rank: async () => { throw new Error('Engine offline'); } }));
+    const { rows } = await database.query<{ metadata: Record<string, unknown> }>("SELECT metadata FROM analytics_events");
+    assert.equal(rows[0].metadata.failed, true);
+    assert.equal(rows[0].metadata.engineScored, 0);
+    await database.query('DROP TABLE analytics_events');
+    const result = await phase4.discovery("viewer", 0, { rank: deterministicRank() });
+    assert.equal(result.items.length, 2);
 });
 
 test("comparison exposes education and every saved questionnaire answer", async () => {

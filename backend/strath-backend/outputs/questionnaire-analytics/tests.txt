@@ -1,0 +1,40 @@
+TAP version 13
+# Subtest: counts current 32-answer completion, inactive midpoint and optional answers correctly
+ok 1 - counts current 32-answer completion, inactive midpoint and optional answers correctly
+  ---
+  duration_ms: 1248.0943
+  type: 'test'
+  ...
+# Subtest: question gaps are the next required question, not total answers plus one
+ok 2 - question gaps are the next required question, not total answers plus one
+  ---
+  duration_ms: 642.5644
+  type: 'test'
+  ...
+# Subtest: deduplicates completions, excludes old 20-answer milestones and legacy/pending matches
+ok 3 - deduplicates completions, excludes old 20-answer milestones and legacy/pending matches
+  ---
+  duration_ms: 817.668
+  type: 'test'
+  ...
+# Subtest: ranking operations count cache reuse and new engine work separately; stale cache excluded
+ok 4 - ranking operations count cache reuse and new engine work separately; stale cache excluded
+  ---
+  duration_ms: 1143.9841
+  type: 'test'
+  ...
+# Subtest: empty periods and missing migrations report absence without invented conversions
+ok 5 - empty periods and missing migrations report absence without invented conversions
+  ---
+  duration_ms: 891.7906
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5536.5778

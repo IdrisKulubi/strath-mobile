@@ -1,0 +1,143 @@
+TAP version 13
+# Subtest: discovery migration is additive and idempotent
+ok 1 - discovery migration is additive and idempotent
+  ---
+  duration_ms: 1613.6454
+  type: 'test'
+  ...
+# Subtest: ranking is deterministic, evidence-aware, paginated, and privacy-safe
+ok 2 - ranking is deterministic, evidence-aware, paginated, and privacy-safe
+  ---
+  duration_ms: 1067.4625
+  type: 'test'
+  ...
+# Subtest: ranking telemetry distinguishes engine scores, cache reuse and comparison calls
+ok 3 - ranking telemetry distinguishes engine scores, cache reuse and comparison calls
+  ---
+  duration_ms: 1826.2083
+  type: 'test'
+  ...
+# [questionnaire analytics] Ranking telemetry could not be saved
+# Subtest: failed ranking is measured and failed telemetry cannot break discovery
+ok 4 - failed ranking is measured and failed telemetry cannot break discovery
+  ---
+  duration_ms: 1684.1822
+  type: 'test'
+  ...
+# Subtest: comparison exposes education and every saved questionnaire answer
+ok 5 - comparison exposes education and every saved questionnaire answer
+  ---
+  duration_ms: 1497.6776
+  type: 'test'
+  ...
+# Subtest: non-disclosure answers stay out of scoring evidence
+ok 6 - non-disclosure answers stay out of scoring evidence
+  ---
+  duration_ms: 1196.5011
+  type: 'test'
+  ...
+# Subtest: optional answers cannot substitute for a missing required question in discovery
+ok 7 - optional answers cannot substitute for a missing required question in discovery
+  ---
+  duration_ms: 1168.5958
+  type: 'test'
+  ...
+# Subtest: large eligible pools are scored in bounded batches before stable pagination
+ok 8 - large eligible pools are scored in bounded batches before stable pagination
+  ---
+  duration_ms: 1917.4848
+  type: 'test'
+  ...
+# Subtest: reciprocal eligibility independently excludes unsafe and incompatible candidates
+ok 9 - reciprocal eligibility independently excludes unsafe and incompatible candidates
+  ---
+  duration_ms: 1231.0815
+  type: 'test'
+  ...
+# Subtest: discovery blockers match readiness for profile safety gates
+ok 10 - discovery blockers match readiness for profile safety gates
+  ---
+  duration_ms: 1193.6853
+  type: 'test'
+  ...
+# Subtest: valid revision cache survives outage and stale cache never does
+ok 11 - valid revision cache survives outage and stale cache never does
+  ---
+  duration_ms: 1246.3335
+  type: 'test'
+  ...
+# Subtest: revision changes during an engine request are rejected
+ok 12 - revision changes during an engine request are rejected
+  ---
+  duration_ms: 953.0801
+  type: 'test'
+  ...
+# Subtest: comparison exposes legacy private answers without exposing unrelated profile data
+ok 13 - comparison exposes legacy private answers without exposing unrelated profile data
+  ---
+  duration_ms: 1076.1334
+  type: 'test'
+  ...
+# Subtest: public API requires matching flag and never accepts caller-supplied identity
+ok 14 - public API requires matching flag and never accepts caller-supplied identity
+  ---
+  duration_ms: 1104.5939
+  type: 'test'
+  ...
+# Subtest: blocking is idempotent, removes discovery immediately, and reporting stores no answer data
+ok 15 - blocking is idempotent, removes discovery immediately, and reporting stores no answer data
+  ---
+  duration_ms: 1149.3235
+  type: 'test'
+  ...
+# Subtest: engine client sends only opaque scoring data and validates authentication contract
+ok 16 - engine client sends only opaque scoring data and validates authentication contract
+  ---
+  duration_ms: 1144.5848
+  type: 'test'
+  ...
+# Subtest: engine client retries transient failures but not authentication failures
+ok 17 - engine client retries transient failures but not authentication failures
+  ---
+  duration_ms: 1102.5638
+  type: 'test'
+  ...
+# Subtest: counts current 32-answer completion, inactive midpoint and optional answers correctly
+ok 18 - counts current 32-answer completion, inactive midpoint and optional answers correctly
+  ---
+  duration_ms: 1625.9375
+  type: 'test'
+  ...
+# Subtest: question gaps are the next required question, not total answers plus one
+ok 19 - question gaps are the next required question, not total answers plus one
+  ---
+  duration_ms: 856.7816
+  type: 'test'
+  ...
+# Subtest: deduplicates completions, excludes old 20-answer milestones and legacy/pending matches
+ok 20 - deduplicates completions, excludes old 20-answer milestones and legacy/pending matches
+  ---
+  duration_ms: 1892.5926
+  type: 'test'
+  ...
+# Subtest: ranking operations count cache reuse and new engine work separately; stale cache excluded
+ok 21 - ranking operations count cache reuse and new engine work separately; stale cache excluded
+  ---
+  duration_ms: 1522.3472
+  type: 'test'
+  ...
+# Subtest: empty periods and missing migrations report absence without invented conversions
+ok 22 - empty periods and missing migrations report absence without invented conversions
+  ---
+  duration_ms: 1403.7214
+  type: 'test'
+  ...
+1..22
+# tests 22
+# suites 0
+# pass 22
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 23000.863
