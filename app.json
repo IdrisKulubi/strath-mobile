@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.strathspace.mobile",
-      "buildNumber": "14",
+      "buildNumber": "16",
       "usesAppleSignIn": true,
       "icon": {
         "light": "./assets/images/icon.png",
@@ -29,7 +29,7 @@
     },
     "android": {
       "package": "com.strathspace.android",
-      "versionCode": 20,
+      "versionCode": 23,
       "icon": "./assets/images/android-app-icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-adaptive-foreground.png",
