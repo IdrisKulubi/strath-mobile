@@ -1,6 +1,6 @@
 # Phase 5 deployment and rollback runbook
 
-This runbook enables the questionnaire experience for a controlled cohort. It does not authorize a production rollout by itself. Record the operator, Git revision, database, Railway revision, cohort IDs and evidence in `master.md`; never record credentials, answers or message content.
+This runbook now describes the global questionnaire switches following the 2026-09-30 user decision to remove account-ID cohorts. Record the operator, Git revision, database, Railway revision and smoke-check evidence in `master.md`; never record credentials, answers or message content.
 
 ## Preconditions
 
@@ -24,11 +24,11 @@ The migrations are additive. Do not drop questionnaire tables during rollback an
 
 1. Deploy Railway and the Next.js backend while all questionnaire flags remain off.
 2. Set `QUESTIONNAIRE_SCHEMA_READY=true` after the migrations and health checks pass.
-3. Add only internal synthetic account IDs to `QUESTIONNAIRE_USER_IDS`; do not use `*`.
-4. Enable collection, then the shell, then matching. Verify each step before enabling the next.
+3. The 2026-09-30 user decision removed the account-ID cohort. Confirm that this universal change is intended for the target environment before enabling the global switches.
+4. Enable collection, then the shell, then matching. Each switch now applies to every authenticated account; verify each step before enabling the next.
 5. On two phones, complete like → mutual match → message → reply/read → restart/history → unmatch. Repeat with block and report. Verify the flow contains no date confirmation, scheduling or checkout step.
 6. Verify an offline retry uses one message row, a blocked/unmatched account cannot read, send or mark read, and an existing legacy conversation retains its ID and message count.
-7. Expand the cohort only after error rate, latency, eligible-pool size and privacy checks remain healthy.
+7. Watch error rate, latency, eligible-pool size and privacy checks after the global switch.
 
 ## Privacy-safe monitoring
 
@@ -38,8 +38,8 @@ Monitor questionnaire completion/drop-off, eligible-pool size, evidence coverage
 
 ## Rollback drill
 
-1. Set `QUESTIONNAIRE_MATCHING_ENABLED=false` for the cohort. This stops discovery and new likes; answer storage and every active conversation continue working.
-2. If the new shell is faulty, set `QUESTIONNAIRE_SHELL_ENABLED=false`. Both old and new message lists use the shared conversations endpoint, and questionnaire conversations remain authorized without a date/payment gate.
+1. Set `QUESTIONNAIRE_MATCHING_ENABLED=false` globally. This stops discovery and new likes; answer storage and every active conversation continue working.
+2. If the new shell is faulty, set `QUESTIONNAIRE_SHELL_ENABLED=false`. The updated app displays a retry state instead of falling into the old UI; restore the shell or deploy a corrected build. Existing conversations remain in the database.
 3. Roll back the Railway engine independently. Serve only revision-valid cached discovery while available; existing conversations do not depend on Railway.
 4. Keep a backend revision that understands `q_connections` deployed until every questionnaire connection is migrated or intentionally ended. Never roll chat authorization back to the legacy date-confirmation-only gate.
 5. Leave migrations and user answers in place. Correct forward, deploy, then re-enable flags for the same small cohort.

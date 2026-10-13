@@ -65,11 +65,12 @@ export default function DatingLayout() {
   const status = useQuestionnaire<QuestionnaireState>('status', Boolean(experience.data?.collection));
   if (experience.isPending) return <Page title="Strathspace"><Loading label="Opening your dating experience" /></Page>;
   if (experience.isError) return <Page title="Strathspace"><Feedback error={experience.error} /><Action label="Try again" tone="primary" onPress={() => { void experience.refetch(); }} /></Page>;
-  if (!experience.data?.shell) return <Redirect href="/(tabs)" />;
+  if (!experience.data?.shell) return <Page title="Strathspace"><Feedback error={new Error('The new experience is temporarily unavailable. Please try again.')} /><Action label="Try again" tone="primary" onPress={() => { void experience.refetch(); }} /></Page>;
   if (setupResume.pending) return <Page title="Strathspace"><Loading label="Loading your profile progress" /></Page>;
   if (setupResume.shouldResumeSetup) return <Redirect href="/dating-setup" />;
   if (experience.data.collection && status.isPending) return <Page title="Strathspace"><Loading label="Loading your question progress" /></Page>;
   if (experience.data.collection && status.isError) return <Page title="Strathspace"><Feedback error={status.error} /><Action label="Try again" tone="primary" onPress={() => { void status.refetch(); }} /></Page>;
+  if (status.data?.discovery.missing.some((blocker) => blocker === 'birthDate' || blocker === 'preferences' || blocker === 'profile')) return <Redirect href="/dating-setup" />;
   if (experience.data.collection && status.data && status.data.answerCount > 0 && !status.data.complete) return <Redirect href="/questions" />;
   return <DatingTabsShell />;
 }

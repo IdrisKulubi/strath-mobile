@@ -4,6 +4,8 @@ Audited: 2026-09-24. Source: current workspace code, including pre-existing stag
 
 This is a historical audit. For current questionnaire behavior, use [the design contract](design-contract.md): thirty-two mandatory consecutive answers, no privacy-choice beat, and every saved answer to a published question visible in profile details, including older answers once marked private under the superseded rule.
 
+The routing and cohort trace below also predates the 2026-09-30 universal new-experience decision. Current code no longer checks `QUESTIONNAIRE_USER_IDS`; login and cached sessions route to `/dating` or `/dating-setup`, with the global readiness switches still required.
+
 ## Route and cohort decisions
 
 1. Before root navigation, `app/_layout.tsx` shows `LaunchExperience`: first-launch brand intro and intro slides if the intro-complete flag is absent, or a returning-user splash otherwise. On completion, root `/` loads a SecureStore auth token. No token routes to `/(auth)/login`. A matching cached profile routes immediately using `getProfileRoute`; its server refresh runs in the background. Without a cache, `GET /api/user/me` determines route. Network failure falls through to `/(tabs)`, while explicit profile-not-found goes to `/onboarding`. Auth expiry is handled centrally. Sources: `app/_layout.tsx`, `components/intro/launch-experience.tsx`, `app/index.tsx`, `lib/profile-access.ts`, `lib/session-cache.ts`.

@@ -18,11 +18,11 @@ import { getProfileRoute } from '@/lib/profile-access';
  *      an explicit auth-failure code, but not before.
  *
  *   2. If no token → go to login.
- *      If token + cached profile → route immediately to the cached landing
- *      (tabs / onboarding / verification). No spinner while offline.
+     *      If token + cached profile → route immediately to the cached landing
+     *      (dating / setup / verification). No spinner while offline.
  *      If token but no cached profile → do a single /api/user/me call.
  *         - success  → cache result + route
- *         - network  → default to /(tabs); the app itself will handle empty
+     *         - network  → default to /dating; the app itself will handle empty
  *                      states gracefully instead of dumping to onboarding
  *         - auth err → clear session, route to login
  *
@@ -61,8 +61,13 @@ export default function Index() {
                 if (hasCachedRoute) {
                     // Optimistic route — user is in the app immediately.
                     const cachedRoute = cached!.route;
-                    const optimisticTarget =
-                        cachedRoute === '/verification' && cached!.faceVerified ? '/(tabs)' : cachedRoute;
+                    const optimisticTarget = cachedRoute === '/verification' && cached!.faceVerified
+                        ? '/dating'
+                        : cachedRoute === '/(tabs)'
+                            ? '/dating'
+                            : cachedRoute === '/onboarding'
+                                ? '/dating-setup'
+                                : cachedRoute;
                     route(optimisticTarget as Parameters<typeof router.replace>[0]);
 
                     // Refresh profile in the background. Failure is harmless.
@@ -88,9 +93,9 @@ export default function Index() {
                     }
                     if (isNetworkError(error)) {
                         // Offline or server unreachable. Trust the token and
-                        // default into the tabs shell. Individual screens will
+                        // default into the dating shell. Individual screens will
                         // show their own "try again" states.
-                        route('/(tabs)');
+                        route('/dating');
                         return;
                     }
                     if (
@@ -99,12 +104,12 @@ export default function Index() {
                         error.message.toLowerCase().includes('profile not found')
                     ) {
                         await setCachedProfile(stored.userId, null);
-                        route('/onboarding');
+                        route('/dating-setup');
                         return;
                     }
                     // Unknown non-auth server error (5xx, 404, etc). Same as
                     // above — keep the user signed in and let the tabs render.
-                    route('/(tabs)');
+                    route('/dating');
                 }
             } catch {
                 // Defensive: never leave the user on a blank Index screen.

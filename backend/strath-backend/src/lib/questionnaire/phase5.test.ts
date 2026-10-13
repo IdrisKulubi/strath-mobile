@@ -236,3 +236,10 @@ test("account cleanup removes questionnaire data and ends connections while pres
     assert.equal(state.birth_date, null);
     assert.equal(state.preferences, null);
 });
+
+test('reviewer samples cannot like real people and real people cannot like reviewer samples', async () => {
+    await seedMember('demo-dates-main', 'female', ['male']);
+    await assert.rejects(() => saveDecision('demo-dates-main', {targetId:'bob',decision:'like'}));
+    await assert.rejects(() => saveDecision('bob', {targetId:'demo-dates-main',decision:'like'}));
+    assert.equal((await database.query('SELECT count(*)::int AS count FROM q_profile_decisions')).rows[0].count,0);
+});

@@ -27,9 +27,11 @@ export async function compareFacesWithRekognition(
     targetBytes: Uint8Array,
     similarityThreshold: number,
 ): Promise<RekognitionComparisonResult> {
+    // Return near misses for diagnostics without lowering the verification pass bar.
+    const reportingThreshold = Math.min(similarityThreshold, 70);
     const response = await rekognitionClient.send(
         new CompareFacesCommand({
-            SimilarityThreshold: similarityThreshold,
+            SimilarityThreshold: reportingThreshold,
             SourceImage: {
                 Bytes: sourceBytes,
             },
@@ -39,16 +41,19 @@ export async function compareFacesWithRekognition(
         }),
     );
 
-    const bestMatch = response.FaceMatches?.[0];
+    const bestMatch = response.FaceMatches?.reduce((best, match) =>
+        (match.Similarity ?? 0) > (best?.Similarity ?? 0) ? match : best,
+        response.FaceMatches?.[0],
+    );
     const unmatchedFaceCount = response.UnmatchedFaces?.length ?? 0;
     const facesDetected = (response.FaceMatches?.length ?? 0) + unmatchedFaceCount;
     const qualityFlags: string[] = [];
 
-    if (!bestMatch) {
+    if ((bestMatch?.Similarity ?? 0) < similarityThreshold) {
         qualityFlags.push("no_match_above_threshold");
     }
 
-    if (unmatchedFaceCount > 1) {
+    if (facesDetected > 1) {
         qualityFlags.push("multiple_target_faces");
     }
 

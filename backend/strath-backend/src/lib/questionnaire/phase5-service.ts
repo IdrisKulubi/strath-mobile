@@ -84,6 +84,7 @@ async function loadCandidates(viewerId: string, ids: string[], executor?: SqlExe
         JOIN profiles profile ON profile.user_id = account.id
         JOIN q_state state ON state.user_id = account.id
         WHERE account.id = ANY($2::text[])
+          AND (($1 LIKE 'demo-dates-%') = (account.id LIKE 'demo-dates-%'))
           AND NOT EXISTS (
               SELECT 1 FROM blocks block
               WHERE (block.blocker_id = $1 AND block.blocked_id = account.id)

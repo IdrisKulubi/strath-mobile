@@ -33,8 +33,9 @@ export async function syncProfilePhotoAssetsForUser(userId: string, photoUrls: s
         return [];
     }
 
-    for (const asset of uniqueAssets) {
-        await db
+    const auditVersion = getFaceVerificationPhotoAuditVersion();
+    await Promise.all(uniqueAssets.map(async (asset) => {
+        const [storedAsset] = await db
             .insert(profilePhotoAssets)
             .values({
                 userId,
@@ -50,10 +51,17 @@ export async function syncProfilePhotoAssetsForUser(userId: string, photoUrls: s
                     contentType: inferImageContentType(asset.objectKey),
                     updatedAt: new Date(),
                 },
-            });
+            })
+            .returning();
 
-        await ensureProfilePhotoAuditJob(userId, asset.objectKey, asset.publicUrl);
-    }
+        if (
+            storedAsset.analysisVersion !== auditVersion ||
+            !storedAsset.lastAnalyzedAt ||
+            storedAsset.analysisError
+        ) {
+            await ensureProfilePhotoAuditJob(userId, asset.objectKey, asset.publicUrl);
+        }
+    }));
 
     await ensureProfileIntelligenceJob({
         userId,

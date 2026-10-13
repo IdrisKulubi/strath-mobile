@@ -28,6 +28,7 @@ import { usePresenceHeartbeat } from '@/hooks/use-presence-heartbeat';
 import { hasCompletedIntroSlides } from '@/lib/intro-storage';
 import { isAuthenticated } from '@/lib/auth-helpers';
 import { QuestionnaireRouteGate } from '@/components/questionnaire/route-gate';
+import { MatchCelebrationProvider } from '@/components/questionnaire/match-celebration';
 
 ExpoSplashScreen.preventAutoHideAsync();
 
@@ -113,8 +114,7 @@ export default function RootLayout() {
 
     async function prepare() {
       try {
-        const [, slidesDone, authed] = await Promise.all([
-          new Promise<void>((resolve) => setTimeout(resolve, 350)),
+        const [slidesDone, authed] = await Promise.all([
           hasCompletedIntroSlides(),
           isAuthenticated(),
         ]);
@@ -162,7 +162,9 @@ export default function RootLayout() {
                   <SessionBootstrap />
                   <NotificationsBootstrap>
                     <QuestionnaireRouteGate>
-                      <RootLayoutNav hasAuthToken={bootstrap.hasAuthToken} />
+                      <MatchCelebrationProvider>
+                        <RootLayoutNav hasAuthToken={bootstrap.hasAuthToken} />
+                      </MatchCelebrationProvider>
                     </QuestionnaireRouteGate>
                   </NotificationsBootstrap>
                 </>

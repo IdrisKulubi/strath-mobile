@@ -5,7 +5,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { setSessionExpiredHandler, isAuthExpiredError, isNetworkError } from '@/lib/api-client';
-import { getStoredAuth } from '@/lib/auth-helpers';
+import { clearSession, getStoredAuth } from '@/lib/auth-helpers';
 import { queryClient } from '@/lib/react-query';
 import { useNetwork } from '@/hooks/use-network';
 import { useToast } from '@/components/ui/toast';

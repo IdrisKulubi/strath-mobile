@@ -7,6 +7,11 @@ import { useTheme } from "@/hooks/use-theme";
 
 const PREVIEWS = [
     {
+        route: "/ui-preview/splash",
+        label: "Connection splash",
+        description: "Centered launch composition in the current theme",
+    },
+    {
         route: "/ui-preview/onboarding-rising",
         label: "Rising sheet onboarding",
         description: "Interactive answer beats and motion",
@@ -45,7 +50,7 @@ export default function UIPreviewIndex() {
                 <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Component sandbox</Text>
             </View>
             <ScrollView contentContainerStyle={styles.list}>
-                {PREVIEWS.filter((preview) => __DEV__ || !preview.route.includes('onboarding-rising')).map((p) => (
+                {PREVIEWS.filter((preview) => __DEV__ || (!preview.route.includes('onboarding-rising') && !preview.route.includes('/splash'))).map((p) => (
                     <Pressable
                         key={p.route}
                         onPress={() => router.push(p.route as any)}

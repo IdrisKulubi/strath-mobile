@@ -1,63 +1,20 @@
-import { NextRequest, NextResponse } from "next/server";
-import { randomUUID } from "crypto";
-import { eq, or } from "drizzle-orm";
-
-import { db } from "@/lib/db";
-import { session as sessionTable, user } from "@/db/schema";
-import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
-
-const DEMO_USER_ID = "demo-dates-main";
-const DEMO_USER_EMAIL = "datesdemo@test.com";
+import { NextRequest, NextResponse } from 'next/server';
+import { APP_FEATURE_KEYS, isFeatureEnabled } from '@/lib/feature-flags';
+import { flags } from '@/lib/questionnaire/flags';
+import { createReviewDemoSession, ReviewDemoError } from '@/lib/services/review-demo-session';
 
 export async function POST(request: NextRequest) {
     try {
-        const demoLoginEnabled = await isFeatureEnabled(APP_FEATURE_KEYS.demoLoginEnabled, false);
-        if (!demoLoginEnabled) {
-            return NextResponse.json(
-                { success: false, error: "Demo login is currently disabled" },
-                { status: 403 },
-            );
-        }
-
-        const demoUser = await db.query.user.findFirst({
-            where: or(eq(user.id, DEMO_USER_ID), eq(user.email, DEMO_USER_EMAIL)),
-        });
-
-        if (!demoUser) {
-            return NextResponse.json(
-                { success: false, error: "Demo user is not seeded" },
-                { status: 404 },
-            );
-        }
-
-        const sessionToken = randomUUID();
-        const now = new Date();
-        const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-        await db.insert(sessionTable).values({
-            id: randomUUID(),
-            userId: demoUser.id,
-            token: sessionToken,
-            expiresAt,
-            ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
-            userAgent: request.headers.get("user-agent") || "strathspace-demo-login",
-            createdAt: now,
-            updatedAt: now,
-        });
-
-        return NextResponse.json({
-            success: true,
-            data: {
-                token: sessionToken,
-                user: demoUser,
-                expiresAt: expiresAt.toISOString(),
-            },
-        });
+        const enabled = await isFeatureEnabled(APP_FEATURE_KEYS.demoLoginEnabled, false);
+        const data = await createReviewDemoSession({ enabled, questionnaireEnabled: flags().shell,
+            ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+            userAgent: request.headers.get('user-agent') });
+        return NextResponse.json({ success:true,data }, { headers: { 'Cache-Control':'no-store' } });
     } catch (error) {
-        console.error("Demo auth error:", error);
-        return NextResponse.json(
-            { success: false, error: "Demo authentication failed" },
-            { status: 500 },
-        );
+        if (error instanceof ReviewDemoError) {
+            return NextResponse.json({ success:false,error:error.message,code:error.code }, { status:error.status });
+        }
+        console.error('Demo authentication failed');
+        return NextResponse.json({ success:false,error:'Demo access is temporarily unavailable. Please try again.',code:'DEMO_AUTH_FAILED' }, { status:503 });
     }
 }

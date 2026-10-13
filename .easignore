@@ -1,0 +1,75 @@
+# EAS archive rules. If this file exists, eas-cli ignores .gitignore and
+# does not walk the tree looking for nested ignore files.
+# Keep these patterns aligned with .gitignore and backend/strath-backend/.gitignore.
+# Directory names are listed without a trailing slash so eas-cli skips the
+# folder itself. A trailing slash does not match the directory path it checks.
+
+# dependencies
+node_modules
+
+# Expo
+.expo
+dist
+web-build
+expo-env.d.ts
+
+# Native
+.kotlin
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+.env
+
+.agents
+agents
+
+# typescript
+*.tsbuildinfo
+
+app-example
+
+# generated native folders
+/ios
+/android
+
+# Local matching-service tooling
+.venv
+__pycache__
+.pytest_cache
+.cache
+
+# backend/strath-backend/.gitignore (paths are relative to that package)
+backend/strath-backend/node_modules
+backend/strath-backend/.pnp
+backend/strath-backend/.pnp.*
+backend/strath-backend/.yarn/*
+!backend/strath-backend/.yarn/patches
+!backend/strath-backend/.yarn/plugins
+!backend/strath-backend/.yarn/releases
+!backend/strath-backend/.yarn/versions
+backend/strath-backend/coverage
+backend/strath-backend/.next
+backend/strath-backend/out
+backend/strath-backend/build
+backend/strath-backend/.env*
+!backend/strath-backend/.env.example
+backend/strath-backend/.vercel
+backend/strath-backend/next-env.d.ts

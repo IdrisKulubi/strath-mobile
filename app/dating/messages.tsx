@@ -1,8 +1,12 @@
-import React, { useCallback } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Archive } from 'phosphor-react-native';
 
+import { ArchivedConversationsSheet } from '@/components/chat/archived-conversations-sheet';
+import { ConversationCard } from '@/components/chat/conversation-card';
 import { Action, Copy, Feedback, Page } from '@/components/questionnaire/ui';
+import { useConversationInbox } from '@/hooks/use-conversation-inbox';
 import { useConversations, type Conversation } from '@/hooks/use-conversations';
 import { useTheme } from '@/hooks/use-theme';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
@@ -11,58 +15,49 @@ export default function MessagesScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const conversations = useConversations();
+  const inbox = useConversationInbox();
+  const [showArchived, setShowArchived] = useState(false);
 
   const openConversation = useCallback((conversation: Conversation) => {
+    setShowArchived(false);
     router.push({ pathname: '/dating-chat/[matchId]', params: { matchId: conversation.id } } as never);
   }, [router]);
 
+  const active = inbox.ready ? (conversations.data ?? []).filter((item) => !inbox.isArchived(item) && !inbox.isRemoved(item)) : [];
+  const archived = inbox.ready ? (conversations.data ?? []).filter((item) => inbox.isArchived(item)) : [];
+
   return (
     <Page title="Messages" floatingTabBar>
-      <Copy>Your existing conversations and new mutual questionnaire matches appear together.</Copy>
-      {conversations.isLoading ? <ActivityIndicator accessibilityLabel="Loading conversations" color={colors.primary} /> : null}
+      <View style={styles.heading}>
+        <Copy muted>Your matches, all in one place.</Copy>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Archived conversations, ${archived.length}`} onPress={() => setShowArchived(true)} style={[styles.archivedButton, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Archive size={18} color={colors.foreground} />
+          <Text style={[styles.archivedText, { color: colors.foreground }]}>Archived{archived.length ? ` ${archived.length}` : ''}</Text>
+        </Pressable>
+      </View>
+      {conversations.isLoading || !inbox.ready ? <ActivityIndicator accessibilityLabel="Loading conversations" color={colors.primary} /> : null}
       <Feedback error={conversations.error} />
       {conversations.isError ? <Action label="Try loading again" onPress={() => { void conversations.refetch(); }} /> : null}
-      {!conversations.isLoading && !conversations.isError && !conversations.data?.length ? (
+      {!conversations.isLoading && !conversations.isError && inbox.ready && !active.length ? (
         <View style={[styles.empty, { borderColor: colors.border, backgroundColor: colors.card }]}>
-          <Text style={[TYPOGRAPHY.title, { color: colors.foreground }]}>No conversations yet</Text>
-          <Copy muted>When you and another person like each other, your conversation will appear here immediately.</Copy>
-          <Action label="Continue your questionnaire" tone="primary" onPress={() => router.push('/questions' as never)} />
+          <Text style={[TYPOGRAPHY.title, { color: colors.foreground }]}>{archived.length ? 'Your inbox is clear' : 'No conversations yet'}</Text>
+          <Copy muted>{archived.length ? 'Your archived chats are ready whenever you need them.' : 'When you and another person like each other, your conversation will appear here.'}</Copy>
+          {archived.length ? <Action label="View archived chats" onPress={() => setShowArchived(true)} /> : null}
         </View>
       ) : null}
-      <View>
-        {(conversations.data ?? []).map((item, index) => (
-          <React.Fragment key={item.id}>
-            {index > 0 ? <View style={[styles.separator, { backgroundColor: colors.border }]} /> : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Open conversation with ${item.partner.name}`}
-            onPress={() => openConversation(item)}
-            style={({ pressed }) => [styles.row, { opacity: pressed ? 0.72 : 1 }]}
-          >
-            {item.partner.image ? <Image source={{ uri: item.partner.image }} accessibilityLabel="" style={styles.avatar} /> : <View style={[styles.avatar, { backgroundColor: colors.muted }]} />}
-            <View style={styles.details}>
-              <View style={styles.rowHeading}>
-                <Text numberOfLines={1} style={[TYPOGRAPHY.body, styles.name, { color: colors.foreground }]}>{item.partner.name}</Text>
-                {item.unreadCount > 0 ? <Text accessibilityLabel={`${item.unreadCount} unread messages`} style={[styles.unread, { color: colors.primaryForeground, backgroundColor: colors.primary }]}>{item.unreadCount}</Text> : null}
-              </View>
-              <Text numberOfLines={1} style={[TYPOGRAPHY.caption, { color: colors.mutedForeground }]}>{item.lastMessage?.content ?? 'Open conversation'}</Text>
-            </View>
-          </Pressable>
-          </React.Fragment>
-        ))}
+      <View style={styles.list}>
+        {active.map((item) => <ConversationCard key={item.id} conversation={item} onPress={openConversation} onArchive={inbox.archive} onDelete={inbox.remove} />)}
       </View>
       {conversations.data?.length ? <Action label="Refresh conversations" tone="ghost" onPress={() => { void conversations.refetch(); }} /> : null}
+      <ArchivedConversationsSheet visible={showArchived} onClose={() => setShowArchived(false)} archivedConversations={archived} onConversationPress={openConversation} onUnarchive={inbox.unarchive} onDelete={inbox.remove} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
+  heading: { gap: SPACING.compact, marginBottom: SPACING.compact },
+  archivedButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 40, paddingHorizontal: 14, borderWidth: 1, borderRadius: RADIUS.full },
+  archivedText: { fontSize: 14, fontWeight: '600' },
   empty: { gap: SPACING.compact, borderWidth: 1, borderRadius: RADIUS.md, padding: SPACING.base },
-  row: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: SPACING.compact, paddingVertical: SPACING.compact },
-  avatar: { width: 52, height: 52, borderRadius: RADIUS.full },
-  details: { flex: 1, gap: SPACING.micro },
-  rowHeading: { flexDirection: 'row', alignItems: 'center', gap: SPACING.tight },
-  name: { flex: 1, fontWeight: '600' },
-  unread: { minWidth: 24, textAlign: 'center', overflow: 'hidden', borderRadius: RADIUS.full, paddingHorizontal: SPACING.tight, paddingVertical: 2, ...TYPOGRAPHY.caption },
-  separator: { height: StyleSheet.hairlineWidth },
+  list: { marginHorizontal: -16 },
 });
