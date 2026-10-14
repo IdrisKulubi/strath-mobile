@@ -18,6 +18,7 @@ export interface ConnectionRequest {
             yearOfStudy: number | null;
             university: string | null;
             photos: string[] | null;
+            age?: number | null;
         } | null;
     };
 }
@@ -78,8 +79,8 @@ export function useConnectionRequests() {
     return useQuery({
         queryKey: ["connection-requests"],
         queryFn: fetchConnectionRequests,
-        staleTime: 15 * 1000,
-        refetchInterval: isAppActive ? 15 * 1000 : false,
+        staleTime: 60 * 1000,
+        refetchInterval: isAppActive ? 60 * 1000 : false,
         refetchIntervalInBackground: false,
     });
 }

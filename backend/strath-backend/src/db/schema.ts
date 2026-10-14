@@ -575,6 +575,7 @@ export const matchmakerSessions = pgTable(
                 | "clarifying"
                 | "ready_to_search"
                 | "presenting_candidate"
+                | "presenting_shortlist"
                 | "collecting_feedback"
                 | "limit_reached"
             >()
@@ -621,6 +622,36 @@ export const matchmakerMessages = pgTable(
     }),
 );
 
+export const matchmakerShortlists = pgTable(
+    "matchmaker_shortlists",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        sessionId: uuid("session_id")
+            .notNull()
+            .references(() => matchmakerSessions.id, { onDelete: "cascade" }),
+        viewerUserId: text("viewer_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        requestKey: text("request_key").notNull(),
+        briefVersion: integer("brief_version").default(0).notNull(),
+        intentSnapshot: jsonb("intent_snapshot").$type<Record<string, unknown>>().default({}).notNull(),
+        status: text("status")
+            .$type<"persisted" | "presented" | "stale">()
+            .default("persisted")
+            .notNull(),
+        creditConsumed: boolean("credit_consumed").default(false).notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        sessionIdx: index("matchmaker_shortlists_session_idx").on(table.sessionId),
+        viewerIdx: index("matchmaker_shortlists_viewer_idx").on(table.viewerUserId),
+        requestKeyUniqueIdx: uniqueIndex("matchmaker_shortlists_request_key_unique_idx").on(table.requestKey),
+        sessionCreatedIdx: index("matchmaker_shortlists_session_created_idx").on(table.sessionId, table.createdAt),
+    }),
+);
+
 export const matchmakerSessionResults = pgTable(
     "matchmaker_session_results",
     {
@@ -628,6 +659,8 @@ export const matchmakerSessionResults = pgTable(
         sessionId: uuid("session_id")
             .notNull()
             .references(() => matchmakerSessions.id, { onDelete: "cascade" }),
+        shortlistId: uuid("shortlist_id")
+            .references(() => matchmakerShortlists.id, { onDelete: "set null" }),
         viewerUserId: text("viewer_user_id")
             .notNull()
             .references(() => user.id, { onDelete: "cascade" }),
@@ -638,12 +671,19 @@ export const matchmakerSessionResults = pgTable(
         score: integer("score").default(0).notNull(),
         reason: text("reason"),
         labels: jsonb("labels").$type<string[]>().default([]).notNull(),
+        fitReasons: jsonb("fit_reasons").$type<string[]>().default([]).notNull(),
+        matchedPreferenceIds: jsonb("matched_preference_ids").$type<string[]>().default([]).notNull(),
+        reciprocalFitEvidence: jsonb("reciprocal_fit_evidence").$type<string[]>().default([]).notNull(),
+        tradeoff: text("tradeoff"),
+        unknown: text("unknown"),
+        matchingEvidence: jsonb("matching_evidence").$type<Record<string, unknown>>().default({}).notNull(),
         intentSnapshot: jsonb("intent_snapshot").$type<Record<string, unknown>>().default({}).notNull(),
         metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
         createdAt: timestamp("created_at").defaultNow().notNull(),
     },
     (table) => ({
         sessionIdx: index("matchmaker_session_results_session_idx").on(table.sessionId),
+        shortlistIdx: index("matchmaker_session_results_shortlist_idx").on(table.shortlistId),
         viewerIdx: index("matchmaker_session_results_viewer_idx").on(table.viewerUserId),
         candidateIdx: index("matchmaker_session_results_candidate_idx").on(table.candidateUserId),
         sessionCandidateUniqueIdx: uniqueIndex("matchmaker_session_results_session_candidate_unique_idx").on(table.sessionId, table.candidateUserId),
@@ -662,6 +702,10 @@ export const matchmakerUserMemory = pgTable(
             candidateUserId?: string;
             outcome: "interested" | "passed" | "not_this_one" | "refinement";
             reason?: string;
+            reasonCode?: string;
+            shortlistId?: string;
+            submissionId?: string;
+            learningScope?: "candidate_only" | "future_matches";
             signals: string[];
             createdAt: string;
         }[]>().default([]).notNull(),
@@ -673,6 +717,92 @@ export const matchmakerUserMemory = pgTable(
     (table) => ({
         updatedAtIdx: index("matchmaker_user_memory_updated_at_idx").on(table.updatedAt),
         lastFeedbackIdx: index("matchmaker_user_memory_last_feedback_idx").on(table.lastFeedbackAt),
+    }),
+);
+
+export const matchmakerUserBriefs = pgTable(
+    "matchmaker_user_briefs",
+    {
+        userId: text("user_id")
+            .primaryKey()
+            .references(() => user.id, { onDelete: "cascade" }),
+        version: integer("version").default(0).notNull(),
+        latestChangeId: uuid("latest_change_id"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        updatedAtIdx: index("matchmaker_user_briefs_updated_at_idx").on(table.updatedAt),
+    }),
+);
+
+export const matchmakerUserPreferences = pgTable(
+    "matchmaker_user_preferences",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        category: text("category").notNull(),
+        value: text("value").notNull(),
+        normalizedValue: text("normalized_value").notNull(),
+        sentiment: text("sentiment")
+            .$type<"prefer" | "avoid">()
+            .default("prefer")
+            .notNull(),
+        importance: text("importance")
+            .$type<"must_have" | "prefer" | "flexible">()
+            .default("flexible")
+            .notNull(),
+        certainty: text("certainty")
+            .$type<"confirmed" | "inferred">()
+            .default("inferred")
+            .notNull(),
+        source: text("source")
+            .$type<"direct" | "feedback" | "migrated_memory" | "system">()
+            .default("system")
+            .notNull(),
+        status: text("status")
+            .$type<"active" | "removed">()
+            .default("active")
+            .notNull(),
+        version: integer("version").default(1).notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userIdx: index("matchmaker_user_preferences_user_idx").on(table.userId),
+        activeIdx: index("matchmaker_user_preferences_active_idx").on(table.userId, table.status),
+        userValueUniqueIdx: uniqueIndex("matchmaker_user_preferences_user_value_unique_idx")
+            .on(table.userId, table.category, table.normalizedValue, table.sentiment),
+    }),
+);
+
+export const matchmakerPreferenceChanges = pgTable(
+    "matchmaker_preference_changes",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        requestKey: text("request_key"),
+        operation: text("operation")
+            .$type<"add" | "update" | "confirm" | "reclassify" | "remove" | "undo" | "migration">()
+            .notNull(),
+        briefVersionBefore: integer("brief_version_before").notNull(),
+        briefVersionAfter: integer("brief_version_after").notNull(),
+        beforeSnapshot: jsonb("before_snapshot").$type<Record<string, unknown>[]>().default([]).notNull(),
+        afterSnapshot: jsonb("after_snapshot").$type<Record<string, unknown>[]>().default([]).notNull(),
+        reversible: boolean("reversible").default(true).notNull(),
+        revertedByChangeId: uuid("reverted_by_change_id"),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userCreatedIdx: index("matchmaker_preference_changes_user_created_idx").on(table.userId, table.createdAt),
+        revertedIdx: index("matchmaker_preference_changes_reverted_idx").on(table.revertedByChangeId),
+        userRequestKeyUnique: uniqueIndex("matchmaker_preference_changes_user_request_key_unique").on(table.userId, table.requestKey),
     }),
 );
 
@@ -1321,12 +1451,19 @@ export const feedbacks = pgTable(
         userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
         name: text("name"),
         phoneNumber: text("phone_number"),
+        email: text("email"),
+        rating: integer("rating"),
+        source: text("source").notNull().default("app"),
         message: text("message").notNull(),
         status: text("status").notNull().default("new"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
     },
     (table) => ({
         userIdIdx: index("feedbacks_user_id_idx").on(table.userId),
+        sourceIdx: index("feedbacks_source_idx").on(table.source),
+        matchmakerV2UserUniqueIdx: uniqueIndex("feedbacks_matchmaker_v2_user_unique")
+            .on(table.userId)
+            .where(sql`${table.source} = 'matchmaker_v2' AND ${table.userId} IS NOT NULL`),
     })
 );
 
@@ -1344,6 +1481,7 @@ export const messages = pgTable(
         senderId: text("sender_id")
             .references(() => user.id)
             .notNull(),
+        clientRequestId: text("client_request_id"),
         status: text("status", { enum: ["sent", "delivered", "read"] })
             .default("sent")
             .notNull(),
@@ -1356,6 +1494,9 @@ export const messages = pgTable(
         createdAtIdx: index("created_at_idx").on(table.createdAt),
         // Composite index for efficient message pagination queries
         matchIdCreatedAtIdx: index("match_id_created_at_idx").on(table.matchId, table.createdAt),
+        senderRequestUniqueIdx: uniqueIndex("messages_sender_request_unique_idx")
+            .on(table.matchId, table.senderId, table.clientRequestId)
+            .where(sql`${table.clientRequestId} IS NOT NULL`),
     })
 );
 
@@ -1682,6 +1823,7 @@ export const matchmakerSessionsRelations = relations(matchmakerSessions, ({ one,
     }),
     messages: many(matchmakerMessages),
     results: many(matchmakerSessionResults),
+    shortlists: many(matchmakerShortlists),
 }));
 
 export const matchmakerMessagesRelations = relations(matchmakerMessages, ({ one }) => ({
@@ -1695,6 +1837,10 @@ export const matchmakerSessionResultsRelations = relations(matchmakerSessionResu
     session: one(matchmakerSessions, {
         fields: [matchmakerSessionResults.sessionId],
         references: [matchmakerSessions.id],
+    }),
+    shortlist: one(matchmakerShortlists, {
+        fields: [matchmakerSessionResults.shortlistId],
+        references: [matchmakerShortlists.id],
     }),
     viewer: one(user, {
         fields: [matchmakerSessionResults.viewerUserId],
@@ -1712,6 +1858,49 @@ export const matchmakerUserMemoryRelations = relations(matchmakerUserMemory, ({ 
     user: one(user, {
         fields: [matchmakerUserMemory.userId],
         references: [user.id],
+    }),
+}));
+
+export const matchmakerUserBriefsRelations = relations(matchmakerUserBriefs, ({ one, many }) => ({
+    user: one(user, {
+        fields: [matchmakerUserBriefs.userId],
+        references: [user.id],
+    }),
+    preferences: many(matchmakerUserPreferences),
+    changes: many(matchmakerPreferenceChanges),
+}));
+
+export const matchmakerShortlistsRelations = relations(matchmakerShortlists, ({ one, many }) => ({
+    session: one(matchmakerSessions, {
+        fields: [matchmakerShortlists.sessionId],
+        references: [matchmakerSessions.id],
+    }),
+    viewer: one(user, {
+        fields: [matchmakerShortlists.viewerUserId],
+        references: [user.id],
+    }),
+    results: many(matchmakerSessionResults),
+}));
+
+export const matchmakerUserPreferencesRelations = relations(matchmakerUserPreferences, ({ one }) => ({
+    user: one(user, {
+        fields: [matchmakerUserPreferences.userId],
+        references: [user.id],
+    }),
+    brief: one(matchmakerUserBriefs, {
+        fields: [matchmakerUserPreferences.userId],
+        references: [matchmakerUserBriefs.userId],
+    }),
+}));
+
+export const matchmakerPreferenceChangesRelations = relations(matchmakerPreferenceChanges, ({ one }) => ({
+    user: one(user, {
+        fields: [matchmakerPreferenceChanges.userId],
+        references: [user.id],
+    }),
+    brief: one(matchmakerUserBriefs, {
+        fields: [matchmakerPreferenceChanges.userId],
+        references: [matchmakerUserBriefs.userId],
     }),
 }));
 
@@ -2643,8 +2832,16 @@ export type MatchmakerMessage = typeof matchmakerMessages.$inferSelect;
 export type NewMatchmakerMessage = typeof matchmakerMessages.$inferInsert;
 export type MatchmakerSessionResult = typeof matchmakerSessionResults.$inferSelect;
 export type NewMatchmakerSessionResult = typeof matchmakerSessionResults.$inferInsert;
+export type MatchmakerShortlist = typeof matchmakerShortlists.$inferSelect;
+export type NewMatchmakerShortlist = typeof matchmakerShortlists.$inferInsert;
 export type MatchmakerUserMemory = typeof matchmakerUserMemory.$inferSelect;
 export type NewMatchmakerUserMemory = typeof matchmakerUserMemory.$inferInsert;
+export type MatchmakerUserBrief = typeof matchmakerUserBriefs.$inferSelect;
+export type NewMatchmakerUserBrief = typeof matchmakerUserBriefs.$inferInsert;
+export type MatchmakerUserPreference = typeof matchmakerUserPreferences.$inferSelect;
+export type NewMatchmakerUserPreference = typeof matchmakerUserPreferences.$inferInsert;
+export type MatchmakerPreferenceChange = typeof matchmakerPreferenceChanges.$inferSelect;
+export type NewMatchmakerPreferenceChange = typeof matchmakerPreferenceChanges.$inferInsert;
 export type FaceVerificationJob = typeof faceVerificationJobs.$inferSelect;
 export type NewFaceVerificationJob = typeof faceVerificationJobs.$inferInsert;
 export type FaceVerificationAssistance = typeof faceVerificationAssistance.$inferSelect;
@@ -2841,3 +3038,5 @@ export type FeedbackRating = "amazing" | "nice" | "meh" | "not_for_me";
 
 // Pulse category type
 export type PulseCategory = "missed_connection" | "campus_thought" | "dating_rant" | "hot_take" | "looking_for" | "general";
+
+export * from "./questionnaire-schema";

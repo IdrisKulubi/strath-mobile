@@ -1,5 +1,7 @@
 # Matchmaker UI Experience Plan
 
+> Historical V1 plan. The active roadmap is [`matchmaker-personalization-v2/README.md`](matchmaker-personalization-v2/README.md). V2 preserves the completed conversation foundation while replacing the one-candidate and opaque-memory model with editable preferences and curated shortlists.
+
 ## Product Direction
 
 The matchmaker should replace the old homepage discovery loop with a calmer, more personal flow. The user should feel like StrathSpace is actively helping them find a real person, not asking them to browse a stack.

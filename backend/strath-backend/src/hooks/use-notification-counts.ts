@@ -30,12 +30,12 @@ async function fetchNotificationCounts(): Promise<NotificationCounts> {
  */
 export function useNotificationCounts(options?: { pollingInterval?: number }) {
   const queryClient = useQueryClient();
-  const pollingInterval = options?.pollingInterval ?? 10000; // Default 10 seconds
+  const pollingInterval = options?.pollingInterval ?? 60_000;
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["notificationCounts"],
     queryFn: fetchNotificationCounts,
-    staleTime: 5000, // Consider data stale after 5 seconds
+    staleTime: 30_000,
     refetchInterval: pollingInterval, // Poll every N seconds
     refetchOnWindowFocus: true, // Refetch when window regains focus
   });

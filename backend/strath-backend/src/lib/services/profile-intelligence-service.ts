@@ -424,7 +424,7 @@ export async function refreshProfileBehaviorSignalsForUsers(userIds: string[], o
     return results;
 }
 
-export async function upsertProfileActivitySignal(userId: string, lastActiveAt = new Date()) {
+export async function upsertProfileActivitySignalLight(userId: string, lastActiveAt = new Date()) {
     const activeScore = calculateActivityScore(lastActiveAt);
     await db
         .insert(userMatchSignals)
@@ -433,7 +433,10 @@ export async function upsertProfileActivitySignal(userId: string, lastActiveAt =
             target: userMatchSignals.userId,
             set: { lastActiveAt, activeScore, updatedAt: new Date() },
         });
+}
 
+export async function upsertProfileActivitySignal(userId: string, lastActiveAt = new Date()) {
+    await upsertProfileActivitySignalLight(userId, lastActiveAt);
     return refreshProfileBehaviorSignals(userId, { now: lastActiveAt });
 }
 

@@ -50,6 +50,7 @@ import {
     recordProfilePass,
 } from "@/lib/services/profile-interaction-service";
 import { recordMatchmakerFeedback } from "@/lib/services/matchmaker-memory-service";
+import { trackMatchmakerEvent } from "@/lib/services/matchmaker-analytics-service";
 import {
     calculateActivityScore,
     calculateResponseScore as calculateBehaviorResponseScore,
@@ -1518,6 +1519,7 @@ export async function handleRecommendationDecision(input: {
     decision: Exclude<RecommendationDecision, "shown" | "viewed" | "ignored">;
     source: RecommendationSource;
     matchType?: MatchType;
+    syncMatchmakerMemory?: boolean;
 }) {
     if (input.viewerUserId === input.candidateUserId) {
         throw new Error("Cannot decide on your own profile");
@@ -1550,17 +1552,25 @@ export async function handleRecommendationDecision(input: {
     }
 
     if (input.source === "matchmaker") {
-        await recordMatchmakerFeedback({
+        trackMatchmakerEvent({
+            event: input.decision === "open_to_meet" ? "interested" : "pass",
             userId: input.viewerUserId,
             candidateUserId: input.candidateUserId,
-            outcome: input.decision === "open_to_meet" ? "interested" : "passed",
-            metadata: {
-                source: "recommendation_decision",
-                matchType: input.matchType,
-            },
-        }).catch((error) => {
-            console.warn("[match-intelligence] matchmaker memory update failed", error);
-        });
+            metadata: { matchType: input.matchType ?? null },
+        }).catch(() => undefined);
+        if (input.syncMatchmakerMemory !== false) {
+            await recordMatchmakerFeedback({
+                userId: input.viewerUserId,
+                candidateUserId: input.candidateUserId,
+                outcome: input.decision === "open_to_meet" ? "interested" : "passed",
+                metadata: {
+                    source: "recommendation_decision",
+                    matchType: input.matchType,
+                },
+            }).catch((error) => {
+                console.warn("[match-intelligence] matchmaker memory update failed", error);
+            });
+        }
     }
 
     await updateSignalsAfterDecision(input.viewerUserId, input.decision);
@@ -1623,6 +1633,9 @@ export async function handleRecommendationDecision(input: {
             candidateUserId: input.candidateUserId,
         });
         const mutualMatchCreated = Boolean(mutual);
+        if (mutualMatchCreated && input.source === "matchmaker") {
+            trackMatchmakerEvent({ event: "mutual_created", userId: input.viewerUserId, candidateUserId: input.candidateUserId, metadata: { pairId: pair?.id ?? null } }).catch(() => undefined);
+        }
         if (!mutualMatchCreated) {
             await recordOneSidedIncomingLike(input.viewerUserId, input.candidateUserId);
         }
@@ -1651,6 +1664,9 @@ export async function handleRecommendationDecision(input: {
     });
 
     const mutualMatchCreated = Boolean(result.mutual);
+    if (mutualMatchCreated && input.source === "matchmaker") {
+        trackMatchmakerEvent({ event: "mutual_created", userId: input.viewerUserId, candidateUserId: input.candidateUserId, metadata: { pairId: result.pair.id } }).catch(() => undefined);
+    }
     if (!mutualMatchCreated) {
         await recordOneSidedIncomingLike(input.viewerUserId, input.candidateUserId);
     }
@@ -1662,6 +1678,30 @@ export async function handleRecommendationDecision(input: {
         mutual: result.mutual,
         mutualMatchCreated,
     };
+}
+
+export async function ensurePermanentCandidatePass(input: {
+    viewerUserId: string;
+    candidateUserId: string;
+    source?: RecommendationSource;
+}) {
+    const existing = await readDb.query.userMatchInterests.findFirst({
+        where: and(
+            eq(userMatchInterests.viewerUserId, input.viewerUserId),
+            eq(userMatchInterests.candidateUserId, input.candidateUserId),
+            eq(userMatchInterests.decision, "passed"),
+        ),
+    });
+    if (existing) return { interest: existing, created: false };
+
+    const result = await handleRecommendationDecision({
+        viewerUserId: input.viewerUserId,
+        candidateUserId: input.candidateUserId,
+        decision: "passed",
+        source: input.source ?? "matchmaker",
+        syncMatchmakerMemory: false,
+    });
+    return { interest: result.interest, created: true };
 }
 
 async function recordOneSidedIncomingLike(swiperId: string, swipedId: string) {

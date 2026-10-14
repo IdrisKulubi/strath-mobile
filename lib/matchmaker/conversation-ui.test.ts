@@ -5,19 +5,27 @@ import type { MatchmakerConversationResponse } from '../../types/matchmaker';
 
 import {
   CANONICAL_MATCHMAKER_PROMPT,
+  filterMatchmakerQuickReplies,
   formatRemainingSearches,
   getAssistantPromptText,
   getDistinctCandidateLabels,
+  getLimitActionFromMessage,
+  getLimitModeFromMessage,
   getMatchmakerVisualState,
   getSessionStatusLabel,
   humanizeCandidateLead,
   isFeedbackReasonReply,
+  isMatchmakerSearchConfirmation,
+  isMatchmakerSearchRefinement,
   normalizeQuickReplyLabel,
   partitionConversationMessages,
   resolveQuickReplyAction,
   selectActiveTurn,
+  shouldShowLimitEmptyState,
   shouldShowMatchmakerComposer,
   shouldEnableMatchmakerQuery,
+  getMessageDisplayVariant,
+  getMessageEyebrow,
 } from './conversation-ui.ts';
 
 test('formatRemainingSearches handles singular and zero', () => {
@@ -29,6 +37,7 @@ test('formatRemainingSearches handles singular and zero', () => {
 test('getSessionStatusLabel maps session states', () => {
   assert.equal(getSessionStatusLabel('ready_to_search'), 'Ready to search');
   assert.equal(getSessionStatusLabel('limit_reached'), 'Paused for today');
+  assert.equal(getSessionStatusLabel('presenting_shortlist'), 'Showing your shortlist');
 });
 
 test('greeting messages preserve the conversational backend copy', () => {
@@ -58,12 +67,105 @@ test('visual state prioritizes errors, pauses, searches, and success', () => {
 });
 
 test('composer is available for typing and hidden for terminal feedback states', () => {
-  assert.equal(shouldShowMatchmakerComposer('prompt'), true);
+  assert.equal(shouldShowMatchmakerComposer('prompt', 3), true);
   assert.equal(shouldShowMatchmakerComposer('candidate', 2), true);
   assert.equal(shouldShowMatchmakerComposer('candidate', 0), false);
-  assert.equal(shouldShowMatchmakerComposer('no_result'), true);
-  assert.equal(shouldShowMatchmakerComposer('feedback'), false);
-  assert.equal(shouldShowMatchmakerComposer('limit'), false);
+  assert.equal(shouldShowMatchmakerComposer('no_result', 3), true);
+  assert.equal(shouldShowMatchmakerComposer('feedback', 3), false);
+  assert.equal(shouldShowMatchmakerComposer('limit', 3), false);
+  assert.equal(shouldShowMatchmakerComposer('limit', 0, 'idle'), false);
+  assert.equal(shouldShowMatchmakerComposer('limit', 0, 'refine_type'), true);
+  assert.equal(shouldShowMatchmakerComposer('limit', 0, 'date_idea'), true);
+  assert.equal(shouldShowMatchmakerComposer('prompt', 0), false);
+});
+
+test('limit metadata helpers read mode and action from assistant messages', () => {
+  const message = {
+    id: 'm1',
+    role: 'assistant',
+    kind: 'limit',
+    text: 'What should I lean into tomorrow?',
+    quickReplies: [],
+    metadata: { limitMode: 'refine_type', limitAction: 'refine_prompt' },
+    createdAt: '',
+  } as MatchmakerConversationResponse['messages'][number];
+
+  assert.equal(getLimitModeFromMessage(message), 'refine_type');
+  assert.equal(getLimitActionFromMessage(message), 'refine_prompt');
+});
+
+test('shouldShowLimitEmptyState only on idle entry limit', () => {
+  const entryTurn = selectActiveTurn({
+    session: {
+      id: 's1',
+      state: 'limit_reached',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'limit',
+        text: 'Searches resume tomorrow.',
+        quickReplies: ['Help me refine my type'],
+        metadata: { limitMode: 'idle', limitAction: 'entry' },
+        createdAt: '',
+      },
+    ],
+    quickReplies: ['Help me refine my type'],
+  } satisfies MatchmakerConversationResponse);
+
+  const refineTurn = selectActiveTurn({
+    session: {
+      id: 's1',
+      state: 'limit_reached',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm2',
+        role: 'assistant',
+        kind: 'limit',
+        text: 'Tell me what to lean into tomorrow.',
+        quickReplies: [],
+        metadata: { limitMode: 'refine_type', limitAction: 'refine_prompt' },
+        createdAt: '',
+      },
+    ],
+    quickReplies: [],
+  } satisfies MatchmakerConversationResponse);
+
+  assert.equal(shouldShowLimitEmptyState(entryTurn), true);
+  assert.equal(shouldShowLimitEmptyState(refineTurn), false);
+  assert.equal(refineTurn.limitMode, 'refine_type');
 });
 
 test('humanizeCandidateLead strips robotic prefixes', () => {
@@ -89,8 +191,20 @@ test('normalizeQuickReplyLabel rewrites search aliases', () => {
 
 test('resolveQuickReplyAction maps guided actions', () => {
   assert.equal(resolveQuickReplyAction('Find another'), 'find_another');
+  assert.equal(resolveQuickReplyAction('Keep looking'), 'find_another');
+  assert.equal(resolveQuickReplyAction("I'll wait for their response"), 'wait_for_response');
   assert.equal(resolveQuickReplyAction('Not this one'), 'not_this_one');
   assert.equal(resolveQuickReplyAction('Not my vibe'), 'feedback_reason');
+  assert.equal(resolveQuickReplyAction('yes please'), 'search');
+  assert.equal(resolveQuickReplyAction('keep searching'), 'search');
+  assert.equal(resolveQuickReplyAction('Change something'), 'send_text');
+});
+
+test('confirmation helpers distinguish proceed vs refine', () => {
+  assert.equal(isMatchmakerSearchConfirmation('start now'), true);
+  assert.equal(isMatchmakerSearchConfirmation('thanks'), true);
+  assert.equal(isMatchmakerSearchRefinement('Make it more serious'), true);
+  assert.equal(isMatchmakerSearchConfirmation('Make it more serious'), false);
 });
 
 test('partitionConversationMessages keeps candidate turns focused', () => {
@@ -164,6 +278,89 @@ test('selectActiveTurn surfaces candidate introduction state', () => {
   assert.equal(turn.searchActionLabel, 'Find another');
 });
 
+test('historical candidate renderer safely presents the first V2 shortlist candidate without another-search action', () => {
+  const data = {
+    session: {
+      id: 's1', state: 'presenting_shortlist', status: 'active', sessionDay: '2026-08-06', dailySearchCount: 1, searchLimit: 3, remainingSearches: 2, currentIntent: {}, currentPlan: {},
+      quota: { used: 1, limit: 3, remaining: 2, resetsAt: '', timezone: 'Africa/Nairobi', limitReason: null },
+    },
+    messages: [{
+      id: 'm1', role: 'assistant', kind: 'candidate', text: 'I found three people worth considering.', quickReplies: [], createdAt: '',
+      metadata: {
+        candidate: { candidateUserId: 'u1', firstName: 'Alex', reason: 'Their profile reflects calm.', labels: [] },
+        shortlist: { id: 'list', briefVersion: 2, candidates: [] },
+      },
+    }],
+    quickReplies: [],
+  } satisfies MatchmakerConversationResponse;
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'candidate');
+  assert.equal(turn.candidate?.candidateUserId, 'u1');
+  assert.equal(turn.showSearchAction, false);
+});
+
+test('getMessageDisplayVariant maps role and length to hero, body, or caption', () => {
+  const user = {
+    id: 'u1',
+    role: 'user',
+    kind: 'text',
+    text: 'Open to any type',
+    quickReplies: [],
+    metadata: {},
+    createdAt: '',
+  } as MatchmakerConversationResponse['messages'][number];
+
+  const shortAssistant = {
+    id: 'a1',
+    role: 'assistant',
+    kind: 'clarifying_question',
+    text: 'What kind of person would feel right today?',
+    quickReplies: [],
+    metadata: {},
+    createdAt: '',
+  } as MatchmakerConversationResponse['messages'][number];
+
+  const searchPlan = {
+    id: 'a2',
+    role: 'assistant',
+    kind: 'search_plan',
+    text: "I'll search using must-haves: outdoor activities and photography, into sports, third year university student, open; avoid: calm.",
+    quickReplies: [],
+    metadata: {},
+    createdAt: '',
+  } as MatchmakerConversationResponse['messages'][number];
+
+  assert.equal(getMessageDisplayVariant(user), 'caption');
+  assert.equal(getMessageDisplayVariant(shortAssistant), 'hero');
+  assert.equal(getMessageDisplayVariant(searchPlan), 'body');
+});
+
+test('getMessageEyebrow returns contextual labels for assistant messages', () => {
+  const greeting = {
+    id: 'g1',
+    role: 'assistant',
+    kind: 'greeting',
+    text: 'Morning.',
+    quickReplies: [],
+    metadata: {},
+    createdAt: '',
+  } as MatchmakerConversationResponse['messages'][number];
+
+  const searchPlan = {
+    id: 's1',
+    role: 'assistant',
+    kind: 'search_plan',
+    text: 'Ready when you are.',
+    quickReplies: [],
+    metadata: {},
+    createdAt: '',
+  } as MatchmakerConversationResponse['messages'][number];
+
+  assert.equal(getMessageEyebrow(greeting), "Today's direction");
+  assert.equal(getMessageEyebrow(searchPlan), 'Search plan');
+  assert.equal(getMessageEyebrow(null), null);
+});
+
 test('shouldEnableMatchmakerQuery respects consent', () => {
   assert.equal(shouldEnableMatchmakerQuery(true, false), true);
   assert.equal(shouldEnableMatchmakerQuery(false, false), false);
@@ -173,4 +370,308 @@ test('shouldEnableMatchmakerQuery respects consent', () => {
 test('isFeedbackReasonReply identifies reason chips', () => {
   assert.equal(isFeedbackReasonReply('Too social'), true);
   assert.equal(isFeedbackReasonReply('Find another'), false);
+});
+
+test('filterMatchmakerQuickReplies removes search actions when quota is exhausted', () => {
+  const replies = [
+    'Find another',
+    'Keep looking',
+    'Skip feedback',
+    "I'll wait for their response",
+    'Help me refine my type',
+    'Go ahead and search',
+  ];
+
+  const filtered = filterMatchmakerQuickReplies(replies, 0);
+  assert.deepEqual(filtered, [
+    "I'll wait for their response",
+    'Help me refine my type',
+  ]);
+  assert.deepEqual(filterMatchmakerQuickReplies(replies, 2), replies);
+});
+
+test('selectActiveTurn hides search actions after interested feedback with no searches left', () => {
+  const data = {
+    session: {
+      id: 's1',
+      state: 'collecting_feedback',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'feedback',
+        text: 'I see you liked them. While you wait, we can fine-tune what you want.',
+        quickReplies: [
+          "I'll wait for their response",
+          'Open Messages',
+          'Help me refine my type',
+        ],
+        metadata: { outcome: 'interested' },
+        createdAt: '',
+      },
+    ],
+    quickReplies: [
+      "I'll wait for their response",
+      'Open Messages',
+      'Help me refine my type',
+      'Find another',
+    ],
+  } satisfies MatchmakerConversationResponse;
+
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'feedback');
+  assert.equal(turn.showSearchAction, false);
+  assert.equal(turn.showMessagesAction, false);
+  assert.equal(turn.quickReplies.includes('Find another'), false);
+  assert.equal(turn.quickReplies.includes('Keep looking'), false);
+});
+
+test('selectActiveTurn keeps keep-looking path when searches remain after interest', () => {
+  const data = {
+    session: {
+      id: 's1',
+      state: 'collecting_feedback',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 1,
+      searchLimit: 3,
+      remainingSearches: 2,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 1,
+        limit: 3,
+        remaining: 2,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: null,
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'feedback',
+        text: 'Nice choice. Want to keep looking while you wait?',
+        quickReplies: [
+          'Keep looking',
+          "I'll wait for their response",
+          'Open Messages',
+        ],
+        metadata: { outcome: 'interested' },
+        createdAt: '',
+      },
+    ],
+    quickReplies: [
+      'Keep looking',
+      "I'll wait for their response",
+      'Open Messages',
+    ],
+  } satisfies MatchmakerConversationResponse;
+
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'feedback');
+  assert.equal(turn.showSearchAction, true);
+  assert.equal(turn.quickReplies.includes('Keep looking'), true);
+  assert.equal(resolveQuickReplyAction('Keep looking'), 'find_another');
+  assert.equal(resolveQuickReplyAction("I'll wait for their response"), 'wait_for_response');
+});
+
+test('selectActiveTurn surfaces limit state with refine replies only', () => {
+  const data = {
+    session: {
+      id: 's1',
+      state: 'limit_reached',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'limit',
+        text: 'That is enough for today. Tell me one thing to sharpen tomorrow.',
+        quickReplies: [
+          'Help me refine my type',
+          'What should I improve?',
+          'Find another',
+        ],
+        metadata: {},
+        createdAt: '',
+      },
+    ],
+    quickReplies: [
+      'Help me refine my type',
+      'What should I improve?',
+      'Find another',
+    ],
+  } satisfies MatchmakerConversationResponse;
+
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'limit');
+  assert.equal(turn.showSearchAction, false);
+  assert.equal(turn.quickReplies.includes('Find another'), false);
+  assert.equal(shouldShowMatchmakerComposer('limit', 0), false);
+});
+
+test('selectActiveTurn forces limit when searches are zero and latest is search_plan', () => {
+  const data = {
+    session: {
+      id: 's1',
+      state: 'ready_to_search',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'search_plan',
+        text: 'Looking for someone calm and active. Ready when you are.',
+        quickReplies: ['Find my person', 'Change something'],
+        metadata: {},
+        createdAt: '',
+      },
+    ],
+    quickReplies: ['Find my person', 'Change something', 'Keep looking'],
+  } satisfies MatchmakerConversationResponse;
+
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'limit');
+  assert.equal(turn.showSearchAction, false);
+  assert.equal(turn.quickReplies.includes('Find my person'), false);
+  assert.equal(turn.quickReplies.includes('Keep looking'), false);
+});
+
+test('selectActiveTurn keeps candidate visible with zero searches but no search action', () => {
+  const data = {
+    session: {
+      id: 's1',
+      state: 'presenting_candidate',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'candidate',
+        text: 'Try Alex. Calm and active feels close.',
+        quickReplies: ['Not this one', 'Find another'],
+        metadata: {
+          candidate: {
+            candidateUserId: 'u1',
+            firstName: 'Alex',
+            reason: 'Try Alex. Calm and active feels close.',
+            labels: ['Active today'],
+          },
+        },
+        createdAt: '',
+      },
+    ],
+    quickReplies: ['Not this one', 'Find another', 'Keep looking'],
+  } satisfies MatchmakerConversationResponse;
+
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'candidate');
+  assert.equal(turn.showSearchAction, false);
+  assert.equal(turn.quickReplies.includes('Find another'), false);
+  assert.equal(turn.quickReplies.includes('Keep looking'), false);
+  assert.equal(shouldShowMatchmakerComposer('candidate', 0), false);
+});
+
+test('selectActiveTurn forces limit when searches are zero and latest is text', () => {
+  const data = {
+    session: {
+      id: 's1',
+      state: 'clarifying',
+      status: 'active',
+      sessionDay: '2026-07-28',
+      dailySearchCount: 3,
+      searchLimit: 3,
+      remainingSearches: 0,
+      currentIntent: {},
+      currentPlan: {},
+      quota: {
+        used: 3,
+        limit: 3,
+        remaining: 0,
+        resetsAt: '',
+        timezone: 'Africa/Nairobi',
+        limitReason: 'daily_search_limit',
+      },
+    },
+    messages: [
+      {
+        id: 'm1',
+        role: 'assistant',
+        kind: 'text',
+        text: 'Tell me more about the vibe you want.',
+        quickReplies: ['Someone calm'],
+        metadata: {},
+        createdAt: '',
+      },
+    ],
+    quickReplies: ['Someone calm', 'Go ahead and search'],
+  } satisfies MatchmakerConversationResponse;
+
+  const turn = selectActiveTurn(data);
+  assert.equal(turn.variant, 'limit');
+  assert.equal(turn.showSearchAction, false);
+  assert.equal(turn.quickReplies.includes('Go ahead and search'), false);
 });

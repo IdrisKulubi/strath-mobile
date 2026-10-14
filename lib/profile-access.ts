@@ -26,7 +26,7 @@ export function isWaitlisted(profile: Profile | null | undefined) {
 
 export function getProfileRoute(profile: Profile | null | undefined) {
     if (!profile || !hasCompletedProfile(profile)) {
-        return '/onboarding' as const;
+        return '/dating-setup' as const;
     }
 
     if (!hasVerifiedFace(profile)) {
@@ -39,5 +39,5 @@ export function getProfileRoute(profile: Profile | null | undefined) {
         return '/waitlist' as const;
     }
 
-    return '/(tabs)' as const;
+    return '/dating' as const;
 }

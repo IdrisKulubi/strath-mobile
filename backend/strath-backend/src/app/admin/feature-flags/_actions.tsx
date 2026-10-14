@@ -10,33 +10,265 @@ import {
     admitSpecificUserFromWaitlist,
     openAppToEveryone,
     resetUserAdmission,
+    updateAdminMatchmakerV2Rollout,
+    updateAdminMatchmakerDailySearchLimit,
+    searchAdminUsersForMatchmakerQuota,
+    resetAdminMatchmakerQuotaForUser,
 } from "@/lib/actions/admin";
 import type { AdmissionStats, GenderBucket } from "@/lib/services/admission-service";
 
 type WaitlistedProfile = Awaited<ReturnType<typeof import("@/lib/actions/admin").getAdminWaitlistedProfiles>>[number];
+type ActionResult = { kind: "success" | "error"; message: string } | null;
 
 export function FeatureFlagToggle({
     flagKey,
     enabled,
+    enableBlockedReason,
 }: {
     flagKey: string;
     enabled: boolean;
+    enableBlockedReason?: string;
 }) {
     const [isPending, startTransition] = useTransition();
+    const [result, setResult] = useState<ActionResult>(null);
+    const isEnableBlocked = !enabled && Boolean(enableBlockedReason);
+
+    const handleToggle = () => {
+        startTransition(async () => {
+            setResult(null);
+            try {
+                const response = await setAdminFeatureFlag(flagKey, !enabled);
+                setResult({
+                    kind: response.ok ? "success" : "error",
+                    message: response.message,
+                });
+            } catch (error) {
+                setResult({
+                    kind: "error",
+                    message: error instanceof Error ? error.message : "The feature flag could not be updated.",
+                });
+            }
+        });
+    };
 
     return (
-        <button
-            type="button"
-            onClick={() => startTransition(() => setAdminFeatureFlag(flagKey, !enabled))}
-            disabled={isPending}
-            className={`inline-flex min-w-[132px] items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                enabled
-                    ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
-                    : "bg-white/10 text-gray-300 hover:bg-white/15"
-            } ${isPending ? "opacity-60" : ""}`}
-        >
-            {isPending ? "Saving..." : enabled ? "Disable" : "Enable"}
-        </button>
+        <div className="max-w-64 text-right">
+            <button
+                type="button"
+                onClick={handleToggle}
+                disabled={isPending || isEnableBlocked}
+                aria-describedby={enableBlockedReason ? `${flagKey}-toggle-status` : undefined}
+                className={`inline-flex min-h-11 min-w-[132px] items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                    enabled
+                        ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                        : "bg-white/10 text-gray-300 hover:bg-white/15"
+                } disabled:cursor-not-allowed disabled:opacity-50`}
+            >
+                {isPending ? "Saving..." : enabled ? "Disable" : "Enable"}
+            </button>
+            {(enableBlockedReason || result) && (
+                <p
+                    id={`${flagKey}-toggle-status`}
+                    role={result?.kind === "error" ? "alert" : "status"}
+                    aria-live="polite"
+                    className={`mt-2 text-xs leading-5 ${result?.kind === "error" ? "text-rose-300" : result?.kind === "success" ? "text-emerald-300" : "text-amber-200"}`}
+                >
+                    {result?.message ?? enableBlockedReason}
+                </p>
+            )}
+        </div>
+    );
+}
+
+export function MatchmakerV2RolloutPanel({ config }: { config: Record<string, unknown> }) {
+    const [isPending, startTransition] = useTransition();
+    const [result, setResult] = useState<ActionResult>(null);
+    const router = useRouter();
+    const percentage = [0, 5, 25, 50, 100].includes(Number(config.percentage)) ? Number(config.percentage) : 100;
+    const internalUserIds = Array.isArray(config.internalUserIds) ? config.internalUserIds.filter((value): value is string => typeof value === "string").join(", ") : "";
+    const rollbackReady = config.rollbackReady === true;
+
+    const handleSubmit = (formData: FormData) => {
+        startTransition(async () => {
+            setResult(null);
+            try {
+                const response = await updateAdminMatchmakerV2Rollout(formData);
+                setResult({ kind: response.ok ? "success" : "error", message: response.message });
+                router.refresh();
+            } catch (error) {
+                setResult({
+                    kind: "error",
+                    message: error instanceof Error ? error.message : "The rollout controls could not be saved.",
+                });
+            }
+        });
+    };
+
+    return (
+        <form action={handleSubmit} className="space-y-4 rounded-lg border border-white/10 bg-white/5 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div><p className="text-sm font-semibold text-white">Staged rollout</p><p className="mt-1 max-w-2xl text-xs leading-5 text-gray-400">Save these controls before enabling V2. Hold each external stage for one complete Nairobi quota-reset cycle. The master toggle remains the emergency rollback.</p></div>
+                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${rollbackReady ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-200"}`}>{rollbackReady ? "Rollback ready" : "Readiness required"}</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1"><span className="text-xs font-medium text-gray-400">Eligible users</span><select name="percentage" defaultValue={percentage} className="rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white">{[0, 5, 25, 50, 100].map((stage) => <option key={stage} value={stage}>{stage === 0 ? "Internal users only" : `${stage}%`}</option>)}</select></label>
+                <label className="flex flex-col gap-1"><span className="text-xs font-medium text-gray-400">Internal user IDs</span><input name="internalUserIds" defaultValue={internalUserIds} placeholder="id-1, id-2" className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white" /></label>
+            </div>
+            <label className="flex min-h-11 items-center gap-3 text-sm text-gray-300"><input type="checkbox" name="rollbackReady" defaultChecked={rollbackReady} className="h-5 w-5" /><span>Production verification and the rollback switch have both been exercised</span></label>
+            <button type="submit" disabled={isPending} className="min-h-11 rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50">{isPending ? "Saving..." : "Save rollout controls"}</button>
+            {result && <p role={result.kind === "error" ? "alert" : "status"} aria-live="polite" className={`text-xs leading-5 ${result.kind === "success" ? "text-emerald-300" : "text-rose-300"}`}>{result.message}</p>}
+        </form>
+    );
+}
+
+type MatchmakerQuotaUser = Awaited<ReturnType<typeof searchAdminUsersForMatchmakerQuota>>[number];
+
+export function MatchmakerQuotaPanel({ config }: { config: Record<string, unknown> }) {
+    const router = useRouter();
+    const [isSaving, startSaving] = useTransition();
+    const [isSearching, startSearching] = useTransition();
+    const [resettingUserId, setResettingUserId] = useState<string | null>(null);
+    const [query, setQuery] = useState("");
+    const [users, setUsers] = useState<MatchmakerQuotaUser[]>([]);
+    const [saveResult, setSaveResult] = useState<ActionResult>(null);
+    const [searchMessage, setSearchMessage] = useState<string | null>(null);
+    const currentLimit = Number.isInteger(Number(config.dailySearchLimit))
+        ? Number(config.dailySearchLimit)
+        : 3;
+
+    const handleLimitSubmit = (formData: FormData) => {
+        startSaving(async () => {
+            setSaveResult(null);
+            try {
+                const response = await updateAdminMatchmakerDailySearchLimit(formData);
+                setSaveResult({ kind: response.ok ? "success" : "error", message: response.message });
+                if (response.ok) router.refresh();
+            } catch (error) {
+                setSaveResult({
+                    kind: "error",
+                    message: error instanceof Error ? error.message : "The daily allowance could not be updated.",
+                });
+            }
+        });
+    };
+
+    const runSearch = () => {
+        const trimmed = query.trim();
+        if (trimmed.length < 2) {
+            setUsers([]);
+            setSearchMessage("Enter at least two characters.");
+            return;
+        }
+        startSearching(async () => {
+            setSearchMessage(null);
+            try {
+                const matches = await searchAdminUsersForMatchmakerQuota(trimmed);
+                setUsers(matches);
+                if (matches.length === 0) setSearchMessage("No users matched that name, email, or ID.");
+            } catch (error) {
+                setUsers([]);
+                setSearchMessage(error instanceof Error ? error.message : "The user search failed.");
+            }
+        });
+    };
+
+    const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        runSearch();
+    };
+
+    const handleReset = (user: MatchmakerQuotaUser) => {
+        if (!window.confirm(`Reset today's Matchmaker suggestions for ${user.name}?`)) return;
+        setResettingUserId(user.userId);
+        setSearchMessage(null);
+        void resetAdminMatchmakerQuotaForUser(user.userId)
+            .then(async (response) => {
+                setSearchMessage(response.message);
+                if (response.ok) {
+                    const matches = await searchAdminUsersForMatchmakerQuota(query.trim());
+                    setUsers(matches);
+                    router.refresh();
+                }
+            })
+            .catch((error) => {
+                setSearchMessage(error instanceof Error ? error.message : "The quota reset failed.");
+            })
+            .finally(() => setResettingUserId(null));
+    };
+
+    return (
+        <section className="mt-5 border-t border-white/10 pt-5">
+            <div>
+                <h3 className="text-sm font-semibold text-white">Daily suggestion allowance</h3>
+                <p className="mt-1 max-w-2xl text-xs leading-5 text-gray-400">
+                    This is the number of Matchmaker searches each V2 user receives per Nairobi day. Increasing it unlocks the difference immediately. Decreasing it stops additional searches after the new limit.
+                </p>
+            </div>
+
+            <form action={handleLimitSubmit} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                <label className="flex max-w-56 flex-1 flex-col gap-1">
+                    <span className="text-xs font-medium text-gray-400">Suggestions per user</span>
+                    <input
+                        type="number"
+                        name="dailySearchLimit"
+                        min={1}
+                        max={10}
+                        defaultValue={currentLimit}
+                        required
+                        className="min-h-11 rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
+                    />
+                </label>
+                <button type="submit" disabled={isSaving} className="min-h-11 rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50">
+                    {isSaving ? "Updating everyone..." : "Update allowance"}
+                </button>
+            </form>
+            {saveResult ? (
+                <p role={saveResult.kind === "error" ? "alert" : "status"} className={`mt-2 text-xs leading-5 ${saveResult.kind === "success" ? "text-emerald-300" : "text-rose-300"}`}>
+                    {saveResult.message}
+                </p>
+            ) : null}
+
+            <div className="mt-6">
+                <h3 className="text-sm font-semibold text-white">Reset one user</h3>
+                <p className="mt-1 text-xs leading-5 text-gray-400">
+                    Find a user by name, email, or ID, then restore today&apos;s full configured allowance.
+                </p>
+                <form onSubmit={handleSearch} className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <input
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="Name, email, or user ID"
+                        className="min-h-11 flex-1 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:border-white/30 focus:outline-none"
+                    />
+                    <button type="submit" disabled={isSearching} className="min-h-11 rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50">
+                        {isSearching ? "Searching..." : "Find user"}
+                    </button>
+                </form>
+
+                {users.length > 0 ? (
+                    <div className="mt-3 divide-y divide-white/10 overflow-hidden rounded-lg border border-white/10">
+                        {users.map((user) => (
+                            <div key={user.userId} className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium text-white">{user.name}</p>
+                                    <p className="truncate text-xs text-gray-400">{user.email} · {user.userId}</p>
+                                    <p className="mt-1 text-xs text-gray-500">Used {user.used} of {user.limit}, {user.remaining} remaining</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handleReset(user)}
+                                    disabled={resettingUserId !== null}
+                                    className="min-h-11 shrink-0 rounded-md bg-pink-500/15 px-4 py-2 text-sm font-semibold text-pink-200 hover:bg-pink-500/25 disabled:opacity-50"
+                                >
+                                    {resettingUserId === user.userId ? "Resetting..." : "Reset today"}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
+                {searchMessage ? <p role="status" className="mt-2 text-xs leading-5 text-gray-300">{searchMessage}</p> : null}
+            </div>
+        </section>
     );
 }
 
@@ -469,10 +701,10 @@ function ResetAdmissionForm() {
             onSubmit={handleSubmit}
             className="rounded-lg border border-white/10 bg-white/5 p-4"
         >
-            <p className="text-sm font-semibold text-white">Reset a user's admission</p>
+            <p className="text-sm font-semibold text-white">Reset a user&apos;s admission</p>
             <p className="mt-1 text-xs text-gray-400">
-                Dev helper for testing the waitlist flow. Clears the user's waitlist status and
-                re-runs the gate with current caps. Safe to run on yourself — you can use this to
+                Dev helper for testing the waitlist flow. Clears the user&apos;s waitlist status and
+                re-runs the gate with current caps. Safe to run on yourself, so you can use this to
                 bounce between admitted and waitlisted as you tune caps.
             </p>
 

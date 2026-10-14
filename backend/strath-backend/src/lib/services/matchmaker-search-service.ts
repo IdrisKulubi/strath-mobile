@@ -22,6 +22,25 @@ export type MatchmakerSearchOptions = {
     intentText: string;
     limit?: number;
     excludeUserIds?: string[];
+    minimumInternalScore?: number;
+    minimumRelevanceScore?: number;
+    confirmedPreferences?: MatchmakerSearchPreference[];
+    dynamicResultCount?: boolean;
+};
+
+export type MatchmakerSearchPreference = {
+    id: string;
+    value: string;
+    sentiment: "prefer" | "avoid";
+    importance: "must_have" | "prefer" | "flexible";
+};
+
+export type MatchmakerCandidateExplanation = {
+    fitReasons: string[];
+    matchedPreferenceIds: string[];
+    reciprocalFitEvidence: string[];
+    tradeoff: string | null;
+    unknown: string | null;
 };
 
 export type MatchmakerCandidateInput = {
@@ -64,7 +83,62 @@ export type RankedMatchmakerCandidate = {
     reason: string;
     labels: string[];
     internalScore: number;
+    explanation: MatchmakerCandidateExplanation;
+    matchingEvidence: Record<string, unknown>;
 };
+
+type NaturallyRankedCandidate = {
+    internalScore: number;
+    intentRelevanceScore: number;
+    hasConfirmedPreferenceEvidence: boolean;
+};
+
+/**
+ * Treat the requested shortlist size as a ceiling, not a quota.
+ * A second profile must be competitive with the best result. A third is only
+ * included when it is both strong and very close to the best result.
+ */
+export function selectNaturalShortlistCandidates<T extends NaturallyRankedCandidate>(
+    candidates: T[],
+    limit: number,
+) {
+    const cappedLimit = Math.max(0, Math.min(limit, 3));
+    if (cappedLimit === 0 || candidates.length === 0) return [];
+
+    const top = candidates[0];
+    const selected = [top];
+    if (cappedLimit === 1) return selected;
+
+    const second = candidates[1];
+    const secondHasFit = second && (
+        second.intentRelevanceScore >= 20
+        || second.hasConfirmedPreferenceEvidence
+    );
+    if (
+        second
+        && secondHasFit
+        && second.internalScore >= Math.max(55, top.internalScore - 9)
+    ) {
+        selected.push(second);
+    }
+
+    if (cappedLimit === 2 || selected.length < 2) return selected;
+
+    const third = candidates[2];
+    const thirdHasStrongFit = third && (
+        third.intentRelevanceScore >= 30
+        || third.hasConfirmedPreferenceEvidence
+    );
+    if (
+        third
+        && thirdHasStrongFit
+        && third.internalScore >= Math.max(62, top.internalScore - 5)
+    ) {
+        selected.push(third);
+    }
+
+    return selected;
+}
 
 function clampScore(value: number | null | undefined) {
     if (!Number.isFinite(value ?? NaN)) return 0;
@@ -96,7 +170,8 @@ function keywordScore(intent: MatchmakerParsedIntent, candidate: MatchmakerCandi
         candidate.university,
         candidate.course,
     ].filter(Boolean).join(" "));
-    if (!haystack || intent.keywords.length === 0) return 35;
+    if (intent.keywords.length === 0) return 35;
+    if (!haystack) return 0;
 
     const matches = intent.keywords.filter((keyword) => haystack.includes(keyword));
     return clampScore((matches.length / Math.min(intent.keywords.length, 8)) * 100);
@@ -104,6 +179,87 @@ function keywordScore(intent: MatchmakerParsedIntent, candidate: MatchmakerCandi
 
 function normalizeTags(values: string[] | null | undefined) {
     return (values ?? []).map((value) => value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")).filter(Boolean);
+}
+
+function candidateEvidence(candidate: MatchmakerCandidateInput) {
+    return {
+        traitTags: normalizeTags(candidate.traitTags),
+        datingIntentTags: normalizeTags(candidate.datingIntentTags),
+        socialEnergyTags: normalizeTags(candidate.socialEnergyTags),
+        lifestyleTags: normalizeTags(candidate.lifestyleTags),
+        interestTags: normalizeTags(candidate.interestTags),
+        communicationTags: normalizeTags(candidate.communicationTags),
+        availabilityTags: normalizeTags(candidate.availabilityTags),
+        dealbreakerTags: normalizeTags(candidate.dealbreakerTags),
+    };
+}
+
+function normalizedPreferenceTokens(value: string) {
+    return normalizeTags([value]).flatMap((item) => [
+        item,
+        ...item.split("_").filter((token) => token.length >= 4),
+    ]);
+}
+
+function findEvidenceField(value: string, evidence: ReturnType<typeof candidateEvidence>) {
+    const wanted = normalizedPreferenceTokens(value);
+    for (const [field, values] of Object.entries(evidence)) {
+        if (wanted.some((token) => values.includes(token))) return { field, value: wanted.find((token) => values.includes(token))! };
+    }
+    return null;
+}
+
+export function buildGroundedMatchmakerExplanation(input: {
+    candidate: MatchmakerCandidateInput;
+    labels: string[];
+    confirmedPreferences?: MatchmakerSearchPreference[];
+}) {
+    const evidence = candidateEvidence(input.candidate);
+    const matches = (input.confirmedPreferences ?? [])
+        .filter((preference) => preference.sentiment === "prefer")
+        .map((preference) => ({ preference, evidence: findEvidenceField(preference.value, evidence) }))
+        .filter((item): item is { preference: MatchmakerSearchPreference; evidence: { field: string; value: string } } => Boolean(item.evidence));
+    const fitReasons = matches.slice(0, 3).map(({ preference }) => `Their profile reflects ${preference.value}.`);
+    for (const label of input.labels) {
+        if (fitReasons.length >= 3) break;
+        if (label === "Intentional") fitReasons.push("Their dating intent is described as intentional.");
+        if (label === "Calm vibe") fitReasons.push("Their profile signals a calm social style.");
+    }
+    const matchedPreferenceIds = [...new Set(matches.map(({ preference }) => preference.id))];
+    const unmatched = (input.confirmedPreferences ?? []).filter((preference) =>
+        preference.sentiment === "prefer" && !matchedPreferenceIds.includes(preference.id),
+    );
+    const avoidEvidence = (input.confirmedPreferences ?? [])
+        .filter((preference) => preference.sentiment === "avoid")
+        .map((preference) => ({ preference, evidence: findEvidenceField(preference.value, evidence) }))
+        .find((item) => item.evidence);
+
+    return {
+        explanation: {
+            fitReasons: [...new Set(fitReasons)].slice(0, 3),
+            matchedPreferenceIds,
+            reciprocalFitEvidence: [] as string[],
+            tradeoff: avoidEvidence ? `Their profile may include ${avoidEvidence.preference.value}.` : null,
+            unknown: unmatched.length > 0 ? `${unmatched[0].value} is not clear from their profile yet.` : null,
+        },
+        matchingEvidence: {
+            matchedPreferences: matches.map(({ preference, evidence: match }) => ({
+                preferenceId: preference.id,
+                candidateField: match.field,
+                candidateValue: match.value,
+            })),
+            avoidEvidence: avoidEvidence ? {
+                preferenceId: avoidEvidence.preference.id,
+                candidateField: avoidEvidence.evidence!.field,
+                candidateValue: avoidEvidence.evidence!.value,
+            } : null,
+            candidateEvidence: evidence,
+            reliability: {
+                activityBand: input.candidate.activityScore >= 80 ? "active_today" : input.candidate.activityScore >= 60 ? "recently_active" : "standard",
+                profileComplete: input.candidate.profileCompletenessScore >= 80,
+            },
+        },
+    };
 }
 
 function structuredTagScore(intent: MatchmakerParsedIntent, candidate: MatchmakerCandidateInput) {
@@ -124,7 +280,7 @@ function structuredTagScore(intent: MatchmakerParsedIntent, candidate: Matchmake
         ...normalizeTags(candidate.communicationTags),
         ...normalizeTags(candidate.availabilityTags),
     ]);
-    if (candidateTags.size === 0) return 35;
+    if (candidateTags.size === 0) return 0;
 
     let matches = 0;
     for (const tag of requestedTags) {
@@ -177,13 +333,20 @@ export function rankMatchmakerCandidates(input: {
     candidates: MatchmakerCandidateInput[];
     intentEmbedding?: number[] | null;
     limit?: number;
+    minimumInternalScore?: number;
+    minimumRelevanceScore?: number;
+    confirmedPreferences?: MatchmakerSearchPreference[];
+    dynamicResultCount?: boolean;
 }) {
     const limit = Math.min(Math.max(input.limit ?? 3, 1), 10);
-    return input.candidates
+    const ranked = input.candidates
         .filter((candidate) => {
             if (input.intent.activeToday) return candidate.activityScore >= 45;
             return true;
         })
+        .filter((candidate) => !(input.confirmedPreferences ?? []).some((preference) =>
+            preference.sentiment === "avoid" && Boolean(findEvidenceField(preference.value, candidateEvidence(candidate))),
+        ))
         .map((candidate) => {
             const lexical = keywordScore(input.intent, candidate);
             const structured = structuredTagScore(input.intent, candidate);
@@ -204,6 +367,11 @@ export function rankMatchmakerCandidates(input: {
             const reason = labels.length > 0
                 ? `${labels.join(", ")} and close to what you asked for.`
                 : "Close to what you asked for.";
+            const grounded = buildGroundedMatchmakerExplanation({
+                candidate,
+                labels,
+                confirmedPreferences: input.confirmedPreferences,
+            });
 
             return {
                 candidateUserId: candidate.candidateUserId,
@@ -216,10 +384,30 @@ export function rankMatchmakerCandidates(input: {
                 labels,
                 reason,
                 internalScore: clampScore(score),
+                intentRelevanceScore: clampScore(relevanceScore),
+                hasConfirmedPreferenceEvidence: grounded.explanation.matchedPreferenceIds.length > 0,
+                ...grounded,
             };
         })
-        .sort((left, right) => right.internalScore - left.internalScore || left.candidateUserId.localeCompare(right.candidateUserId))
-        .slice(0, limit);
+        .filter((candidate) =>
+            candidate.internalScore >= (input.minimumInternalScore ?? 0) &&
+            (
+                input.intent.keywords.length === 0 ||
+                candidate.intentRelevanceScore >= (input.minimumRelevanceScore ?? 0) ||
+                candidate.hasConfirmedPreferenceEvidence
+            ),
+        )
+        .sort((left, right) => right.internalScore - left.internalScore || left.candidateUserId.localeCompare(right.candidateUserId));
+    const selected = input.dynamicResultCount
+        ? selectNaturalShortlistCandidates(ranked, limit)
+        : ranked.slice(0, limit);
+
+    return selected
+        .map(({ intentRelevanceScore, hasConfirmedPreferenceEvidence, ...candidate }) => {
+            void intentRelevanceScore;
+            void hasConfirmedPreferenceEvidence;
+            return candidate;
+        });
 }
 
 async function getExcludedUserIds(viewerUserId: string, additional: string[]) {
@@ -322,7 +510,16 @@ export async function searchMatchmakerCandidates(options: MatchmakerSearchOption
         getExcludedUserIds(options.viewerUserId, options.excludeUserIds ?? []),
     ]);
     const candidates = await getCachedCandidates(options.viewerUserId, excludeUserIds);
-    const ranked = rankMatchmakerCandidates({ intent, candidates, intentEmbedding, limit });
+    const ranked = rankMatchmakerCandidates({
+        intent,
+        candidates,
+        intentEmbedding,
+        limit,
+        minimumInternalScore: options.minimumInternalScore ?? 45,
+        minimumRelevanceScore: options.minimumRelevanceScore ?? 15,
+        confirmedPreferences: options.confirmedPreferences,
+        dynamicResultCount: options.dynamicResultCount,
+    });
 
     await recordMatchmakerIntent({
         userId: options.viewerUserId,
@@ -340,7 +537,10 @@ export async function searchMatchmakerCandidates(options: MatchmakerSearchOption
         summary: ranked.length > 0
             ? `I found ${ranked.length} ${ranked.length === 1 ? "person" : "people"} who fit that well.`
             : "I could not find a strong fit yet. Try broadening the request.",
-        candidates: ranked.map(({ internalScore: _internalScore, ...candidate }) => candidate),
+        candidates: ranked.map(({ internalScore, ...candidate }) => {
+            void internalScore;
+            return candidate;
+        }),
         intent: {
             traits: intent.traits,
             activeToday: intent.activeToday,

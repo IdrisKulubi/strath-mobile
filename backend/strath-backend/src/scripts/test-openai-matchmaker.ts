@@ -20,9 +20,23 @@ import {
     generateMatchmakerSearchStatusReply,
 } from "@/lib/services/matchmaker-llm-client";
 
+const FORBIDDEN_REPLY_PATTERNS = [
+    /got it\.?\s*i will prioritize/i,
+    /should i go ahead\??/i,
+    /avoid people you have already passed/i,
+];
+
 function maskKey(value: string) {
     if (value.length <= 8) return "set";
     return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function assertNoForbiddenReply(text: string, label: string) {
+    for (const pattern of FORBIDDEN_REPLY_PATTERNS) {
+        if (pattern.test(text)) {
+            throw new Error(`${label} used forbidden template wording: ${text}`);
+        }
+    }
 }
 
 async function main() {
@@ -45,12 +59,26 @@ async function main() {
         role: "assistant" as const,
         text: "What kind of person would feel right for you today?",
     }];
-    const [turn, greeting, candidate, feedback, limit, noResult] = await Promise.all([
+
+    const repeatedTurns = await Promise.all([
         generateMatchmakerLlmTurn({
             userMessage: "I want someone calm, intentional, active today, and easy to talk to.",
             state: "collecting_intent",
             recentMessages,
         }),
+        generateMatchmakerLlmTurn({
+            userMessage: "I want someone calm, intentional, active today, and easy to talk to.",
+            state: "collecting_intent",
+            recentMessages,
+        }),
+        generateMatchmakerLlmTurn({
+            userMessage: "I want someone calm, intentional, active today, and easy to talk to.",
+            state: "collecting_intent",
+            recentMessages,
+        }),
+    ]);
+
+    const [greeting, candidate, feedback, limit, noResult] = await Promise.all([
         generateMatchmakerGreeting({ firstName: "Idris" }),
         generateMatchmakerCandidateIntro({
             firstName: "Maya",
@@ -78,14 +106,25 @@ async function main() {
         }),
     ]);
 
-    if (turn.provider !== "openai" || turn.fallbackUsed) {
-        throw new Error(`OpenAI smoke test failed. provider=${turn.provider}, fallbackUsed=${turn.fallbackUsed}`);
+    for (const [index, turn] of repeatedTurns.entries()) {
+        if (turn.provider !== "openai" || turn.fallbackUsed) {
+            throw new Error(`OpenAI smoke test failed on turn ${index + 1}. provider=${turn.provider}, fallbackUsed=${turn.fallbackUsed}`);
+        }
+        assertNoForbiddenReply(turn.reply, `turn ${index + 1}`);
     }
+
+    const uniqueReplies = new Set(repeatedTurns.map((turn) => turn.reply.trim().toLowerCase()));
+    if (uniqueReplies.size < 2) {
+        throw new Error(`Expected varied replies across repeated prompts, got: ${[...uniqueReplies].join(" | ")}`);
+    }
+
     for (const reply of [greeting, candidate, feedback, limit, noResult]) {
         if (reply.provider !== "openai" || reply.fallbackUsed) {
             throw new Error(`OpenAI voice smoke test failed. provider=${reply.provider}, fallbackUsed=${reply.fallbackUsed}`);
         }
     }
+
+    assertNoForbiddenReply(candidate.text, "candidate");
     if (/\b(?:she|her|hers|he|him|his)\b|(?:she|he)[’']s\b/i.test(candidate.text)) {
         throw new Error(`Candidate reply invented gendered language: ${candidate.text}`);
     }
@@ -95,13 +134,7 @@ async function main() {
 
     console.log("OpenAI smoke test passed.");
     console.log(JSON.stringify({
-        provider: turn.provider,
-        model: turn.model,
-        messageType: turn.messageType,
-        shouldClarify: turn.shouldClarify,
-        reply: turn.reply,
-        traits: turn.intent.traits,
-        priorities: turn.searchPlan.priorities,
+        repeatedReplies: repeatedTurns.map((turn) => turn.reply),
         greeting: greeting.text,
         candidate: candidate.text,
         feedback: feedback.text,

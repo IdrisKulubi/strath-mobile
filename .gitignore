@@ -46,3 +46,9 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Local matching-service tooling
+.venv/
+__pycache__/
+.pytest_cache/
+.cache/

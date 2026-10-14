@@ -9,6 +9,8 @@ import {
     type AppNotificationType,
 } from '@/lib/services/notifications-service';
 import { useToast } from '@/components/ui/toast';
+import type { PublicFeatureFlags } from '@/hooks/use-payments-enabled';
+import { getIncomingLikeRoute } from '@/lib/home-experience-routing';
 import {
     configureAndroidNotificationChannel,
     registerPushTokenIfGranted,
@@ -38,6 +40,7 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
         case NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH:
         case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
         case NOTIFICATION_TYPES.MATCH:
+        case NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH:
             return 'accent';
 
         case NOTIFICATION_TYPES.PAYMENT_EXPIRING:
@@ -52,7 +55,10 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
     }
 }
 
-function resolveRoute(data: NotificationPayload): string | null {
+export function resolveNotificationRoute(
+    data: NotificationPayload,
+    isV2Enabled = false,
+): string | null {
     if (data.route) {
         if (data.route.includes('payments')) {
             return '/(tabs)/dates';
@@ -62,7 +68,7 @@ function resolveRoute(data: NotificationPayload): string | null {
 
     switch (data.type) {
         case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
-            return '/(tabs)?homeTab=interested';
+            return getIncomingLikeRoute(isV2Enabled);
 
         case NOTIFICATION_TYPES.DATE_REQUEST_ACCEPTED:
         case NOTIFICATION_TYPES.DATE_REQUEST_DECLINED:
@@ -176,18 +182,25 @@ export function usePushNotifications(options?: {
                     invalidateMessagingCaches(queryClient, data.matchId);
                 }
 
+                if (data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH) {
+                    queryClient.invalidateQueries({ queryKey: ['questionnaire'] });
+                    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                }
+
                 if (data.type === NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED) {
                     queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
                     queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
                 }
 
-                toast.show({
-                    message,
-                    variant: toastVariantFor(data.type),
-                    position: 'top',
-                    duration: 4000,
-                    showInModal: true,
-                });
+                if (data.type !== NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH) {
+                    toast.show({
+                        message,
+                        variant: toastVariantFor(data.type),
+                        position: 'top',
+                        duration: 4000,
+                        showInModal: true,
+                    });
+                }
             });
 
         notificationResponseListener.current =
@@ -199,12 +212,21 @@ export function usePushNotifications(options?: {
                     invalidateMessagingCaches(queryClient, data.matchId);
                 }
 
+                if (data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH) {
+                    queryClient.invalidateQueries({ queryKey: ['questionnaire'] });
+                    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                }
+
                 if (data.type === NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED) {
                     queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
                     queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
                 }
 
-                const route = resolveRoute(data);
+                const flags = queryClient.getQueryData<PublicFeatureFlags>(['publicFeatureFlags']);
+                const route = resolveNotificationRoute(
+                    data,
+                    Boolean(flags?.matchmakerPersonalizationV2),
+                );
                 if (route) {
                     router.push(route as any);
                 }

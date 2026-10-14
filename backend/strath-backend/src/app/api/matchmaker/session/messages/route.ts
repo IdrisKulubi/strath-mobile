@@ -4,6 +4,7 @@ import { z } from "zod";
 import { errorResponse, successResponse } from "@/lib/api-response";
 import { AI_CONSENT_REQUIRED_MESSAGE, hasAiConsent } from "@/lib/ai-consent";
 import { getSessionWithBearerFallback } from "@/lib/security";
+import { matchmakerRouteErrorResponse } from "@/lib/services/matchmaker-route-errors";
 import { addMatchmakerConversationMessage } from "@/lib/services/matchmaker-session-service";
 import { requireMatchmakingAccess } from "@/lib/services/profile-access";
 
@@ -38,6 +39,6 @@ export async function POST(req: NextRequest) {
         return successResponse(conversation);
     } catch (error) {
         console.error("[matchmaker/session/messages] Error:", error);
-        return errorResponse(error);
+        return matchmakerRouteErrorResponse(error);
     }
 }

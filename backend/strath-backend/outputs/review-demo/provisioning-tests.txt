@@ -1,0 +1,46 @@
+TAP version 13
+# Subtest: disabled demo never accesses or mutates the database
+ok 1 - disabled demo never accesses or mutates the database
+  ---
+  duration_ms: 1740.9338
+  type: 'test'
+  ...
+# Subtest: missing demo is provisioned with a working session and complete synthetic questionnaire profiles
+ok 2 - missing demo is provisioned with a working session and complete synthetic questionnaire profiles
+  ---
+  duration_ms: 1685.8446
+  type: 'test'
+  ...
+# Subtest: repeat taps issue fresh sessions without duplicating profiles or overwriting saved answers
+ok 3 - repeat taps issue fresh sessions without duplicating profiles or overwriting saved answers
+  ---
+  duration_ms: 1730.1531
+  type: 'test'
+  ...
+# Subtest: an email collision cannot sign reviewers into an unrelated account
+ok 4 - an email collision cannot sign reviewers into an unrelated account
+  ---
+  duration_ms: 1554.0579
+  type: 'test'
+  ...
+# Subtest: an admin or suspended demo identity is never granted a reviewer session
+ok 5 - an admin or suspended demo identity is never granted a reviewer session
+  ---
+  duration_ms: 1399.1802
+  type: 'test'
+  ...
+# Subtest: missing catalogue rolls back provisioning, rather than issuing an unusable session
+ok 6 - missing catalogue rolls back provisioning, rather than issuing an unusable session
+  ---
+  duration_ms: 1375.4339
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 12127.9875

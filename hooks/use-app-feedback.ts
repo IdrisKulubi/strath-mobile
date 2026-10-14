@@ -1,5 +1,6 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-helpers';
+import { apiFetch } from '@/lib/api-client';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.strathspace.com';
 
@@ -17,6 +18,22 @@ export interface SubmitAppFeedbackParams {
     category: AppFeedbackCategory;
     message: string;
     anonymous?: boolean;
+}
+
+const MATCHMAKER_FEEDBACK_QUERY_KEY = ['feedback', 'matchmaker_v2'] as const;
+
+interface MatchmakerFeedbackStatus {
+    hasSubmitted: boolean;
+}
+
+interface MatchmakerFeedbackStatusEnvelope {
+    data?: MatchmakerFeedbackStatus;
+    hasSubmitted?: boolean;
+}
+
+function unwrapMatchmakerFeedbackStatus(response: MatchmakerFeedbackStatusEnvelope): MatchmakerFeedbackStatus {
+    if (response.data) return response.data;
+    return { hasSubmitted: Boolean(response.hasSubmitted) };
 }
 
 export function useSubmitAppFeedback() {
@@ -54,6 +71,45 @@ export function useSubmitAppFeedback() {
             } catch {
                 return { ok: true };
             }
+        },
+    });
+}
+
+export function useMatchmakerExperienceFeedbackStatus(enabled: boolean) {
+    return useQuery({
+        queryKey: MATCHMAKER_FEEDBACK_QUERY_KEY,
+        enabled,
+        staleTime: 5 * 60 * 1000,
+        queryFn: async () => {
+            const response = await apiFetch<MatchmakerFeedbackStatusEnvelope>(
+                '/api/feedback?source=matchmaker_v2',
+            );
+            return unwrapMatchmakerFeedbackStatus(response);
+        },
+    });
+}
+
+export function useSubmitMatchmakerExperienceFeedback() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({ rating, message }: { rating: number; message?: string }) => {
+            return apiFetch('/api/feedback', {
+                method: 'POST',
+                body: {
+                    category: 'general',
+                    message: message?.trim() ?? '',
+                    anonymous: false,
+                    source: 'matchmaker_v2',
+                    rating,
+                },
+            });
+        },
+        onSuccess: () => {
+            queryClient.setQueryData<MatchmakerFeedbackStatus>(
+                MATCHMAKER_FEEDBACK_QUERY_KEY,
+                { hasSubmitted: true },
+            );
         },
     });
 }

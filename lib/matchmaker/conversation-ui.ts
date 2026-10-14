@@ -31,6 +31,17 @@ export type ActiveTurnVariant =
   | 'limit'
   | 'no_result';
 
+export type MatchmakerLimitMode = 'idle' | 'refine_type' | 'date_idea';
+
+export type MatchmakerLimitAction =
+  | 'entry'
+  | 'refine_prompt'
+  | 'refine_saved'
+  | 'profile_tips'
+  | 'date_idea'
+  | 'date_idea_followup'
+  | 'save_tomorrow';
+
 export interface ActiveTurn {
   variant: ActiveTurnVariant;
   promptText: string;
@@ -40,6 +51,8 @@ export interface ActiveTurn {
   showSearchAction: boolean;
   searchActionLabel: string;
   showMessagesAction: boolean;
+  limitMode: MatchmakerLimitMode;
+  limitAction: MatchmakerLimitAction | null;
 }
 
 export type QuickReplyAction =
@@ -49,7 +62,16 @@ export type QuickReplyAction =
   | 'feedback_reason'
   | 'skip_feedback'
   | 'open_messages'
+  | 'wait_for_response'
   | 'send_text';
+
+const SEARCH_CONSUMING_REPLIES = new Set([
+  'find another',
+  'find my person',
+  'keep looking',
+  'skip feedback',
+  'go ahead and search',
+]);
 
 export function getAssistantPromptText(
   message: MatchmakerConversationMessage | null,
@@ -69,6 +91,7 @@ export function getMatchmakerVisualState(input: {
   if (input.isLoading || input.isMutating) return 'thinking';
   if (
     input.sessionState === 'presenting_candidate'
+    || input.sessionState === 'presenting_shortlist'
     || input.sessionState === 'collecting_feedback'
   ) {
     return 'success';
@@ -79,10 +102,46 @@ export function getMatchmakerVisualState(input: {
 export function shouldShowMatchmakerComposer(
   variant: ActiveTurnVariant,
   remainingSearches = 0,
+  limitMode: MatchmakerLimitMode = 'idle',
 ): boolean {
-  if (variant === 'limit' || variant === 'feedback') return false;
-  if (variant === 'candidate' && remainingSearches <= 0) return false;
+  if (variant === 'limit' && remainingSearches <= 0) {
+    return limitMode === 'refine_type' || limitMode === 'date_idea';
+  }
+  if (remainingSearches <= 0) return false;
+  if (variant === 'feedback') return false;
   return variant === 'prompt' || variant === 'candidate' || variant === 'no_result';
+}
+
+export function getLimitModeFromMessage(
+  message: MatchmakerConversationMessage | null,
+): MatchmakerLimitMode {
+  const mode = message?.metadata?.limitMode;
+  if (mode === 'refine_type' || mode === 'date_idea') return mode;
+  return 'idle';
+}
+
+export function getLimitActionFromMessage(
+  message: MatchmakerConversationMessage | null,
+): MatchmakerLimitAction | null {
+  const action = message?.metadata?.limitAction;
+  if (
+    action === 'entry'
+    || action === 'refine_prompt'
+    || action === 'refine_saved'
+    || action === 'profile_tips'
+    || action === 'date_idea'
+    || action === 'date_idea_followup'
+    || action === 'save_tomorrow'
+  ) {
+    return action;
+  }
+  return null;
+}
+
+export function shouldShowLimitEmptyState(turn: ActiveTurn): boolean {
+  if (turn.variant !== 'limit') return false;
+  if (turn.limitMode === 'refine_type' || turn.limitMode === 'date_idea') return false;
+  return !turn.limitAction || turn.limitAction === 'entry';
 }
 
 export function humanizeCandidateLead(text: string, firstName?: string | null): string {
@@ -121,6 +180,8 @@ export function getSessionStatusLabel(state: MatchmakerConversationState): strin
       return 'Ready to search';
     case 'presenting_candidate':
       return 'Showing a match';
+    case 'presenting_shortlist':
+      return 'Showing your shortlist';
     case 'collecting_feedback':
       return 'Adjusting for next time';
     case 'limit_reached':
@@ -164,6 +225,78 @@ export function isFeedbackReasonReply(reply: string): boolean {
   return FEEDBACK_REASON_REPLIES.has(reply);
 }
 
+const SEARCH_REFINEMENT_REPLIES = new Set([
+  'change something',
+  'make it more serious',
+  'show someone active',
+]);
+
+const SEARCH_CONFIRMATION_PATTERNS = [
+  /^yes\b/i,
+  /^yeah\b/i,
+  /^yep\b/i,
+  /^yup\b/i,
+  /^sure\b/i,
+  /^ok(?:ay)?\b/i,
+  /^please\b/i,
+  /^go ahead\b/i,
+  /^start(?:\s+now|\s+searching)?\b/i,
+  /^search(?:\s+now)?\b/i,
+  /^keep\s+(?:searching|going)\b/i,
+  /^continue\b/i,
+  /^find\s+(?:my\s+person|someone)\b/i,
+  /^thanks?\b/i,
+  /^thank\s+you\b/i,
+  /^sounds?\s+good\b/i,
+  /^let'?s\s+(?:go|do\s+it)\b/i,
+  /^do\s+it\b/i,
+  /^proceed\b/i,
+];
+
+const SEARCH_REFINEMENT_PATTERNS = [
+  /change something/i,
+  /make it more/i,
+  /show someone active/i,
+  /\btweak\b/i,
+  /\badjust\b/i,
+  /more serious/i,
+  /less social/i,
+  /\bdifferent\b/i,
+];
+
+export function isMatchmakerSearchRefinement(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+
+  return SEARCH_REFINEMENT_REPLIES.has(normalized)
+    || SEARCH_REFINEMENT_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+export function isMatchmakerSearchConfirmation(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized || isMatchmakerSearchRefinement(normalized)) return false;
+
+  if (
+    normalized === 'go ahead and search'
+    || normalized === 'find my person'
+    || normalized === 'search now'
+  ) {
+    return true;
+  }
+
+  if (
+    normalized.includes('yes please')
+    || normalized.includes('start now')
+    || normalized.includes('start searching')
+    || normalized.includes('keep searching')
+    || normalized.includes('keep going')
+  ) {
+    return true;
+  }
+
+  return SEARCH_CONFIRMATION_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
 export function normalizeQuickReplyLabel(reply: string): string {
   const normalized = reply.toLowerCase();
   if (normalized === 'go ahead and search') return 'Find my person';
@@ -171,16 +304,25 @@ export function normalizeQuickReplyLabel(reply: string): string {
   return reply;
 }
 
+export function filterMatchmakerQuickReplies(
+  replies: string[],
+  remainingSearches: number,
+): string[] {
+  if (remainingSearches > 0) return replies;
+
+  return replies.filter((reply) => {
+    const normalized = reply.trim().toLowerCase();
+    if (SEARCH_CONSUMING_REPLIES.has(normalized)) return false;
+    if (isMatchmakerSearchConfirmation(reply)) return false;
+    return true;
+  });
+}
+
 export function resolveQuickReplyAction(reply: string): QuickReplyAction {
+  if (isMatchmakerSearchConfirmation(reply)) return 'search';
   const normalized = reply.toLowerCase();
-  if (
-    normalized === 'go ahead and search'
-    || normalized === 'find my person'
-    || normalized === 'search now'
-  ) {
-    return 'search';
-  }
-  if (normalized === 'find another') return 'find_another';
+  if (normalized === 'find another' || normalized === 'keep looking') return 'find_another';
+  if (normalized === "i'll wait for their response") return 'wait_for_response';
   if (normalized === 'not this one') return 'not_this_one';
   if (normalized === 'skip feedback') return 'skip_feedback';
   if (normalized.includes('message')) return 'open_messages';
@@ -225,18 +367,25 @@ export function selectActiveTurn(
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant') ?? null;
   const state = data?.session.state ?? 'greeting';
   const remainingSearches = data?.session.remainingSearches ?? 0;
-  const quickReplies = data?.quickReplies?.filter(Boolean).slice(0, 6) ?? [];
+  const limitMode = getLimitModeFromMessage(latestAssistant);
+  const limitAction = getLimitActionFromMessage(latestAssistant);
+  const quickReplies = filterMatchmakerQuickReplies(
+    data?.quickReplies?.filter(Boolean).slice(0, 6) ?? [],
+    remainingSearches,
+  );
 
   if (latestAssistant?.kind === 'limit' || state === 'limit_reached') {
     return {
       variant: 'limit',
-      promptText: latestAssistant?.text ?? 'I saved what I learned for tomorrow.',
+      promptText: latestAssistant?.text ?? 'Searches resume tomorrow. Fine-tune now if you want.',
       promptMessage: latestAssistant,
       candidate: null,
       quickReplies,
       showSearchAction: false,
       searchActionLabel: 'Find my person',
       showMessagesAction: false,
+      limitMode,
+      limitAction,
     };
   }
 
@@ -250,6 +399,8 @@ export function selectActiveTurn(
       showSearchAction: false,
       searchActionLabel: 'Try again',
       showMessagesAction: false,
+      limitMode: 'idle',
+      limitAction: null,
     };
   }
 
@@ -263,9 +414,11 @@ export function selectActiveTurn(
       promptMessage: latestAssistant,
       candidate: candidate ? { ...candidate, reason: insight } : null,
       quickReplies,
-      showSearchAction: remainingSearches > 0,
+      showSearchAction: remainingSearches > 0 && state !== 'presenting_shortlist',
       searchActionLabel: 'Find another',
       showMessagesAction: false,
+      limitMode: 'idle',
+      limitAction: null,
     };
   }
 
@@ -279,7 +432,25 @@ export function selectActiveTurn(
       quickReplies,
       showSearchAction: remainingSearches > 0 && !quickReplies.some((reply) => FEEDBACK_REASON_REPLIES.has(reply)),
       searchActionLabel: 'Find another',
-      showMessagesAction: outcome === 'interested',
+      showMessagesAction: outcome === 'interested'
+        && !quickReplies.some((reply) => reply.toLowerCase().includes('message')),
+      limitMode: 'idle',
+      limitAction: null,
+    };
+  }
+
+  if (remainingSearches <= 0) {
+    return {
+      variant: 'limit',
+      promptText: latestAssistant?.text ?? 'Searches resume tomorrow. Fine-tune now if you want.',
+      promptMessage: latestAssistant,
+      candidate: null,
+      quickReplies,
+      showSearchAction: false,
+      searchActionLabel: 'Find my person',
+      showMessagesAction: false,
+      limitMode: 'idle',
+      limitAction: 'entry',
     };
   }
 
@@ -292,9 +463,62 @@ export function selectActiveTurn(
     showSearchAction: remainingSearches > 0 && state === 'ready_to_search',
     searchActionLabel: state === 'presenting_candidate' ? 'Find another' : 'Find my person',
     showMessagesAction: false,
+    limitMode: 'idle',
+    limitAction: null,
   };
 }
 
 export function shouldEnableMatchmakerQuery(hasAiConsent: boolean, isAiConsentLoading: boolean): boolean {
   return hasAiConsent && !isAiConsentLoading;
+}
+
+export type MatchmakerMessageDisplayVariant = 'hero' | 'body' | 'caption';
+
+const LONG_MESSAGE_THRESHOLD = 140;
+
+export function getMessageDisplayVariant(
+  message: MatchmakerConversationMessage | null,
+): MatchmakerMessageDisplayVariant {
+  if (!message) return 'hero';
+  if (message.role === 'user') return 'caption';
+
+  const text = message.text?.trim() ?? '';
+  if (
+    message.kind === 'search_plan'
+    || message.kind === 'feedback'
+    || message.kind === 'limit'
+    || message.kind === 'candidate'
+    || text.length > LONG_MESSAGE_THRESHOLD
+  ) {
+    return 'body';
+  }
+
+  if (message.kind === 'greeting' || message.kind === 'clarifying_question') {
+    return text.length > LONG_MESSAGE_THRESHOLD ? 'body' : 'hero';
+  }
+
+  return text.length > LONG_MESSAGE_THRESHOLD ? 'body' : 'hero';
+}
+
+export function getMessageEyebrow(
+  message: MatchmakerConversationMessage | null,
+): string | null {
+  if (!message || message.role !== 'assistant') return null;
+
+  switch (message.kind) {
+    case 'greeting':
+    case 'intent':
+    case 'clarifying_question':
+      return "Today's direction";
+    case 'search_plan':
+      return 'Search plan';
+    case 'candidate':
+      return 'Match insight';
+    case 'feedback':
+      return 'Your feedback';
+    case 'limit':
+      return 'Paused for today';
+    default:
+      return null;
+  }
 }

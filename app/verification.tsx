@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, Easing } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Animated, Easing } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
+import { OnboardingPrimaryButton } from '@/components/onboarding/onboarding-primary-button';
 import { VerificationForm } from '@/components/verification/verification-form';
 import { VerificationProcessingOverlay } from '@/components/verification/verification-processing-overlay';
 import {
@@ -12,8 +13,6 @@ import {
     VerificationSuccessCard,
 } from '@/components/verification/verification-result-card';
 import { VerificationShell } from '@/components/verification/verification-shell';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
 import { useFaceVerification } from '@/hooks/use-face-verification';
 import { useProfile } from '@/hooks/use-profile';
 import { hasVerifiedFace } from '@/lib/profile-access';
@@ -36,6 +35,10 @@ import { useToast } from '@/components/ui/toast';
 
 export default function VerificationScreen() {
     const router = useRouter();
+    const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
+    const returnPath = returnTo === '/questions' || returnTo === '/dating' || returnTo === '/dating/profile' || returnTo === '/dating-setup'
+        ? returnTo
+        : '/dating';
     const queryClient = useQueryClient();
     const { show } = useToast();
     const { data: profile, isLoading: isProfileLoading, refetch: refetchProfile } = useProfile();
@@ -52,6 +55,8 @@ export default function VerificationScreen() {
         isUploadingAndSubmitting,
     } = useFaceVerification();
     const [selfieUri, setSelfieUri] = useState<string | null>(null);
+    const [verificationBeat, setVerificationBeat] = useState<0 | 1>(0);
+    const [cameraError, setCameraError] = useState<string | null>(null);
     const [isContinuingToApp, setIsContinuingToApp] = useState(false);
     const [overlayStageIndex, setOverlayStageIndex] = useState(0);
     const [resultStateDismissed, setResultStateDismissed] = useState(false);
@@ -63,7 +68,7 @@ export default function VerificationScreen() {
         () =>
             (profile?.photos ?? [])
                 .filter((photo: string | undefined | null): photo is string => !!photo)
-                .slice(0, 4),
+                .slice(0, 6),
         [profile?.photos],
     );
 
@@ -118,7 +123,7 @@ export default function VerificationScreen() {
 
                 queryClient.setQueryData(['profile'], next);
                 await setCachedProfile(next.userId, next);
-                router.replace('/(tabs)' as any);
+                router.replace(returnPath as any);
             } catch {
                 exitToTabsInFlightRef.current = false;
             }
@@ -132,6 +137,7 @@ export default function VerificationScreen() {
         queryClient,
         router,
         refetchProfile,
+        returnPath,
     ]);
 
     const showSuccessState =
@@ -174,7 +180,7 @@ export default function VerificationScreen() {
 
     const handleEditProfilePhotos = () => {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        router.push({ pathname: '/edit-profile', params: { focus: 'photos' } } as any);
+        router.push((returnTo ? '/dating-setup' : '/edit-profile') as any);
     };
 
     const handleDismissRetryCard = () => {
@@ -183,7 +189,7 @@ export default function VerificationScreen() {
     };
 
     useEffect(() => {
-        setResultStateDismissed(false);
+        queueMicrotask(() => setResultStateDismissed(false));
     }, [latestSession?.id, status]);
 
     useEffect(() => {
@@ -214,7 +220,7 @@ export default function VerificationScreen() {
 
     useEffect(() => {
         if (!isUploadingAndSubmitting && !isProcessing) {
-            setOverlayStageIndex(0);
+            queueMicrotask(() => setOverlayStageIndex(0));
             return;
         }
 
@@ -233,20 +239,17 @@ export default function VerificationScreen() {
 
     const handleCaptureSelfie = async () => {
         try {
+            setCameraError(null);
             const permission = await ImagePicker.requestCameraPermissionsAsync();
             if (!permission.granted) {
-                Alert.alert(
-                    'Camera access needed',
-                    'Please allow camera access to capture your verification selfie.',
-                );
+                setCameraError('Camera access is needed for the selfie. Enable it in device settings, then try again.');
                 return;
             }
 
             const result = await ImagePicker.launchCameraAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 cameraType: ImagePicker.CameraType.front,
-                allowsEditing: true,
-                aspect: [3, 4],
+                allowsEditing: false,
                 quality: 0.85,
             });
 
@@ -255,15 +258,20 @@ export default function VerificationScreen() {
                 setSelfieUri(result.assets[0].uri);
             }
         } catch {
-            show({
-                message: 'Could not open the camera. Please try again.',
-                variant: 'danger',
-            });
+            setCameraError('Could not open the camera. Please try again.');
         }
     };
 
     const handleStartOrRetry = async () => {
         try {
+            if (!selfieUri) {
+                setCameraError('Take a selfie before submitting verification.');
+                return;
+            }
+            if (profilePhotoUrls.length < 2) {
+                show({ message: 'Add at least 2 clear profile photos before you verify.', variant: 'warning' });
+                return;
+            }
             const shouldRetryLatest =
                 latestSession?.status === 'retry_required' || latestSession?.status === 'failed';
             const canReuseLatestSession =
@@ -295,32 +303,15 @@ export default function VerificationScreen() {
                 throw new Error('Could not create a verification session. Please try again.');
             }
 
-            if (!selfieUri) {
-                show({
-                    message: 'Take a selfie first so we can verify your profile.',
-                    variant: 'warning',
-                });
-                return;
-            }
-
-            if (profilePhotoUrls.length < 2) {
-                show({
-                    message: 'Add at least 2 clear profile photos before you verify.',
-                    variant: 'warning',
-                });
-                return;
-            }
-
-            await uploadAndSubmitAsync({
+            const submitted = await uploadAndSubmitAsync({
                 sessionId: session.id,
                 selfieUri,
                 profilePhotoUrls,
             });
             await refetchProfile();
-            show({
-                message: 'We did the check. You are verified.',
-                variant: 'success',
-            });
+            if (submitted.session.status === 'verified') {
+                show({ message: 'Your face verification is complete.', variant: 'success' });
+            }
         } catch (error) {
             show({
                 message: getVerificationUserMessage(error),
@@ -354,7 +345,7 @@ export default function VerificationScreen() {
                 queryClient.setQueryData(['profile'], nextProfile);
                 await setCachedProfile(nextProfile.userId, nextProfile);
             }
-            router.replace('/(tabs)' as any);
+            router.replace(returnPath as any);
         } finally {
             setIsContinuingToApp(false);
         }
@@ -388,18 +379,14 @@ export default function VerificationScreen() {
                 loading={shouldExitToTabs}
                 footer={
                     showForm ? (
-                        <Button
-                            onPress={handleStartOrRetry}
-                            disabled={submitDisabled}
-                            style={{ width: '100%', minHeight: 48 }}
+                        <OnboardingPrimaryButton
+                            appearance="rising"
+                            label={verificationBeat === 0 ? 'Continue to selfie' : isUploadingAndSubmitting || isCreatingSession || isRetryingSession ? 'Please wait…' : 'Submit verification'}
+                            onPress={verificationBeat === 0 ? () => setVerificationBeat(1) : handleStartOrRetry}
+                            disabled={submitDisabled || (verificationBeat === 0 && profilePhotoUrls.length < 2)}
                             accessibilityLabel="Submit face verification"
-                        >
-                            <Text>
-                                {isUploadingAndSubmitting || isCreatingSession || isRetryingSession
-                                    ? 'Please wait…'
-                                    : 'Submit verification'}
-                            </Text>
-                        </Button>
+                            icon="shield-checkmark-outline"
+                        />
                     ) : undefined
                 }
             >
@@ -434,6 +421,9 @@ export default function VerificationScreen() {
 
                 {showForm ? (
                     <VerificationForm
+                        beat={verificationBeat}
+                        cameraError={cameraError}
+                        onBackToPhotos={() => setVerificationBeat(0)}
                         profilePhotoUrls={profilePhotoUrls}
                         profileSummary={profileSummary}
                         selfieUri={selfieUri}

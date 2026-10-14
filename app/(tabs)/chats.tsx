@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { View, StyleSheet, StatusBar, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useMinimizeOnScroll } from 'expo-glass-tabs';
 import * as Haptics from 'expo-haptics';
 
 import { ConversationsList, ArchivedConversationsSheet } from '@/components/chat';
@@ -13,6 +14,7 @@ import { useDailyMatches } from '@/hooks/use-daily-matches';
 import { ActionRequiredBanner } from '@/components/attention/action-required-banner';
 
 export default function ChatsScreen() {
+    const onScroll = useMinimizeOnScroll();
     const { colors, colorScheme } = useTheme();
     const router = useRouter();
 
@@ -177,6 +179,7 @@ export default function ChatsScreen() {
                         onMute={handleMute}
                         onExplore={handleExplore}
                         mutedIds={mutedIds}
+                        onScroll={onScroll}
                     />
                 </View>
 

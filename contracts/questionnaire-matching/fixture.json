@@ -1,0 +1,192 @@
+{
+  "request": {
+    "candidates": [
+      {
+        "answers": [
+          {
+            "acceptableAnswerIds": [
+              "yes"
+            ],
+            "answerId": "yes",
+            "questionVersionId": "q0:1",
+            "weight": 1
+          },
+          {
+            "acceptableAnswerIds": [
+              "yes"
+            ],
+            "answerId": "yes",
+            "questionVersionId": "q1:1",
+            "weight": 1
+          },
+          {
+            "acceptableAnswerIds": [
+              "yes"
+            ],
+            "answerId": "yes",
+            "questionVersionId": "q2:1",
+            "weight": 1
+          },
+          {
+            "acceptableAnswerIds": [
+              "yes"
+            ],
+            "answerId": "yes",
+            "questionVersionId": "q3:1",
+            "weight": 1
+          },
+          {
+            "acceptableAnswerIds": [
+              "yes"
+            ],
+            "answerId": "yes",
+            "questionVersionId": "q4:1",
+            "weight": 1
+          },
+          {
+            "acceptableAnswerIds": [
+              "yes"
+            ],
+            "answerId": "yes",
+            "questionVersionId": "q5:1",
+            "weight": 1
+          },
+          {
+            "acceptableAnswerIds": [
+              "yes"
+            ],
+            "answerId": "yes",
+            "questionVersionId": "q6:1",
+            "weight": 1
+          },
+          {
+            "acceptableAnswerIds": [
+              "yes"
+            ],
+            "answerId": "yes",
+            "questionVersionId": "q7:1",
+            "weight": 1
+          },
+          {
+            "acceptableAnswerIds": [
+              "yes"
+            ],
+            "answerId": "yes",
+            "questionVersionId": "q8:1",
+            "weight": 1
+          },
+          {
+            "acceptableAnswerIds": [
+              "yes"
+            ],
+            "answerId": "yes",
+            "questionVersionId": "q9:1",
+            "weight": 1
+          }
+        ],
+        "id": "candidate-perfect",
+        "revision": 3
+      }
+    ],
+    "viewer": {
+      "answers": [
+        {
+          "acceptableAnswerIds": [
+            "yes"
+          ],
+          "answerId": "yes",
+          "questionVersionId": "q0:1",
+          "weight": 1
+        },
+        {
+          "acceptableAnswerIds": [
+            "yes"
+          ],
+          "answerId": "yes",
+          "questionVersionId": "q1:1",
+          "weight": 1
+        },
+        {
+          "acceptableAnswerIds": [
+            "yes"
+          ],
+          "answerId": "yes",
+          "questionVersionId": "q2:1",
+          "weight": 1
+        },
+        {
+          "acceptableAnswerIds": [
+            "yes"
+          ],
+          "answerId": "yes",
+          "questionVersionId": "q3:1",
+          "weight": 1
+        },
+        {
+          "acceptableAnswerIds": [
+            "yes"
+          ],
+          "answerId": "yes",
+          "questionVersionId": "q4:1",
+          "weight": 1
+        },
+        {
+          "acceptableAnswerIds": [
+            "yes"
+          ],
+          "answerId": "yes",
+          "questionVersionId": "q5:1",
+          "weight": 1
+        },
+        {
+          "acceptableAnswerIds": [
+            "yes"
+          ],
+          "answerId": "yes",
+          "questionVersionId": "q6:1",
+          "weight": 1
+        },
+        {
+          "acceptableAnswerIds": [
+            "yes"
+          ],
+          "answerId": "yes",
+          "questionVersionId": "q7:1",
+          "weight": 1
+        },
+        {
+          "acceptableAnswerIds": [
+            "yes"
+          ],
+          "answerId": "yes",
+          "questionVersionId": "q8:1",
+          "weight": 1
+        },
+        {
+          "acceptableAnswerIds": [
+            "yes"
+          ],
+          "answerId": "yes",
+          "questionVersionId": "q9:1",
+          "weight": 1
+        }
+      ],
+      "id": "viewer",
+      "revision": 2
+    }
+  },
+  "response": {
+    "results": [
+      {
+        "algorithmVersion": "questionnaire-v1",
+        "candidateId": "candidate-perfect",
+        "candidateRevision": 3,
+        "evidenceCount": 10,
+        "score": 100.0,
+        "sharedCount": 10,
+        "status": "ready",
+        "viewerRevision": 2
+      }
+    ]
+  }
+}

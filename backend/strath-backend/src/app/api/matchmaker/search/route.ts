@@ -40,7 +40,13 @@ export async function POST(req: NextRequest) {
             excludeUserIds: body.excludeUserIds,
         });
 
-        return successResponse(result);
+        return successResponse({
+            ...result,
+            candidates: result.candidates.map(({ matchingEvidence, ...candidate }) => {
+                void matchingEvidence;
+                return candidate;
+            }),
+        });
     } catch (error) {
         console.error("[matchmaker/search] Error:", error);
         return errorResponse(error);

@@ -3,10 +3,46 @@ import assert from "node:assert/strict";
 
 import { parseMatchmakerIntent } from "@/lib/services/matchmaker-intent-service";
 import {
+    buildGroundedMatchmakerExplanation,
     buildMatchmakerLabels,
     rankMatchmakerCandidates,
+    selectNaturalShortlistCandidates,
     type MatchmakerCandidateInput,
 } from "@/lib/services/matchmaker-search-service";
+
+function scored(internalScore: number, intentRelevanceScore: number, confirmed = false) {
+    return { internalScore, intentRelevanceScore, hasConfirmedPreferenceEvidence: confirmed };
+}
+
+test("dynamic shortlist size keeps only one when the next result is materially weaker", () => {
+    const results = selectNaturalShortlistCandidates([
+        scored(76, 72),
+        scored(60, 45),
+        scored(59, 42),
+    ], 3);
+
+    assert.equal(results.length, 1);
+});
+
+test("dynamic shortlist size includes two competitive results without padding a third", () => {
+    const results = selectNaturalShortlistCandidates([
+        scored(70, 62),
+        scored(64, 40),
+        scored(58, 38),
+    ], 3);
+
+    assert.equal(results.length, 2);
+});
+
+test("dynamic shortlist size includes three only when all three are strong and close", () => {
+    const results = selectNaturalShortlistCandidates([
+        scored(74, 70),
+        scored(72, 64),
+        scored(70, 58),
+    ], 3);
+
+    assert.equal(results.length, 3);
+});
 
 function candidate(overrides: Partial<MatchmakerCandidateInput>): MatchmakerCandidateInput {
     return {
@@ -97,4 +133,71 @@ test("buildMatchmakerLabels returns safe user-facing labels", () => {
     assert.ok(labels.includes("Active today"));
     assert.ok(labels.includes("Responsive"));
     assert.equal(labels.some((label) => label.toLowerCase().includes("score")), false);
+});
+
+test("rankMatchmakerCandidates never pads below the requested quality threshold", () => {
+    const results = rankMatchmakerCandidates({
+        intent: parseMatchmakerIntent("someone kind"),
+        candidates: [candidate({ candidateUserId: "weak" })],
+        limit: 3,
+        minimumInternalScore: 101,
+    });
+    assert.deepEqual(results, []);
+});
+
+test("rankMatchmakerCandidates does not fill the limit with profiles unrelated to the search", () => {
+    const results = rankMatchmakerCandidates({
+        intent: parseMatchmakerIntent("someone calm and serious"),
+        candidates: [
+            candidate({ candidateUserId: "strong-match" }),
+            candidate({
+                candidateUserId: "partial-match",
+                profileSummary: "Calm and thoughtful.",
+                searchText: "calm thoughtful",
+            }),
+            candidate({
+                candidateUserId: "good-profile-wrong-fit",
+                profileSummary: "Outgoing and spontaneous.",
+                searchText: "outgoing spontaneous nightlife",
+                activityScore: 98,
+                responseScore: 95,
+                candidateStrengthScore: 95,
+                profileCompletenessScore: 100,
+            }),
+        ],
+        limit: 3,
+        minimumInternalScore: 45,
+        minimumRelevanceScore: 15,
+    });
+
+    assert.deepEqual(results.map((item) => item.candidateUserId), ["strong-match", "partial-match"]);
+});
+
+test("confirmed avoid evidence excludes a candidate", () => {
+    const results = rankMatchmakerCandidates({
+        intent: parseMatchmakerIntent("someone calm"),
+        candidates: [candidate({ candidateUserId: "nightlife", lifestyleTags: ["nightlife"] })],
+        confirmedPreferences: [{ id: "avoid-nightlife", value: "nightlife", sentiment: "avoid", importance: "must_have" }],
+    });
+    assert.deepEqual(results, []);
+});
+
+test("grounded explanations retain the exact candidate field used as evidence", () => {
+    const grounded = buildGroundedMatchmakerExplanation({
+        candidate: candidate({ traitTags: ["calm"], datingIntentTags: ["intentional"] }),
+        labels: ["Calm vibe", "Intentional", "Active today"],
+        confirmedPreferences: [
+            { id: "calm-pref", value: "calm", sentiment: "prefer", importance: "prefer" },
+            { id: "maturity-pref", value: "emotionally mature", sentiment: "prefer", importance: "must_have" },
+        ],
+    });
+    assert.deepEqual(grounded.explanation.matchedPreferenceIds, ["calm-pref"]);
+    assert.match(grounded.explanation.fitReasons[0], /calm/i);
+    assert.deepEqual(grounded.matchingEvidence.matchedPreferences, [{
+        preferenceId: "calm-pref",
+        candidateField: "traitTags",
+        candidateValue: "calm",
+    }]);
+    assert.match(grounded.explanation.unknown ?? "", /emotionally mature/i);
+    assert.equal(grounded.explanation.fitReasons.some((reason) => /active|complete/i.test(reason)), false);
 });

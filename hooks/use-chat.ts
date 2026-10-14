@@ -2,8 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { z } from 'zod';
-import { getAuthToken } from '@/lib/auth-helpers';
-import { getCurrentUserId } from '@/lib/auth-helpers';
+import { getAuthToken, getCurrentUserId } from '@/lib/auth-helpers';
+import { replaceOptimisticMessage } from '@/lib/chat-message-reconciliation';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -21,7 +21,7 @@ export type Message = z.infer<typeof MessageSchema>;
 
 export class ChatAccessDeniedError extends Error {
     constructor() {
-        super('Confirm your assigned date before messaging.');
+        super('This conversation is no longer available.');
         this.name = 'ChatAccessDeniedError';
     }
 }
@@ -119,7 +119,7 @@ async function fetchMessages(
     return parseMessagesPayload(raw);
 }
 
-async function sendMessage(matchId: string, content: string): Promise<Message> {
+async function sendMessage(matchId: string, content: string, clientRequestId: string): Promise<Message> {
     const token = await getAuthToken();
 
     const response = await fetch(`${API_URL}/api/messages/${matchId}`, {
@@ -128,7 +128,7 @@ async function sendMessage(matchId: string, content: string): Promise<Message> {
             Authorization: token ? `Bearer ${token}` : '',
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, clientRequestId }),
     });
 
     if (response.status === 403) {
@@ -183,7 +183,9 @@ export function useChat(matchId: string, options?: UseChatOptions) {
     const pausePolling = options?.pausePolling === true;
     const [isAppActive, setIsAppActive] = useState(true);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-    const hasMoreRef = useRef(false);
+    const [hasMoreMessages, setHasMoreMessages] = useState(false);
+    const lastSendRef = useRef<{ content: string; clientRequestId: string } | null>(null);
+    const sendInFlightRef = useRef(false);
 
     useEffect(() => {
         getCurrentUserId().then(setCurrentUserId);
@@ -233,10 +235,10 @@ export function useChat(matchId: string, options?: UseChatOptions) {
             }
 
             const { messages: loaded, hasMore } = await fetchMessages(matchId);
-            hasMoreRef.current = hasMore;
+            setHasMoreMessages(hasMore);
             return loaded;
         },
-        refetchInterval: isAppActive && !pausePolling ? 3000 : false,
+        refetchInterval: isAppActive && !pausePolling ? 20_000 : false,
         refetchIntervalInBackground: false,
         enabled,
         retry: (failureCount, err) => {
@@ -250,7 +252,7 @@ export function useChat(matchId: string, options?: UseChatOptions) {
     });
 
     const loadOlderMessages = async (): Promise<void> => {
-        if (!hasMoreRef.current || messages.length === 0) return;
+        if (!hasMoreMessages || messages.length === 0) return;
 
         const oldest = messages[0]?.createdAt;
         if (!oldest) return;
@@ -258,7 +260,7 @@ export function useChat(matchId: string, options?: UseChatOptions) {
         const { messages: older, hasMore } = await fetchMessages(matchId, {
             before: oldest,
         });
-        hasMoreRef.current = hasMore;
+        setHasMoreMessages(hasMore);
 
         if (older.length === 0) return;
 
@@ -268,7 +270,14 @@ export function useChat(matchId: string, options?: UseChatOptions) {
     };
 
     const sendMessageMutation = useMutation({
-        mutationFn: (content: string) => sendMessage(matchId, content),
+        mutationFn: (content: string) => {
+            const prior = lastSendRef.current;
+            const clientRequestId = prior?.content === content
+                ? prior.clientRequestId
+                : `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+            lastSendRef.current = { content, clientRequestId };
+            return sendMessage(matchId, content, clientRequestId);
+        },
         onMutate: async (content) => {
             await queryClient.cancelQueries({ queryKey: ['chat', matchId] });
 
@@ -288,14 +297,24 @@ export function useChat(matchId: string, options?: UseChatOptions) {
                 optimisticMessage,
             ]);
 
-            return { previousMessages };
+            return { previousMessages, optimisticId: optimisticMessage.id };
         },
         onError: (_err, _content, context) => {
-            if (context?.previousMessages) {
-                queryClient.setQueryData(['chat', matchId], context.previousMessages);
+            if (!context) return;
+            queryClient.setQueryData<Message[]>(['chat', matchId], (current = []) =>
+                mergeMessages(context.previousMessages ?? [], current.filter((message) => message.id !== context.optimisticId)),
+            );
+        },
+        onSuccess: (saved, _content, context) => {
+            if (context) {
+                queryClient.setQueryData<Message[]>(['chat', matchId], (current = []) =>
+                    replaceOptimisticMessage(current, context.optimisticId, saved),
+                );
             }
+            lastSendRef.current = null;
         },
         onSettled: () => {
+            sendInFlightRef.current = false;
             queryClient.invalidateQueries({ queryKey: ['chat', matchId] });
             queryClient.invalidateQueries({ queryKey: ['matches'] });
             queryClient.invalidateQueries({ queryKey: ['conversations'] });
@@ -315,8 +334,12 @@ export function useChat(matchId: string, options?: UseChatOptions) {
         error,
         refetch,
         loadOlderMessages,
-        hasMoreMessages: hasMoreRef.current,
-        sendMessage: sendMessageMutation.mutate,
+        hasMoreMessages,
+        sendMessage: (content: string, options?: Parameters<typeof sendMessageMutation.mutate>[1]) => {
+            if (sendInFlightRef.current) return;
+            sendInFlightRef.current = true;
+            sendMessageMutation.mutate(content, options);
+        },
         isSending: sendMessageMutation.isPending,
         currentUserId,
         isAppActive,

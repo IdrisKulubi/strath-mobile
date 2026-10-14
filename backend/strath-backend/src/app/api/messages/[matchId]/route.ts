@@ -1,12 +1,13 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { messages, matches, mutualMatches, user } from "@/db/schema";
+import { messages, matches, user } from "@/db/schema";
 import { messageSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { eq, and, or, asc, desc, lt, gt } from "drizzle-orm";
 import { sendPushNotification } from "@/lib/notifications";
 import { assertChatReadable, assertChatUnlocked } from "@/lib/chat-access";
+import { questionnaireChatAccess, saveMessageIdempotently } from "@/lib/questionnaire/phase5-service";
+import { getSessionWithBearerFallback } from "@/lib/security";
 
 const DEFAULT_MESSAGE_LIMIT = 50;
 const MAX_MESSAGE_LIMIT = 100;
@@ -29,30 +30,7 @@ export async function GET(
     { params }: { params: Promise<{ matchId: string }> }
 ) {
     try {
-        let session = await auth.api.getSession({ headers: req.headers });
-
-        // Fallback: Manual token check if getSession fails (for Bearer token auth)
-        if (!session) {
-            const authHeader = req.headers.get('authorization');
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                const token = authHeader.split(' ')[1];
-                const { session: sessionTable } = await import("@/db/schema");
-                const dbSession = await db.query.session.findFirst({
-                    where: eq(sessionTable.token, token),
-                    with: { user: true }
-                });
-
-                if (dbSession) {
-                    const now = new Date();
-                    if (dbSession.expiresAt > now) {
-                        session = {
-                            session: dbSession,
-                            user: dbSession.user
-                        } as any;
-                    }
-                }
-            }
-        }
+        const session = await getSessionWithBearerFallback(req);
 
         if (!session) {
             return errorResponse(new Error("Unauthorized"), 401);
@@ -122,30 +100,7 @@ export async function POST(
     { params }: { params: Promise<{ matchId: string }> }
 ) {
     try {
-        let session = await auth.api.getSession({ headers: req.headers });
-
-        // Fallback: Manual token check if getSession fails (for Bearer token auth)
-        if (!session) {
-            const authHeader = req.headers.get('authorization');
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                const token = authHeader.split(' ')[1];
-                const { session: sessionTable } = await import("@/db/schema");
-                const dbSession = await db.query.session.findFirst({
-                    where: eq(sessionTable.token, token),
-                    with: { user: true }
-                });
-
-                if (dbSession) {
-                    const now = new Date();
-                    if (dbSession.expiresAt > now) {
-                        session = {
-                            session: dbSession,
-                            user: dbSession.user
-                        } as any;
-                    }
-                }
-            }
-        }
+        const session = await getSessionWithBearerFallback(req);
 
         if (!session) {
             return errorResponse(new Error("Unauthorized"), 401);
@@ -153,7 +108,7 @@ export async function POST(
 
         const { matchId } = await params;
         const body = await req.json();
-        const { content } = messageSchema.parse(body);
+        const { content, clientRequestId } = messageSchema.parse(body);
 
         // Verify user is part of the match
         const match = await db.query.matches.findFirst({
@@ -173,21 +128,12 @@ export async function POST(
         const partnerId = match.user1Id === session.user.id ? match.user2Id : match.user1Id;
 
         // Save message
-        const [newMessage] = await db
-            .insert(messages)
-            .values({
-                matchId,
-                senderId: session.user.id,
-                content,
-                status: "sent",
-            })
-            .returning();
+        const saved = await saveMessageIdempotently(matchId, session.user.id, content, clientRequestId);
+        const newMessage = saved.message;
 
-        // Update match last message time
-        await db
-            .update(matches)
-            .set({ lastMessageAt: new Date(), updatedAt: new Date() })
-            .where(eq(matches.id, matchId));
+        // A network retry with the same client request ID returns the original row
+        // without sending a second push or moving the conversation timestamp.
+        if (!saved.created) return successResponse(newMessage);
 
         // Get partner's push token
         const partner = await db.query.user.findFirst({
@@ -195,6 +141,7 @@ export async function POST(
         });
 
         if (partner?.pushToken) {
+            const isQuestionnaireConnection = await questionnaireChatAccess(matchId, session.user.id);
             await sendPushNotification(
                 partner.pushToken,
                 `New message from ${session.user.name}`,
@@ -202,7 +149,7 @@ export async function POST(
                     type: "message",
                     matchId,
                     messageId: newMessage.id,
-                    route: `/chat/${matchId}`,
+                    route: isQuestionnaireConnection ? `/dating-chat/${matchId}` : `/chat/${matchId}`,
                 }
             );
         }

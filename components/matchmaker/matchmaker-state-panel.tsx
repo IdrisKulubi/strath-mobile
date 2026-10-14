@@ -5,7 +5,7 @@ import { Clock3, RefreshCw, SearchX, WifiOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { MATCHMAKER_HOME, RADIUS, SPACING } from '@/lib/design-tokens';
 
-type MatchmakerStateVariant = 'loading' | 'error' | 'inline_error' | 'limit' | 'no_result';
+type MatchmakerStateVariant = 'loading' | 'error' | 'inline_error' | 'offline' | 'limit' | 'no_result';
 
 interface MatchmakerStatePanelProps {
   variant: MatchmakerStateVariant;
@@ -27,8 +27,8 @@ function defaultCopy(variant: MatchmakerStateVariant) {
 
   if (variant === 'limit') {
     return {
-      title: 'That is enough searching for today',
-      body: 'I saved what I learned, so tomorrow can start from a better place.',
+      title: "You're out of searches for today",
+      body: 'I saved what I learned. Fine-tune your type now and tomorrow\'s searches will start sharper.',
     };
   }
 
@@ -36,6 +36,13 @@ function defaultCopy(variant: MatchmakerStateVariant) {
     return {
       title: 'That request is narrow',
       body: 'Change one part of it and I can search again without losing the direction.',
+    };
+  }
+
+  if (variant === 'offline') {
+    return {
+      title: 'You are offline',
+      body: 'Your conversation and drafts are safe. Reconnect, then try again.',
     };
   }
 
@@ -62,7 +69,7 @@ export function MatchmakerStatePanel({
   onReply,
 }: MatchmakerStatePanelProps) {
   const copy = defaultCopy(variant);
-  const canRetry = Boolean(onRetry) && (variant === 'error' || variant === 'inline_error');
+  const canRetry = Boolean(onRetry) && (variant === 'error' || variant === 'inline_error' || variant === 'offline');
 
   return (
     <View
@@ -96,26 +103,34 @@ export function MatchmakerStatePanel({
       ) : null}
 
       {canRetry ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Try again"
-          accessibilityHint="Retries loading the matchmaker conversation."
-          disabled={busy}
-          onPress={onRetry}
-          style={({ pressed }) => [
-              styles.retry,
-              styles.retrySurface,
-              pressed && !busy && styles.pressed,
-              busy && styles.disabled,
-            ]}
-        >
-          {busy ? (
-            <ActivityIndicator size="small" color={MATCHMAKER_HOME.primary} />
-          ) : (
-            <RefreshCw size={15} color={MATCHMAKER_HOME.primary} />
-          )}
-          <Text style={styles.retryText}>Try again</Text>
-        </Pressable>
+        <View style={styles.retryRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            accessibilityHint="Retries loading the matchmaker conversation."
+            disabled={busy}
+            onPress={onRetry}
+            style={styles.retryPressable}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.retry,
+                  styles.retrySurface,
+                  pressed && !busy && styles.pressed,
+                  busy && styles.disabled,
+                ]}
+              >
+                {busy ? (
+                  <ActivityIndicator size="small" color={MATCHMAKER_HOME.primary} />
+                ) : (
+                  <RefreshCw size={16} color={MATCHMAKER_HOME.primary} strokeWidth={2.5} />
+                )}
+                <Text style={styles.retryText}>Try again</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
       ) : null}
 
       {replies.length > 0 ? (
@@ -193,15 +208,22 @@ const styles = StyleSheet.create({
   skeletonLineShort: {
     width: '64%',
   },
+  retryRow: {
+    alignItems: 'flex-start',
+    paddingTop: 2,
+  },
+  retryPressable: {
+    alignSelf: 'flex-start',
+  },
   retry: {
     minHeight: 44,
-    alignSelf: 'flex-start',
     borderWidth: 1,
     borderRadius: RADIUS.full,
-    paddingHorizontal: 14,
+    paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.tight,
+    justifyContent: 'center',
+    gap: 8,
   },
   retrySurface: {
     backgroundColor: MATCHMAKER_HOME.surface,
@@ -209,7 +231,7 @@ const styles = StyleSheet.create({
   },
   retryText: {
     color: MATCHMAKER_HOME.foreground,
-    fontSize: 13,
+    fontSize: 14,
     lineHeight: 18,
     fontWeight: '800',
   },

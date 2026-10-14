@@ -22,10 +22,10 @@ export function useVerificationThemedStyles() {
         const card: ViewStyle = {
             backgroundColor: colors.card,
             borderRadius: RADIUS.lg,
-            padding: SPACING.comfortable,
+            padding: SPACING.base,
             borderWidth: StyleSheet.hairlineWidth,
             borderColor: colors.border,
-            gap: SPACING.compact,
+            gap: SPACING.tight,
         };
 
         const title: TextStyle = {
@@ -97,14 +97,14 @@ export function useVerificationThemedStyles() {
         };
 
         const selfiePlaceholder: ViewStyle = {
-            height: 220,
+            height: 140,
             borderRadius: RADIUS.lg,
             borderWidth: 2,
             borderStyle: 'dashed',
             borderColor: withAlpha(colors.primary, 0.45),
             alignItems: 'center',
             justifyContent: 'center',
-            gap: SPACING.compact,
+            gap: SPACING.tight,
             backgroundColor: colors.input,
         };
 

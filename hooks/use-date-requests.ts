@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { getAuthToken } from '@/lib/auth-helpers';
 import type { RescheduleViewerState } from '@/lib/reschedule-types';
 
@@ -52,6 +54,17 @@ export interface ScheduledDate {
 }
 
 export function useMutualMatches() {
+    const [isAppActive, setIsAppActive] = useState(true);
+
+    useEffect(() => {
+        const handleAppStateChange = (nextAppState: AppStateStatus) => {
+            setIsAppActive(nextAppState === 'active');
+        };
+
+        const subscription = AppState.addEventListener('change', handleAppStateChange);
+        return () => subscription?.remove();
+    }, []);
+
     return useQuery({
         queryKey: ['mutualDates'],
         queryFn: async (): Promise<MutualDate[]> => {
@@ -64,10 +77,11 @@ export function useMutualMatches() {
             const json = await res.json();
             return json?.data ?? [];
         },
-        staleTime: 0,
+        staleTime: 60_000,
         refetchOnMount: 'always',
         refetchOnWindowFocus: 'always',
-        refetchInterval: 10_000,
+        refetchInterval: isAppActive ? 60_000 : false,
+        refetchIntervalInBackground: false,
         placeholderData: (previousData) => previousData,
     });
 }
