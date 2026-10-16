@@ -1,5 +1,5 @@
 import { DomainError } from "./phase2-service";
-import { notifyQuestionnaireMatch } from "./phase5-notifications";
+import { notifyQuestionnaireLike, notifyQuestionnaireMatch } from "./phase5-notifications";
 import { listConnections, listLikes, saveDecision, unmatch, type Phase5Dependencies } from "./phase5-service";
 
 export type Phase5Request = {
@@ -17,6 +17,7 @@ export async function handlePhase5Request(request: Phase5Request, dependencies: 
     if (request.method === "GET" && resource === "connections") return listConnections(request.userId);
     if (request.method === "POST" && resource === "decisions") {
         return saveDecision(request.userId, request.body, {
+            notifyLike: dependencies.notifyLike ?? notifyQuestionnaireLike,
             notifyMatch: dependencies.notifyMatch ?? notifyQuestionnaireMatch,
         });
     }

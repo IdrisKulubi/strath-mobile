@@ -243,3 +243,20 @@ test('reviewer samples cannot like real people and real people cannot like revie
     await assert.rejects(() => saveDecision('bob', {targetId:'demo-dates-main',decision:'like'}));
     assert.equal((await database.query('SELECT count(*)::int AS count FROM q_profile_decisions')).rows[0].count,0);
 });
+
+test("incoming likes notify once, passes stay quiet, reciprocal likes notify both via match only", async () => {
+    const likes: string[] = [];
+    const matches: string[] = [];
+    const dependencies = {
+        notifyLike: async (actor: string, recipient: string) => { likes.push(`${actor}:${recipient}`); },
+        notifyMatch: async (a: string, b: string) => { matches.push(`${a}:${b}`); },
+    };
+    await saveDecision("alice", { targetId: "charlie", decision: "pass" }, dependencies);
+    assert.deepEqual(likes, []);
+    await saveDecision("alice", { targetId: "bob", decision: "like" }, dependencies);
+    await saveDecision("alice", { targetId: "bob", decision: "like" }, dependencies);
+    assert.deepEqual(likes, ["alice:bob"]);
+    await saveDecision("bob", { targetId: "alice", decision: "like" }, dependencies);
+    assert.deepEqual(likes, ["alice:bob"]);
+    assert.deepEqual(matches, ["alice:bob"]);
+});

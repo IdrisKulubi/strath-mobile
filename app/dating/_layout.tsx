@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Redirect, useRouter } from 'expo-router';
 import { TabList, Tabs, TabSlot, TabTrigger } from 'expo-router/ui';
 import { TabBarMinimizeProvider, renderFadingTabScreen } from 'expo-glass-tabs';
-import { StyleSheet } from 'react-native';
+import { AppState, StyleSheet } from 'react-native';
 
 import { buildGlassTabItems, DATING_TAB_ROUTES } from '@/components/navigation/glass-tab-config';
 import { StrathGlassTabBar, StrathGlassTabButton } from '@/components/navigation/strath-glass-tab-bar';
@@ -11,7 +11,23 @@ import { useSetupResumeTarget } from '@/hooks/use-setup-resume-target';
 import { useTheme } from '@/hooks/use-theme';
 import { useExperience, useQuestionnaire, type QuestionnaireState } from '@/lib/questionnaire';
 
+import { useNotificationPermissionPrompt } from '@/context/notification-permission-context';
+import { registerPushTokenIfGranted } from '@/lib/push-registration';
+
 function DatingTabsShell() {
+  const { promptIfAppropriate, setExpoPushToken } = useNotificationPermissionPrompt();
+  useEffect(() => {
+    const refresh = () => {
+      void registerPushTokenIfGranted().then(setExpoPushToken).catch((error) => console.warn('[Notifications] Registration failed', error));
+      void promptIfAppropriate({ context: 'reminder' });
+    };
+    // Give the home screen time to settle before offering the permission sheet.
+    const timer = setTimeout(refresh, 5000);
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+    return () => { clearTimeout(timer); listener.remove(); };
+  }, [promptIfAppropriate, setExpoPushToken]);
   const router = useRouter();
   const { colors, isDark } = useTheme();
 

@@ -1,16 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 
-import { getAuthHeaders } from '@/lib/auth-helpers';
+import { getAuthHeaders, getCurrentUserId } from '@/lib/auth-helpers';
+
+import { isNotificationReminderDue } from './notification-reminder-policy';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-export type PrePermissionContext = 'mutual_match' | 'after_confirm' | 'settings';
+export type PrePermissionContext = 'mutual_match' | 'after_confirm' | 'settings' | 'reminder';
 
 const STORAGE_PREFIX = 'strathspace:push_pre_prompt:';
 
-function storageKey(context: PrePermissionContext): string {
-    return `${STORAGE_PREFIX}${context}`;
+async function storageKey(): Promise<string | null> {
+    const userId = await getCurrentUserId();
+    return userId ? `${STORAGE_PREFIX}${userId}:last-shown` : null;
 }
 
 export async function getPushPermissionStatus(): Promise<Notifications.PermissionStatus> {
@@ -24,9 +27,10 @@ export async function shouldShowPrePermissionPrompt(
     const status = await getPushPermissionStatus();
     if (status === 'granted') return false;
 
-    const seen = await AsyncStorage.getItem(storageKey(context));
+    const key = await storageKey();
+    if (!key) return false;
     if (context === 'settings') return true;
-    return seen !== 'dismissed';
+    return isNotificationReminderDue(await AsyncStorage.getItem(key));
 }
 
 async function reportPushPrePromptOutcome(
@@ -54,6 +58,12 @@ export async function markPrePermissionPromptSeen(
     context: PrePermissionContext,
     outcome: 'dismissed' | 'accepted',
 ): Promise<void> {
-    await AsyncStorage.setItem(storageKey(context), outcome);
+    const key = await storageKey();
+    if (key) await AsyncStorage.setItem(key, String(Date.now()));
     void reportPushPrePromptOutcome(context, outcome);
+}
+
+export async function markPrePermissionPromptShown(): Promise<void> {
+    const key = await storageKey();
+    if (key) await AsyncStorage.setItem(key, String(Date.now()));
 }

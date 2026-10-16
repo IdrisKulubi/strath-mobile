@@ -56,3 +56,9 @@ The original phase excluded provider and policy changes. The user's 2026-09-30 v
 Evidence: focused backend decision tests and mobile retry-guidance tests pass; backend TypeScript and targeted lint pass. Full mobile TypeScript still has pre-existing errors outside changed files. No production biometric samples or native device test were available. Keep this correction In review until real-device and production outcomes are checked.
 
 When working, replace these placeholders with actual evidence. Synchronize this phase's status and the master row in the same task. A written plan or generated concept image is not implementation evidence.
+
+## 2026-10-04 existing-account verification loop
+
+The verification screen now requires the current profile's actual verified status instead of treating the legacy faceVerificationRequired=false flag or an old verified session as a successful verification. It refreshes the profile on entry and when a session finishes, and invalidates questionnaire readiness before returning to Discover. This keeps existing unverified accounts on the selfie flow and respects photo-change verification resets. Four focused status/routing tests pass. Native existing-account verification and release checks remain pending; this is a mobile change requiring an updated build. Phase statuses remain unchanged.
+Validation follow-up: focused ESLint and git diff --check passed. Full mobile TypeScript was also requested; device verification remains pending.
+Full mobile TypeScript did not finish after several minutes and was stopped; no passing full typecheck is claimed. Four focused tests, targeted lint, and diff checks passed.

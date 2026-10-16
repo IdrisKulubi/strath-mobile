@@ -53,6 +53,7 @@ export async function enablePushNotificationsFromUserAction(): Promise<string | 
         return null;
     }
 
+    await configureAndroidNotificationChannel();
     const existing = await Notifications.getPermissionsAsync();
 
     if (existing.status === 'granted') {
@@ -84,6 +85,7 @@ export async function requestPushPermissionAndRegister(): Promise<string | null>
         return null;
     }
 
+    await configureAndroidNotificationChannel();
     const existingStatus = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus.status;
 
@@ -111,6 +113,7 @@ export async function requestPushPermissionAndRegister(): Promise<string | null>
         console.log('[Notifications] Push token registered');
     } catch (e) {
         console.warn('[Notifications] Failed to register token with backend', e);
+        return null;
     }
 
     return token;
@@ -127,6 +130,7 @@ export async function registerPushTokenIfGranted(): Promise<string | null> {
     if (!projectId) return null;
 
     try {
+        await configureAndroidNotificationChannel();
         const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
         const token = tokenResponse.data;
         await NotificationsService.registerPushToken(token);

@@ -34,10 +34,11 @@ function copyForContext(context: PrePermissionContext, partnerName?: string): {
                 body: 'Get a heads-up when your match confirms, when your date is set, and when they message you.',
                 enableLabel: 'Enable alerts',
             };
+        case 'reminder':
         case 'settings':
             return {
-                title: 'Match and date alerts',
-                body: 'We only notify you for mutual matches, date confirmations, and messages — nothing noisy.',
+                title: 'Don’t miss a connection',
+                body: 'Get timely alerts for new likes, mutual matches, messages, and date updates. You can change notification permissions in Settings.',
                 enableLabel: 'Enable alerts',
             };
         default:

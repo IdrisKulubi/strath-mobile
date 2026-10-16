@@ -41,6 +41,7 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
         case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
         case NOTIFICATION_TYPES.MATCH:
         case NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH:
+        case NOTIFICATION_TYPES.QUESTIONNAIRE_LIKE:
             return 'accent';
 
         case NOTIFICATION_TYPES.PAYMENT_EXPIRING:
@@ -67,6 +68,10 @@ export function resolveNotificationRoute(
     }
 
     switch (data.type) {
+        case NOTIFICATION_TYPES.QUESTIONNAIRE_LIKE:
+            return '/dating/likes';
+        case NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH:
+            return data.matchId ? `/dating-chat/${encodeURIComponent(data.matchId)}` : '/dating/messages';
         case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
             return getIncomingLikeRoute(isV2Enabled);
 
@@ -146,6 +151,7 @@ export function usePushNotifications(options?: {
     const queryClient = useQueryClient();
     const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
 
+    const lastResponseId = useRef<string | null>(null);
     const notificationReceivedListener = useRef<Notifications.EventSubscription | null>(null);
     const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null);
 
@@ -182,7 +188,7 @@ export function usePushNotifications(options?: {
                     invalidateMessagingCaches(queryClient, data.matchId);
                 }
 
-                if (data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH) {
+                if (data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH || data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_LIKE || data.type === NOTIFICATION_TYPES.MESSAGE) {
                     queryClient.invalidateQueries({ queryKey: ['questionnaire'] });
                     queryClient.invalidateQueries({ queryKey: ['conversations'] });
                 }
@@ -203,34 +209,41 @@ export function usePushNotifications(options?: {
                 }
             });
 
-        notificationResponseListener.current =
-            Notifications.addNotificationResponseReceivedListener((response) => {
-                const content = response.notification.request.content;
-                const data = (content.data || {}) as NotificationPayload;
+        const handleResponse = (response: Notifications.NotificationResponse) => {
+            const responseId = response.notification.request.identifier;
+            if (lastResponseId.current === responseId) return;
+            lastResponseId.current = responseId;
+            const content = response.notification.request.content;
+            const data = (content.data || {}) as NotificationPayload;
 
-                if (data.type === NOTIFICATION_TYPES.MESSAGE) {
-                    invalidateMessagingCaches(queryClient, data.matchId);
-                }
+            if (data.type === NOTIFICATION_TYPES.MESSAGE) {
+                invalidateMessagingCaches(queryClient, data.matchId);
+            }
 
-                if (data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH) {
-                    queryClient.invalidateQueries({ queryKey: ['questionnaire'] });
-                    queryClient.invalidateQueries({ queryKey: ['conversations'] });
-                }
+            if (data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH || data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_LIKE || data.type === NOTIFICATION_TYPES.MESSAGE) {
+                queryClient.invalidateQueries({ queryKey: ['questionnaire'] });
+                queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            }
 
-                if (data.type === NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED) {
-                    queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
-                    queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
-                }
+            if (data.type === NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED) {
+                queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
+                queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+            }
 
-                const flags = queryClient.getQueryData<PublicFeatureFlags>(['publicFeatureFlags']);
-                const route = resolveNotificationRoute(
-                    data,
-                    Boolean(flags?.matchmakerPersonalizationV2),
-                );
-                if (route) {
-                    router.push(route as any);
-                }
-            });
+            const flags = queryClient.getQueryData<PublicFeatureFlags>(['publicFeatureFlags']);
+            const route = resolveNotificationRoute(
+                data,
+                Boolean(flags?.matchmakerPersonalizationV2),
+            );
+            if (route) {
+                router.push(route as any);
+                void Notifications.clearLastNotificationResponseAsync().catch((error) => console.warn('[Notifications] Could not clear response', error));
+            }
+        };
+        notificationResponseListener.current = Notifications.addNotificationResponseReceivedListener(handleResponse);
+        void Notifications.getLastNotificationResponseAsync().then((response) => {
+            if (response) handleResponse(response);
+        }).catch((error) => console.warn('[Notifications] Launch response unavailable', error));
 
         return () => {
             notificationReceivedListener.current?.remove();
