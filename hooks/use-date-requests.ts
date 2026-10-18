@@ -1,5 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { getAuthToken } from '@/lib/auth-helpers';
+import type { RescheduleViewerState } from '@/lib/reschedule-types';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -32,6 +35,7 @@ export interface MutualDate {
     confirmWindowOpen?: boolean;
     /** Unread messages the viewer has not yet read in the linked chat thread. */
     unreadMessageCount?: number;
+    reschedule?: RescheduleViewerState;
 }
 
 export interface ScheduledDate {
@@ -50,6 +54,17 @@ export interface ScheduledDate {
 }
 
 export function useMutualMatches() {
+    const [isAppActive, setIsAppActive] = useState(true);
+
+    useEffect(() => {
+        const handleAppStateChange = (nextAppState: AppStateStatus) => {
+            setIsAppActive(nextAppState === 'active');
+        };
+
+        const subscription = AppState.addEventListener('change', handleAppStateChange);
+        return () => subscription?.remove();
+    }, []);
+
     return useQuery({
         queryKey: ['mutualDates'],
         queryFn: async (): Promise<MutualDate[]> => {
@@ -62,10 +77,12 @@ export function useMutualMatches() {
             const json = await res.json();
             return json?.data ?? [];
         },
-        staleTime: 0,
+        staleTime: 60_000,
         refetchOnMount: 'always',
         refetchOnWindowFocus: 'always',
-        refetchInterval: 10_000,
+        refetchInterval: isAppActive ? 60_000 : false,
+        refetchIntervalInBackground: false,
+        placeholderData: (previousData) => previousData,
     });
 }
 
@@ -108,10 +125,30 @@ const CHAT_UNLOCKED_STATUSES: MutualDate['arrangementStatus'][] = [
     'completed',
 ];
 
-/** Messaging is available once a chat thread exists and the viewer has confirmed their assigned slot. */
+/** Dates tab: hide Message until slot is confirmed (all statuses including arranging). */
 export function isChatUnlocked(match: MutualDate): boolean {
     if (!match.legacyMatchId) return false;
     if (!CHAT_UNLOCKED_STATUSES.includes(match.arrangementStatus)) return false;
+    if (match.needsSlotConfirmation && !match.viewerSlotConfirmed) return false;
+    return true;
+}
+
+/**
+ * Read history in thread when mutual match is listable (slot confirm does not block read).
+ */
+export function isChatThreadReadable(match: MutualDate): boolean {
+    if (!match.legacyMatchId) return false;
+    return CHAT_UNLOCKED_STATUSES.includes(match.arrangementStatus);
+}
+
+/**
+ * Chat thread APIs: mirrors backend assertChatUnlocked — arranging pairs may message
+ * while confirm UI stays on Dates; mutual matches still require slot confirm.
+ */
+export function isChatThreadUnlocked(match: MutualDate): boolean {
+    if (!match.legacyMatchId) return false;
+    if (!CHAT_UNLOCKED_STATUSES.includes(match.arrangementStatus)) return false;
+    if (match.arrangementStatus === 'being_arranged') return true;
     if (match.needsSlotConfirmation && !match.viewerSlotConfirmed) return false;
     return true;
 }

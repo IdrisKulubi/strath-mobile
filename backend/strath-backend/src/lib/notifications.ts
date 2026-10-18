@@ -1,6 +1,6 @@
 import { Expo, ExpoPushMessage } from "expo-server-sdk";
 
-const expo = new Expo();
+import { enqueuePush } from "./push-delivery";
 
 export type PushNotificationPayload = {
     title?: string;
@@ -14,7 +14,7 @@ export type PushNotificationPayload = {
 export async function sendPushNotification(
     pushToken: string,
     message: string,
-    data?: any
+    data?: Record<string, unknown>
 ): Promise<unknown>;
 export async function sendPushNotification(
     pushToken: string,
@@ -23,10 +23,10 @@ export async function sendPushNotification(
 export async function sendPushNotification(
     pushToken: string,
     messageOrPayload: string | PushNotificationPayload,
-    data?: any
+    data?: Record<string, unknown>
 ) {
     if (!Expo.isExpoPushToken(pushToken)) {
-        console.error(`Push token ${pushToken} is not a valid Expo push token`);
+        console.error("Invalid Expo push token; notification skipped");
         return;
     }
 
@@ -50,18 +50,5 @@ export async function sendPushNotification(
         priority: "high",
     });
 
-    const chunks = expo.chunkPushNotifications(messages);
-    const tickets = [];
-
-    for (const chunk of chunks) {
-        try {
-            const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-            tickets.push(...ticketChunk);
-        } catch (error) {
-            console.error("Error sending push notification chunk", error);
-        }
-    }
-
-    // In a real app, you'd want to handle receipt errors here (e.g. invalid tokens)
-    return tickets;
+    return enqueuePush(messages[0]);
 }

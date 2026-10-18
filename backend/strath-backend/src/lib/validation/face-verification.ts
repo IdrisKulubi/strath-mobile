@@ -23,7 +23,13 @@ export const retryFaceVerificationSessionSchema = z.object({
     sessionId: z.string().uuid().optional(),
 });
 
+export const submitFaceVerificationAssistanceSchema = z.object({
+    sessionId: z.string().uuid(),
+    message: z.string().trim().min(10, "Please write a bit more so we can help").max(1000),
+});
+
 export type CreateFaceVerificationSessionInput = z.infer<typeof createFaceVerificationSessionSchema>;
 export type CreateFaceVerificationUploadTargetsInput = z.infer<typeof createFaceVerificationUploadTargetsSchema>;
 export type SubmitFaceVerificationSessionInput = z.infer<typeof submitFaceVerificationSessionSchema>;
 export type RetryFaceVerificationSessionInput = z.infer<typeof retryFaceVerificationSessionSchema>;
+export type SubmitFaceVerificationAssistanceInput = z.infer<typeof submitFaceVerificationAssistanceSchema>;

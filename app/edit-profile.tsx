@@ -23,6 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile, Profile } from '@/hooks/use-profile';
 import { useImageUpload } from '@/hooks/use-image-upload';
+import { isApiError } from '@/lib/api-client';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
@@ -41,7 +42,7 @@ import {
 } from 'phosphor-react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { PhotosEditor, SectionCard, ChipSelector } from '@/components/edit-profile';
+import { PhotosEditor, SectionCard, ChipSelector, PhoneNumberInput, LocationUpdater } from '@/components/edit-profile';
 import { StrengthMeter } from '@/components/profile/strength-meter';
 import { SelectionSheet } from '@/components/ui/selection-sheet';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -66,6 +67,19 @@ import {
     LANGUAGE_OPTIONS,
     PROMPT_OPTIONS,
 } from '@/constants/profile-options';
+import {
+    INTEREST_OPTIONS,
+    INTEREST_MIN_SELECTION,
+    INTEREST_MAX_SELECTION,
+} from '@/constants/interest-options';
+import {
+    PERSONALITY_QUESTIONS,
+    getPersonalityOptionLabel,
+} from '@/constants/personality-options';
+import {
+    LIFESTYLE_QUESTIONS,
+    getLifestyleOptionLabel,
+} from '@/constants/lifestyle-options';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -177,7 +191,7 @@ export default function EditProfileScreen() {
     const router = useRouter();
     const params = useLocalSearchParams<{ focus?: string | string[] }>();
     const scrollViewRef = useRef<ScrollView>(null);
-    const photosSectionY = useRef(0);
+    const sectionPositions = useRef<Record<string, number>>({});
 
     const focusRaw = params.focus;
     const focusParam = Array.isArray(focusRaw) ? focusRaw[0] : focusRaw;
@@ -185,7 +199,7 @@ export default function EditProfileScreen() {
     const [formData, setFormData] = useState<Partial<Profile>>({});
     const [isDirty, setIsDirty] = useState(false);
     const [activeField, setActiveField] = useState<string | null>(null);
-    const [newInterest, setNewInterest] = useState('');
+    const [activePromptIndex, setActivePromptIndex] = useState<number | null>(null);
 
     // Animation for save button
     const saveButtonScale = useSharedValue(1);
@@ -195,26 +209,34 @@ export default function EditProfileScreen() {
 
     useEffect(() => {
         if (profile) {
-            setFormData(profile);
+            setFormData({
+                ...profile,
+                bio: profile.bio || profile.aboutMe || '',
+            });
         }
     }, [profile]);
 
     useEffect(() => {
-        if (focusParam !== 'photos' || isLoading) {
+        if (!focusParam || isLoading) {
             return;
         }
         const timer = setTimeout(() => {
+            const targetY = sectionPositions.current[focusParam];
+            if (targetY == null) return;
             scrollViewRef.current?.scrollTo({
-                y: Math.max(0, photosSectionY.current - 16),
+                y: Math.max(0, targetY - 16),
                 animated: true,
             });
         }, 480);
         return () => clearTimeout(timer);
     }, [focusParam, isLoading]);
 
-    const onPhotosSectionLayout = useCallback((e: LayoutChangeEvent) => {
-        photosSectionY.current = e.nativeEvent.layout.y;
-    }, []);
+    const registerSectionLayout = useCallback(
+        (section: string) => (event: LayoutChangeEvent) => {
+            sectionPositions.current[section] = event.nativeEvent.layout.y;
+        },
+        [],
+    );
 
     useEffect(() => {
         if (isDirty) {
@@ -229,10 +251,46 @@ export default function EditProfileScreen() {
         setIsDirty(true);
     }, []);
 
+    const handleNestedChange = useCallback(
+        (parent: 'personalityAnswers' | 'lifestyleAnswers', key: string, value: unknown) => {
+            setFormData((prev) => ({
+                ...prev,
+                [parent]: {
+                    ...(prev[parent] ?? {}),
+                    [key]: value,
+                },
+            }));
+            setIsDirty(true);
+        },
+        []
+    );
+
+    const handleLocationUpdate = useCallback(
+        (data: {
+            currentLocation: string;
+            locationLatitude: string;
+            locationLongitude: string;
+            locationPermissionStatus: 'granted' | 'denied' | 'undetermined' | 'unknown';
+        }) => {
+            setFormData((prev) => ({ ...prev, ...data }));
+            setIsDirty(true);
+        },
+        []
+    );
+
     const handleSave = async () => {
         try {
+            if (formData.age !== undefined && formData.age > 0 && formData.age < 18) {
+                Alert.alert('Age requirement', 'You must be at least 18 years old.');
+                return;
+            }
+
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             let updatedFormData = { ...formData };
+
+            if (updatedFormData.bio !== undefined) {
+                updatedFormData.aboutMe = updatedFormData.bio;
+            }
 
             // Upload main photo if changed (local URI)
             if (updatedFormData.profilePhoto && !updatedFormData.profilePhoto.startsWith('http')) {
@@ -259,37 +317,52 @@ export default function EditProfileScreen() {
                     setIsDirty(false);
                     router.back();
                 },
-                onError: () => {
+                onError: (error) => {
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                    Alert.alert('Error', 'Failed to update profile.');
+                    const message = isApiError(error)
+                        ? error.message
+                        : 'Failed to update profile.';
+                    Alert.alert('Error', message);
                 },
             });
         } catch (error) {
-            Alert.alert('Error', 'Failed to save changes');
+            const message =
+                error instanceof Error ? error.message : 'Failed to save changes';
+            Alert.alert('Error', message);
         }
     };
 
-    const addInterest = () => {
-        if (!newInterest.trim()) return;
+    const toggleInterest = (interest: string) => {
         const currentInterests = formData.interests || [];
-        if (!currentInterests.includes(newInterest.trim())) {
-            handleChange('interests', [...currentInterests, newInterest.trim()]);
+        if (currentInterests.includes(interest)) {
+            handleChange('interests', currentInterests.filter((item) => item !== interest));
+        } else if (currentInterests.length < INTEREST_MAX_SELECTION) {
+            handleChange('interests', [...currentInterests, interest]);
         }
-        setNewInterest('');
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     };
 
-    const removeInterest = (interest: string) => {
-        const currentInterests = formData.interests || [];
-        handleChange('interests', currentInterests.filter((i) => i !== interest));
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    };
+    const customInterests = (formData.interests || []).filter(
+        (interest) => !INTEREST_OPTIONS.some((option) => option.label === interest)
+    );
+
+    const interestChipOptions = [
+        ...INTEREST_OPTIONS.map((option) => ({
+            value: option.label,
+            label: option.label,
+            emoji: option.emoji,
+        })),
+        ...customInterests.map((interest) => ({
+            value: interest,
+            label: interest,
+        })),
+    ];
 
     const toggleQuality = (quality: string) => {
         const current = formData.qualities || [];
         if (current.includes(quality)) {
             handleChange('qualities', current.filter((q) => q !== quality));
-        } else if (current.length < 5) {
+        } else {
             handleChange('qualities', [...current, quality]);
         }
     };
@@ -304,6 +377,20 @@ export default function EditProfileScreen() {
     };
 
     const getOptionsForField = (field: string) => {
+        if (field.startsWith('personalityAnswers.')) {
+            const key = field.split('.')[1];
+            const question = PERSONALITY_QUESTIONS.find((item) => item.id === key);
+            return question?.options ?? [];
+        }
+        if (field.startsWith('lifestyleAnswers.')) {
+            const key = field.split('.')[1];
+            const question = LIFESTYLE_QUESTIONS.find((item) => item.id === key);
+            return question?.options ?? [];
+        }
+        if (field === 'prompt') {
+            return PROMPT_OPTIONS.map((prompt) => ({ value: prompt.id, label: prompt.label }));
+        }
+
         switch (field) {
             case 'gender': return GENDER_OPTIONS;
             case 'lookingFor': return [...LOOKING_FOR_OPTIONS, ...LEGACY_LOOKING_FOR_OPTIONS];
@@ -326,6 +413,18 @@ export default function EditProfileScreen() {
     };
 
     const getLabelForField = (field: string) => {
+        if (field.startsWith('personalityAnswers.')) {
+            const key = field.split('.')[1];
+            return PERSONALITY_QUESTIONS.find((item) => item.id === key)?.editLabel ?? key;
+        }
+        if (field.startsWith('lifestyleAnswers.')) {
+            const key = field.split('.')[1];
+            return LIFESTYLE_QUESTIONS.find((item) => item.id === key)?.editLabel ?? key;
+        }
+        if (field === 'prompt') {
+            return 'Choose a prompt';
+        }
+
         const labels: Record<string, string> = {
             gender: 'Gender',
             lookingFor: 'Looking For',
@@ -362,6 +461,25 @@ export default function EditProfileScreen() {
         );
 
         return matchedOption?.label || String(value);
+    };
+
+    const getNestedDisplayValue = (parent: 'personalityAnswers' | 'lifestyleAnswers', key: string) => {
+        const answers = formData[parent] as Record<string, unknown> | undefined;
+        const value = answers?.[key];
+        if (!value) return 'Select';
+        if (Array.isArray(value)) {
+            if (value.length === 0) return 'Select';
+            if (parent === 'personalityAnswers' && key === 'musicGenres') {
+                return (value as string[])
+                    .map((item) => getPersonalityOptionLabel('musicGenres', item))
+                    .join(', ');
+            }
+            return (value as string[]).join(', ');
+        }
+        if (parent === 'personalityAnswers') {
+            return getPersonalityOptionLabel(key, String(value));
+        }
+        return getLifestyleOptionLabel(key, String(value));
     };
 
     const getPromptLabel = (promptId: string) => {
@@ -476,7 +594,7 @@ export default function EditProfileScreen() {
                     </Animated.View>
 
                     {/* Photos Section — layout y used when opening from face verification (focus=photos) */}
-                    <View onLayout={onPhotosSectionLayout}>
+                    <View onLayout={registerSectionLayout('photos')}>
                         <Animated.View entering={FadeInDown.delay(150)}>
                             <PhotosEditor
                                 profilePhoto={formData.profilePhoto}
@@ -522,7 +640,7 @@ export default function EditProfileScreen() {
                             onChangeText={(text) => handleChange('bio', text)}
                             placeholder="Write something catchy about yourself..."
                             multiline
-                            maxLength={200}
+                            maxLength={300}
                             colors={colors}
                             isDark={isDark}
                         />
@@ -549,6 +667,18 @@ export default function EditProfileScreen() {
                                 />
                             </View>
                         </View>
+                        <PhoneNumberInput
+                            value={formData.phoneNumber}
+                            onChange={(phoneNumber) => handleChange('phoneNumber', phoneNumber)}
+                            colors={colors}
+                            isDark={isDark}
+                        />
+                        <LocationUpdater
+                            currentLocation={formData.currentLocation}
+                            onLocationUpdate={handleLocationUpdate}
+                            colors={colors}
+                            isDark={isDark}
+                        />
                     </SectionCard>
 
                     {/* Dating Preferences */}
@@ -557,6 +687,8 @@ export default function EditProfileScreen() {
                         subtitle="Help us find your perfect match"
                         icon={<Heart />}
                         delay={250}
+                        onLayout={registerSectionLayout('dating')}
+                        highlighted={focusParam === 'dating'}
                     >
                         <SelectorRow
                             label="Looking For"
@@ -593,6 +725,8 @@ export default function EditProfileScreen() {
                         subtitle="Your academic journey"
                         icon={<GraduationCap />}
                         delay={300}
+                        onLayout={registerSectionLayout('education')}
+                        highlighted={focusParam === 'education'}
                     >
                         <StyledInput
                             label="University"
@@ -635,6 +769,8 @@ export default function EditProfileScreen() {
                         subtitle="Show off your personality"
                         icon={<Sparkle />}
                         delay={350}
+                        onLayout={registerSectionLayout('personality')}
+                        highlighted={focusParam === 'personality'}
                     >
                         <View style={styles.selectorGrid}>
                             <SelectorRow
@@ -667,7 +803,7 @@ export default function EditProfileScreen() {
                     {/* Qualities */}
                     <SectionCard
                         title="My Qualities"
-                        subtitle="Select up to 5 that describe you"
+                        subtitle="Pick the traits that feel like you"
                         icon={<Sparkle />}
                         delay={400}
                     >
@@ -683,60 +819,17 @@ export default function EditProfileScreen() {
                     {/* Interests */}
                     <SectionCard
                         title="Interests"
-                        subtitle="What do you enjoy?"
+                        subtitle={`Pick ${INTEREST_MIN_SELECTION}-${INTEREST_MAX_SELECTION} interests`}
                         icon={<Heart />}
                         delay={450}
                     >
-                        <View style={styles.interestTags}>
-                            {formData.interests?.map((interest, index) => (
-                                <TouchableOpacity
-                                    key={index}
-                                    onPress={() => removeInterest(interest)}
-                                    style={[
-                                        styles.interestTag,
-                                        {
-                                            backgroundColor: isDark
-                                                ? 'rgba(236, 72, 153, 0.2)'
-                                                : 'rgba(236, 72, 153, 0.1)',
-                                            borderColor: colors.primary,
-                                        },
-                                    ]}
-                                >
-                                    <Text style={[styles.interestTagText, { color: colors.primary }]}>
-                                        {interest}
-                                    </Text>
-                                    <Ionicons name="close" size={14} color={colors.primary} />
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                        <View style={styles.addInterestRow}>
-                            <TextInput
-                                style={[
-                                    styles.addInterestInput,
-                                    {
-                                        color: colors.foreground,
-                                        backgroundColor: isDark
-                                            ? 'rgba(255,255,255,0.06)'
-                                            : 'rgba(0,0,0,0.04)',
-                                        borderColor: isDark
-                                            ? 'rgba(255,255,255,0.1)'
-                                            : 'rgba(0,0,0,0.08)',
-                                    },
-                                ]}
-                                value={newInterest}
-                                onChangeText={setNewInterest}
-                                placeholder="Add an interest..."
-                                placeholderTextColor={colors.muted}
-                                onSubmitEditing={addInterest}
-                                returnKeyType="done"
-                            />
-                            <TouchableOpacity
-                                onPress={addInterest}
-                                style={[styles.addInterestButton, { backgroundColor: colors.primary }]}
-                            >
-                                <Ionicons name="add" size={24} color="#fff" />
-                            </TouchableOpacity>
-                        </View>
+                        <ChipSelector
+                            options={interestChipOptions}
+                            selected={formData.interests || []}
+                            onSelect={toggleInterest}
+                            multiSelect
+                            columns={3}
+                        />
                     </SectionCard>
 
                     {/* Prompts */}
@@ -758,11 +851,22 @@ export default function EditProfileScreen() {
                                     key={`${currentPrompt.promptId || 'prompt'}-${index}`}
                                     style={styles.promptContainer}
                                 >
-                                    <Text
-                                        style={[styles.promptLabel, { color: colors.primary }]}
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            setActivePromptIndex(index);
+                                            setActiveField('prompt');
+                                        }}
+                                        activeOpacity={0.7}
                                     >
-                                        {getPromptLabel(currentPrompt.promptId)}
-                                    </Text>
+                                        <View style={styles.promptHeader}>
+                                            <Text
+                                                style={[styles.promptLabel, { color: colors.primary }]}
+                                            >
+                                                {getPromptLabel(currentPrompt.promptId)}
+                                            </Text>
+                                            <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+                                        </View>
+                                    </TouchableOpacity>
                                     <TextInput
                                         style={[
                                             styles.promptInput,
@@ -811,6 +915,8 @@ export default function EditProfileScreen() {
                         subtitle="Your daily habits"
                         icon={<Barbell />}
                         delay={550}
+                        onLayout={registerSectionLayout('lifestyle')}
+                        highlighted={focusParam === 'lifestyle'}
                     >
                         <View style={styles.selectorGrid}>
                             {[
@@ -818,6 +924,7 @@ export default function EditProfileScreen() {
                                 { label: 'Drinking', field: 'drinkingPreference' },
                                 { label: 'Workout', field: 'workoutFrequency' },
                                 { label: 'Social Media', field: 'socialMediaUsage' },
+                                { label: 'Communication', field: 'communicationStyle' },
                             ].map((item) => (
                                 <SelectorRow
                                     key={item.field}
@@ -834,12 +941,68 @@ export default function EditProfileScreen() {
                         </View>
                     </SectionCard>
 
-                    {/* About Me */}
+                    {/* Personality Deep Dive */}
+                    <SectionCard
+                        title="Personality"
+                        subtitle="How you move through the world"
+                        icon={<Sparkle />}
+                        delay={575}
+                    >
+                        <View style={styles.selectorGrid}>
+                            {PERSONALITY_QUESTIONS.map((question) => (
+                                <SelectorRow
+                                    key={question.id}
+                                    label={question.editLabel}
+                                    value={
+                                        question.multi
+                                            ? formData.personalityAnswers?.musicGenres?.length
+                                            : (formData.personalityAnswers as Record<string, unknown> | undefined)?.[
+                                                  question.id
+                                              ]
+                                    }
+                                    displayValue={getNestedDisplayValue('personalityAnswers', question.id)}
+                                    onPress={() => setActiveField(`personalityAnswers.${question.id}`)}
+                                    colors={colors}
+                                    isDark={isDark}
+                                />
+                            ))}
+                        </View>
+                    </SectionCard>
+
+                    {/* Dating Goals */}
+                    <SectionCard
+                        title="Dating Goals"
+                        subtitle="What you're looking for"
+                        icon={<Heart />}
+                        delay={625}
+                    >
+                        <View style={styles.selectorGrid}>
+                            {LIFESTYLE_QUESTIONS.map((question) => (
+                                <SelectorRow
+                                    key={question.id}
+                                    label={question.editLabel}
+                                    value={
+                                        (formData.lifestyleAnswers as Record<string, unknown> | undefined)?.[
+                                            question.id
+                                        ]
+                                    }
+                                    displayValue={getNestedDisplayValue('lifestyleAnswers', question.id)}
+                                    onPress={() => setActiveField(`lifestyleAnswers.${question.id}`)}
+                                    colors={colors}
+                                    isDark={isDark}
+                                />
+                            ))}
+                        </View>
+                    </SectionCard>
+
+                    {/* More Details */}
                     <SectionCard
                         title="More Details"
                         subtitle="Help people get to know you better"
                         icon={<User />}
                         delay={600}
+                        onLayout={registerSectionLayout('details')}
+                        highlighted={focusParam === 'details'}
                     >
                         <View style={styles.selectorGrid}>
                             {[
@@ -886,6 +1049,8 @@ export default function EditProfileScreen() {
                         subtitle="Connect your social accounts"
                         icon={<InstagramLogo />}
                         delay={700}
+                        onLayout={registerSectionLayout('socials')}
+                        highlighted={focusParam === 'socials'}
                     >
                         <View style={styles.socialRow}>
                             <View
@@ -980,20 +1145,82 @@ export default function EditProfileScreen() {
             {/* Selection Sheet */}
             <SelectionSheet
                 visible={!!activeField}
-                onClose={() => setActiveField(null)}
+                onClose={() => {
+                    setActiveField(null);
+                    setActivePromptIndex(null);
+                }}
                 title={activeField ? getLabelForField(activeField) : ''}
                 options={activeField ? getOptionsForField(activeField) : []}
                 value={
-                    activeField && activeField !== 'interestedIn'
+                    activeField &&
+                    activeField !== 'interestedIn' &&
+                    activeField !== 'prompt' &&
+                    !activeField.startsWith('personalityAnswers.') &&
+                    !activeField.startsWith('lifestyleAnswers.')
                         ? (formData[activeField as keyof Profile] as string)
-                        : undefined
+                        : activeField?.startsWith('personalityAnswers.') &&
+                            !activeField.endsWith('musicGenres')
+                          ? String(
+                                (formData.personalityAnswers as Record<string, unknown> | undefined)?.[
+                                    activeField.split('.')[1]
+                                ] ?? ''
+                            )
+                          : activeField?.startsWith('lifestyleAnswers.')
+                            ? String(
+                                  (formData.lifestyleAnswers as Record<string, unknown> | undefined)?.[
+                                      activeField.split('.')[1]
+                                  ] ?? ''
+                              )
+                            : activeField === 'prompt' && activePromptIndex !== null
+                              ? formData.prompts?.[activePromptIndex]?.promptId
+                              : undefined
                 }
-                multiValue={activeField === 'interestedIn' ? formData.interestedIn || [] : undefined}
-                onSelect={(value) => activeField && handleChange(activeField as keyof Profile, value)}
-                onMultiSelect={(values) =>
-                    activeField === 'interestedIn' && handleChange('interestedIn', values)
+                multiValue={
+                    activeField === 'interestedIn'
+                        ? formData.interestedIn || []
+                        : activeField === 'personalityAnswers.musicGenres'
+                          ? formData.personalityAnswers?.musicGenres || []
+                          : undefined
                 }
-                multiSelect={activeField === 'interestedIn'}
+                onSelect={(value) => {
+                    if (!activeField) return;
+
+                    if (activeField === 'prompt' && activePromptIndex !== null) {
+                        const newPrompts = [...(formData.prompts || [])];
+                        const existing = newPrompts[activePromptIndex] || { promptId: value, response: '' };
+                        newPrompts[activePromptIndex] = { ...existing, promptId: value };
+                        handleChange('prompts', newPrompts);
+                        setActiveField(null);
+                        setActivePromptIndex(null);
+                        return;
+                    }
+
+                    if (activeField.startsWith('personalityAnswers.')) {
+                        handleNestedChange('personalityAnswers', activeField.split('.')[1], value);
+                        setActiveField(null);
+                        return;
+                    }
+
+                    if (activeField.startsWith('lifestyleAnswers.')) {
+                        handleNestedChange('lifestyleAnswers', activeField.split('.')[1], value);
+                        setActiveField(null);
+                        return;
+                    }
+
+                    handleChange(activeField as keyof Profile, value);
+                }}
+                onMultiSelect={(values) => {
+                    if (activeField === 'interestedIn') {
+                        handleChange('interestedIn', values);
+                        return;
+                    }
+                    if (activeField === 'personalityAnswers.musicGenres') {
+                        handleNestedChange('personalityAnswers', 'musicGenres', values);
+                    }
+                }}
+                multiSelect={
+                    activeField === 'interestedIn' || activeField === 'personalityAnswers.musicGenres'
+                }
             />
         </View>
     );
@@ -1150,10 +1377,16 @@ const styles = StyleSheet.create({
     promptContainer: {
         marginBottom: 16,
     },
+    promptHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
     promptLabel: {
         fontSize: 14,
         fontWeight: '600',
-        marginBottom: 8,
+        flex: 1,
     },
     promptInput: {
         fontSize: 15,

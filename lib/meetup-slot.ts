@@ -36,4 +36,4 @@ export function formatConfirmBy(iso: string, locale = 'en-KE'): string {
 }
 
 export const MEETUP_WINDOWS_COPY =
-    'StrathSpace dates are Wednesdays at 5:30 PM and Saturdays at 3:00 PM on campus.';
+    'StrathSpace dates are Wednesdays from 5:30 PM and Saturdays from 3:00 PM at Landmark Bistro Westlands.';

@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { errorResponse, successResponse } from "@/lib/api-response";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
 import { confirmMeetupSlot } from "@/lib/services/meetup-confirmation-service";
@@ -41,6 +41,17 @@ export async function POST(req: NextRequest) {
             return errorResponse(
                 new Error("The confirmation window for this date has closed"),
                 409,
+            );
+        }
+        if (result.status === "payment_required") {
+            return NextResponse.json(
+                {
+                    success: false,
+                    reason: "payment_required",
+                    paymentToken: result.paymentToken,
+                    webPaymentUrl: result.webPaymentUrl,
+                },
+                { status: 402 },
             );
         }
 

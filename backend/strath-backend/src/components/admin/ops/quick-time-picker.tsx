@@ -3,6 +3,12 @@
 import { useMemo, useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+    formatNairobiDateTime,
+    getNairobiNowParts,
+    nairobiPresetInstant,
+    toNairobiDateTimeLocalInput,
+} from "@/lib/nairobi-datetime";
 
 interface QuickTimePickerProps {
     value: string | null;
@@ -68,7 +74,7 @@ export function QuickTimePicker({ value, onChange }: QuickTimePickerProps) {
             {isCustom && (
                 <div className="rounded-2xl bg-white/[0.03] p-3 ring-1 ring-inset ring-white/[0.04]">
                     <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-white/40">
-                        Pick a custom slot
+                        Pick a custom slot (Nairobi time)
                     </label>
                     <input
                         type="datetime-local"
@@ -85,72 +91,42 @@ export function QuickTimePicker({ value, onChange }: QuickTimePickerProps) {
 
 function buildPresets(): QuickPreset[] {
     const now = new Date();
+    const parts = getNairobiNowParts();
 
-    const tonight = atTime(now, 19, 0);
-    const tomorrow = atTime(addDays(now, 1), 18, 0);
-    const saturday = atTime(nextWeekday(now, 6), 14, 0);
-    const nextFriday = atTime(nextWeekday(now, 5), 18, 30);
+    const tonight = nairobiPresetInstant(parts, 0, 19, 0);
+    const tomorrow = nairobiPresetInstant(parts, 1, 18, 0);
+    const saturday = nairobiPresetInstant(parts, daysUntilWeekday(parts, 6), 14, 0);
+    const nextFriday = nairobiPresetInstant(parts, daysUntilWeekday(parts, 5), 18, 30);
 
     const presets: QuickPreset[] = [];
     if (tonight > now) {
-        presets.push({
-            id: "tonight",
-            label: "Tonight · 7:00 pm",
-            sublabel: formatPresetDate(tonight),
-            isoLocal: toLocalInput(tonight),
-        });
+        presets.push(makePreset("tonight", "Tonight · 7:00 pm", tonight));
     }
-    presets.push({
-        id: "tomorrow",
-        label: "Tomorrow · 6:00 pm",
-        sublabel: formatPresetDate(tomorrow),
-        isoLocal: toLocalInput(tomorrow),
-    });
-    presets.push({
-        id: "saturday",
-        label: "Saturday · 2:00 pm",
-        sublabel: formatPresetDate(saturday),
-        isoLocal: toLocalInput(saturday),
-    });
-    presets.push({
-        id: "friday",
-        label: "Friday · 6:30 pm",
-        sublabel: formatPresetDate(nextFriday),
-        isoLocal: toLocalInput(nextFriday),
-    });
+    presets.push(makePreset("tomorrow", "Tomorrow · 6:00 pm", tomorrow));
+    presets.push(makePreset("saturday", "Saturday · 2:00 pm", saturday));
+    presets.push(makePreset("friday", "Friday · 6:30 pm", nextFriday));
     return presets.slice(0, 4);
 }
 
-function addDays(date: Date, days: number) {
-    const d = new Date(date);
-    d.setDate(d.getDate() + days);
-    return d;
+function makePreset(id: string, label: string, instant: Date): QuickPreset {
+    return {
+        id,
+        label,
+        sublabel: formatNairobiDateTime(instant, {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+        }),
+        isoLocal: toNairobiDateTimeLocalInput(instant),
+    };
 }
 
-function atTime(date: Date, hours: number, minutes: number) {
-    const d = new Date(date);
-    d.setHours(hours, minutes, 0, 0);
-    return d;
-}
-
-function nextWeekday(date: Date, targetDay: number) {
-    const d = new Date(date);
-    const current = d.getDay();
-    let diff = (targetDay - current + 7) % 7;
+function daysUntilWeekday(parts: ReturnType<typeof getNairobiNowParts>, targetDay: number) {
+    let diff = (targetDay - parts.dayOfWeek + 7) % 7;
     if (diff === 0) diff = 7;
-    d.setDate(d.getDate() + diff);
-    return d;
-}
-
-function toLocalInput(d: Date) {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return diff;
 }
 
 function minDateTimeLocal() {
-    return toLocalInput(new Date());
-}
-
-function formatPresetDate(d: Date) {
-    return d.toLocaleDateString("en-KE", { weekday: "short", month: "short", day: "numeric" });
+    return toNairobiDateTimeLocalInput(new Date());
 }

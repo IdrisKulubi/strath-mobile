@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { PairCard, PairInfoTile } from "@/components/admin/ops/pair-card";
 import { PairDetailSheet } from "@/components/admin/ops/pair-detail-sheet";
 import { ScheduleDateSheet } from "@/components/admin/ops/schedule-date-sheet";
+import { formatNairobiDateTime } from "@/lib/nairobi-datetime";
 import { EmptyState } from "@/components/admin/ops/empty-state";
 import { OpsHeader } from "@/components/admin/ops/ops-header";
 import { CountdownChip } from "@/components/admin/ops/countdown-chip";
@@ -87,7 +88,7 @@ export function UpcomingView({ rows: initialRows, locations, isDemo }: UpcomingV
                                 metaRow={
                                     <span className="truncate text-[11px] text-white/40">
                                         {pair.scheduledAt
-                                            ? new Date(pair.scheduledAt).toLocaleString("en-KE", {
+                                            ? formatNairobiDateTime(pair.scheduledAt, {
                                                   weekday: "short",
                                                   hour: "2-digit",
                                                   minute: "2-digit",

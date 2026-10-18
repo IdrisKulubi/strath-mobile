@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm";
 
 import {
+    faceVerificationAssistance,
     faceVerificationJobs,
     faceVerificationResults,
     faceVerificationSessions,
@@ -67,6 +68,7 @@ export async function getFaceVerificationAdminOverview(limit = 20) {
         oldestPendingJob,
         recentAttentionSessions,
         recentProcessedSessions,
+        recentAssistanceRequests,
     ] = await Promise.all([
         db
             .select({ count: sql<number>`count(*)::int` })
@@ -239,6 +241,35 @@ export async function getFaceVerificationAdminOverview(limit = 20) {
             .where(inArray(faceVerificationSessions.status, COMPLETED_STATUSES))
             .orderBy(desc(faceVerificationSessions.updatedAt))
             .limit(safeLimit),
+        db
+            .select({
+                id: faceVerificationAssistance.id,
+                userId: faceVerificationAssistance.userId,
+                sessionId: faceVerificationAssistance.sessionId,
+                attemptNumber: faceVerificationAssistance.attemptNumber,
+                email: faceVerificationAssistance.email,
+                phoneNumber: faceVerificationAssistance.phoneNumber,
+                message: faceVerificationAssistance.message,
+                failureReasons: faceVerificationAssistance.failureReasons,
+                verificationStatus: faceVerificationAssistance.verificationStatus,
+                status: faceVerificationAssistance.status,
+                createdAt: faceVerificationAssistance.createdAt,
+                firstName: profiles.firstName,
+                lastName: profiles.lastName,
+                name: user.name,
+            })
+            .from(faceVerificationAssistance)
+            .innerJoin(user, eq(faceVerificationAssistance.userId, user.id))
+            .leftJoin(profiles, eq(faceVerificationAssistance.userId, profiles.userId))
+            .orderBy(
+                sql`case
+                    when ${faceVerificationAssistance.status} = 'new' then 0
+                    when ${faceVerificationAssistance.status} = 'contacted' then 1
+                    else 2
+                end`,
+                desc(faceVerificationAssistance.createdAt),
+            )
+            .limit(50),
     ]);
 
     const allTimeByStatus = buildStatusCountMap(statusCounts);
@@ -397,6 +428,10 @@ export async function getFaceVerificationAdminOverview(limit = 20) {
                           ),
                       )
                     : null,
+        })),
+        assistanceRequests: recentAssistanceRequests.map((request) => ({
+            ...request,
+            displayName: buildDisplayName(request.firstName, request.lastName, request.name),
         })),
         alerts: buildFaceVerificationAlerts({
             staleProcessing: staleProcessingRow[0]?.count ?? 0,

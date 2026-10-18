@@ -632,6 +632,7 @@ function ActionModal({
         description = `Send ${fullName(selectedCandidate)} to ${fullName(selectedUser)} and ${fullName(selectedUser)} to ${fullName(selectedCandidate)}.`;
     } else if (action.type === "cancel") {
         description = "Cancel this sent match, remove it from Sent, and return both people to the matching pool.";
+    }
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" onClick={onClose}>
             <section className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#10101c] p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>

@@ -1,0 +1,300 @@
+import React from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
+import { stickyFooterScrollPadding } from '@/components/questionnaire/sticky-footer';
+import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { useTheme } from '@/hooks/use-theme';
+import { type Person } from '@/lib/questionnaire';
+import { PortraitCard } from '@/components/questionnaire/portrait-card';
+
+export function Page({
+  title,
+  eyebrow,
+  children,
+  back = false,
+  onBackPress,
+  footer,
+  header,
+  hideTitle = false,
+  floatingTabBar = false,
+  floatingFooter = false,
+  footerReserveTabBar = false,
+  footerButtonCount = 1,
+  footerTertiaryLink = false,
+}: {
+  title: string;
+  eyebrow?: string;
+  children: React.ReactNode;
+  back?: boolean;
+  /** When set, overrides default router back for the ghost Back control */
+  onBackPress?: () => void;
+  footer?: React.ReactNode;
+  header?: React.ReactNode;
+  hideTitle?: boolean;
+  /** Reserve scroll space for the floating glass tab bar (dating shell). */
+  floatingTabBar?: boolean;
+  /** Footer overlays scroll content (e.g. glass setup CTA). */
+  floatingFooter?: boolean;
+  /** Match StickyFooter `reserveTabBar` when computing scroll inset. */
+  footerReserveTabBar?: boolean;
+  /** Pill count in floating footer (excludes link-style tertiary). */
+  footerButtonCount?: number;
+  /** Reserve space for a link-style tertiary above footer pills. */
+  footerTertiaryLink?: boolean;
+}) {
+  const { colors } = useTheme();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const floatingTabPad = floatingTabBar ? getGlassTabBarHeight(insets.bottom) : 0;
+  const scrollBottomPad = floatingFooter && footer
+    ? stickyFooterScrollPadding(insets.bottom, footerReserveTabBar, footerButtonCount, footerTertiaryLink)
+    : floatingTabPad
+      ? SPACING.xl + floatingTabPad
+      : footer
+        ? SPACING.xl
+        : undefined;
+
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.flex}>
+          <ScrollView
+            style={styles.flex}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={[
+              styles.page,
+              footer && !floatingFooter ? styles.pageWithFooter : null,
+              scrollBottomPad !== undefined ? { paddingBottom: scrollBottomPad } : null,
+            ]}
+            contentInsetAdjustmentBehavior="automatic"
+            showsVerticalScrollIndicator={false}
+          >
+            {header}
+            {back ? (
+              <Action
+                label="Back"
+                tone="ghost"
+                onPress={() => {
+                  if (onBackPress) {
+                    onBackPress();
+                    return;
+                  }
+                  if (router.canGoBack()) router.back();
+                  else router.replace('/dating' as never);
+                }}
+              />
+            ) : null}
+            {!hideTitle ? (
+              <View style={styles.headingGroup}>
+                {eyebrow ? <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>{eyebrow}</Text> : null}
+                <Text accessibilityRole="header" style={[styles.title, { color: colors.foreground }]}>{title}</Text>
+              </View>
+            ) : null}
+            {children}
+          </ScrollView>
+          {footer}
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+export function Copy({ children, muted = false }: { children: React.ReactNode; muted?: boolean }) {
+  const { colors } = useTheme();
+  return <Text style={[styles.copy, { color: muted ? colors.mutedForeground : colors.foreground }]}>{children}</Text>;
+}
+
+export function SectionLabel({ children }: { children: React.ReactNode }) {
+  const { colors } = useTheme();
+  return <Text accessibilityRole="header" style={[styles.sectionLabel, { color: colors.foreground }]}>{children}</Text>;
+}
+
+export function Action({
+  label,
+  onPress,
+  disabled = false,
+  selected = false,
+  tone = 'secondary',
+  selectionMode,
+  accessibilityHint,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  selected?: boolean;
+  tone?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  selectionMode?: 'single' | 'multiple';
+  accessibilityHint?: string;
+}) {
+  const { colors } = useTheme();
+  const primary = tone === 'primary';
+  const danger = tone === 'danger';
+  const ghost = tone === 'ghost';
+  const backgroundColor = primary
+    ? colors.primary
+    : selected
+      ? colors.secondary
+      : ghost
+        ? 'transparent'
+        : colors.card;
+  const textColor = primary ? colors.primaryForeground : danger ? colors.destructive : colors.foreground;
+  return (
+    <Pressable
+      accessibilityRole={selectionMode === 'single' ? 'radio' : selectionMode === 'multiple' ? 'checkbox' : 'button'}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled, ...(selectionMode ? { checked: selected } : { selected }) }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.action,
+        {
+          borderColor: danger ? colors.destructive : selected ? colors.primary : ghost ? 'transparent' : colors.border,
+          borderWidth: selected && selectionMode ? 2 : 1,
+          backgroundColor,
+          opacity: disabled ? 0.45 : pressed ? 0.72 : 1,
+        },
+      ]}
+    >
+      <Text style={[styles.actionText, selectionMode && styles.choiceText, { color: textColor }]}>{label}</Text>
+      {selectionMode ? (
+        <View style={[
+          styles.choiceIndicator,
+          selectionMode === 'single' && styles.radioIndicator,
+          { borderColor: selected ? colors.primary : colors.mutedForeground, backgroundColor: selected ? colors.primary : 'transparent' },
+        ]}>
+          {selected ? <Text style={[styles.choiceCheck, { color: colors.primaryForeground }]}>✓</Text> : null}
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+export function Field({
+  label,
+  value,
+  onChangeText,
+  multiline = false,
+  keyboardType = 'default',
+  placeholder,
+  disabled = false,
+  maxLength,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  multiline?: boolean;
+  keyboardType?: 'default' | 'numeric';
+  placeholder?: string;
+  disabled?: boolean;
+  maxLength?: number;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.field}>
+      <Text style={[styles.fieldLabel, { color: colors.foreground }]}>{label}</Text>
+      <TextInput
+        accessibilityLabel={label}
+        accessibilityState={{ disabled }}
+        editable={!disabled}
+        maxLength={maxLength}
+        value={value}
+        onChangeText={onChangeText}
+        multiline={multiline}
+        keyboardType={keyboardType}
+        placeholder={placeholder}
+        placeholderTextColor={colors.mutedForeground}
+        textAlignVertical={multiline ? 'top' : 'center'}
+        style={[
+          styles.input,
+          multiline && styles.multiline,
+          { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card },
+        ]}
+      />
+    </View>
+  );
+}
+
+export function Progress({ value, total, label }: { value: number; total: number; label: string }) {
+  const { colors } = useTheme();
+  const percentage = total > 0 ? Math.min(100, Math.max(0, value / total * 100)) : 0;
+  return (
+    <View accessible accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: total, now: value }} accessibilityLabel={label} style={styles.progressGroup}>
+      <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
+        <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${percentage}%` }]} />
+      </View>
+      <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>{label}</Text>
+    </View>
+  );
+}
+
+export function Notice({ children, tone = 'info' }: { children: React.ReactNode; tone?: 'info' | 'success' | 'error' }) {
+  const { colors } = useTheme();
+  const color = tone === 'success' ? colors.success : tone === 'error' ? colors.destructive : colors.mutedForeground;
+  return (
+    <View style={[styles.notice, { borderColor: colors.border, backgroundColor: colors.card }]}>
+      <Text accessibilityRole={tone === 'error' ? 'alert' : undefined} style={[styles.noticeText, { color }]}>{children}</Text>
+    </View>
+  );
+}
+
+export function Feedback({ error }: { error: unknown }) {
+  if (!error) return null;
+  const message = error instanceof Error ? error.message : 'We could not save that. Check your connection and try again.';
+  return <Notice tone="error">{message}</Notice>;
+}
+
+export function Loading({ label = 'Loading your questionnaire' }: { label?: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.loading} accessibilityLiveRegion="polite">
+      <ActivityIndicator accessibilityLabel={label} color={colors.primary} />
+      <Copy muted>{label}</Copy>
+    </View>
+  );
+}
+
+export function PersonCard({ person }: { person: Person }) {
+  return <PortraitCard person={person} />;
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  safeArea: { flex: 1 },
+  page: { width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: SPACING.screenX, paddingTop: SPACING.base, paddingBottom: 56, gap: SPACING.base },
+  pageWithFooter: { paddingBottom: SPACING.xl },
+  headingGroup: { gap: SPACING.micro, marginBottom: SPACING.tight },
+  eyebrow: { ...TYPOGRAPHY.callout, fontWeight: '500' },
+  title: { ...TYPOGRAPHY.display, maxWidth: 560 },
+  copy: { ...TYPOGRAPHY.body, maxWidth: 640 },
+  sectionLabel: { ...TYPOGRAPHY.title, marginTop: SPACING.tight },
+  action: { minHeight: 48, paddingHorizontal: SPACING.base, paddingVertical: SPACING.compact, borderRadius: RADIUS.md, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.compact },
+  actionText: { ...TYPOGRAPHY.body, fontWeight: '600' },
+  choiceText: { flex: 1 },
+  choiceIndicator: { width: 24, height: 24, borderWidth: 2, borderRadius: RADIUS.sm, alignItems: 'center', justifyContent: 'center' },
+  radioIndicator: { borderRadius: RADIUS.full },
+  choiceCheck: { fontSize: 16, lineHeight: 20, fontWeight: '700' },
+  field: { gap: SPACING.tight },
+  fieldLabel: { ...TYPOGRAPHY.body, fontWeight: '600' },
+  input: { minHeight: 52, borderWidth: 1, borderRadius: RADIUS.md, paddingHorizontal: SPACING.base, paddingVertical: SPACING.compact, ...TYPOGRAPHY.body },
+  multiline: { minHeight: 112 },
+  progressGroup: { gap: SPACING.tight },
+  progressTrack: { height: 6, borderRadius: RADIUS.full, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: RADIUS.full },
+  progressLabel: { ...TYPOGRAPHY.caption, fontVariant: ['tabular-nums'] },
+  notice: { borderWidth: 1, borderRadius: RADIUS.md, padding: SPACING.base },
+  noticeText: { ...TYPOGRAPHY.callout },
+  loading: { minHeight: 96, alignItems: 'center', justifyContent: 'center', gap: SPACING.compact },
+});

@@ -6,9 +6,7 @@
  * the same scoring model.
  */
 
-import { db } from "@/lib/db";
-import { profiles } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { selectProfilesForCompatibility } from "@/lib/db/queries/profiles";
 import { scoreProfilePair } from "@/lib/services/match-ranking";
 
 export interface CompatibilityResult {
@@ -23,18 +21,32 @@ export async function computeCompatibility(
     myUserId: string,
     theirUserId: string,
 ): Promise<CompatibilityResult> {
-    const [myProfile, theirProfile] = await Promise.all([
-        db.query.profiles.findFirst({ where: eq(profiles.userId, myUserId) }),
-        db.query.profiles.findFirst({ where: eq(profiles.userId, theirUserId) }),
-    ]);
+    const results = await computeCompatibilityMany(myUserId, [theirUserId]);
+    return results.get(theirUserId) ?? { score: 0, reasons: ["Incomplete profile data"] };
+}
 
-    if (!myProfile || !theirProfile) {
-        return { score: 0, reasons: ["Incomplete profile data"] };
+export async function computeCompatibilityMany(
+    viewerUserId: string,
+    targetUserIds: string[],
+): Promise<Map<string, CompatibilityResult>> {
+    const uniqueTargetIds = [...new Set(targetUserIds.filter(Boolean))];
+    const profileMap = await selectProfilesForCompatibility([viewerUserId, ...uniqueTargetIds]);
+    const viewerProfile = profileMap.get(viewerUserId);
+    const results = new Map<string, CompatibilityResult>();
+
+    for (const targetUserId of uniqueTargetIds) {
+        const targetProfile = profileMap.get(targetUserId);
+        if (!viewerProfile || !targetProfile) {
+            results.set(targetUserId, { score: 0, reasons: ["Incomplete profile data"] });
+            continue;
+        }
+
+        const ranked = scoreProfilePair(viewerProfile, targetProfile);
+        results.set(targetUserId, {
+            score: ranked.score,
+            reasons: ranked.reasons,
+        });
     }
 
-    const ranked = scoreProfilePair(myProfile, theirProfile);
-    return {
-        score: ranked.score,
-        reasons: ranked.reasons,
-    };
+    return results;
 }

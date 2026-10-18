@@ -1,12 +1,25 @@
-# StrathSpace Payment Flow — Paystack Date Confirmation Fee
+# StrathSpace Payment Flow — Paystack Date Confirmation Pack
 
 ## Document Purpose
 
-This document explains how StrathSpace will update its matching flow to include a **Date Confirmation Fee** using **Paystack**.
+This document explains how StrathSpace uses a **Date Confirmation Pack** via **Paystack** to keep the matching flow intentional.
 
-The goal is to make the dating flow more intentional. Users do not pay to browse, swipe, chat, or unlock people. They only pay when both people have shown real intent and StrathSpace is about to help arrange a real-world date.
+The goal is to make dating more serious and reduce ghosting. Users do not pay to browse, swipe, chat, or unlock people. They only see payment **after they have a mutual match** and need to confirm before StrathSpace sets up a real-world date.
 
-This document is written for the developer/AI agent implementing the feature.
+**Current product model (locked):**
+
+```txt
+Pay KSh 499 once → get 2 date confirmations.
+A confirmation is only used when both people confirm and date setup proceeds.
+```
+
+For the phased engineering plan to implement this model, see
+[`payment/two-confirmation-pack.md`](./payment/two-confirmation-pack.md).
+
+> **Note:** Older sections below may still describe the legacy per-date fee (KSh 499 per
+> person per date). Where they conflict with the pack model above, the pack model wins.
+> The engineering execution plan in [`payment/README.md`](./payment/README.md) tracks
+> rollout status.
 
 ---
 
@@ -28,7 +41,15 @@ The payment is for:
 Recommended name everywhere:
 
 ```txt
-Date Confirmation Fee
+Date Confirmation Pack
+```
+
+(or "date confirmations" when referring to the balance)
+
+User-facing screen title:
+
+```txt
+Confirm your match
 ```
 
 Avoid using:
@@ -43,31 +64,52 @@ Pay to view profile
 
 ---
 
-## 2. Payment Amount
+## 2. Payment Amount — Confirmation Pack
 
 Launch amount:
 
 ```txt
-KES 500 per person per confirmed date
+KSh 499 per person for a pack of 2 date confirmations
 ```
 
-Both people must pay.
+Each person buys their own pack. Both people still need to confirm before a date is set up.
 
-That means one fully confirmed date collects:
+Effective cost per successful date (if both confirmations are used):
 
 ```txt
-KES 500 x 2 = KES 1,000 total
+KSh 499 ÷ 2 = ~KSh 250 per confirmed date per person
 ```
+
+A confirmation is **not** spent when:
+
+- The user pays but their match does not confirm in time
+- The match expires before both people confirm
+- Date setup does not proceed
+
+A confirmation **is** spent when:
+
+- Both users confirm within the window **and**
+- `tryFinalizeConfirmedMeetup` succeeds (date setup proceeds)
 
 Environment variables:
 
 ```env
-DATE_CONFIRMATION_AMOUNT_KES=500
-DATE_CONFIRMATION_AMOUNT_CENTS=50000
+DATE_CONFIRMATION_PACK_AMOUNT_KES=499
+DATE_CONFIRMATION_PACK_AMOUNT_CENTS=49900
+DATE_CONFIRMATION_PACK_SIZE=2
+DATE_CONFIRMATION_UNIT_CENTS=24950
 DATE_PAYMENT_WINDOW_HOURS=24
 ```
 
-> Note: Paystack expects the amount in the smallest currency unit. For KES 500, send `50000`.
+> **Paystack:** send `49900` for the pack purchase. Confirmation balance is tracked in
+> `user_credits` (see [`payment/two-confirmation-pack.md`](./payment/two-confirmation-pack.md)).
+
+Legacy env names still in code until migration:
+
+```env
+DATE_CONFIRMATION_AMOUNT_KES=499
+DATE_CONFIRMATION_AMOUNT_CENTS=49900
+```
 
 ---
 
@@ -131,45 +173,48 @@ User receives curated match
         ↓
 Both users choose Open to Meet
         ↓
-Mutual match/date match is created
+Mutual match / date match is created
         ↓
-Users complete or agree to a short vibe-check step
+System assigns slot (Wed/Sat) + confirm-by deadline
         ↓
-Both users confirm they still want to meet
+"Confirm your match" screen appears          ← payment only shown here
         ↓
-Payment becomes required
+Does user have confirmation credit?
+   ├─ Yes → use 1 credit, confirm slot (no Paystack)
+   └─ No  → Pay KSh 499 → grant 2 confirmations → use 1 for this match
         ↓
-Each user is redirected to /payments
+Wait for partner to confirm (same flow for them)
         ↓
-Paystack processes payment
+Both confirmed + both have paid/used credit
         ↓
-Backend verifies payment
+Spend 1 confirmation each → StrathSpace arranges the date
         ↓
-If both users pay → StrathSpace arranges the date
+Next match: user with 1 credit left skips Paystack
         ↓
-If payment is not completed → match expires/cancels
+If window expires before both confirm → match cancels, unused credits stay
 ```
 
 ---
 
 ## 6. When Payment Is Required
 
-Payment should only be required after both users have shown serious intent.
+Payment UI appears **only after a mutual match exists** and the user reaches the
+**Confirm your match** step (slot confirmation screen).
 
-Payment should start after:
+Prerequisites before payment is shown:
 
 1. User A and User B are matched.
-2. Both users choose `Open to Meet`.
-3. Both users complete or accept the vibe-check flow.
-4. Both users confirm they still want to meet.
+2. Both users chose `Open to Meet`.
+3. A `date_match` row exists with an assigned slot and `slotConfirmBy` deadline.
 
-At that point, the match enters:
+At that point, for each user:
 
 ```txt
-payment_required
+If confirmation_balance >= 1 → show "Confirm" (uses 1 credit)
+If confirmation_balance = 0  → show "Pay KSh 499" (pack grants 2, uses 1)
 ```
 
-Then both users must pay the Date Confirmation Fee.
+Users never see payment on signup, browse, or before they have a match.
 
 ---
 
@@ -197,39 +242,30 @@ This prevents one person from blocking the other person from meeting new matches
 
 ## 8. Match Termination Logic
 
-If the payment window expires and payment is incomplete:
+If the confirmation window expires and both users have not confirmed:
 
 - The match is cancelled in the backend.
-- The users are released back into the matchmaking pool.
-- The person who failed to pay may receive a low-intent flag.
-- If one user paid and the other did not, the paying user is given refund/credit options.
+- Both users are released back into the matchmaking pool.
+- **Unused confirmation credits stay on each user's balance** (nothing is spent).
+- The person who failed to confirm may receive a low-intent flag.
 
-This is important because StrathSpace should not allow a serious user to be stuck waiting for someone unserious.
+If one user confirmed (paid or used credit) but the other did not:
+
+- Cancel the match and release both users.
+- **Restore** the confirming user's reserved confirmation (mark credit `active` again).
+- Flag the non-confirming user as low intent.
+- No refund flow needed if the confirmation was never spent.
+
+If a user paid KSh 499 for a pack but never used any confirmation on that match,
+they still have 2 confirmations available for future matches.
 
 ---
 
 ## 9. Main Payment Scenarios
 
-### Scenario A — Nobody Pays
+### Scenario A — Nobody Confirms
 
-If neither user pays before the deadline:
-
-```txt
-payment_state = expired
-date_match.status = cancelled
-```
-
-Actions:
-
-- Cancel the match.
-- Release both users back to matchmaking.
-- No refund is needed.
-
----
-
-### Scenario B — One User Pays, Other User Does Not
-
-If User A pays but User B does not pay before the deadline:
+If neither user confirms before the deadline:
 
 ```txt
 payment_state = expired
@@ -240,57 +276,49 @@ Actions:
 
 - Cancel the match.
 - Release both users back to matchmaking.
-- Mark the unpaid user as low intent internally.
-- Ask the paying user what they want to do with the money.
-
-The paying user should see:
-
-```txt
-The other person did not confirm in time.
-
-You can either request a refund or keep this as StrathSpace credit for your next confirmed date.
-```
-
-Options:
-
-```txt
-Keep as credit
-Request refund
-```
-
-Recommended default option:
-
-```txt
-Keep as credit
-```
-
-Reason:
-
-Credit is easier to manage operationally and encourages the user to continue using StrathSpace.
+- No confirmations spent; balances unchanged.
 
 ---
 
-### Scenario C — Both Users Pay
+### Scenario B — One User Confirms, Other Does Not
 
-If both users pay before the deadline:
+If User A confirms (paid or used credit) but User B does not before the deadline:
+
+```txt
+payment_state = expired
+date_match.status = cancelled
+```
+
+Actions:
+
+- Cancel the match.
+- Release both users back to matchmaking.
+- **Restore** User A's reserved confirmation (if one was held for this match).
+- Mark User B as low intent internally.
+
+User A should see:
+
+```txt
+They did not confirm in time.
+Your confirmation was not used. You still have X date confirmations left.
+```
+
+---
+
+### Scenario C — Both Users Confirm (Pack Model)
+
+If both users confirm before the deadline (each paid or used credit):
 
 ```txt
 payment_state = both_paid
-date_match.status = ready_to_arrange
-```
-
-Then move to:
-
-```txt
-payment_state = being_arranged
-date_match.status = being_arranged
+date_match.status = scheduled (after tryFinalizeConfirmedMeetup)
 ```
 
 Actions:
 
+- Spend 1 confirmation from each user's balance.
 - Notify both users.
-- Add the match to the admin arrangement queue.
-- StrathSpace team manually arranges the date.
+- StrathSpace arranges the date.
 
 User copy:
 
@@ -298,6 +326,8 @@ User copy:
 You're both confirmed.
 We're arranging this one for you.
 ```
+
+If a user had 2 confirmations before this match, they now have 1 left for the next one.
 
 ---
 
@@ -1298,37 +1328,40 @@ The final flow should feel like this:
 Join StrathSpace for free.
 Receive curated matches for free.
 Say Open to Meet for free.
-Complete the vibe-check for free.
-Only pay when both people are ready for StrathSpace to arrange the real date.
+When you get a match, confirm before we set up the date.
+Pay KSh 499 once for 2 date confirmations (only when you need your first one).
+Your next match can use your remaining confirmation — no second payment.
+A confirmation is only used when you both confirm and we proceed with setup.
 ```
 
 This keeps StrathSpace intentional, serious, and focused on real-world dating outcomes.
 
 The payment is not for digital access.
 
-It is a commitment fee for real-world date coordination.
+It is a commitment pack for real-world date coordination.
 
 ---
 
 ## 35. Key Rule for the Developer
 
-Do not allow an unpaid or expired match to block users.
+Do not allow an unconfirmed or expired match to block users.
 
-If someone refuses to pay or ignores the payment step:
+If someone refuses to confirm or ignores the confirmation step:
 
 ```txt
 Cancel the match.
 Release the other person.
+Restore any reserved (unspent) confirmations.
 Let serious users continue matching.
 ```
 
-If one person paid and the other did not:
+If one person confirmed and the other did not:
 
 ```txt
 Cancel the match.
-Ask the paying user whether they want refund or credit.
+Restore the confirming user's confirmation (do not spend it).
 Keep the platform fair.
 Protect serious users.
 ```
 
-That is the main logic this feature must enforce.
+Never spend a confirmation unless both users confirm and date setup proceeds.

@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { View, StyleSheet, StatusBar, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useMinimizeOnScroll } from 'expo-glass-tabs';
 import * as Haptics from 'expo-haptics';
 
 import { ConversationsList, ArchivedConversationsSheet } from '@/components/chat';
@@ -9,12 +10,28 @@ import { MessagesHeader } from '@/components/messages';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
 import { useTheme } from '@/hooks/use-theme';
 import { useConversations, type Conversation } from '@/hooks/use-conversations';
+import { useDailyMatches } from '@/hooks/use-daily-matches';
+import { ActionRequiredBanner } from '@/components/attention/action-required-banner';
 
 export default function ChatsScreen() {
+    const onScroll = useMinimizeOnScroll();
     const { colors, colorScheme } = useTheme();
     const router = useRouter();
 
-    const { data: conversations = [], isLoading, refetch } = useConversations();
+    const {
+        data: conversations = [],
+        isLoading,
+        isError,
+        error,
+        refetch,
+    } = useConversations();
+    const dailyMatches = useDailyMatches();
+    const activeHold = dailyMatches.data?.hold ?? null;
+    const showConfirmBanner = Boolean(
+        activeHold?.slotConfirmation?.needsSlotConfirmation
+        && !activeHold?.slotConfirmation?.viewerSlotConfirmed
+        && activeHold?.slotConfirmation?.confirmWindowOpen,
+    );
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showSearch, setShowSearch] = useState(false);
@@ -138,18 +155,31 @@ export default function ChatsScreen() {
                     onOpenArchived={() => setShowArchivedSheet(true)}
                 />
 
+                {showConfirmBanner && activeHold ? (
+                    <ActionRequiredBanner
+                        partnerFirstName={activeHold.partner.firstName ?? 'your match'}
+                        slot={activeHold.slotConfirmation}
+                        dateMatchId={activeHold.dateMatchId}
+                        onPress={() => router.push('/(tabs)')}
+                    />
+                ) : null}
+
                 <View style={styles.listContainer}>
                     <ConversationsList
                         conversations={visibleConversations}
                         isLoading={isLoading}
                         isRefreshing={isRefreshing}
+                        isError={isError}
+                        errorMessage={error instanceof Error ? error.message : undefined}
                         onRefresh={handleRefresh}
+                        onRetry={() => refetch()}
                         onConversationPress={handleConversationPress}
                         onArchive={handleArchive}
                         onDelete={handleDelete}
                         onMute={handleMute}
                         onExplore={handleExplore}
                         mutedIds={mutedIds}
+                        onScroll={onScroll}
                     />
                 </View>
 

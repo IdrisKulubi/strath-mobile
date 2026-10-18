@@ -20,6 +20,28 @@ import { syncMutualMatchFromDateMatch } from "@/lib/services/mutual-match-servic
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
+import { getPaymentConfig } from "@/lib/payments/config";
+import {
+    canConfirmWithBalance,
+    countParticipantsWithReservedOrPaid,
+    hasReservedForMatch,
+    restoreAllReservedForMatch,
+    spendReservedConfirmation,
+} from "@/lib/payments/confirmation-balance";
+import {
+    applyBalanceConfirmedParticipantInTransaction,
+    runPaidParticipantSideEffects,
+} from "@/lib/payments/payment-apply";
+import { getPaymentsEnabled } from "@/lib/payments/payment-flags";
+import { buildDateMatchPaymentInsert } from "@/lib/payments/payment-init";
+import { findUserPaymentForMatch } from "@/lib/payments/payment-repository";
+import { signPaymentToken } from "@/lib/payments/payment-token";
+import {
+    shouldBlockFinalizeForPayment,
+    shouldRequirePaymentToConfirm,
+} from "@/lib/services/meetup-confirmation-payment";
+import type { RescheduleViewerState } from "@/lib/meetup-reschedule/result-types";
+import { notifyPartnerAfterSlotConfirm } from "@/lib/services/meetup-push-notifications-service";
 
 export interface SlotConfirmationView {
     assignedSlot: MeetupSlotKind | null;
@@ -29,6 +51,7 @@ export interface SlotConfirmationView {
     viewerSlotConfirmed: boolean;
     partnerSlotConfirmed: boolean;
     needsSlotConfirmation: boolean;
+    reschedule?: RescheduleViewerState;
 }
 
 export function buildSlotConfirmationView(
@@ -117,6 +140,53 @@ export async function sendDateScheduledPushNotifications(input: {
     ]);
 }
 
+/** Apply a Wed/Sat window to mutual + linked date_match (reschedule accept, admin). */
+export async function applyMeetupSlotToMatch(
+    mutualMatchId: string,
+    input: {
+        slot: MeetupSlotKind;
+        scheduledAt: Date;
+        confirmBy: Date;
+        markBothConfirmed?: boolean;
+    },
+): Promise<void> {
+    const now = new Date();
+    const markBothConfirmed = input.markBothConfirmed ?? true;
+
+    const existing = await db.query.mutualMatches.findFirst({
+        where: eq(mutualMatches.id, mutualMatchId),
+        columns: {
+            userASlotConfirmedAt: true,
+            userBSlotConfirmedAt: true,
+            legacyDateMatchId: true,
+        },
+    });
+    if (!existing) return;
+
+    await db
+        .update(mutualMatches)
+        .set({
+            assignedSlot: input.slot,
+            scheduledAt: input.scheduledAt,
+            slotConfirmBy: input.confirmBy,
+            ...(markBothConfirmed
+                ? {
+                      userASlotConfirmedAt: existing.userASlotConfirmedAt ?? now,
+                      userBSlotConfirmedAt: existing.userBSlotConfirmedAt ?? now,
+                  }
+                : {}),
+            updatedAt: now,
+        })
+        .where(eq(mutualMatches.id, mutualMatchId));
+
+    if (existing.legacyDateMatchId) {
+        await db
+            .update(dateMatches)
+            .set({ scheduledAt: input.scheduledAt })
+            .where(eq(dateMatches.id, existing.legacyDateMatchId));
+    }
+}
+
 export async function tryFinalizeConfirmedMeetup(
     mutualMatchId: string,
 ): Promise<{ finalized: boolean; reason?: string }> {
@@ -144,6 +214,29 @@ export async function tryFinalizeConfirmedMeetup(
     const dateMatchId = row.legacyDateMatchId;
     if (!dateMatchId) return { finalized: false, reason: "no_date_match" };
 
+    const paymentsEnabled = await getPaymentsEnabled();
+    if (paymentsEnabled) {
+        const dateMatch = await db.query.dateMatches.findFirst({
+            where: eq(dateMatches.id, dateMatchId),
+        });
+
+        const readyCount = await countParticipantsWithReservedOrPaid(
+            dateMatchId,
+            row.userAId,
+            row.userBId,
+        );
+
+        if (
+            shouldBlockFinalizeForPayment({
+                paymentsEnabled: true,
+                paymentState: dateMatch?.paymentState,
+                readyParticipantCount: readyCount,
+            })
+        ) {
+            return { finalized: false, reason: "payment_incomplete" };
+        }
+    }
+
     const location = await getDefaultDateLocation();
     if (!location) {
         console.error(
@@ -154,6 +247,13 @@ export async function tryFinalizeConfirmedMeetup(
     }
 
     const scheduledAt = row.scheduledAt ?? new Date();
+
+    if (paymentsEnabled) {
+        await db.transaction(async (tx) => {
+            await spendReservedConfirmation(tx, row.userAId, dateMatchId, new Date());
+            await spendReservedConfirmation(tx, row.userBId, dateMatchId, new Date());
+        });
+    }
 
     await db
         .update(dateMatches)
@@ -201,7 +301,12 @@ export type ConfirmMeetupSlotResult =
     | { status: "expired" }
     | { status: "not_found" }
     | { status: "forbidden" }
-    | { status: "confirm_window_closed" };
+    | { status: "confirm_window_closed" }
+    | {
+          status: "payment_required";
+          paymentToken: string;
+          webPaymentUrl: string;
+      };
 
 export async function confirmMeetupSlot(
     mutualMatchId: string,
@@ -224,11 +329,80 @@ export async function confirmMeetupSlot(
         return { status: "confirm_window_closed" };
     }
 
+    const paymentsEnabled = await getPaymentsEnabled();
+    if (paymentsEnabled) {
+        const dateMatchId = row.legacyDateMatchId;
+        if (!dateMatchId) {
+            return { status: "not_found" };
+        }
+
+        const [userPayment, reserved, useBalance] = await Promise.all([
+            findUserPaymentForMatch(dateMatchId, userId),
+            hasReservedForMatch(userId, dateMatchId),
+            canConfirmWithBalance(userId),
+        ]);
+
+        if (
+            shouldRequirePaymentToConfirm({
+                paymentsEnabled: true,
+                userPaymentStatus: userPayment?.status,
+                hasReserved: reserved,
+                canUseBalance: useBalance,
+            })
+        ) {
+            const { webPaymentUrl } = getPaymentConfig();
+            return {
+                status: "payment_required",
+                paymentToken: signPaymentToken({ dateMatchId, userId }),
+                webPaymentUrl,
+            };
+        }
+    }
+
     const now = new Date();
     const isUserA = row.userAId === userId;
     const alreadyConfirmed = isUserA ? row.userASlotConfirmedAt : row.userBSlotConfirmedAt;
 
-    if (!alreadyConfirmed) {
+    if (!alreadyConfirmed && paymentsEnabled && row.legacyDateMatchId) {
+        const dateMatchId = row.legacyDateMatchId;
+        const reserved = await hasReservedForMatch(userId, dateMatchId);
+        const userPayment = await findUserPaymentForMatch(dateMatchId, userId);
+
+        if (!reserved && userPayment?.status !== "paid") {
+            try {
+                const applyResult = await db.transaction(async (tx) => {
+                    return applyBalanceConfirmedParticipantInTransaction(tx, {
+                        dateMatchId,
+                        userId,
+                        now,
+                    });
+                });
+                await runPaidParticipantSideEffects({
+                    dateMatchId,
+                    userId,
+                    paidCount: applyResult.paidCount,
+                    mutualMatchId: applyResult.mutualMatchId,
+                });
+            } catch {
+                const { webPaymentUrl } = getPaymentConfig();
+                return {
+                    status: "payment_required",
+                    paymentToken: signPaymentToken({ dateMatchId, userId }),
+                    webPaymentUrl,
+                };
+            }
+        } else if (!alreadyConfirmed) {
+            await db
+                .update(mutualMatches)
+                .set({
+                    ...(isUserA
+                        ? { userASlotConfirmedAt: now }
+                        : { userBSlotConfirmedAt: now }),
+                    updatedAt: now,
+                })
+                .where(eq(mutualMatches.id, mutualMatchId));
+        }
+    } else if (!alreadyConfirmed) {
         await db
             .update(mutualMatches)
             .set({
@@ -238,6 +412,10 @@ export async function confirmMeetupSlot(
                 updatedAt: now,
             })
             .where(eq(mutualMatches.id, mutualMatchId));
+    }
+
+    if (!alreadyConfirmed) {
+        await notifyPartnerAfterSlotConfirm(mutualMatchId, userId);
     }
 
     const finalize = await tryFinalizeConfirmedMeetup(mutualMatchId);
@@ -271,6 +449,7 @@ export async function expireUnconfirmedMeetups(mutualMatchId?: string): Promise<
         inArray(mutualMatches.status, ["mutual", "being_arranged"]),
         isNotNull(mutualMatches.slotConfirmBy),
         lte(mutualMatches.slotConfirmBy, now),
+        isNull(mutualMatches.pendingRescheduleRequestId),
         or(
             isNull(mutualMatches.userASlotConfirmedAt),
             isNull(mutualMatches.userBSlotConfirmedAt),
@@ -292,6 +471,9 @@ export async function expireUnconfirmedMeetups(mutualMatchId?: string): Promise<
 
     for (const row of expired) {
         if (row.legacyDateMatchId) {
+            await db.transaction(async (tx) => {
+                await restoreAllReservedForMatch(tx, row.legacyDateMatchId!);
+            });
             await db
                 .update(dateMatches)
                 .set({ status: "cancelled" })
@@ -322,6 +504,11 @@ export async function initializeMeetupSlotForMutual(
 ): Promise<{ dateMatchId: string; scheduledAt: Date; confirmBy: Date; slot: MeetupSlotKind }> {
     const mutualAt = input.mutualAt ?? new Date();
     const assignment = assignMeetupSlot(mutualAt);
+    const paymentsEnabled = await getPaymentsEnabled();
+    const paymentFields = buildDateMatchPaymentInsert({
+        confirmBy: assignment.confirmBy,
+        enabled: paymentsEnabled,
+    });
 
     const [dateRow] = await tx
         .insert(dateMatches)
@@ -336,6 +523,7 @@ export async function initializeMeetupSlotForMutual(
             userAConfirmed: false,
             userBConfirmed: false,
             createdAt: mutualAt,
+            ...paymentFields,
         })
         .returning({ id: dateMatches.id });
 

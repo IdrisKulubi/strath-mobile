@@ -1,4 +1,4 @@
-import { ThemeProvider as NavThemeProvider } from '@react-navigation/native';
+import { ThemeProvider as NavThemeProvider } from 'expo-router/react-navigation';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
@@ -17,12 +17,18 @@ import { LaunchExperience } from '@/components/intro/launch-experience';
 import { NoInternetScreen } from '@/components/no-internet-screen';
 import { OfflineBanner } from '@/components/offline-banner';
 import { SessionBootstrap } from '@/components/session-bootstrap';
-import { AppFeedbackNudge } from '@/components/feedback/app-feedback-nudge';
 import { useNetwork } from '@/hooks/use-network';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
+import { PaymentDeepLinkHandler } from '@/components/payment/payment-deep-link-handler';
+import {
+  NotificationPermissionProvider,
+  useNotificationPermissionPrompt,
+} from '@/context/notification-permission-context';
 import { usePresenceHeartbeat } from '@/hooks/use-presence-heartbeat';
 import { hasCompletedIntroSlides } from '@/lib/intro-storage';
 import { isAuthenticated } from '@/lib/auth-helpers';
+import { QuestionnaireRouteGate } from '@/components/questionnaire/route-gate';
+import { MatchCelebrationProvider } from '@/components/questionnaire/match-celebration';
 
 ExpoSplashScreen.preventAutoHideAsync();
 
@@ -58,6 +64,7 @@ function RootLayoutNav({ hasAuthToken }: { hasAuthToken: boolean }) {
         <Stack.Screen name="chat/[matchId]" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="verification" />
+        <Stack.Screen name="questions" options={{ gestureEnabled: false }} />
         <Stack.Screen name="waitlist" options={{ gestureEnabled: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Modal' }} />
         <Stack.Screen name="settings" />
@@ -67,19 +74,30 @@ function RootLayoutNav({ hasAuthToken }: { hasAuthToken: boolean }) {
         <Stack.Screen name="ui-preview" />
         <Stack.Screen name="profile/[userId]" />
         <Stack.Screen name="feedback/[dateId]" />
+        <Stack.Screen name="payments/success" options={{ animation: 'fade' }} />
+        <Stack.Screen name="payments/failed" options={{ animation: 'fade' }} />
         <Stack.Screen name="app-feedback" options={{ presentation: 'modal' }} />
       </Stack>
       <OfflineBanner />
-      <AppFeedbackNudge hasAuthToken={hasAuthToken} />
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
     </NavThemeProvider>
   );
 }
 
-function NotificationsBootstrap() {
-  usePushNotifications();
+function PushNotificationListeners() {
+  const { setExpoPushToken } = useNotificationPermissionPrompt();
+  usePushNotifications({ onTokenRegistered: setExpoPushToken });
   usePresenceHeartbeat();
-  return null;
+  return <PaymentDeepLinkHandler />;
+}
+
+function NotificationsBootstrap({ children }: { children: React.ReactNode }) {
+  return (
+    <NotificationPermissionProvider>
+      <PushNotificationListeners />
+      {children}
+    </NotificationPermissionProvider>
+  );
 }
 
 interface BootstrapState {
@@ -96,8 +114,7 @@ export default function RootLayout() {
 
     async function prepare() {
       try {
-        const [, slidesDone, authed] = await Promise.all([
-          new Promise<void>((resolve) => setTimeout(resolve, 350)),
+        const [slidesDone, authed] = await Promise.all([
           hasCompletedIntroSlides(),
           isAuthenticated(),
         ]);
@@ -143,8 +160,13 @@ export default function RootLayout() {
               ) : (
                 <>
                   <SessionBootstrap />
-                  <NotificationsBootstrap />
-                  <RootLayoutNav hasAuthToken={bootstrap.hasAuthToken} />
+                  <NotificationsBootstrap>
+                    <QuestionnaireRouteGate>
+                      <MatchCelebrationProvider>
+                        <RootLayoutNav hasAuthToken={bootstrap.hasAuthToken} />
+                      </MatchCelebrationProvider>
+                    </QuestionnaireRouteGate>
+                  </NotificationsBootstrap>
                 </>
               )}
             </ToastProvider>

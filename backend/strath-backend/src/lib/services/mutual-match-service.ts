@@ -7,7 +7,7 @@ import {
     profiles,
 } from "@/db/schema";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
-import { buildSlotConfirmationView } from "@/lib/services/meetup-confirmation-service";
+import { buildSlotConfirmationViewWithReschedule } from "@/lib/services/meetup-reschedule-service";
 
 /**
  * Admin moves a mutual match to arranging: flip `mutualMatches` to `being_arranged` and
@@ -330,8 +330,8 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                 venueName: row.venueName ?? undefined,
                 venueAddress: row.venueAddress ?? undefined,
                 scheduledAt: row.scheduledAt?.toISOString() ?? undefined,
-                ...(() => {
-                    const slot = buildSlotConfirmationView(row, userId);
+                ...(await (async () => {
+                    const slot = await buildSlotConfirmationViewWithReschedule(row, userId);
                     return {
                         confirmBy: slot.confirmBy ?? undefined,
                         assignedSlot: slot.assignedSlot ?? undefined,
@@ -339,8 +339,9 @@ export async function listMutualDatesForUser(userId: string): Promise<MutualDate
                         partnerSlotConfirmed: slot.partnerSlotConfirmed,
                         needsSlotConfirmation: slot.needsSlotConfirmation,
                         confirmWindowOpen: slot.confirmWindowOpen,
+                        reschedule: slot.reschedule,
                     };
-                })(),
+                })()),
                 createdAt: row.createdAt.toISOString(),
             };
         }),

@@ -12,17 +12,27 @@ export interface FaceVerificationComparisonDecisionInput {
     qualityFlags: string[];
 }
 
+export function isStrongSingleFaceMatch(
+    result: { similarity: number | null; facesDetected: number },
+    similarityThreshold: number,
+) {
+    return result.facesDetected === 1 && (result.similarity ?? 0) >= similarityThreshold;
+}
+
+function getEvaluatedComparisonResults(results: FaceVerificationComparisonDecisionInput[]) {
+    return results.filter((result) => result.decision !== "skipped");
+}
+
 export function resolveFaceVerificationOutcome(input: {
     minimumMatchCount: number;
     similarityThreshold: number;
     comparisonResults: FaceVerificationComparisonDecisionInput[];
 }) {
-    const matchedPhotoCount = input.comparisonResults.filter(
-        (result) => result.decision === "matched",
-    ).length;
+    const evaluatedResults = getEvaluatedComparisonResults(input.comparisonResults);
+    const matchedPhotoCount = evaluatedResults.filter((result) => result.decision === "matched").length;
 
     const failureReasons = buildFailureReasons({
-        comparisonResults: input.comparisonResults,
+        comparisonResults: evaluatedResults,
         matchedPhotoCount,
         minimumMatchCount: input.minimumMatchCount,
     });
@@ -30,13 +40,20 @@ export function resolveFaceVerificationOutcome(input: {
     const finalStatus =
         matchedPhotoCount >= input.minimumMatchCount
             ? FACE_VERIFICATION_STATUSES.VERIFIED
-            : input.comparisonResults.every((result) => result.decision === "error")
-            ? input.comparisonResults.every((result) =>
-                  result.qualityFlags.every((flag) => RETRYABLE_IMAGE_ERROR_FLAGS.has(flag)),
-              )
-                ? FACE_VERIFICATION_STATUSES.RETRY_REQUIRED
-                : FACE_VERIFICATION_STATUSES.MANUAL_REVIEW
-            : FACE_VERIFICATION_STATUSES.RETRY_REQUIRED;
+            : evaluatedResults.length === 0
+              ? FACE_VERIFICATION_STATUSES.RETRY_REQUIRED
+              : evaluatedResults.some((result) =>
+                    result.decision === "error" &&
+                    result.qualityFlags.some((flag) => !RETRYABLE_IMAGE_ERROR_FLAGS.has(flag)),
+                )
+                ? FACE_VERIFICATION_STATUSES.MANUAL_REVIEW
+              : evaluatedResults.every((result) => result.decision === "error")
+                ? evaluatedResults.every((result) =>
+                      result.qualityFlags.every((flag) => RETRYABLE_IMAGE_ERROR_FLAGS.has(flag)),
+                  )
+                    ? FACE_VERIFICATION_STATUSES.RETRY_REQUIRED
+                    : FACE_VERIFICATION_STATUSES.MANUAL_REVIEW
+                : FACE_VERIFICATION_STATUSES.RETRY_REQUIRED;
 
     return {
         matchedPhotoCount,
@@ -44,7 +61,7 @@ export function resolveFaceVerificationOutcome(input: {
         finalStatus,
         decisionSummary: {
             matchedPhotoCount,
-            comparedPhotoCount: input.comparisonResults.length,
+            comparedPhotoCount: evaluatedResults.length,
             similarityThreshold: input.similarityThreshold,
             minimumMatchCount: input.minimumMatchCount,
         },

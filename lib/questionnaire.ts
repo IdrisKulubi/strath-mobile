@@ -1,0 +1,102 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { apiFetch } from '@/lib/api-client';
+import { getCurrentUserId } from '@/lib/auth-helpers';
+
+export type Experience = { collection: boolean; matching: boolean; shell: boolean };
+export type Compatibility = { status: 'ready' | 'insufficient_evidence'; score: number | null; sharedCount: number; evidenceCount: number };
+export type Person = { id: string; name: string; age: number; city: string; bio: string; photos: string[]; intentions: string[]; university?: string | null; course?: string | null; yearOfStudy?: number | null; compatibility?: Compatibility };
+export type Preferences = { genders: string[]; minAge: number; maxAge: number; city: string; radiusKm: number | null; latitude: number | null; longitude: number | null; intentions: string[] };
+export type DiscoveryBlocker =
+  | 'answers'
+  | 'birthDate'
+  | 'preferences'
+  | 'profile'
+  | 'verification'
+  | 'visibility'
+  | 'paused'
+  | 'anonymous';
+
+export type QuestionnaireState = {
+  answerCount: number;
+  required: number;
+  requiredQuestionIds: string[];
+  complete: boolean;
+  revision: number;
+  birthDate: string | null;
+  preferences: Preferences | null;
+  skipped: string[];
+  discovery: { ready: boolean; missing: DiscoveryBlocker[] };
+};
+export type DiscoveryResponse = { items: Person[]; page: number; pageSize: number; totalEligible: number; hasMore: boolean };
+export type LikesResponse = { received: Person[]; sent: Person[] };
+export type DecisionResponse = { mutual: boolean; matchId?: string };
+export type PublicComparison = {
+  profile: Person;
+  compatibility: Compatibility;
+  questions: {
+    id: string;
+    prompt: string;
+    options: { id: string; label: string }[];
+    yours: string | null;
+    theirs: string;
+    yourExplanation: string | null;
+    theirExplanation: string;
+  }[];
+};
+export type Question = {
+  id: string;
+  question_key: string;
+  version: number;
+  prompt: string;
+  category: string;
+  pool: 'starter' | 'replacement' | 'sensitive';
+  sensitive: boolean;
+  neutral_answer_id: string | null;
+  options: { id: string; label: string }[];
+  answer_id: string | null;
+  acceptable: string[] | null;
+  weight: number | null;
+  public: boolean | null;
+  explanation: string | null;
+};
+
+const prefix = '/api/v2/questionnaire/';
+
+export function useIdentity() {
+  return useQuery({ queryKey: ['questionnaire-identity'], queryFn: getCurrentUserId, staleTime: 0 });
+}
+
+export function useQuestionnaire<T>(resource: string, enabled = true) {
+  const identity = useIdentity();
+  return useQuery({
+    queryKey: ['questionnaire', identity.data, resource],
+    queryFn: () => apiFetch<T>(prefix + resource),
+    enabled: enabled && Boolean(identity.data),
+    retry: false,
+    staleTime: 10_000,
+  });
+}
+
+export function useExperience() {
+  return useQuestionnaire<Experience>('experience');
+}
+
+export function useQuestionnaireMutation<T = unknown>(resource: string, method = 'POST') {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiFetch<T>(prefix + resource, { method, body }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['questionnaire'] }),
+        queryClient.invalidateQueries({ queryKey: ['profile'] }),
+      ]);
+    },
+  });
+}
+
+export function compatibilityLabel(compatibility?: Compatibility) {
+  return compatibility?.score != null
+    ? `${Math.round(compatibility.score)}% compatible · ${compatibility.sharedCount} shared answers`
+    : 'Answer more questions to compare';
+}

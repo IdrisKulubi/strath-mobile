@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { View, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, StyleSheet, Pressable, TouchableOpacity, Text as RNText } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown, FadeIn, SlideInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { CancelHoldSheet } from '@/components/home/cancel-hold-sheet';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
@@ -13,8 +13,12 @@ import {
     MatchHoldCancelReason,
     useCancelMatchHold,
 } from '@/hooks/use-daily-matches';
+import { usePaymentStatus } from '@/hooks/use-payment-status';
+import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
+import { formatPaymentAmount } from '@/lib/payment-ui';
+import { CONFIRM_MATCH_WHY_TEASER } from '@/lib/confirmation-copy';
 import { formatMeetupSlot } from '@/lib/meetup-slot';
-
+import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 interface DateHoldCardProps {
     hold: MatchHold;
 }
@@ -28,17 +32,92 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
 
     const partnerName = hold.partner.firstName ?? 'your match';
 
-    const copy = useMemo(() => buildCopy(hold), [hold]);
+    const { paymentsEnabled } = usePaymentsEnabled();
+    const { data: paymentStatus } = usePaymentStatus(hold.dateMatchId ?? undefined);
 
-    const handleCancel = (reason: MatchHoldCancelReason, notes?: string) => {
+    const copy = useMemo(
+        () =>
+            buildCopy(
+                hold,
+                paymentsEnabled,
+                paymentStatus?.amount,
+                paymentStatus?.currency,
+                paymentStatus?.canConfirmWithBalance,
+            ),
+        [
+            hold,
+            paymentsEnabled,
+            paymentStatus?.amount,
+            paymentStatus?.currency,
+            paymentStatus?.canConfirmWithBalance,
+        ],
+    );
+
+    const reschedulePending = hold.slotConfirmation?.reschedule?.pending;
+    const needsRescheduleResponse = Boolean(reschedulePending?.isYourTurnToRespond);
+
+    const handleRescheduleResponse = useCallback(() => {
+        if (!reschedulePending?.requestId) {
+            router.push('/(tabs)/dates');
+            return;
+        }
+        router.push({
+            pathname: '/(tabs)/dates',
+            params: { rescheduleRequestId: reschedulePending.requestId },
+        } as any);
+    }, [reschedulePending?.requestId, router]);
+
+    const handlePrimaryCta = useCallback(() => {
+        if (copy.primaryCta?.kind === 'feedback' && hold.dateMatchId) {
+            router.push({
+                pathname: '/feedback/[dateId]',
+                params: {
+                    dateId: hold.dateMatchId,
+                    name: partnerName,
+                },
+            });
+            return;
+        }
+        router.push('/(tabs)/dates');
+    }, [copy.primaryCta, hold.dateMatchId, partnerName, router]);
+
+    const paidCreditNote = useMemo(() => {
+        if (!paymentsEnabled) {
+            return null;
+        }
+        if (paymentStatus?.confirmationBalance && paymentStatus.confirmationBalance.reserved > 0) {
+            return 'If they do not confirm in time, your confirmation stays unused.';
+        }
+        if (paymentStatus?.currentUserPaid) {
+            const amountLabel = formatPaymentAmount(
+                paymentStatus.amount ?? 499,
+                paymentStatus.currency ?? 'KES',
+            );
+            return `If you cancel, your ${amountLabel} pack balance stays on your account.`;
+        }
+        return null;
+    }, [paymentsEnabled, paymentStatus]);
+
+    const handleCancel = (reason: MatchHoldCancelReason) => {
         cancel.mutate(
-            { mutualMatchId: hold.mutualMatchId, reason, notes: notes ?? null },
+            { mutualMatchId: hold.mutualMatchId, reason, notes: null },
             {
-                onSuccess: () => {
-                    toast.show({
-                        message: 'Cancelled — Home will reopen for new intros.',
-                        variant: 'success',
-                    });
+                onSuccess: (data) => {
+                    if (data.credited && data.creditAmountCents != null) {
+                        const amountLabel = formatPaymentAmount(
+                            data.creditAmountCents / 100,
+                            paymentStatus?.currency ?? 'KES',
+                        );
+                        toast.show({
+                            message: `Cancelled. ${amountLabel} saved as your StrathSpace credit.`,
+                            variant: 'success',
+                        });
+                    } else {
+                        toast.show({
+                            message: 'Cancelled — Home will reopen for new intros.',
+                            variant: 'success',
+                        });
+                    }
                     setShowCancel(false);
                 },
                 onError: () => {
@@ -51,10 +130,12 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
         );
     };
 
-    const cardBorder = isDark ? 'rgba(233,30,140,0.3)' : 'rgba(233,30,140,0.22)';
+    const rescheduleCtaFill = isDark ? 'rgba(217,74,143,0.12)' : 'rgba(184,50,122,0.08)';
+    const rescheduleCtaFillPressed = isDark ? 'rgba(217,74,143,0.2)' : 'rgba(184,50,122,0.12)';
+
     return (
         <Animated.View entering={FadeInDown.duration(400)} style={styles.outer}>
-            <View style={[styles.card, { borderColor: cardBorder, backgroundColor: colors.card }]}>
+            <View style={styles.card}>
                 <View style={styles.content}>
                     <View style={styles.statusPillRow}>
                         <View style={[styles.statusPill, { backgroundColor: colors.primary }]}>
@@ -66,7 +147,7 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                     </View>
 
                     <View style={styles.partnerRow}>
-                        <View style={[styles.avatarWrap, { borderColor: cardBorder }]}>
+                        <View style={[styles.avatarWrap, { borderColor: colors.border }]}>
                             {hold.partner.profilePhoto ? (
                                 <CachedImage uri={hold.partner.profilePhoto} style={styles.avatar} />
                             ) : (
@@ -99,7 +180,7 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{copy.subtitle}</Text>
 
                     {hold.slotConfirmation?.needsSlotConfirmation && hold.slotConfirmation.viewerSlotConfirmed ? (
-                        <View style={[styles.detailsBlock, { borderColor: cardBorder }]}>
+                        <View style={[styles.detailsBlock, { borderColor: colors.border }]}>
                             {hold.slotConfirmation.scheduledAt ? (
                                 <View style={styles.detailRow}>
                                     <Ionicons name="calendar-outline" size={18} color={colors.primary} />
@@ -110,12 +191,12 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                             ) : null}
                             <Text style={[styles.waitingPartner, { color: colors.mutedForeground }]}>
                                 {hold.slotConfirmation.partnerSlotConfirmed
-                                    ? 'Finalizing your date.'
-                                    : `Waiting for ${partnerName} to confirm.`}
+                                    ? `${partnerName} confirmed — finalizing your date.`
+                                    : `You confirmed · Waiting for ${partnerName} to confirm.`}
                             </Text>
                         </View>
                     ) : !hold.slotConfirmation?.needsSlotConfirmation && (hold.scheduledAt || hold.venueName) ? (
-                        <View style={[styles.detailsBlock, { borderColor: cardBorder }]}>
+                        <View style={[styles.detailsBlock, { borderColor: colors.border }]}>
                             {hold.scheduledAt ? (
                                 <View style={styles.detailRow}>
                                     <Ionicons name="calendar-outline" size={18} color={colors.primary} />
@@ -136,49 +217,78 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                         </View>
                     ) : null}
 
-                    <View style={styles.ctaStack}>
-                        {copy.primaryCta ? (
-                            <Pressable
-                                accessibilityRole="button"
-                                onPress={() => {
-                                    if (copy.primaryCta?.kind === 'feedback' && hold.dateMatchId) {
-                                        router.push({
-                                            pathname: '/feedback/[dateId]',
-                                            params: {
-                                                dateId: hold.dateMatchId,
-                                                name: partnerName,
-                                            },
-                                        });
-                                    } else {
-                                        router.push('/(tabs)/dates');
-                                    }
-                                }}
-                                style={({ pressed }) => [
-                                    styles.primaryCta,
-                                    { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 },
-                                ]}
-                            >
-                                <Text style={[styles.primaryCtaLabel, { color: colors.primaryForeground }]}>
-                                    {copy.primaryCta.label}
-                                </Text>
-                                <Ionicons name="arrow-forward" size={18} color={colors.primaryForeground} />
-                            </Pressable>
-                        ) : null}
-
+                    {needsRescheduleResponse && reschedulePending ? (
                         <Pressable
                             accessibilityRole="button"
-                            onPress={() => setShowCancel(true)}
+                            accessibilityLabel="Respond to date change request"
+                            onPress={handleRescheduleResponse}
                             style={({ pressed }) => [
-                                styles.secondaryCta,
-                                { borderColor: cardBorder, opacity: pressed ? 0.85 : 1 },
+                                styles.rescheduleCta,
+                                {
+                                    borderColor: colors.primary,
+                                    backgroundColor: pressed
+                                        ? rescheduleCtaFillPressed
+                                        : rescheduleCtaFill,
+                                },
                             ]}
                         >
-                            <Text style={[styles.secondaryCtaLabel, { color: colors.foreground }]}>
-                                {hold.status === 'completed_pending_feedback'
-                                    ? 'Mark as not interested'
-                                    : 'Cancel — keep matching me'}
+                            <Ionicons name="swap-horizontal" size={18} color={colors.primary} />
+                            <Text style={[styles.rescheduleCtaText, { color: colors.primary }]}>
+                                Respond to date change request
                             </Text>
                         </Pressable>
+                    ) : null}
+
+                    <View style={styles.ctaStack}>
+                        {copy.primaryCta ? (
+                            <TouchableOpacity
+                                accessibilityRole="button"
+                                accessibilityLabel={copy.primaryCta.label}
+                                activeOpacity={0.88}
+                                onPress={handlePrimaryCta}
+                            >
+                                <View
+                                    style={[
+                                        styles.primaryButton,
+                                        {
+                                            backgroundColor: colors.primary,
+                                            borderColor: colors.primary,
+                                        },
+                                    ]}
+                                >
+                                    <RNText style={styles.primaryButtonLabel}>
+                                        {copy.primaryCta.label}
+                                    </RNText>
+                                </View>
+                            </TouchableOpacity>
+                        ) : null}
+
+                        <TouchableOpacity
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                                hold.status === 'completed_pending_feedback'
+                                    ? 'Mark as not interested'
+                                    : 'Cancel, keep matching me'
+                            }
+                            activeOpacity={0.88}
+                            onPress={() => setShowCancel(true)}
+                        >
+                            <View
+                                style={[
+                                    styles.outlineButton,
+                                    {
+                                        borderColor: colors.primary,
+                                        backgroundColor: colors.background,
+                                    },
+                                ]}
+                            >
+                                <RNText style={[styles.outlineButtonLabel, { color: colors.primary }]}>
+                                    {hold.status === 'completed_pending_feedback'
+                                        ? 'Mark as not interested'
+                                        : 'Cancel, keep matching me'}
+                                </RNText>
+                            </View>
+                        </TouchableOpacity>
                     </View>
 
                     <Text style={[styles.footnote, { color: colors.mutedForeground }]}>
@@ -191,132 +301,11 @@ export function DateHoldCard({ hold }: DateHoldCardProps) {
                 visible={showCancel}
                 partnerName={partnerName}
                 isSubmitting={cancel.isPending}
+                paidCreditNote={paidCreditNote}
                 onClose={() => setShowCancel(false)}
                 onConfirm={handleCancel}
             />
         </Animated.View>
-    );
-}
-
-interface CancelHoldSheetProps {
-    visible: boolean;
-    partnerName: string;
-    isSubmitting: boolean;
-    onClose: () => void;
-    onConfirm: (reason: MatchHoldCancelReason, notes?: string) => void;
-}
-
-const REASONS: { id: MatchHoldCancelReason; label: string }[] = [
-    { id: 'no_longer_interested', label: 'No longer interested' },
-    { id: 'scheduling_conflict', label: 'Scheduling conflict' },
-    { id: 'safety_concern', label: 'Safety concern' },
-    { id: 'other', label: 'Other' },
-];
-
-function CancelHoldSheet({
-    visible,
-    partnerName,
-    isSubmitting,
-    onClose,
-    onConfirm,
-}: CancelHoldSheetProps) {
-    const { colors, isDark } = useTheme();
-    const [selected, setSelected] = useState<MatchHoldCancelReason | null>(null);
-
-    const sheetBg = colors.card;
-    const handleColor = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.15)';
-
-    return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-            <Animated.View entering={FadeIn.duration(180)} style={styles.modalBackdrop}>
-                <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-                <Animated.View
-                    entering={SlideInUp.duration(260)}
-                    style={[styles.sheet, { backgroundColor: sheetBg }]}
-                >
-                    <View style={[styles.sheetHandle, { backgroundColor: handleColor }]} />
-                    <ScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
-                        <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
-                            Cancel match with {partnerName}?
-                        </Text>
-                        <Text style={[styles.sheetSubtitle, { color: colors.mutedForeground }]}>
-                            We’ll release you back into matching right away. Help us by telling us why.
-                        </Text>
-
-                        <View style={styles.reasonStack}>
-                            {REASONS.map((r) => {
-                                const isSelected = selected === r.id;
-                                return (
-                                    <Pressable
-                                        key={r.id}
-                                        accessibilityRole="radio"
-                                        accessibilityState={{ selected: isSelected }}
-                                        onPress={() => setSelected(r.id)}
-                                        style={({ pressed }) => [
-                                            styles.reasonRow,
-                                            {
-                                                borderColor: isSelected ? colors.primary : colors.border,
-                                                backgroundColor: isSelected
-                                                    ? isDark
-                                                        ? 'rgba(233,30,140,0.18)'
-                                                        : 'rgba(233,30,140,0.08)'
-                                                    : 'transparent',
-                                                opacity: pressed ? 0.85 : 1,
-                                            },
-                                        ]}
-                                    >
-                                        <View
-                                            style={[
-                                                styles.radioOuter,
-                                                { borderColor: isSelected ? colors.primary : colors.border },
-                                            ]}
-                                        >
-                                            {isSelected ? (
-                                                <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
-                                            ) : null}
-                                        </View>
-                                        <Text style={[styles.reasonLabel, { color: colors.foreground }]}>
-                                            {r.label}
-                                        </Text>
-                                    </Pressable>
-                                );
-                            })}
-                        </View>
-
-                        <View style={styles.sheetActions}>
-                            <Pressable
-                                accessibilityRole="button"
-                                onPress={onClose}
-                                style={({ pressed }) => [
-                                    styles.sheetSecondary,
-                                    { borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
-                                ]}
-                            >
-                                <Text style={[styles.sheetSecondaryLabel, { color: colors.foreground }]}>
-                                    Keep my match
-                                </Text>
-                            </Pressable>
-                            <Pressable
-                                accessibilityRole="button"
-                                disabled={!selected || isSubmitting}
-                                onPress={() => selected && onConfirm(selected)}
-                                style={({ pressed }) => [
-                                    styles.sheetPrimary,
-                                    {
-                                        backgroundColor: colors.primary,
-                                        opacity: !selected || isSubmitting ? 0.55 : pressed ? 0.9 : 1,
-                                    },
-                                ]}
-                            >
-                                <Text style={[styles.sheetPrimaryLabel, { color: colors.primaryForeground }]}>
-                                    {isSubmitting ? 'Cancelling…' : 'Confirm cancel'}
-                                </Text>
-                            </Pressable>
-                        </View>
-                    </ScrollView>
-                </Animated.View>
-            </Animated.View>
-        </Modal>
     );
 }
 
@@ -329,8 +318,26 @@ interface HoldCopy {
     primaryCta: { label: string; kind: 'view' | 'feedback' } | null;
 }
 
-function buildCopy(hold: MatchHold): HoldCopy {
+function buildCopy(
+    hold: MatchHold,
+    paymentsEnabled: boolean,
+    amount?: number,
+    currency?: string,
+    canConfirmWithBalance?: boolean,
+): HoldCopy {
     const name = hold.partner.firstName ?? 'them';
+    const amountLabel = formatPaymentAmount(amount ?? 499, currency ?? 'KES');
+    const needsPayConfirm =
+        paymentsEnabled
+        && hold.slotConfirmation?.needsSlotConfirmation
+        && !hold.slotConfirmation.viewerSlotConfirmed
+        && !canConfirmWithBalance;
+    const needsBalanceConfirm =
+        paymentsEnabled
+        && hold.slotConfirmation?.needsSlotConfirmation
+        && !hold.slotConfirmation.viewerSlotConfirmed
+        && Boolean(canConfirmWithBalance);
+
     switch (hold.status) {
         case 'mutual':
             return {
@@ -338,28 +345,54 @@ function buildCopy(hold: MatchHold): HoldCopy {
                 statusIcon: 'heart',
                 title: `You and ${name} both said yes`,
                 subtitle: hold.slotConfirmation?.needsSlotConfirmation
-                    ? 'Confirm your assigned campus date below. New intros stay paused until this is settled.'
+                    ? needsPayConfirm
+                        ? `Pay ${amountLabel} on Dates for 2 dates. ${CONFIRM_MATCH_WHY_TEASER}`
+                        : needsBalanceConfirm
+                          ? 'You have a confirmation ready. Confirm your campus time on Dates.'
+                          : 'Confirm your assigned StrathSpace date below. New intros stay paused until this is settled.'
                     : 'Say hi in chat while your date is lined up. New intros are paused for this match.',
                 footnote: 'You can cancel any time and we will keep matching you.',
-                primaryCta: { label: 'Message in Dates', kind: 'view' },
+                primaryCta: needsPayConfirm
+                    ? { label: `Pay ${amountLabel} · 2 dates`, kind: 'view' }
+                    : needsBalanceConfirm
+                      ? { label: 'Confirm on Dates', kind: 'view' }
+                      : { label: 'Message', kind: 'view' },
             };
         case 'being_arranged':
             return {
                 statusLabel: hold.slotConfirmation?.needsSlotConfirmation
-                    ? 'Confirm your date'
+                    ? needsPayConfirm
+                        ? 'Pay to confirm'
+                        : needsBalanceConfirm
+                          ? 'Confirm your match'
+                          : 'Confirm your date'
                     : 'Arranging your date',
                 statusIcon: hold.slotConfirmation?.needsSlotConfirmation ? 'calendar' : 'calendar-outline',
                 title: hold.slotConfirmation?.needsSlotConfirmation
-                    ? `Confirm your date with ${name}`
+                    ? needsPayConfirm
+                        ? `Pay ${amountLabel} · 2 dates`
+                        : needsBalanceConfirm
+                          ? `Confirm your match with ${name}`
+                          : `Confirm your date with ${name}`
                     : `Setting up your date with ${name}`,
                 subtitle: hold.slotConfirmation?.needsSlotConfirmation
-                    ? 'Your campus time is assigned. Confirm below to continue.'
+                    ? needsPayConfirm
+                        ? `Your campus time is assigned. ${CONFIRM_MATCH_WHY_TEASER} Pay on Dates to confirm.`
+                        : needsBalanceConfirm
+                          ? 'Your campus time is assigned. Use 1 confirmation on Dates to continue.'
+                          : 'Your campus time is assigned. Confirm below to continue.'
                     : 'Your date is being finalized. New intros stay paused.',
                 footnote: hold.slotConfirmation?.needsSlotConfirmation
-                    ? 'Messaging unlocks after you confirm.'
-                    : 'You will get a push notification once it is confirmed.',
+                    ? needsPayConfirm
+                        ? 'Messaging unlocks after you pay and confirm.'
+                        : 'Messaging unlocks after you confirm.'
+                    : 'Open Dates for details while your plan is finalized.',
                 primaryCta: hold.slotConfirmation?.needsSlotConfirmation
-                    ? null
+                    ? needsPayConfirm
+                        ? { label: `Pay ${amountLabel} · 2 dates`, kind: 'view' }
+                        : needsBalanceConfirm
+                          ? { label: 'Confirm on Dates', kind: 'view' }
+                          : null
                     : { label: 'See arrangement', kind: 'view' },
             };
         case 'upcoming':
@@ -390,7 +423,8 @@ function buildCopy(hold: MatchHold): HoldCopy {
 function formatDate(iso: string): string {
     try {
         const d = new Date(iso);
-        return d.toLocaleString(undefined, {
+        return d.toLocaleString('en-KE', {
+            timeZone: 'Africa/Nairobi',
             weekday: 'short',
             month: 'short',
             day: 'numeric',
@@ -421,13 +455,11 @@ const styles = StyleSheet.create({
         paddingBottom: 8,
     },
     card: {
-        borderRadius: 28,
-        borderWidth: 1,
-        overflow: 'hidden',
+        backgroundColor: 'transparent',
     },
     content: {
-        paddingHorizontal: 22,
-        paddingVertical: 24,
+        paddingHorizontal: 4,
+        paddingVertical: 8,
         gap: 14,
     },
     statusPillRow: {
@@ -501,7 +533,7 @@ const styles = StyleSheet.create({
     detailsBlock: {
         marginTop: 4,
         borderRadius: 16,
-        borderWidth: StyleSheet.hairlineWidth,
+        borderWidth: 1,
         paddingHorizontal: 14,
         paddingVertical: 12,
         gap: 10,
@@ -521,32 +553,53 @@ const styles = StyleSheet.create({
         lineHeight: 18,
         marginTop: 4,
     },
-    ctaStack: {
-        marginTop: 4,
-        gap: 10,
-    },
-    primaryCta: {
+    rescheduleCta: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        paddingVertical: 14,
-        paddingHorizontal: 20,
-        borderRadius: 16,
-    },
-    primaryCtaLabel: {
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    secondaryCta: {
-        paddingVertical: 12,
-        paddingHorizontal: 20,
+        minHeight: 48,
+        paddingHorizontal: 16,
         borderRadius: 14,
         borderWidth: 1,
-        alignItems: 'center',
+        marginTop: 4,
     },
-    secondaryCtaLabel: {
-        fontSize: 14,
+    rescheduleCtaText: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    ctaStack: {
+        marginTop: SPACING.tight,
+        gap: SPACING.compact,
+        width: '100%',
+    },
+    primaryButton: {
+        width: '100%',
+        minHeight: 52,
+        borderRadius: RADIUS.lg,
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: SPACING.base,
+        paddingVertical: SPACING.compact,
+    },
+    primaryButtonLabel: {
+        ...TYPOGRAPHY.headline,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    outlineButton: {
+        width: '100%',
+        minHeight: 52,
+        borderRadius: RADIUS.lg,
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: SPACING.base,
+        paddingVertical: SPACING.compact,
+    },
+    outlineButtonLabel: {
+        ...TYPOGRAPHY.headline,
         fontWeight: '600',
     },
     footnote: {
@@ -554,94 +607,5 @@ const styles = StyleSheet.create({
         lineHeight: 17,
         textAlign: 'center',
         marginTop: 2,
-    },
-    modalBackdrop: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.55)',
-        justifyContent: 'flex-end',
-    },
-    sheet: {
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
-        maxHeight: '80%',
-    },
-    sheetHandle: {
-        width: 44,
-        height: 4,
-        borderRadius: 2,
-        alignSelf: 'center',
-        marginTop: 10,
-    },
-    sheetContent: {
-        paddingHorizontal: 22,
-        paddingTop: 18,
-        paddingBottom: 32,
-        gap: 14,
-    },
-    sheetTitle: {
-        fontSize: 22,
-        fontWeight: '800',
-        letterSpacing: -0.3,
-    },
-    sheetSubtitle: {
-        fontSize: 14,
-        lineHeight: 20,
-    },
-    reasonStack: {
-        marginTop: 6,
-        gap: 10,
-    },
-    reasonRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 14,
-        borderRadius: 14,
-        borderWidth: 1,
-    },
-    radioOuter: {
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        borderWidth: 2,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    radioInner: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-    },
-    reasonLabel: {
-        flex: 1,
-        fontSize: 15,
-        fontWeight: '600',
-    },
-    sheetActions: {
-        flexDirection: 'row',
-        gap: 10,
-        marginTop: 12,
-    },
-    sheetSecondary: {
-        flex: 1,
-        paddingVertical: 14,
-        borderRadius: 14,
-        borderWidth: 1,
-        alignItems: 'center',
-    },
-    sheetSecondaryLabel: {
-        fontSize: 15,
-        fontWeight: '700',
-    },
-    sheetPrimary: {
-        flex: 1,
-        paddingVertical: 14,
-        borderRadius: 14,
-        alignItems: 'center',
-    },
-    sheetPrimaryLabel: {
-        fontSize: 15,
-        fontWeight: '700',
     },
 });

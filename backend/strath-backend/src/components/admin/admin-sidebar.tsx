@@ -5,9 +5,13 @@ import { type ComponentType } from "react";
 import { usePathname } from "next/navigation";
 import {
     BarChart3,
+    BrainCircuit,
+    Image,
     Clock3,
     CalendarCheck2,
     CalendarClock,
+    Timer,
+    Wallet,
     Flag,
     Mail,
     ChevronDown,
@@ -15,9 +19,12 @@ import {
     LayoutDashboard,
     MapPinned,
     Megaphone,
+    Bell,
     ShieldCheck,
     Sparkles,
     Users,
+    RotateCcw,
+    MessageSquareText,
 } from "lucide-react";
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -60,7 +67,10 @@ const groups: NavGroup[] = [
         items: [
             { href: "/admin/verification", label: "Verification", icon: ShieldCheck },
             { href: "/admin/matchmaking", label: "Matchmaking", icon: Sparkles },
+            { href: "/admin/restore-match", label: "Restore & match", icon: RotateCcw },
             { href: "/admin/date-requests", label: "Match Activity", icon: ClipboardList },
+            { href: "/admin/meetup-slots", label: "Slot confirmation", icon: Timer },
+            { href: "/admin/payments", label: "Payments", icon: Wallet },
             { href: "/admin/pending-dates", label: "Arranging", icon: CalendarClock },
             { href: "/admin/scheduled-dates", label: "Upcoming", icon: CalendarCheck2 },
             { href: "/admin/history", label: "History", icon: Clock3 },
@@ -76,11 +86,17 @@ const groups: NavGroup[] = [
         items: [
             { href: "/admin/users", label: "Users", icon: Users },
             { href: "/admin/metrics", label: "Metrics", icon: BarChart3 },
+            { href: "/admin/metrics/questionnaire", label: "Questionnaire analytics", icon: BrainCircuit },
+            { href: "/admin/feedback", label: "Feedback", icon: MessageSquareText },
+            { href: "/admin/profile-intelligence", label: "Profile Intelligence", icon: BrainCircuit },
+            { href: "/admin/photo-intelligence", label: "Photo Intelligence", icon: Image },
+            { href: "/admin/push-notifications", label: "Push notifications", icon: Bell },
         ],
     },
 ];
 
 function isActive(pathname: string, href: string) {
+    if (href === "/admin/metrics") return pathname === href;
     return pathname === href || pathname.startsWith(`${href}/`);
 }
 

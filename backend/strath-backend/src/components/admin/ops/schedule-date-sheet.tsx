@@ -18,6 +18,7 @@ import { PairAvatars } from "./pair-avatars";
 import { LocationPickerGrid } from "./location-picker-grid";
 import { QuickTimePicker } from "./quick-time-picker";
 import { PushPreviewCard } from "./push-preview-card";
+import { formatNairobiDateTime, normalizeNairobiDateTimeInput } from "@/lib/nairobi-datetime";
 import { getVibeMeta, type OpsLocation, type OpsPairUser } from "./types";
 
 interface ScheduleDateSheetProps {
@@ -53,7 +54,9 @@ export function ScheduleDateSheet({
 }: ScheduleDateSheetProps) {
     const [step, setStep] = useState<Step>(1);
     const [locationId, setLocationId] = useState<string | null>(() => initialLocationId ?? null);
-    const [scheduledAt, setScheduledAt] = useState<string | null>(() => initialScheduledAt ?? null);
+    const [scheduledAt, setScheduledAt] = useState<string | null>(() =>
+        normalizeNairobiDateTimeInput(initialScheduledAt),
+    );
     const [isPending, startTransition] = useTransition();
     const vibeMeta = getVibeMeta(vibe);
     const isReschedule = mode === "reschedule";
@@ -64,7 +67,7 @@ export function ScheduleDateSheet({
     );
 
     const whenLabel = scheduledAt
-        ? new Date(scheduledAt).toLocaleString("en-KE", {
+        ? formatNairobiDateTime(scheduledAt, {
               weekday: "short",
               month: "short",
               day: "numeric",

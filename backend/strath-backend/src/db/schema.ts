@@ -1,3 +1,4 @@
+import type { MeetupRescheduleStatus, MeetupSlotKind } from "@/lib/meetup-reschedule/types";
 import { relations, sql } from "drizzle-orm";
 import {
     timestamp,
@@ -60,6 +61,7 @@ export const user = pgTable(
         deletedAt: timestamp("deleted_at"), // Soft delete - when set, account is marked as deleted
         deletedReason: text("deleted_reason").$type<"self_deleted" | "admin_suspended" | null>(),
         deletedByUserId: text("deleted_by_user_id"),
+        lowIntentScore: integer("low_intent_score").default(0).notNull(),
     },
     (table) => ({
         emailIdx: index("user_email_idx").on(table.email),
@@ -301,6 +303,33 @@ export const faceVerificationResults = pgTable("face_verification_results", {
     decisionIdx: index("face_verification_results_decision_idx").on(table.decision),
 }));
 
+export const faceVerificationAssistance = pgTable(
+    "face_verification_assistance",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        sessionId: uuid("session_id")
+            .notNull()
+            .references(() => faceVerificationSessions.id, { onDelete: "cascade" }),
+        attemptNumber: integer("attempt_number").notNull(),
+        email: text("email").notNull(),
+        phoneNumber: text("phone_number"),
+        message: text("message").notNull(),
+        failureReasons: jsonb("failure_reasons").$type<string[]>().default([]).notNull(),
+        verificationStatus: text("verification_status").notNull(),
+        status: text("status").$type<"new" | "contacted" | "resolved">().default("new").notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdx: index("face_verification_assistance_user_idx").on(table.userId),
+        sessionUniqueIdx: uniqueIndex("face_verification_assistance_session_idx").on(table.sessionId),
+        statusIdx: index("face_verification_assistance_status_idx").on(table.status),
+        createdAtIdx: index("face_verification_assistance_created_at_idx").on(table.createdAt),
+    }),
+);
+
 export const profilePhotoAssets = pgTable("profile_photo_assets", {
     id: uuid("id").defaultRandom().primaryKey(),
     userId: text("user_id")
@@ -327,6 +356,455 @@ export const profilePhotoAssets = pgTable("profile_photo_assets", {
     objectKeyIdx: uniqueIndex("profile_photo_assets_object_key_idx").on(table.objectKey),
     readyIdx: index("profile_photo_assets_ready_idx").on(table.verificationReady, table.lastAnalyzedAt),
 }));
+
+export const profilePhotoAnalysis = pgTable(
+    "profile_photo_analysis",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        profileId: uuid("profile_id").references(() => profiles.id, { onDelete: "cascade" }),
+        photoUrl: text("photo_url").notNull(),
+        photoHash: text("photo_hash"),
+        qualityScore: integer("quality_score").default(0).notNull(),
+        faceVisible: boolean("face_visible").default(false).notNull(),
+        imageClear: boolean("image_clear").default(false).notNull(),
+        lightingScore: integer("lighting_score").default(0).notNull(),
+        blurScore: integer("blur_score").default(0).notNull(),
+        duplicateScore: integer("duplicate_score").default(0).notNull(),
+        hasMultiplePeople: boolean("has_multiple_people").default(false).notNull(),
+        isScreenshotOrMeme: boolean("is_screenshot_or_meme").default(false).notNull(),
+        isObjectOrLandscapeOnly: boolean("is_object_or_landscape_only").default(false).notNull(),
+        moderationStatus: text("moderation_status")
+            .$type<"pending" | "approved" | "rejected" | "needs_review">()
+            .default("pending")
+            .notNull(),
+        moderationReason: text("moderation_reason"),
+        embeddingProvider: text("embedding_provider"),
+        embeddingModel: text("embedding_model"),
+        embeddingId: uuid("embedding_id"),
+        analysisVersion: text("analysis_version").default("v1").notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userIdx: index("profile_photo_analysis_user_idx").on(table.userId),
+        profileIdx: index("profile_photo_analysis_profile_idx").on(table.profileId),
+        photoUrlIdx: index("profile_photo_analysis_photo_url_idx").on(table.photoUrl),
+        moderationIdx: index("profile_photo_analysis_moderation_idx").on(table.moderationStatus),
+        qualityIdx: index("profile_photo_analysis_quality_idx").on(table.qualityScore),
+        userPhotoUrlIdx: uniqueIndex("profile_photo_analysis_user_photo_url_idx").on(table.userId, table.photoUrl),
+    }),
+);
+
+export const profilePhotoEmbeddings = pgTable(
+    "profile_photo_embeddings",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        photoAnalysisId: uuid("photo_analysis_id").references(() => profilePhotoAnalysis.id, { onDelete: "cascade" }),
+        embedding: vector("embedding", { dimension: 768 }),
+        provider: text("provider").notNull(),
+        model: text("model").notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdx: index("profile_photo_embeddings_user_idx").on(table.userId),
+        analysisIdx: index("profile_photo_embeddings_analysis_idx").on(table.photoAnalysisId),
+    }),
+);
+
+export const userVisualPreferenceSignals = pgTable(
+    "user_visual_preference_signals",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        likedEmbeddingCentroid: jsonb("liked_embedding_centroid").$type<number[] | null>(),
+        passedEmbeddingCentroid: jsonb("passed_embedding_centroid").$type<number[] | null>(),
+        totalVisualLikes: integer("total_visual_likes").default(0).notNull(),
+        totalVisualPasses: integer("total_visual_passes").default(0).notNull(),
+        totalVisualViews: integer("total_visual_views").default(0).notNull(),
+        preferenceConfidence: integer("preference_confidence").default(0).notNull(),
+        lastUpdatedFromEventId: uuid("last_updated_from_event_id"),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userUniqueIdx: uniqueIndex("user_visual_preference_signals_user_unique_idx").on(table.userId),
+    }),
+);
+
+export const profileInteractionEvents = pgTable(
+    "profile_interaction_events",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        actorUserId: text("actor_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        targetUserId: text("target_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        eventType: text("event_type")
+            .$type<"profile_view" | "profile_like" | "profile_pass" | "profile_skip" | "profile_open">()
+            .notNull(),
+        source: text("source"),
+        timeSpentMs: integer("time_spent_ms"),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        actorIdx: index("profile_interaction_events_actor_idx").on(table.actorUserId),
+        targetIdx: index("profile_interaction_events_target_idx").on(table.targetUserId),
+        eventTypeIdx: index("profile_interaction_events_type_idx").on(table.eventType),
+        createdAtIdx: index("profile_interaction_events_created_at_idx").on(table.createdAt),
+    }),
+);
+
+export const profileIntelligence = pgTable(
+    "profile_intelligence",
+    {
+        userId: text("user_id")
+            .primaryKey()
+            .references(() => user.id, { onDelete: "cascade" }),
+        profileSummary: text("profile_summary"),
+        searchText: text("search_text"),
+        textEmbedding: vector("text_embedding", { dimension: 768 }),
+        visualEmbedding: vector("visual_embedding", { dimension: 768 }),
+        traitTags: jsonb("trait_tags").$type<string[]>().default([]).notNull(),
+        datingIntentTags: jsonb("dating_intent_tags").$type<string[]>().default([]).notNull(),
+        socialEnergyTags: jsonb("social_energy_tags").$type<string[]>().default([]).notNull(),
+        lifestyleTags: jsonb("lifestyle_tags").$type<string[]>().default([]).notNull(),
+        interestTags: jsonb("interest_tags").$type<string[]>().default([]).notNull(),
+        communicationTags: jsonb("communication_tags").$type<string[]>().default([]).notNull(),
+        availabilityTags: jsonb("availability_tags").$type<string[]>().default([]).notNull(),
+        dealbreakerTags: jsonb("dealbreaker_tags").$type<string[]>().default([]).notNull(),
+        photoPresentationScore: integer("photo_presentation_score").default(0).notNull(),
+        profileCompletenessScore: integer("profile_completeness_score").default(0).notNull(),
+        activityScore: integer("activity_score").default(0).notNull(),
+        responseScore: integer("response_score").default(0).notNull(),
+        inboundInterestScore: integer("inbound_interest_score").default(0).notNull(),
+        mutualConversionScore: integer("mutual_conversion_score").default(0).notNull(),
+        candidateStrengthScore: integer("candidate_strength_score").default(0).notNull(),
+        lastSeenAt: timestamp("last_seen_at"),
+        lastProfileChangeAt: timestamp("last_profile_change_at"),
+        lastAnalyzedAt: timestamp("last_analyzed_at"),
+        analysisVersion: text("analysis_version").default("profile_intelligence_v1").notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        candidateStrengthIdx: index("profile_intelligence_candidate_strength_idx").on(table.candidateStrengthScore),
+        activityIdx: index("profile_intelligence_activity_idx").on(table.activityScore),
+        lastAnalyzedIdx: index("profile_intelligence_last_analyzed_idx").on(table.lastAnalyzedAt),
+        lastSeenIdx: index("profile_intelligence_last_seen_idx").on(table.lastSeenAt),
+    }),
+);
+
+export const profileIntelligenceJobs = pgTable(
+    "profile_intelligence_jobs",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+        jobType: text("job_type")
+            .$type<"profile_analyze" | "profile_backfill" | "profile_refresh">()
+            .notNull(),
+        status: text("status")
+            .$type<"pending" | "processing" | "completed" | "failed">()
+            .default("pending")
+            .notNull(),
+        attempts: integer("attempts").default(0).notNull(),
+        maxAttempts: integer("max_attempts").default(3).notNull(),
+        lastError: text("last_error"),
+        lockedAt: timestamp("locked_at"),
+        completedAt: timestamp("completed_at"),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userIdx: index("profile_intelligence_jobs_user_idx").on(table.userId),
+        statusIdx: index("profile_intelligence_jobs_status_idx").on(table.status),
+        jobTypeIdx: index("profile_intelligence_jobs_type_idx").on(table.jobType),
+        statusCreatedIdx: index("profile_intelligence_jobs_status_created_idx").on(table.status, table.createdAt),
+    }),
+);
+
+export const matchmakerIntents = pgTable(
+    "matchmaker_intents",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        rawText: text("raw_text").notNull(),
+        parsedIntent: jsonb("parsed_intent").$type<Record<string, unknown>>().default({}).notNull(),
+        intentEmbedding: vector("intent_embedding", { dimension: 768 }),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdx: index("matchmaker_intents_user_idx").on(table.userId),
+        createdAtIdx: index("matchmaker_intents_created_at_idx").on(table.createdAt),
+    }),
+);
+
+export const matchmakerSessions = pgTable(
+    "matchmaker_sessions",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        sessionDay: text("session_day").notNull(),
+        status: text("status")
+            .$type<"active" | "completed" | "expired">()
+            .default("active")
+            .notNull(),
+        state: text("state")
+            .$type<
+                | "greeting"
+                | "collecting_intent"
+                | "clarifying"
+                | "ready_to_search"
+                | "presenting_candidate"
+                | "presenting_shortlist"
+                | "collecting_feedback"
+                | "limit_reached"
+            >()
+            .default("greeting")
+            .notNull(),
+        dailySearchCount: integer("daily_search_count").default(0).notNull(),
+        searchLimit: integer("search_limit").default(3).notNull(),
+        currentIntent: jsonb("current_intent").$type<Record<string, unknown>>().default({}).notNull(),
+        currentPlan: jsonb("current_plan").$type<Record<string, unknown>>().default({}).notNull(),
+        lastCandidateUserId: text("last_candidate_user_id").references(() => user.id, { onDelete: "set null" }),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userDayIdx: index("matchmaker_sessions_user_day_idx").on(table.userId, table.sessionDay),
+        statusIdx: index("matchmaker_sessions_status_idx").on(table.status),
+        updatedAtIdx: index("matchmaker_sessions_updated_at_idx").on(table.updatedAt),
+    }),
+);
+
+export const matchmakerMessages = pgTable(
+    "matchmaker_messages",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        sessionId: uuid("session_id")
+            .notNull()
+            .references(() => matchmakerSessions.id, { onDelete: "cascade" }),
+        role: text("role")
+            .$type<"user" | "assistant" | "system">()
+            .notNull(),
+        kind: text("kind")
+            .$type<"greeting" | "text" | "intent" | "clarifying_question" | "search_plan" | "candidate" | "feedback" | "limit">()
+            .default("text")
+            .notNull(),
+        text: text("text").notNull(),
+        quickReplies: jsonb("quick_replies").$type<string[]>().default([]).notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        sessionCreatedIdx: index("matchmaker_messages_session_created_idx").on(table.sessionId, table.createdAt),
+        roleIdx: index("matchmaker_messages_role_idx").on(table.role),
+    }),
+);
+
+export const matchmakerShortlists = pgTable(
+    "matchmaker_shortlists",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        sessionId: uuid("session_id")
+            .notNull()
+            .references(() => matchmakerSessions.id, { onDelete: "cascade" }),
+        viewerUserId: text("viewer_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        requestKey: text("request_key").notNull(),
+        briefVersion: integer("brief_version").default(0).notNull(),
+        intentSnapshot: jsonb("intent_snapshot").$type<Record<string, unknown>>().default({}).notNull(),
+        status: text("status")
+            .$type<"persisted" | "presented" | "stale">()
+            .default("persisted")
+            .notNull(),
+        creditConsumed: boolean("credit_consumed").default(false).notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        sessionIdx: index("matchmaker_shortlists_session_idx").on(table.sessionId),
+        viewerIdx: index("matchmaker_shortlists_viewer_idx").on(table.viewerUserId),
+        requestKeyUniqueIdx: uniqueIndex("matchmaker_shortlists_request_key_unique_idx").on(table.requestKey),
+        sessionCreatedIdx: index("matchmaker_shortlists_session_created_idx").on(table.sessionId, table.createdAt),
+    }),
+);
+
+export const matchmakerSessionResults = pgTable(
+    "matchmaker_session_results",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        sessionId: uuid("session_id")
+            .notNull()
+            .references(() => matchmakerSessions.id, { onDelete: "cascade" }),
+        shortlistId: uuid("shortlist_id")
+            .references(() => matchmakerShortlists.id, { onDelete: "set null" }),
+        viewerUserId: text("viewer_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        candidateUserId: text("candidate_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        position: integer("position").notNull(),
+        score: integer("score").default(0).notNull(),
+        reason: text("reason"),
+        labels: jsonb("labels").$type<string[]>().default([]).notNull(),
+        fitReasons: jsonb("fit_reasons").$type<string[]>().default([]).notNull(),
+        matchedPreferenceIds: jsonb("matched_preference_ids").$type<string[]>().default([]).notNull(),
+        reciprocalFitEvidence: jsonb("reciprocal_fit_evidence").$type<string[]>().default([]).notNull(),
+        tradeoff: text("tradeoff"),
+        unknown: text("unknown"),
+        matchingEvidence: jsonb("matching_evidence").$type<Record<string, unknown>>().default({}).notNull(),
+        intentSnapshot: jsonb("intent_snapshot").$type<Record<string, unknown>>().default({}).notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        sessionIdx: index("matchmaker_session_results_session_idx").on(table.sessionId),
+        shortlistIdx: index("matchmaker_session_results_shortlist_idx").on(table.shortlistId),
+        viewerIdx: index("matchmaker_session_results_viewer_idx").on(table.viewerUserId),
+        candidateIdx: index("matchmaker_session_results_candidate_idx").on(table.candidateUserId),
+        sessionCandidateUniqueIdx: uniqueIndex("matchmaker_session_results_session_candidate_unique_idx").on(table.sessionId, table.candidateUserId),
+    }),
+);
+
+export const matchmakerUserMemory = pgTable(
+    "matchmaker_user_memory",
+    {
+        userId: text("user_id")
+            .primaryKey()
+            .references(() => user.id, { onDelete: "cascade" }),
+        positiveSignals: jsonb("positive_signals").$type<Record<string, number>>().default({}).notNull(),
+        negativeSignals: jsonb("negative_signals").$type<Record<string, number>>().default({}).notNull(),
+        feedbackHistory: jsonb("feedback_history").$type<{
+            candidateUserId?: string;
+            outcome: "interested" | "passed" | "not_this_one" | "refinement";
+            reason?: string;
+            reasonCode?: string;
+            shortlistId?: string;
+            submissionId?: string;
+            learningScope?: "candidate_only" | "future_matches";
+            signals: string[];
+            createdAt: string;
+        }[]>().default([]).notNull(),
+        memorySummary: text("memory_summary"),
+        lastFeedbackAt: timestamp("last_feedback_at"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        updatedAtIdx: index("matchmaker_user_memory_updated_at_idx").on(table.updatedAt),
+        lastFeedbackIdx: index("matchmaker_user_memory_last_feedback_idx").on(table.lastFeedbackAt),
+    }),
+);
+
+export const matchmakerUserBriefs = pgTable(
+    "matchmaker_user_briefs",
+    {
+        userId: text("user_id")
+            .primaryKey()
+            .references(() => user.id, { onDelete: "cascade" }),
+        version: integer("version").default(0).notNull(),
+        latestChangeId: uuid("latest_change_id"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        updatedAtIdx: index("matchmaker_user_briefs_updated_at_idx").on(table.updatedAt),
+    }),
+);
+
+export const matchmakerUserPreferences = pgTable(
+    "matchmaker_user_preferences",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        category: text("category").notNull(),
+        value: text("value").notNull(),
+        normalizedValue: text("normalized_value").notNull(),
+        sentiment: text("sentiment")
+            .$type<"prefer" | "avoid">()
+            .default("prefer")
+            .notNull(),
+        importance: text("importance")
+            .$type<"must_have" | "prefer" | "flexible">()
+            .default("flexible")
+            .notNull(),
+        certainty: text("certainty")
+            .$type<"confirmed" | "inferred">()
+            .default("inferred")
+            .notNull(),
+        source: text("source")
+            .$type<"direct" | "feedback" | "migrated_memory" | "system">()
+            .default("system")
+            .notNull(),
+        status: text("status")
+            .$type<"active" | "removed">()
+            .default("active")
+            .notNull(),
+        version: integer("version").default(1).notNull(),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userIdx: index("matchmaker_user_preferences_user_idx").on(table.userId),
+        activeIdx: index("matchmaker_user_preferences_active_idx").on(table.userId, table.status),
+        userValueUniqueIdx: uniqueIndex("matchmaker_user_preferences_user_value_unique_idx")
+            .on(table.userId, table.category, table.normalizedValue, table.sentiment),
+    }),
+);
+
+export const matchmakerPreferenceChanges = pgTable(
+    "matchmaker_preference_changes",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        requestKey: text("request_key"),
+        operation: text("operation")
+            .$type<"add" | "update" | "confirm" | "reclassify" | "remove" | "undo" | "migration">()
+            .notNull(),
+        briefVersionBefore: integer("brief_version_before").notNull(),
+        briefVersionAfter: integer("brief_version_after").notNull(),
+        beforeSnapshot: jsonb("before_snapshot").$type<Record<string, unknown>[]>().default([]).notNull(),
+        afterSnapshot: jsonb("after_snapshot").$type<Record<string, unknown>[]>().default([]).notNull(),
+        reversible: boolean("reversible").default(true).notNull(),
+        revertedByChangeId: uuid("reverted_by_change_id"),
+        metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userCreatedIdx: index("matchmaker_preference_changes_user_created_idx").on(table.userId, table.createdAt),
+        revertedIdx: index("matchmaker_preference_changes_reverted_idx").on(table.revertedByChangeId),
+        userRequestKeyUnique: uniqueIndex("matchmaker_preference_changes_user_request_key_unique").on(table.userId, table.requestKey),
+    }),
+);
 
 export const faceVerificationJobs = pgTable("face_verification_jobs", {
     id: uuid("id").defaultRandom().primaryKey(),
@@ -452,6 +930,11 @@ export const userMatchSignals = pgTable(
         matchQualityScore: integer("match_quality_score").default(0).notNull(),
         ghostingPenalty: integer("ghosting_penalty").default(0).notNull(),
         passRiskPenalty: integer("pass_risk_penalty").default(0).notNull(),
+        photoQualityScore: integer("photo_quality_score").default(0).notNull(),
+        visualPreferenceConfidence: integer("visual_preference_confidence").default(0).notNull(),
+        hasUsableProfilePhoto: boolean("has_usable_profile_photo").default(false).notNull(),
+        photoAnalysisCompleted: boolean("photo_analysis_completed").default(false).notNull(),
+        photoAnalysisUpdatedAt: timestamp("photo_analysis_updated_at"),
         updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
     },
     (table) => ({
@@ -584,7 +1067,7 @@ export const recommendationEvents = pgTable(
             .notNull()
             .references(() => user.id, { onDelete: "cascade" }),
         source: text("source")
-            .$type<"daily_recommendations" | "browse" | "admin_curated" | "available_now">()
+            .$type<"daily_recommendations" | "browse" | "matchmaker" | "admin_curated" | "available_now">()
             .notNull(),
         matchType: text("match_type")
             .$type<"similarity" | "complementary" | "discovery" | "high_activity" | "admin_curated">(),
@@ -659,7 +1142,7 @@ export const userMatchInterests = pgTable(
             .$type<"open_to_meet" | "passed">()
             .notNull(),
         source: text("source")
-            .$type<"daily_recommendations" | "browse" | "admin_curated" | "available_now">()
+            .$type<"daily_recommendations" | "browse" | "matchmaker" | "admin_curated" | "available_now">()
             .notNull(),
         matchType: text("match_type")
             .$type<"similarity" | "complementary" | "discovery" | "high_activity" | "admin_curated">(),
@@ -728,6 +1211,22 @@ export const dateMatches = pgTable(
         venueName: text("venue_name"),
         venueAddress: text("venue_address"),
         scheduledAt: timestamp("scheduled_at"),
+        paymentState: text("payment_state")
+            .$type<
+                | "not_required"
+                | "awaiting_payment"
+                | "paid_waiting_for_other"
+                | "both_paid"
+                | "expired"
+                | "cancelled"
+            >()
+            .default("not_required")
+            .notNull(),
+        paymentDueBy: timestamp("payment_due_by"),
+        paymentAmountCents: integer("payment_amount_cents").default(49900).notNull(),
+        paymentCurrency: text("payment_currency").default("KES").notNull(),
+        paidUserCount: integer("paid_user_count").default(0).notNull(),
+        paymentAdminNotes: text("payment_admin_notes"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
     },
     (table) => ({
@@ -736,6 +1235,80 @@ export const dateMatches = pgTable(
         usersIdx: index("date_match_users_idx").on(table.userAId, table.userBId),
         locationIdx: index("date_match_location_idx").on(table.locationId),
     })
+);
+
+export const datePayments = pgTable(
+    "date_payments",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        dateMatchId: uuid("date_match_id")
+            .notNull()
+            .references(() => dateMatches.id, { onDelete: "cascade" }),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        amountCents: integer("amount_cents").notNull(),
+        currency: text("currency").default("KES").notNull(),
+        provider: text("provider").default("paystack").notNull(),
+        paystackReference: text("paystack_reference").notNull().unique(),
+        paystackTransactionId: text("paystack_transaction_id"),
+        status: text("status")
+            .$type<
+                | "pending"
+                | "paid"
+                | "failed"
+                | "refund_requested"
+                | "refunded"
+                | "credited"
+                | "cancelled"
+            >()
+            .default("pending")
+            .notNull(),
+        paidAt: timestamp("paid_at"),
+        refundedAt: timestamp("refunded_at"),
+        creditedAt: timestamp("credited_at"),
+        refundReason: text("refund_reason"),
+        rawVerifyPayload: jsonb("raw_verify_payload"),
+        rawWebhookPayload: jsonb("raw_webhook_payload"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+    },
+    (table) => ({
+        userMatchUnique: uniqueIndex("date_payments_user_match_unique").on(
+            table.dateMatchId,
+            table.userId,
+        ),
+        referenceIdx: index("date_payments_reference_idx").on(table.paystackReference),
+        statusIdx: index("date_payments_status_idx").on(table.status),
+    }),
+);
+
+export const userCredits = pgTable(
+    "user_credits",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        amountCents: integer("amount_cents").notNull(),
+        currency: text("currency").default("KES").notNull(),
+        reason: text("reason").notNull(),
+        dateMatchId: uuid("date_match_id").references(() => dateMatches.id, {
+            onDelete: "set null",
+        }),
+        paymentId: uuid("payment_id").references(() => datePayments.id, {
+            onDelete: "set null",
+        }),
+        status: text("status")
+            .$type<"active" | "reserved" | "spent" | "expired">()
+            .default("active")
+            .notNull(),
+        usedAt: timestamp("used_at"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdx: index("user_credits_user_idx").on(table.userId),
+    }),
 );
 
 // Date feedback — post-date rating and meet_again
@@ -816,7 +1389,10 @@ export const mutualMatches = pgTable(
         userASlotConfirmedAt: timestamp("user_a_slot_confirmed_at"),
         userBSlotConfirmedAt: timestamp("user_b_slot_confirmed_at"),
         slotConfirmBy: timestamp("slot_confirm_by"),
+        slotConfirmReminderSentAt: timestamp("slot_confirm_reminder_sent_at"),
         assignedSlot: text("assigned_slot").$type<"wednesday" | "saturday">(),
+        pendingRescheduleRequestId: uuid("pending_reschedule_request_id"),
+        reschedulePausedExpiryAt: timestamp("reschedule_paused_expiry_at"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
     },
@@ -827,7 +1403,45 @@ export const mutualMatches = pgTable(
         statusIdx: index("mutual_matches_status_idx").on(table.status),
         legacyMatchIdx: index("mutual_matches_legacy_match_idx").on(table.legacyMatchId),
         legacyDateMatchIdx: index("mutual_matches_legacy_date_match_idx").on(table.legacyDateMatchId),
+        pendingRescheduleRequestIdx: index("mutual_matches_pending_reschedule_request_idx").on(
+            table.pendingRescheduleRequestId,
+        ),
     })
+);
+
+export const meetupRescheduleRequests = pgTable(
+    "meetup_reschedule_requests",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        mutualMatchId: uuid("mutual_match_id")
+            .notNull()
+            .references(() => mutualMatches.id, { onDelete: "cascade" }),
+        requestedByUserId: text("requested_by_user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+        proposedSlot: text("proposed_slot").$type<MeetupSlotKind>().notNull(),
+        proposedScheduledAt: timestamp("proposed_scheduled_at").notNull(),
+        proposedConfirmBy: timestamp("proposed_confirm_by").notNull(),
+        status: text("status").$type<MeetupRescheduleStatus>().default("pending").notNull(),
+        declineReason: text("decline_reason"),
+        // Self-FK enforced in drizzle/0026_meetup_reschedule.sql (omit .references here to avoid TS circular init).
+        counterOfRequestId: uuid("counter_of_request_id"),
+        chainRootId: uuid("chain_root_id"),
+        respondedAt: timestamp("responded_at"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => ({
+        mutualStatusIdx: index("meetup_reschedule_mutual_status_idx").on(
+            table.mutualMatchId,
+            table.status,
+        ),
+        mutualCreatedIdx: index("meetup_reschedule_mutual_created_idx").on(
+            table.mutualMatchId,
+            table.createdAt,
+        ),
+        requestedByIdx: index("meetup_reschedule_requested_by_idx").on(table.requestedByUserId),
+        counterOfIdx: index("meetup_reschedule_counter_of_idx").on(table.counterOfRequestId),
+    }),
 );
 
 export const feedbacks = pgTable(
@@ -837,12 +1451,19 @@ export const feedbacks = pgTable(
         userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
         name: text("name"),
         phoneNumber: text("phone_number"),
+        email: text("email"),
+        rating: integer("rating"),
+        source: text("source").notNull().default("app"),
         message: text("message").notNull(),
         status: text("status").notNull().default("new"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
     },
     (table) => ({
         userIdIdx: index("feedbacks_user_id_idx").on(table.userId),
+        sourceIdx: index("feedbacks_source_idx").on(table.source),
+        matchmakerV2UserUniqueIdx: uniqueIndex("feedbacks_matchmaker_v2_user_unique")
+            .on(table.userId)
+            .where(sql`${table.source} = 'matchmaker_v2' AND ${table.userId} IS NOT NULL`),
     })
 );
 
@@ -860,6 +1481,7 @@ export const messages = pgTable(
         senderId: text("sender_id")
             .references(() => user.id)
             .notNull(),
+        clientRequestId: text("client_request_id"),
         status: text("status", { enum: ["sent", "delivered", "read"] })
             .default("sent")
             .notNull(),
@@ -872,6 +1494,9 @@ export const messages = pgTable(
         createdAtIdx: index("created_at_idx").on(table.createdAt),
         // Composite index for efficient message pagination queries
         matchIdCreatedAtIdx: index("match_id_created_at_idx").on(table.matchId, table.createdAt),
+        senderRequestUniqueIdx: uniqueIndex("messages_sender_request_unique_idx")
+            .on(table.matchId, table.senderId, table.clientRequestId)
+            .where(sql`${table.clientRequestId} IS NOT NULL`),
     })
 );
 
@@ -1014,7 +1639,17 @@ export const userRelations = relations(user, ({ one, many }) => ({
     matchSignals: one(userMatchSignals),
     faceVerificationSessions: many(faceVerificationSessions),
     faceVerificationJobs: many(faceVerificationJobs),
+    faceVerificationAssistance: many(faceVerificationAssistance),
     profilePhotoAssets: many(profilePhotoAssets),
+    profilePhotoAnalysis: many(profilePhotoAnalysis),
+    profilePhotoEmbeddings: many(profilePhotoEmbeddings),
+    visualPreferenceSignals: one(userVisualPreferenceSignals),
+    profileInteractionEventsAsActor: many(profileInteractionEvents, { relationName: "interactionActor" }),
+    profileInteractionEventsAsTarget: many(profileInteractionEvents, { relationName: "interactionTarget" }),
+    profileIntelligence: one(profileIntelligence),
+    profileIntelligenceJobs: many(profileIntelligenceJobs),
+    matchmakerIntents: many(matchmakerIntents),
+    matchmakerSessions: many(matchmakerSessions),
     sessions: many(session),
     accounts: many(account),
 }));
@@ -1085,6 +1720,18 @@ export const faceVerificationSessionsRelations = relations(faceVerificationSessi
     }),
     results: many(faceVerificationResults),
     jobs: many(faceVerificationJobs),
+    assistance: one(faceVerificationAssistance),
+}));
+
+export const faceVerificationAssistanceRelations = relations(faceVerificationAssistance, ({ one }) => ({
+    user: one(user, {
+        fields: [faceVerificationAssistance.userId],
+        references: [user.id],
+    }),
+    session: one(faceVerificationSessions, {
+        fields: [faceVerificationAssistance.sessionId],
+        references: [faceVerificationSessions.id],
+    }),
 }));
 
 export const faceVerificationResultsRelations = relations(faceVerificationResults, ({ one }) => ({
@@ -1098,6 +1745,162 @@ export const profilePhotoAssetsRelations = relations(profilePhotoAssets, ({ one 
     user: one(user, {
         fields: [profilePhotoAssets.userId],
         references: [user.id],
+    }),
+}));
+
+export const profilePhotoAnalysisRelations = relations(profilePhotoAnalysis, ({ one, many }) => ({
+    user: one(user, {
+        fields: [profilePhotoAnalysis.userId],
+        references: [user.id],
+    }),
+    profile: one(profiles, {
+        fields: [profilePhotoAnalysis.profileId],
+        references: [profiles.id],
+    }),
+    embeddings: many(profilePhotoEmbeddings),
+}));
+
+export const profilePhotoEmbeddingsRelations = relations(profilePhotoEmbeddings, ({ one }) => ({
+    user: one(user, {
+        fields: [profilePhotoEmbeddings.userId],
+        references: [user.id],
+    }),
+    photoAnalysis: one(profilePhotoAnalysis, {
+        fields: [profilePhotoEmbeddings.photoAnalysisId],
+        references: [profilePhotoAnalysis.id],
+    }),
+}));
+
+export const userVisualPreferenceSignalsRelations = relations(userVisualPreferenceSignals, ({ one }) => ({
+    user: one(user, {
+        fields: [userVisualPreferenceSignals.userId],
+        references: [user.id],
+    }),
+}));
+
+export const profileInteractionEventsRelations = relations(profileInteractionEvents, ({ one }) => ({
+    actor: one(user, {
+        fields: [profileInteractionEvents.actorUserId],
+        references: [user.id],
+        relationName: "interactionActor",
+    }),
+    target: one(user, {
+        fields: [profileInteractionEvents.targetUserId],
+        references: [user.id],
+        relationName: "interactionTarget",
+    }),
+}));
+
+export const profileIntelligenceRelations = relations(profileIntelligence, ({ one }) => ({
+    user: one(user, {
+        fields: [profileIntelligence.userId],
+        references: [user.id],
+    }),
+}));
+
+export const profileIntelligenceJobsRelations = relations(profileIntelligenceJobs, ({ one }) => ({
+    user: one(user, {
+        fields: [profileIntelligenceJobs.userId],
+        references: [user.id],
+    }),
+}));
+
+export const matchmakerIntentsRelations = relations(matchmakerIntents, ({ one }) => ({
+    user: one(user, {
+        fields: [matchmakerIntents.userId],
+        references: [user.id],
+    }),
+}));
+
+export const matchmakerSessionsRelations = relations(matchmakerSessions, ({ one, many }) => ({
+    user: one(user, {
+        fields: [matchmakerSessions.userId],
+        references: [user.id],
+    }),
+    lastCandidate: one(user, {
+        fields: [matchmakerSessions.lastCandidateUserId],
+        references: [user.id],
+    }),
+    messages: many(matchmakerMessages),
+    results: many(matchmakerSessionResults),
+    shortlists: many(matchmakerShortlists),
+}));
+
+export const matchmakerMessagesRelations = relations(matchmakerMessages, ({ one }) => ({
+    session: one(matchmakerSessions, {
+        fields: [matchmakerMessages.sessionId],
+        references: [matchmakerSessions.id],
+    }),
+}));
+
+export const matchmakerSessionResultsRelations = relations(matchmakerSessionResults, ({ one }) => ({
+    session: one(matchmakerSessions, {
+        fields: [matchmakerSessionResults.sessionId],
+        references: [matchmakerSessions.id],
+    }),
+    shortlist: one(matchmakerShortlists, {
+        fields: [matchmakerSessionResults.shortlistId],
+        references: [matchmakerShortlists.id],
+    }),
+    viewer: one(user, {
+        fields: [matchmakerSessionResults.viewerUserId],
+        references: [user.id],
+        relationName: "matchmakerResultViewer",
+    }),
+    candidate: one(user, {
+        fields: [matchmakerSessionResults.candidateUserId],
+        references: [user.id],
+        relationName: "matchmakerResultCandidate",
+    }),
+}));
+
+export const matchmakerUserMemoryRelations = relations(matchmakerUserMemory, ({ one }) => ({
+    user: one(user, {
+        fields: [matchmakerUserMemory.userId],
+        references: [user.id],
+    }),
+}));
+
+export const matchmakerUserBriefsRelations = relations(matchmakerUserBriefs, ({ one, many }) => ({
+    user: one(user, {
+        fields: [matchmakerUserBriefs.userId],
+        references: [user.id],
+    }),
+    preferences: many(matchmakerUserPreferences),
+    changes: many(matchmakerPreferenceChanges),
+}));
+
+export const matchmakerShortlistsRelations = relations(matchmakerShortlists, ({ one, many }) => ({
+    session: one(matchmakerSessions, {
+        fields: [matchmakerShortlists.sessionId],
+        references: [matchmakerSessions.id],
+    }),
+    viewer: one(user, {
+        fields: [matchmakerShortlists.viewerUserId],
+        references: [user.id],
+    }),
+    results: many(matchmakerSessionResults),
+}));
+
+export const matchmakerUserPreferencesRelations = relations(matchmakerUserPreferences, ({ one }) => ({
+    user: one(user, {
+        fields: [matchmakerUserPreferences.userId],
+        references: [user.id],
+    }),
+    brief: one(matchmakerUserBriefs, {
+        fields: [matchmakerUserPreferences.userId],
+        references: [matchmakerUserBriefs.userId],
+    }),
+}));
+
+export const matchmakerPreferenceChangesRelations = relations(matchmakerPreferenceChanges, ({ one }) => ({
+    user: one(user, {
+        fields: [matchmakerPreferenceChanges.userId],
+        references: [user.id],
+    }),
+    brief: one(matchmakerUserBriefs, {
+        fields: [matchmakerPreferenceChanges.userId],
+        references: [matchmakerUserBriefs.userId],
     }),
 }));
 
@@ -1878,7 +2681,27 @@ export const candidatePairHistoryRelations = relations(candidatePairHistory, ({ 
     }),
 }));
 
-export const mutualMatchesRelations = relations(mutualMatches, ({ one }) => ({
+export const meetupRescheduleRequestsRelations = relations(
+    meetupRescheduleRequests,
+    ({ one }) => ({
+        mutualMatch: one(mutualMatches, {
+            fields: [meetupRescheduleRequests.mutualMatchId],
+            references: [mutualMatches.id],
+        }),
+        requestedBy: one(user, {
+            fields: [meetupRescheduleRequests.requestedByUserId],
+            references: [user.id],
+            relationName: "rescheduleRequestedBy",
+        }),
+        counterOf: one(meetupRescheduleRequests, {
+            fields: [meetupRescheduleRequests.counterOfRequestId],
+            references: [meetupRescheduleRequests.id],
+            relationName: "rescheduleCounter",
+        }),
+    }),
+);
+
+export const mutualMatchesRelations = relations(mutualMatches, ({ one, many }) => ({
     candidatePair: one(candidatePairs, {
         fields: [mutualMatches.candidatePairId],
         references: [candidatePairs.id],
@@ -1897,6 +2720,12 @@ export const mutualMatchesRelations = relations(mutualMatches, ({ one }) => ({
         fields: [mutualMatches.legacyDateMatchId],
         references: [dateMatches.id],
     }),
+    pendingRescheduleRequest: one(meetupRescheduleRequests, {
+        fields: [mutualMatches.pendingRescheduleRequestId],
+        references: [meetupRescheduleRequests.id],
+        relationName: "mutualPendingReschedule",
+    }),
+    rescheduleRequests: many(meetupRescheduleRequests),
 }));
 
 export const userMatchInterestsRelations = relations(userMatchInterests, ({ one }) => ({
@@ -1964,6 +2793,14 @@ export type UserMatchInterest = typeof userMatchInterests.$inferSelect;
 export type NewUserMatchInterest = typeof userMatchInterests.$inferInsert;
 export type MutualMatch = typeof mutualMatches.$inferSelect;
 export type NewMutualMatch = typeof mutualMatches.$inferInsert;
+export type MeetupRescheduleRequest = typeof meetupRescheduleRequests.$inferSelect;
+export type NewMeetupRescheduleRequest = typeof meetupRescheduleRequests.$inferInsert;
+
+export type {
+    MeetupRescheduleStatus,
+    MeetupSlotKind,
+} from "@/lib/meetup-reschedule/types";
+export { MEETUP_RESCHEDULE_STATUSES } from "@/lib/meetup-reschedule/types";
 export type WeeklyDrop = typeof weeklyDrops.$inferSelect;
 export type NewWeeklyDrop = typeof weeklyDrops.$inferInsert;
 export type MatchMission = typeof matchMissions.$inferSelect;
@@ -1977,8 +2814,38 @@ export type FaceVerificationResult = typeof faceVerificationResults.$inferSelect
 export type NewFaceVerificationResult = typeof faceVerificationResults.$inferInsert;
 export type ProfilePhotoAsset = typeof profilePhotoAssets.$inferSelect;
 export type NewProfilePhotoAsset = typeof profilePhotoAssets.$inferInsert;
+export type ProfilePhotoAnalysis = typeof profilePhotoAnalysis.$inferSelect;
+export type NewProfilePhotoAnalysis = typeof profilePhotoAnalysis.$inferInsert;
+export type ProfilePhotoEmbedding = typeof profilePhotoEmbeddings.$inferSelect;
+export type NewProfilePhotoEmbedding = typeof profilePhotoEmbeddings.$inferInsert;
+export type UserVisualPreferenceSignal = typeof userVisualPreferenceSignals.$inferSelect;
+export type ProfileInteractionEvent = typeof profileInteractionEvents.$inferSelect;
+export type ProfileIntelligence = typeof profileIntelligence.$inferSelect;
+export type NewProfileIntelligence = typeof profileIntelligence.$inferInsert;
+export type ProfileIntelligenceJob = typeof profileIntelligenceJobs.$inferSelect;
+export type NewProfileIntelligenceJob = typeof profileIntelligenceJobs.$inferInsert;
+export type MatchmakerIntent = typeof matchmakerIntents.$inferSelect;
+export type NewMatchmakerIntent = typeof matchmakerIntents.$inferInsert;
+export type MatchmakerSession = typeof matchmakerSessions.$inferSelect;
+export type NewMatchmakerSession = typeof matchmakerSessions.$inferInsert;
+export type MatchmakerMessage = typeof matchmakerMessages.$inferSelect;
+export type NewMatchmakerMessage = typeof matchmakerMessages.$inferInsert;
+export type MatchmakerSessionResult = typeof matchmakerSessionResults.$inferSelect;
+export type NewMatchmakerSessionResult = typeof matchmakerSessionResults.$inferInsert;
+export type MatchmakerShortlist = typeof matchmakerShortlists.$inferSelect;
+export type NewMatchmakerShortlist = typeof matchmakerShortlists.$inferInsert;
+export type MatchmakerUserMemory = typeof matchmakerUserMemory.$inferSelect;
+export type NewMatchmakerUserMemory = typeof matchmakerUserMemory.$inferInsert;
+export type MatchmakerUserBrief = typeof matchmakerUserBriefs.$inferSelect;
+export type NewMatchmakerUserBrief = typeof matchmakerUserBriefs.$inferInsert;
+export type MatchmakerUserPreference = typeof matchmakerUserPreferences.$inferSelect;
+export type NewMatchmakerUserPreference = typeof matchmakerUserPreferences.$inferInsert;
+export type MatchmakerPreferenceChange = typeof matchmakerPreferenceChanges.$inferSelect;
+export type NewMatchmakerPreferenceChange = typeof matchmakerPreferenceChanges.$inferInsert;
 export type FaceVerificationJob = typeof faceVerificationJobs.$inferSelect;
 export type NewFaceVerificationJob = typeof faceVerificationJobs.$inferInsert;
+export type FaceVerificationAssistance = typeof faceVerificationAssistance.$inferSelect;
+export type NewFaceVerificationAssistance = typeof faceVerificationAssistance.$inferInsert;
 export type StudySession = typeof studySessions.$inferSelect;
 export type NewStudySession = typeof studySessions.$inferInsert;
 export type WingmanLink = typeof wingmanLinks.$inferSelect;
@@ -1994,6 +2861,10 @@ export type BlindDate = typeof blindDates.$inferSelect;
 export type NewBlindDate = typeof blindDates.$inferInsert;
 export type AgentAnalyticsEvent = typeof agentAnalytics.$inferSelect;
 export type AppFeatureFlag = typeof appFeatureFlags.$inferSelect;
+export type DatePayment = typeof datePayments.$inferSelect;
+export type NewDatePayment = typeof datePayments.$inferInsert;
+export type UserCredit = typeof userCredits.$inferSelect;
+export type NewUserCredit = typeof userCredits.$inferInsert;
 
 // Analytics events — lightweight funnel tracking
 export const analyticsEvents = pgTable(
@@ -2167,3 +3038,5 @@ export type FeedbackRating = "amazing" | "nice" | "meh" | "not_for_me";
 
 // Pulse category type
 export type PulseCategory = "missed_connection" | "campus_thought" | "dating_rant" | "hot_take" | "looking_for" | "general";
+
+export * from "./questionnaire-schema";

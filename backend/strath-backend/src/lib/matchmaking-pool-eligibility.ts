@@ -1,4 +1,7 @@
-import { isFaceVerificationPassed } from "@/lib/services/face-verification-policy";
+import { eq, isNotNull, or, type SQL } from "drizzle-orm";
+
+import { profiles } from "@/db/schema";
+import { FACE_VERIFICATION_STATUSES, isFaceVerificationPassed } from "@/lib/services/face-verification-policy";
 
 /**
  * Minimal profile fields for deciding if someone has finished the first (face) verification.
@@ -15,6 +18,14 @@ export interface ProfileFaceVerificationFields {
  */
 export function hasCompletedInitialFaceVerification(profile: ProfileFaceVerificationFields): boolean {
     return isFaceVerificationPassed(profile.faceVerificationStatus) || Boolean(profile.faceVerifiedAt);
+}
+
+/** Drizzle WHERE fragment: profile has passed initial face verification. */
+export function faceVerifiedProfileWhereClause(): SQL {
+    return or(
+        eq(profiles.faceVerificationStatus, FACE_VERIFICATION_STATUSES.VERIFIED),
+        isNotNull(profiles.faceVerifiedAt),
+    )!;
 }
 
 /**

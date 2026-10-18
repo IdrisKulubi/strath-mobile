@@ -74,12 +74,46 @@ This is the backend for the StrathSpace 2.0 mobile app, built with Next.js App R
 - `src/lib`: Utility functions (auth, db, matching, pusher, validation).
 - `src/scripts`: Database scripts (seed).
 
+## Photo-Aware Matching
+
+Photo quality, moderation, and bounded visual preference signals are documented in [docs/photo-intelligence-architecture.md](docs/photo-intelligence-architecture.md).
+
+User-facing routes:
+
+- `POST /api/photos/analyze`
+- `POST /api/photos/reanalyze`
+- `GET /api/photos/quality-score`
+- `GET /api/photos/improvement-tips`
+- `POST /api/profiles/view`, `POST /api/profiles/like`, `POST /api/profiles/pass`
+
+Admin routes:
+
+- `GET /api/admin/photo-quality/low-quality-profiles`
+- `GET /api/admin/photo-quality/needs-review`
+- `POST /api/admin/photo-quality/reanalyze-user`
+- `POST /api/admin/photo-quality/backfill` — batch analyze + embed (use `offset` until `nextOffset` is null)
+
+**Backfill embeddings in production** (after Vercel has `PHOTO_INTELLIGENCE_*` vars):
+
+```bash
+curl -X POST "https://YOUR_BACKEND/api/admin/photo-quality/backfill" \
+  -H "Authorization: Bearer YOUR_CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"limit":20,"offset":0,"onlyMissingEmbeddings":true}'
+```
+
+Repeat with `"offset":20`, then `40`, … until the response has `"nextOffset": null`.
+
+Apply migration `drizzle/0022_photo_aware_matching.sql` before enabling in production.
+
+Optional embedding worker: `services/photo-intelligence-worker` (Railway).
+
 ## Face Verification Operations
 
 Face verification is configured to run in async-first mode in production.
 
-- User submit requests queue work through `POST /api/verification/face/submit`.
-- The queue worker runs through `GET /api/worker/face-verification`.
+- User submit requests run Rekognition for that session inside `POST /api/verification/face/submit` when possible, then return the final session status.
+- A queue job is still created for recovery; the worker drains backlog through `GET /api/worker/face-verification`.
 - Vercel cron is configured in [vercel.json](C:\Users\Idris Kulubi\Desktop\sidequests\active\smobile\strath-mobile\backend\strath-backend\vercel.json) to call the worker directly every minute.
 - `GET /api/cron/face-verification` remains available as a compatibility and recovery trigger, but it now simply drains queued jobs.
 - Profile photo uploads are pre-audited into verification-ready metadata so repeated verification attempts can reuse face/readiness information.

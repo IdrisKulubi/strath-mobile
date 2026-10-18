@@ -179,6 +179,17 @@ export async function getFaceVerificationJobById(jobId: string) {
     });
 }
 
+export async function completePendingFaceVerificationSessionJob(sessionId: string) {
+    const job = await getExistingActiveFaceVerificationJob({
+        jobType: FACE_VERIFICATION_JOB_TYPES.PROCESS_SESSION,
+        sessionId,
+    });
+
+    if (job) {
+        await completeFaceVerificationJob(job.id);
+    }
+}
+
 export async function getExistingActiveFaceVerificationJob(input: {
     jobType: string;
     sessionId?: string | null;

@@ -6,6 +6,7 @@ import { profilePhotoAssets } from "@/db/schema";
 import { ensureProfilePhotoAuditJob } from "@/lib/services/face-verification-queue";
 import { getFaceVerificationPhotoAuditVersion } from "@/lib/services/face-verification-policy";
 import { detectFacesWithRekognition } from "@/lib/services/face-verification-provider-rekognition";
+import { ensureProfileIntelligenceJob } from "@/lib/services/profile-intelligence-service";
 import {
     extractR2ObjectKeyFromUrl,
     getFaceVerificationComparisonBytes,
@@ -32,8 +33,9 @@ export async function syncProfilePhotoAssetsForUser(userId: string, photoUrls: s
         return [];
     }
 
-    for (const asset of uniqueAssets) {
-        await db
+    const auditVersion = getFaceVerificationPhotoAuditVersion();
+    await Promise.all(uniqueAssets.map(async (asset) => {
+        const [storedAsset] = await db
             .insert(profilePhotoAssets)
             .values({
                 userId,
@@ -49,10 +51,28 @@ export async function syncProfilePhotoAssetsForUser(userId: string, photoUrls: s
                     contentType: inferImageContentType(asset.objectKey),
                     updatedAt: new Date(),
                 },
-            });
+            })
+            .returning();
 
-        await ensureProfilePhotoAuditJob(userId, asset.objectKey, asset.publicUrl);
-    }
+        if (
+            storedAsset.analysisVersion !== auditVersion ||
+            !storedAsset.lastAnalyzedAt ||
+            storedAsset.analysisError
+        ) {
+            await ensureProfilePhotoAuditJob(userId, asset.objectKey, asset.publicUrl);
+        }
+    }));
+
+    await ensureProfileIntelligenceJob({
+        userId,
+        jobType: "profile_refresh",
+        metadata: {
+            source: "profile_photo_assets_sync",
+            photoCount: uniqueAssets.length,
+        },
+    }).catch((error) => {
+        console.warn("[profile-photo-assets] failed to enqueue profile intelligence refresh", error);
+    });
 
     return uniqueAssets;
 }

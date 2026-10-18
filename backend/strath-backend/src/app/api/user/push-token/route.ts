@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { session as sessionTable, user } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
+import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 import { z } from "zod";
 
 const pushTokenSchema = z.object({
@@ -41,10 +42,20 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const { pushToken } = pushTokenSchema.parse(body);
 
+        const existing = await db.query.user.findFirst({
+            where: eq(user.id, session.user.id),
+            columns: { pushToken: true },
+        });
+
         await db
             .update(user)
             .set({ pushToken })
             .where(eq(user.id, session.user.id));
+
+        await logEvent(EVENT_TYPES.PUSH_TOKEN_REGISTERED, session.user.id, {
+            hadTokenBefore: Boolean(existing?.pushToken),
+            context: "api_register",
+        });
 
         return successResponse({ success: true });
     } catch (error) {

@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import db from "@/db/drizzle";
 import { dateMatches, mutualMatches } from "@/db/schema";
+import { getPaymentsEnabled } from "@/lib/payments/payment-flags";
 import { assignLegacyArrangingSlot } from "@/lib/services/meetup-slot-service";
 
 export interface BackfillArrangingResult {
@@ -67,9 +68,25 @@ export async function backfillArrangingMeetupSlots(
                 legacyDateMatchId: dateMatchId,
                 userASlotConfirmedAt: null,
                 userBSlotConfirmedAt: null,
+                slotConfirmReminderSentAt: null,
                 updatedAt: backfillAt,
             })
             .where(eq(mutualMatches.id, row.id));
+
+        const { sendMeetupSlotAssignedPushes } = await import(
+            "@/lib/services/meetup-push-notifications-service"
+        );
+        const paymentsEnabled = await getPaymentsEnabled();
+        await sendMeetupSlotAssignedPushes({
+            userAId: row.userAId,
+            userBId: row.userBId,
+            scheduledAt: assignment.scheduledAt,
+            confirmBy: assignment.confirmBy,
+            paymentsEnabled,
+            dateMatchId: dateMatchId ?? undefined,
+        }).catch((err) => {
+            console.warn("[meetup-backfill] slot push failed", row.id, err);
+        });
 
         updated += 1;
         details.push({

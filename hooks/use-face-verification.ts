@@ -1,9 +1,15 @@
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getAuthHeaders } from '@/lib/auth-helpers';
 import { normalizeImageForUpload } from '@/lib/image-normalization';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.strathspace.com';
+const API_TIMEOUT_MS = 20_000;
+const POLL_FAST_MS = 2000;
+const POLL_SLOW_MS = 5000;
+const POLL_FAST_WINDOW_MS = 30_000;
+const POLL_MAX_WINDOW_MS = 3 * 60_000;
 
 export type FaceVerificationStatus =
     | 'not_started'
@@ -54,6 +60,13 @@ interface UploadTarget {
     slot: 'front' | 'left' | 'right' | 'smile' | 'extra';
 }
 
+interface SubmitSessionResponse {
+    session: FaceVerificationSession;
+    queued?: boolean;
+    processedInline?: boolean;
+    duplicateSubmit?: boolean;
+}
+
 function normalizeSessionPayload(
     payload: FaceVerificationSession | { session?: FaceVerificationSession } | null,
 ) {
@@ -72,37 +85,97 @@ function normalizeSessionPayload(
     return null;
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${API_URL}${path}`, {
-        ...init,
-        headers: {
-            ...headers,
-            ...(init?.headers ?? {}),
-        },
-    });
+function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-        const detailMessage = Array.isArray(payload?.details) && payload.details.length > 0
-            ? payload.details
-                .map((detail: { path?: (string | number)[]; message?: string }) => {
-                    const field = Array.isArray(detail?.path) ? detail.path.join('.') : 'field';
-                    return detail?.message ? `${field}: ${detail.message}` : null;
-                })
-                .filter(Boolean)
-                .join(', ')
-            : null;
-
-        throw new Error(detailMessage || payload.error || `Request failed with status ${response.status}`);
+function isRetriableFetchError(error: unknown) {
+    if (!(error instanceof Error)) {
+        return false;
     }
 
-    return (payload.data ?? payload) as T;
+    const message = error.message.toLowerCase();
+    return (
+        message.includes('network request failed') ||
+        message.includes('failed to fetch') ||
+        message.includes('network error') ||
+        message.includes('timed out') ||
+        message.includes('timeout')
+    );
+}
+
+async function apiFetchOnce<T>(path: string, init?: RequestInit): Promise<T> {
+    const headers = await getAuthHeaders();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+    try {
+        const response = await fetch(`${API_URL}${path}`, {
+            ...init,
+            signal: controller.signal,
+            headers: {
+                ...headers,
+                ...(init?.headers ?? {}),
+            },
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const detailMessage =
+                Array.isArray(payload?.details) && payload.details.length > 0
+                    ? payload.details
+                          .map((detail: { path?: (string | number)[]; message?: string }) => {
+                              const field = Array.isArray(detail?.path)
+                                  ? detail.path.join('.')
+                                  : 'field';
+                              return detail?.message ? `${field}: ${detail.message}` : null;
+                          })
+                          .filter(Boolean)
+                          .join(', ')
+                    : null;
+
+            throw new Error(
+                detailMessage || payload.error || `Request failed with status ${response.status}`,
+            );
+        }
+
+        return (payload.data ?? payload) as T;
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error('Request timed out. Check your connection and try again.');
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+async function apiFetch<T>(path: string, init?: RequestInit & { allowRetry?: boolean }) {
+    const method = (init?.method ?? 'GET').toUpperCase();
+    const allowRetry = init?.allowRetry ?? method === 'GET';
+    const maxAttempts = allowRetry ? 2 : 1;
+
+    let lastError: unknown;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        try {
+            return await apiFetchOnce<T>(path, init);
+        } catch (error) {
+            lastError = error;
+            if (attempt < maxAttempts - 1 && isRetriableFetchError(error)) {
+                await sleep(400 * (attempt + 1));
+                continue;
+            }
+            throw error;
+        }
+    }
+
+    throw lastError;
 }
 
 async function getLatestSession() {
     const payload = await apiFetch<FaceVerificationSession | { session?: FaceVerificationSession } | null>(
         '/api/verification/face/session',
+        { allowRetry: true },
     );
     return normalizeSessionPayload(payload);
 }
@@ -111,8 +184,9 @@ async function createSession() {
     const payload = await apiFetch<FaceVerificationSession | { session?: FaceVerificationSession }>(
         '/api/verification/face/session',
         {
-        method: 'POST',
-        body: JSON.stringify({}),
+            method: 'POST',
+            body: JSON.stringify({}),
+            allowRetry: false,
         },
     );
 
@@ -128,8 +202,9 @@ async function retrySession() {
     const payload = await apiFetch<FaceVerificationSession | { session?: FaceVerificationSession }>(
         '/api/verification/face/retry',
         {
-        method: 'POST',
-        body: JSON.stringify({}),
+            method: 'POST',
+            body: JSON.stringify({}),
+            allowRetry: false,
         },
     );
 
@@ -150,34 +225,69 @@ async function requestUploadTargets(sessionId: string, contentType = 'image/jpeg
                 sessionId,
                 uploads: [{ slot: 'front', contentType }],
             }),
+            allowRetry: false,
         },
     );
 }
 
 async function submitSession(sessionId: string, profilePhotoUrls: string[]) {
-    return apiFetch<{ session: FaceVerificationSession; queued: boolean }>(
-        '/api/verification/face/submit',
-        {
-            method: 'POST',
-            body: JSON.stringify({
-                sessionId,
-                profilePhotoUrls,
-            }),
-        },
-    );
+    return apiFetch<SubmitSessionResponse>('/api/verification/face/submit', {
+        method: 'POST',
+        body: JSON.stringify({
+            sessionId,
+            profilePhotoUrls,
+        }),
+        allowRetry: false,
+    });
 }
 
 export function useFaceVerification() {
     const queryClient = useQueryClient();
+    const processingPollStartedAtRef = useRef<number | null>(null);
+    const [pollTimedOut, setPollTimedOut] = useState(false);
+    const [lastSubmitQueued, setLastSubmitQueued] = useState(false);
 
     const query = useQuery({
         queryKey: ['face-verification', 'latest-session'],
         queryFn: getLatestSession,
         refetchInterval: (queryState) => {
             const status = queryState.state.data?.status;
-            return status === 'processing' || status === 'pending_capture' ? 4000 : false;
+            const shouldPoll = status === 'processing' || status === 'pending_capture';
+
+            if (!shouldPoll) {
+                processingPollStartedAtRef.current = null;
+                return false;
+            }
+
+            if (processingPollStartedAtRef.current === null) {
+                processingPollStartedAtRef.current = Date.now();
+            }
+
+            const elapsed = Date.now() - processingPollStartedAtRef.current;
+            if (elapsed >= POLL_MAX_WINDOW_MS) {
+                return false;
+            }
+
+            return elapsed < POLL_FAST_WINDOW_MS ? POLL_FAST_MS : POLL_SLOW_MS;
         },
     });
+
+    const status = query.data?.status;
+    const isProcessing = status === 'processing';
+
+    useEffect(() => {
+        if (!isProcessing && status !== 'pending_capture') {
+            setPollTimedOut(false);
+            return;
+        }
+
+        setPollTimedOut(false);
+        const timer = setTimeout(() => {
+            setPollTimedOut(true);
+        }, POLL_MAX_WINDOW_MS);
+
+        return () => clearTimeout(timer);
+    }, [isProcessing, status, query.data?.id]);
 
     const createSessionMutation = useMutation({
         mutationFn: createSession,
@@ -230,7 +340,9 @@ export function useFaceVerification() {
             return submitSession(session.id, profilePhotoUrls);
         },
         onSuccess: (data) => {
+            setLastSubmitQueued(Boolean(data.queued && !data.processedInline));
             queryClient.setQueryData(['face-verification', 'latest-session'], data.session);
+            queryClient.invalidateQueries({ queryKey: ['face-verification', 'latest-session'] });
             queryClient.invalidateQueries({ queryKey: ['profile'] });
         },
     });
@@ -238,6 +350,8 @@ export function useFaceVerification() {
     return {
         ...query,
         latestSession: query.data,
+        pollTimedOut,
+        lastSubmitQueued,
         createSessionAsync: createSessionMutation.mutateAsync,
         retrySessionAsync: retrySessionMutation.mutateAsync,
         uploadAndSubmitAsync: uploadAndSubmitMutation.mutateAsync,

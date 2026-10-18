@@ -3,6 +3,7 @@ import { eq, or, sql } from "drizzle-orm";
 import { db as readDb } from "@/lib/db";
 import { profiles, user } from "@/db/schema";
 import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
+import { redis } from "@/lib/redis";
 
 /**
  * Accounts that must never participate in automated daily introductions or
@@ -13,6 +14,11 @@ import { APP_FEATURE_KEYS, isFeatureEnabled } from "@/lib/feature-flags";
  */
 const DEFAULT_EXCLUDED_MATCH_EMAILS = ["kulubiidris@gmail.com", "maria.muthoni@strathmore.edu", "jasminemaria784@gmail.com"] as const;
 
+const MATCH_EXCLUDED_CACHE_KEY = "match:excluded-user-ids";
+const MATCH_EXCLUDED_TTL_SECONDS = 15 * 60;
+
+let memoryCache: { ids: string[]; expiresAt: number } | null = null;
+
 function parseExtraExcludedEmailsFromEnv(): string[] {
     const raw = process.env.MATCH_EXCLUDED_FROM_POOL_EMAILS?.trim();
     if (!raw) return [];
@@ -22,12 +28,7 @@ function parseExtraExcludedEmailsFromEnv(): string[] {
         .filter(Boolean);
 }
 
-/**
- * User IDs excluded from being shown as candidates, from receiving new candidate
- * pairs, and from creating mutual matches via swipe when the other side is
- * involved (see swipe route).
- */
-export async function resolveMatchExcludedUserIds(): Promise<Set<string>> {
+async function loadMatchExcludedUserIdsFromDb(): Promise<Set<string>> {
     const emailSet = new Set<string>([
         ...DEFAULT_EXCLUDED_MATCH_EMAILS.map((e) => e.toLowerCase()),
         ...parseExtraExcludedEmailsFromEnv(),
@@ -59,9 +60,76 @@ export async function resolveMatchExcludedUserIds(): Promise<Set<string>> {
     return out;
 }
 
-export async function isAdminMatchPreviewUser(userId: string): Promise<boolean> {
+export async function invalidateMatchExcludedUserIdsCache(): Promise<void> {
+    memoryCache = null;
+    try {
+        await redis.del(MATCH_EXCLUDED_CACHE_KEY);
+    } catch (error) {
+        console.warn("[match-exclusion] failed to invalidate redis cache", error);
+    }
+}
+
+/**
+ * User IDs excluded from being shown as candidates, from receiving new candidate
+ * pairs, and from creating mutual matches via swipe when the other side is
+ * involved (see swipe route).
+ */
+export async function resolveMatchExcludedUserIds(): Promise<Set<string>> {
+    const now = Date.now();
+
+    if (memoryCache && memoryCache.expiresAt > now) {
+        return new Set(memoryCache.ids);
+    }
+
+    try {
+        const cached = await redis.get<string[]>(MATCH_EXCLUDED_CACHE_KEY);
+        if (Array.isArray(cached) && cached.length >= 0) {
+            memoryCache = {
+                ids: cached,
+                expiresAt: now + MATCH_EXCLUDED_TTL_SECONDS * 1000,
+            };
+            return new Set(cached);
+        }
+    } catch (error) {
+        console.warn("[match-exclusion] redis cache read failed", error);
+    }
+
+    const out = await loadMatchExcludedUserIdsFromDb();
+    const ids = [...out];
+    memoryCache = {
+        ids,
+        expiresAt: now + MATCH_EXCLUDED_TTL_SECONDS * 1000,
+    };
+
+    try {
+        await redis.set(MATCH_EXCLUDED_CACHE_KEY, ids, { ex: MATCH_EXCLUDED_TTL_SECONDS });
+    } catch (error) {
+        console.warn("[match-exclusion] redis cache write failed", error);
+    }
+
+    return out;
+}
+
+export type MatchExclusionContext = {
+    matchExcludedUserIds: Set<string>;
+    sessionUserRole?: string | null;
+};
+
+export async function createMatchExclusionContext(sessionUserRole?: string | null): Promise<MatchExclusionContext> {
+    const matchExcludedUserIds = await resolveMatchExcludedUserIds();
+    return { matchExcludedUserIds, sessionUserRole };
+}
+
+export async function isAdminMatchPreviewUser(
+    userId: string,
+    options?: { sessionUserRole?: string | null },
+): Promise<boolean> {
     const enabled = await isFeatureEnabled(APP_FEATURE_KEYS.adminMatchPreviewEnabled, false);
     if (!enabled) return false;
+
+    if (options?.sessionUserRole === "admin") {
+        return true;
+    }
 
     const [userRow, profileRow] = await Promise.all([
         readDb.query.user.findFirst({

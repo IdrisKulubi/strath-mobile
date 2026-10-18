@@ -4,6 +4,8 @@ This project uses:
 - **System notifications (push)** via `expo-notifications` + Expo Push service
 - **In-app notifications** via the existing toast system (`ToastProvider` / `useToast`)
 
+See the [2026-10-16 reliability plan, rollout steps and acceptance checklist](notification-reliability.md) for the current queue, receipt checks, questionnaire events and weekly permission reminders.
+
 ## What’s already wired
 
 ### Mobile
@@ -41,7 +43,7 @@ Token registration calls `/api/user/push-token` which requires auth.
 
 ### 5) Verify the token is saved server-side
 When the app starts, it:
-- requests notification permission
+- silently registers when notification permission is already granted (the system prompt requires an explicit Enable action)
 - fetches `ExpoPushToken[...]`
 - POSTs it to `/api/user/push-token`
 

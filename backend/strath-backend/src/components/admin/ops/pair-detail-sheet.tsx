@@ -10,6 +10,7 @@ import {
     SheetHeader,
     SheetTitle,
 } from "@/components/ui/sheet";
+import { formatNairobiDateTime } from "@/lib/nairobi-datetime";
 import { PairAvatars } from "./pair-avatars";
 import { ContactRow } from "./contact-row";
 import { DateFlowTimeline } from "./date-flow-timeline";
@@ -103,7 +104,7 @@ export function PairDetailSheet({
                                     <CalendarClock className="mt-0.5 size-4 shrink-0 text-white/50" strokeWidth={1.75} />
                                     <div className="min-w-0">
                                         <p className="text-[13px] font-medium text-white">
-                                            {new Date(scheduledAt).toLocaleString("en-KE", {
+                                            {formatNairobiDateTime(scheduledAt, {
                                                 weekday: "long",
                                                 month: "short",
                                                 day: "numeric",
@@ -254,7 +255,7 @@ function buildTimelineSteps({
 }
 
 function formatShort(iso: string) {
-    return new Date(iso).toLocaleString("en-KE", {
+    return formatNairobiDateTime(iso, {
         month: "short",
         day: "numeric",
         hour: "2-digit",

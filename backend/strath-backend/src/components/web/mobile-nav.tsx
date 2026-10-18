@@ -41,7 +41,7 @@ const navItems = [
 
 export function MobileNav() {
   const pathname = usePathname();
-  const { unopenedMatches, unreadMessages } = useNotificationCounts({ pollingInterval: 10000 });
+  const { unopenedMatches, unreadMessages } = useNotificationCounts({ pollingInterval: 60_000 });
 
   // Don't show nav on chat pages (full screen experience)
   if (pathname.includes("/app/chat/")) {
