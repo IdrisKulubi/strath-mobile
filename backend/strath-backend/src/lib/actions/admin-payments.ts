@@ -22,6 +22,7 @@ export type AdminPaymentQueueKey =
     | "one_paid"
     | "both_paid"
     | "expired_with_credit"
+    | "cancelled"
     | "refund_requested";
 
 export interface AdminPaymentUser {
@@ -144,6 +145,9 @@ function resolveQueuesForMatch(input: {
     if (input.paymentState === "expired" && input.hasActiveCredit) {
         queues.push("expired_with_credit");
     }
+    if (input.paymentState === "cancelled") {
+        queues.push("cancelled");
+    }
     if (input.hasRefundRequested) {
         queues.push("refund_requested");
     }
@@ -200,6 +204,7 @@ export async function getAdminPaymentQueues(
                 "paid_waiting_for_other",
                 "both_paid",
                 "expired",
+                "cancelled",
             ]),
         ),
         orderBy: [desc(dateMatches.createdAt)],
@@ -279,6 +284,7 @@ export async function getAdminPaymentQueues(
         one_paid: rows.filter((r) => r.queues.includes("one_paid")).length,
         both_paid: rows.filter((r) => r.queues.includes("both_paid")).length,
         expired_with_credit: rows.filter((r) => r.queues.includes("expired_with_credit")).length,
+        cancelled: rows.filter((r) => r.queues.includes("cancelled")).length,
         refund_requested: rows.filter((r) => r.queues.includes("refund_requested")).length,
     };
 

@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { View, StyleSheet } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useMinimizeOnScroll } from 'expo-glass-tabs';
+import Animated from 'react-native-reanimated';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useMyHype } from '@/hooks/use-hype';
@@ -10,7 +11,7 @@ import * as Haptics from 'expo-haptics';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     ProfileHeroCard,
-    CompletionProgressCard,
+    GuidedCompletionPath,
     ProfilePhotoGrid,
     AboutCard,
     InterestChipsSection,
@@ -35,35 +36,15 @@ import {
     Globe,
     Church,
 } from 'phosphor-react-native';
+import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
 import { TabSwipeView } from '@/components/navigation/tab-swipe-view';
-
-function calculateCompletion(profile: any): number {
-    if (!profile) return 0;
-    let score = 0;
-    if (profile.firstName && profile.lastName) score += 7;
-    if (profile.bio || profile.aboutMe) score += 7;
-    if (profile.profilePhoto) score += 6;
-    if (profile.university) score += 8;
-    if (profile.course && profile.yearOfStudy) score += 7;
-    if (profile.interests?.length) score += 5;
-    if (profile.zodiacSign) score += 3;
-    if (profile.personalityType) score += 3;
-    if (profile.loveLanguage) score += 3;
-    if (profile.photos?.length) score += 3;
-    if (profile.qualities?.length) score += 4;
-    if (profile.prompts?.length) score += 4;
-    if (profile.height) score += 3;
-    if (profile.education) score += 3;
-    if (profile.workoutFrequency) score += 2;
-    if (profile.smoking) score += 2;
-    if (profile.lookingFor) score += 3;
-    if (profile.politics) score += 2;
-    if (profile.religion) score += 3;
-    if (profile.languages?.length) score += 2;
-    if (profile.instagram) score += 10;
-    if (profile.spotify || profile.snapchat) score += 10;
-    return Math.min(score, 100);
-}
+import { Action, Copy } from '@/components/questionnaire/ui';
+import { useExperience } from '@/lib/questionnaire';
+import {
+    calculateProfileCompletion,
+    getProfileCompletionTasks,
+    type ProfileCompletionTask,
+} from '@/lib/profile-completion';
 
 function formatDisplayValue(value?: string | null): string | null {
     if (!value?.trim()) return null;
@@ -81,11 +62,17 @@ export default function ProfileScreen() {
     const { colors, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const router = useRouter();
-    const tabBarHeight = useBottomTabBarHeight();
+    const insets = useSafeAreaInsets();
+    const tabBarHeight = getGlassTabBarHeight(insets.bottom);
+    const onScroll = useMinimizeOnScroll();
     const { data: profile, isLoading } = useProfile();
     const { data: hypeData } = useMyHype();
+    const experience = useExperience();
 
-    const completion = calculateCompletion(profile);
+    const completionTasks = profile ? getProfileCompletionTasks(profile) : [];
+    const calculatedCompletion = calculateProfileCompletion(profile);
+    const needsCompletion = completionTasks.length > 0;
+    const completion = needsCompletion ? Math.min(calculatedCompletion, 95) : calculatedCompletion;
     const allPhotos = Array.from(
         new Set([profile?.profilePhoto, ...(profile?.photos ?? [])].filter(Boolean)),
     ) as string[];
@@ -93,6 +80,11 @@ export default function ProfileScreen() {
     const handlePress = (route: string) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         router.push(route as any);
+    };
+
+    const handleCompletionTask = (task: ProfileCompletionTask) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        router.push({ pathname: '/edit-profile', params: { focus: task.id } });
     };
 
     const lifestyleTags = [
@@ -168,7 +160,9 @@ export default function ProfileScreen() {
         },
     ].filter(Boolean) as ProfileDetailItem[];
 
-    const scrollBottom = profileScrollBottomInset(tabBarHeight);
+    const scrollBottom = needsCompletion
+        ? tabBarHeight + SPACING.tight
+        : profileScrollBottomInset(tabBarHeight);
 
     return (
         <TabSwipeView route="/(tabs)/profile">
@@ -176,7 +170,9 @@ export default function ProfileScreen() {
                 style={[styles.container, { backgroundColor: colors.background }]}
                 edges={['top']}
             >
-                <ScrollView
+                <Animated.ScrollView
+                    onScroll={onScroll}
+                    scrollEventThrottle={16}
                     contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottom }]}
                     showsVerticalScrollIndicator={false}
                     contentInsetAdjustmentBehavior="automatic"
@@ -191,18 +187,27 @@ export default function ProfileScreen() {
                         university={profile.university}
                         personalityType={profile.personalityType}
                         zodiacSign={profile.zodiacSign}
-                        completionPercentage={completion}
                         onSettingsPress={() => handlePress('/settings')}
                     />
 
-                    <ProfileEditProfileButton onPress={() => handlePress('/edit-profile')} />
-
-                    {completion < 100 && (
-                        <CompletionProgressCard
+                    {needsCompletion ? (
+                        <GuidedCompletionPath
                             percentage={completion}
-                            onPress={() => handlePress('/edit-profile')}
+                            tasks={completionTasks}
+                            onContinue={handleCompletionTask}
                         />
+                    ) : (
+                        <ProfileEditProfileButton onPress={() => handlePress('/edit-profile')} />
                     )}
+
+                    {experience.data?.shell ? (
+                        <ProfileContentSection title="Question matching preview">
+                            <View style={styles.previewEntry}>
+                                <Copy muted>Complete your profile and questionnaire in the new internal experience.</Copy>
+                                <Action label="Open question matching" tone="primary" onPress={() => handlePress('/dating')} />
+                            </View>
+                        </ProfileContentSection>
+                    ) : null}
 
                     <ProfilePhotoGrid
                         photos={allPhotos.length > 0 ? allPhotos : [undefined]}
@@ -259,9 +264,11 @@ export default function ProfileScreen() {
                             snapchat={profile.snapchat}
                         />
                     </ProfileContentSection>
-                </ScrollView>
+                </Animated.ScrollView>
 
-                <ProfileFloatingEditBar onEditPress={() => handlePress('/edit-profile')} />
+                {!needsCompletion && (
+                    <ProfileFloatingEditBar onEditPress={() => handlePress('/edit-profile')} />
+                )}
             </SafeAreaView>
         </TabSwipeView>
     );
@@ -278,5 +285,9 @@ const styles = StyleSheet.create({
     },
     promptList: {
         gap: SPACING.compact,
+    },
+    previewEntry: {
+        gap: SPACING.compact,
+        paddingHorizontal: SPACING.screenX,
     },
 });

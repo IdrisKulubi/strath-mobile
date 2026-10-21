@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
 import { usePaymentStatus } from '@/hooks/use-payment-status';
 import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
+import { ConfirmationBalancePill } from '@/components/dates/confirmation-balance-pill';
 import {
     formatPaymentAmount,
     getPaymentUiCopy,
@@ -40,7 +41,13 @@ export function PaymentStatusBanner({
         partnerSlotConfirmed,
     });
 
-    if (phase === 'free_confirm' || phase === 'awaiting_payment' || phase === 'partner_paid_you_havent') {
+    if (
+        phase === 'free_confirm'
+        || phase === 'awaiting_pack_payment'
+        || phase === 'has_balance_confirm'
+        || phase === 'partner_paid_you_havent'
+        || phase === 'awaiting_payment'
+    ) {
         return null;
     }
 
@@ -48,42 +55,59 @@ export function PaymentStatusBanner({
         paymentStatus?.amount ?? 499,
         paymentStatus?.currency ?? 'KES',
     );
-    const copy = getPaymentUiCopy(phase, partnerFirstName, amountLabel);
+    const copy = getPaymentUiCopy(
+        phase,
+        partnerFirstName,
+        amountLabel,
+        paymentStatus?.confirmationBalance,
+    );
 
     const tone =
         phase === 'both_paid'
             ? colors.success ?? '#3DB87A'
-            : phase === 'expired_unpaid' || phase === 'expired_refund_choice'
+            : phase === 'expired_unpaid' || phase === 'expired_refund_choice' || phase === 'expired_restored'
               ? colors.mutedForeground
               : colors.primary;
 
     return (
-        <View
-            style={[
-                styles.banner,
-                {
-                    backgroundColor: `${tone}14`,
-                    borderColor: `${tone}35`,
-                },
-            ]}
-        >
-            <Ionicons
-                name={
-                    phase === 'both_paid'
-                        ? 'checkmark-circle'
-                        : phase === 'paid_waiting'
-                          ? 'time-outline'
-                          : 'information-circle-outline'
-                }
-                size={18}
-                color={tone}
-            />
-            <RNText style={[styles.text, { color: colors.foreground }]}>{copy.body || copy.partnerLine}</RNText>
+        <View style={styles.wrap}>
+            {paymentStatus?.confirmationBalance && paymentStatus.confirmationBalance.total > 0 ? (
+                <ConfirmationBalancePill balance={paymentStatus.confirmationBalance} />
+            ) : null}
+            <View
+                style={[
+                    styles.banner,
+                    {
+                        backgroundColor: `${tone}14`,
+                        borderColor: `${tone}35`,
+                    },
+                ]}
+            >
+                <Ionicons
+                    name={
+                        phase === 'both_paid'
+                            ? 'checkmark-circle'
+                            : phase === 'paid_waiting'
+                              ? 'time-outline'
+                              : 'information-circle-outline'
+                    }
+                    size={18}
+                    color={tone}
+                />
+                <RNText style={[styles.text, { color: colors.foreground }]}>
+                    {copy.body || copy.partnerLine}
+                </RNText>
+            </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
+    wrap: {
+        gap: SPACING.tight,
+        marginTop: SPACING.tight,
+        alignSelf: 'stretch',
+    },
     banner: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -91,7 +115,6 @@ const styles = StyleSheet.create({
         padding: SPACING.compact,
         borderRadius: RADIUS.md,
         borderWidth: 1,
-        marginTop: SPACING.tight,
     },
     text: {
         ...TYPOGRAPHY.caption,

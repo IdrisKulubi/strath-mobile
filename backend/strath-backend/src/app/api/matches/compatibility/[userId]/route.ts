@@ -1,12 +1,13 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { profiles, candidatePairs, userMatchInterests } from "@/db/schema";
+import { candidatePairs, userMatchInterests } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { canonicalizePairUsers } from "@/lib/services/candidate-pairs-service";
 import { canViewUserProfile } from "@/lib/services/profile-view-access";
 import { getSessionWithBearerFallback } from "@/lib/security";
+import { selectProfileAccessFlags } from "@/lib/db/queries/profiles";
 
 export const dynamic = "force-dynamic";
 
@@ -31,9 +32,7 @@ export async function GET(
             return errorResponse(new Error("Missing userId"), 400);
         }
 
-        const targetProfile = await db.query.profiles.findFirst({
-            where: eq(profiles.userId, targetUserId),
-        });
+        const targetProfile = await selectProfileAccessFlags(targetUserId);
 
         if (!targetProfile) {
             return errorResponse(new Error("User not found"), 404);
@@ -42,7 +41,7 @@ export async function GET(
         const canViewProfile = await canViewUserProfile({
             viewerUserId: session.user.id,
             targetUserId,
-            targetIsVisible: targetProfile.isVisible,
+            targetIsVisible: targetProfile.isVisible ?? false,
         });
 
         if (!canViewProfile) {

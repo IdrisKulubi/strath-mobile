@@ -1,5 +1,7 @@
 import React, { useCallback } from 'react';
-import { View, FlatList, StyleSheet, RefreshControl } from 'react-native';
+import { View, StyleSheet, RefreshControl, Pressable } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { useMinimizeOnScroll } from 'expo-glass-tabs';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import type { Conversation } from '@/hooks/use-conversations';
@@ -7,19 +9,21 @@ import { ConversationCard } from './conversation-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatCircleDots } from 'phosphor-react-native';
 
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-
 interface ConversationsListProps {
     conversations: Conversation[];
     isLoading: boolean;
     isRefreshing: boolean;
+    isError?: boolean;
+    errorMessage?: string;
     onRefresh: () => void;
+    onRetry?: () => void;
     onConversationPress: (conversation: Conversation) => void;
     onArchive?: (conversation: Conversation) => void;
     onDelete?: (conversation: Conversation) => void;
     onMute?: (conversation: Conversation) => void;
     onExplore?: () => void;
     mutedIds?: Set<string>;
+    onScroll?: ReturnType<typeof useMinimizeOnScroll>;
 }
 
 // Skeleton loader for conversations
@@ -47,7 +51,7 @@ function ConversationSkeleton({ index }: { index: number }) {
 
 // Empty state component
 function EmptyState({ onExplore }: { onExplore?: () => void }) {
-    const { isDark } = useTheme();
+    const { colors, isDark } = useTheme();
     
     return (
         <Animated.View 
@@ -58,15 +62,44 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
                 styles.emptyIconContainer,
                 { backgroundColor: isDark ? 'rgba(236, 72, 153, 0.15)' : 'rgba(236, 72, 153, 0.1)' }
             ]}>
-                <ChatCircleDots size={48} color="#ec4899" weight="duotone" />
+                <ChatCircleDots size={48} color={colors.primary} weight="duotone" />
             </View>
-            <Text style={[styles.emptyTitle, { color: isDark ? '#fff' : '#1a1a2e' }]}>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
                 No messages yet
             </Text>
-            <Text style={[styles.emptySubtitle, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
+            <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
                 When you and someone are a mutual match, they&apos;ll appear here so you can chat.
             </Text>
         </Animated.View>
+    );
+}
+
+function ErrorState({
+    message,
+    onRetry,
+}: {
+    message?: string;
+    onRetry?: () => void;
+}) {
+    const { colors } = useTheme();
+
+    return (
+        <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                Couldn&apos;t load conversations
+            </Text>
+            <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
+                {message || 'Check your connection and try again.'}
+            </Text>
+            {onRetry ? (
+                <Pressable
+                    onPress={onRetry}
+                    style={[styles.retryButton, { backgroundColor: colors.primary }]}
+                >
+                    <Text style={{ color: colors.primaryForeground, fontWeight: '600' }}>Retry</Text>
+                </Pressable>
+            ) : null}
+        </View>
     );
 }
 
@@ -74,15 +107,19 @@ export function ConversationsList({
     conversations,
     isLoading,
     isRefreshing,
+    isError = false,
+    errorMessage,
     onRefresh,
+    onRetry,
     onConversationPress,
     onArchive,
     onDelete,
     onMute,
     onExplore,
     mutedIds = new Set(),
+    onScroll,
 }: ConversationsListProps) {
-    const { colors, isDark } = useTheme();
+    const { colors } = useTheme();
 
     const renderItem = useCallback(({ item, index }: { item: Conversation; index: number }) => (
         <Animated.View entering={FadeInDown.delay(index * 30).duration(300)}>
@@ -97,21 +134,24 @@ export function ConversationsList({
         </Animated.View>
     ), [onConversationPress, onArchive, onDelete, onMute, mutedIds]);
 
-    const keyExtractor = useCallback((item: Conversation) => item.id, []);
+    const keyExtractor = useCallback(
+        (item: Conversation) => `${item.id}:${item.mutualMatchId}`,
+        [],
+    );
 
     const renderHeader = useCallback(() => {
         if (conversations.length === 0) return null;
         return (
             <View style={styles.listHeader}>
-                <Text style={[styles.hintText, { color: isDark ? '#64748b' : '#9ca3af' }]}>
+                <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
                     ← Swipe left for quick actions
                 </Text>
             </View>
         );
-    }, [conversations.length, isDark]);
+    }, [conversations.length, colors.mutedForeground]);
 
     // Loading state
-    if (isLoading && !isRefreshing) {
+    if (isLoading && !isRefreshing && !isError) {
         return (
             <View style={styles.loadingContainer}>
                 {[0, 1, 2, 3, 4].map((i) => (
@@ -121,19 +161,26 @@ export function ConversationsList({
         );
     }
 
+    // Error state
+    if (isError && conversations.length === 0) {
+        return <ErrorState message={errorMessage} onRetry={onRetry ?? onRefresh} />;
+    }
+
     // Empty state
-    if (!isLoading && conversations.length === 0) {
+    if (!isLoading && !isError && conversations.length === 0) {
         return <EmptyState onExplore={onExplore} />;
     }
 
     return (
-        <FlatList
+        <Animated.FlatList
             data={conversations}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
             contentContainerStyle={styles.listContent}
             ListHeaderComponent={renderHeader}
             showsVerticalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
             refreshControl={
                 <RefreshControl
                     refreshing={isRefreshing}
@@ -205,5 +252,11 @@ const styles = StyleSheet.create({
     hintText: {
         fontSize: 13,
         fontWeight: '500',
+    },
+    retryButton: {
+        marginTop: 20,
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 24,
     },
 });

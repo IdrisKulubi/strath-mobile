@@ -32,16 +32,42 @@ const ConversationsResponseSchema = z.object({
 
 export type Conversation = z.infer<typeof ConversationSchema>;
 
+function conversationSortTime(c: Conversation): number {
+    const iso = c.lastMessage?.createdAt ?? c.createdAt;
+    const t = Date.parse(iso);
+    return Number.isNaN(t) ? 0 : t;
+}
+
+/** One row per partner when the API returns duplicate legacy thread ids. */
+export function dedupeConversations(conversations: Conversation[]): Conversation[] {
+    const byPartner = new Map<string, Conversation>();
+
+    for (const item of conversations) {
+        const existing = byPartner.get(item.partner.id);
+        if (!existing) {
+            byPartner.set(item.partner.id, item);
+            continue;
+        }
+        if (conversationSortTime(item) >= conversationSortTime(existing)) {
+            byPartner.set(item.partner.id, item);
+        }
+    }
+
+    return [...byPartner.values()].sort(
+        (a, b) => conversationSortTime(b) - conversationSortTime(a),
+    );
+}
+
 async function fetchConversations(): Promise<Conversation[]> {
     const result = await apiFetch<{ data?: { conversations: Conversation[] } }>(
         '/api/conversations',
     );
     const raw = result.data?.conversations ?? [];
     const parsed = ConversationsResponseSchema.safeParse({ conversations: raw });
-    if (parsed.success) {
-        return parsed.data.conversations;
-    }
-    return z.array(ConversationSchema).parse(raw);
+    const list = parsed.success
+        ? parsed.data.conversations
+        : z.array(ConversationSchema).parse(raw);
+    return dedupeConversations(list);
 }
 
 /** Mutual matches eligible for messaging, with optional last message preview. */

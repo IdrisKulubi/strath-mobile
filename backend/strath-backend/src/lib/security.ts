@@ -81,11 +81,69 @@ export function isAuthorizedCronRequest(req: NextRequest) {
         ? authHeader.slice("Bearer ".length).trim()
         : null;
     const xCronSecret = req.headers.get("x-cron-secret");
+    const querySecret = req.nextUrl.searchParams.get("secret");
 
     return (
         (!!bearer && safeEqual(bearer, cronSecret)) ||
-        (!!xCronSecret && safeEqual(xCronSecret, cronSecret))
+        (!!xCronSecret && safeEqual(xCronSecret, cronSecret)) ||
+        (!!querySecret && safeEqual(querySecret, cronSecret))
     );
+}
+
+function readProvidedSecret(req: NextRequest) {
+    const authHeader = req.headers.get("authorization") ?? "";
+    const bearer = authHeader.startsWith("Bearer ")
+        ? authHeader.slice("Bearer ".length).trim()
+        : null;
+
+    return (
+        bearer
+        || req.headers.get("x-matchmaker-health-secret")
+        || req.headers.get("x-cron-secret")
+        || req.nextUrl.searchParams.get("secret")
+    )?.trim() || null;
+}
+
+export function checkMatchmakerHealthAuth(req: NextRequest) {
+    if (req.headers.get("x-vercel-cron") === "1") {
+        return { authorized: true as const };
+    }
+
+    const configuredSecrets = [
+        process.env.MATCHMAKER_HEALTH_SECRET?.trim(),
+        process.env.CRON_SECRET?.trim(),
+    ].filter((value): value is string => Boolean(value));
+
+    if (configuredSecrets.length === 0) {
+        if (process.env.NODE_ENV !== "production") {
+            return { authorized: true as const };
+        }
+
+        return {
+            authorized: false as const,
+            reason: "No health secret is configured in production. Set MATCHMAKER_HEALTH_SECRET or CRON_SECRET in your host environment.",
+        };
+    }
+
+    const providedSecret = readProvidedSecret(req);
+    if (!providedSecret) {
+        return {
+            authorized: false as const,
+            reason: configuredSecrets.length > 0
+                ? "Missing secret in request. CRON_SECRET is configured on the server, but you must still pass it: ?secret=<value> or Authorization: Bearer <value>."
+                : "Missing secret. Pass ?secret=..., Authorization: Bearer ..., x-matchmaker-health-secret, or x-cron-secret.",
+        };
+    }
+
+    const authorized = configuredSecrets.some((secret) => safeEqual(providedSecret, secret));
+    if (!authorized) {
+        return {
+            authorized: false as const,
+            reason: "Secret did not match MATCHMAKER_HEALTH_SECRET or CRON_SECRET on this deployment.",
+        };
+    }
+
+    return { authorized: true as const };
 }
 
 export function isDebugRouteEnabled() {

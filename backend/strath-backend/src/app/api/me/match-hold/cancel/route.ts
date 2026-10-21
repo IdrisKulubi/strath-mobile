@@ -41,6 +41,15 @@ export async function POST(req: NextRequest) {
             return errorResponse(new Error("You do not belong to this mutual"), 403);
         }
 
+        if (result.status === "cancelled") {
+            return successResponse({
+                status: result.status,
+                credited: result.credited,
+                creditAmountCents: result.creditAmountCents,
+                dateMatchId: result.dateMatchId,
+            });
+        }
+
         return successResponse({ status: result.status });
     } catch (error) {
         console.error("[me/match-hold/cancel] Error:", error);

@@ -4,6 +4,8 @@ import db from "@/db/drizzle";
 import { matches, messages, mutualMatches, profiles, user } from "@/db/schema";
 import { CHAT_UNLOCKED_STATUSES, isChatUnlockedStatus } from "@/lib/chat-access";
 import { ensureLegacyMatch } from "@/lib/services/legacy-match-service";
+import { PROFILE_CARD_COLUMNS } from "@/lib/db/queries/profiles";
+import { listQuestionnaireConversations } from "@/lib/questionnaire/phase5-service";
 
 export interface ConversationItem {
     id: string;
@@ -29,6 +31,7 @@ export interface ConversationItem {
 const LISTABLE_STATUSES = [...CHAT_UNLOCKED_STATUSES] as const;
 
 export async function listConversationsForUser(userId: string): Promise<ConversationItem[]> {
+    const questionnaireItems = await listQuestionnaireConversations(userId);
     const rows = await db.query.mutualMatches.findMany({
         where: and(
             or(eq(mutualMatches.userAId, userId), eq(mutualMatches.userBId, userId)),
@@ -38,7 +41,7 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
     });
 
     if (rows.length === 0) {
-        return [];
+        return questionnaireItems;
     }
 
     const hydrated = await db.transaction(async (tx) => {
@@ -68,7 +71,9 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
         return results;
     });
 
-    const legacyIds = hydrated.map((item) => item.legacyMatchId);
+    const uniqueHydrated = dedupeHydratedByPartner(hydrated, userId);
+
+    const legacyIds = uniqueHydrated.map((item) => item.legacyMatchId);
 
     const [matchRows, unreadRows] = await Promise.all([
         legacyIds.length > 0
@@ -103,18 +108,38 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
     const matchById = new Map(matchRows.map((m) => [m.id, m]));
     const unreadByMatch = new Map(unreadRows.map((r) => [r.matchId, Number(r.count) || 0]));
 
+    const partnerIds = uniqueHydrated.map(({ row }) =>
+        row.userAId === userId ? row.userBId : row.userAId,
+    );
+
+    const [profileRows, partnerUserRows] = partnerIds.length > 0
+        ? await Promise.all([
+              db.query.profiles.findMany({
+                  where: inArray(profiles.userId, partnerIds),
+                  columns: PROFILE_CARD_COLUMNS,
+              }),
+              db.query.user.findMany({
+                  where: inArray(user.id, partnerIds),
+                  columns: {
+                      id: true,
+                      name: true,
+                      profilePhoto: true,
+                      image: true,
+                      lastActive: true,
+                  },
+              }),
+          ])
+        : [[], []];
+
+    const profileByUserId = new Map(profileRows.map((p) => [p.userId, p]));
+    const userById = new Map(partnerUserRows.map((u) => [u.id, u]));
+
     const items: ConversationItem[] = [];
 
-    for (const { row, legacyMatchId } of hydrated) {
+    for (const { row, legacyMatchId } of uniqueHydrated) {
         const otherUserId = row.userAId === userId ? row.userBId : row.userAId;
-        const [profile, partnerUser] = await Promise.all([
-            db.query.profiles.findFirst({
-                where: eq(profiles.userId, otherUserId),
-            }),
-            db.query.user.findFirst({
-                where: eq(user.id, otherUserId),
-            }),
-        ]);
+        const profile = profileByUserId.get(otherUserId);
+        const partnerUser = userById.get(otherUserId);
 
         const primaryPhoto =
             (Array.isArray(profile?.photos) ? profile.photos[0] : null)
@@ -159,5 +184,37 @@ export async function listConversationsForUser(userId: string): Promise<Conversa
         return new Date(bTime).getTime() - new Date(aTime).getTime();
     });
 
-    return items;
+    const combined = [...questionnaireItems, ...items];
+    const byPartner = new Map<string, ConversationItem>();
+    for (const item of combined) {
+        const existing = byPartner.get(item.partner.id);
+        const itemTime = item.lastMessage?.createdAt ?? item.createdAt;
+        const existingTime = existing?.lastMessage?.createdAt ?? existing?.createdAt;
+        if (!existing || new Date(itemTime).getTime() >= new Date(existingTime as string).getTime()) {
+            byPartner.set(item.partner.id, item);
+        }
+    }
+    return [...byPartner.values()].sort((a, b) => {
+        const aTime = a.lastMessage?.createdAt ?? a.createdAt;
+        const bTime = b.lastMessage?.createdAt ?? b.createdAt;
+        return new Date(bTime).getTime() - new Date(aTime).getTime();
+    });
+}
+
+/** One inbox row per partner when multiple mutual_matches share the same legacy chat thread. */
+function dedupeHydratedByPartner<T extends { row: { userAId: string; userBId: string; updatedAt: Date }; legacyMatchId: string }>(
+    hydrated: T[],
+    userId: string,
+): T[] {
+    const byPartner = new Map<string, T>();
+
+    for (const item of hydrated) {
+        const partnerId = item.row.userAId === userId ? item.row.userBId : item.row.userAId;
+        const existing = byPartner.get(partnerId);
+        if (!existing || item.row.updatedAt > existing.row.updatedAt) {
+            byPartner.set(partnerId, item);
+        }
+    }
+
+    return [...byPartner.values()];
 }

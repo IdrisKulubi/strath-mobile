@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Text } from '@/components/ui/text';
+import { View, StyleSheet, Text } from 'react-native';
 import { useTheme } from '@/hooks/use-theme';
 import { Message, formatMessageTime } from '@/hooks/use-chat';
 import { Check, Checks } from 'phosphor-react-native';
@@ -42,10 +41,7 @@ export function MessageBubble({ message, isOwn, showTimestamp = true }: MessageB
     return (
         <View style={[styles.container, isOwn ? styles.ownContainer : styles.otherContainer]}>
             <View style={bubbleStyle}>
-                <Text
-                    style={[styles.messageText, { color: textColor }]}
-                    className="text-base"
-                >
+                <Text style={[styles.messageText, { color: textColor }]}>
                     {message.content}
                 </Text>
 

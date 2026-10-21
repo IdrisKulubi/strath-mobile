@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui/text';
 import type { OnboardingData } from '@/components/digital-dna/types';
+import { PERSONALITY_QUESTIONS } from '@/constants/personality-options';
 
 type PersonalityAnswers = OnboardingData['personalityAnswers'];
 
@@ -43,92 +44,27 @@ interface Question {
     multi?: boolean;
 }
 
-const QUESTIONS: Question[] = [
-    {
-        id: 'sleepSchedule',
-        title: 'When do you come alive?',
-        subtitle: 'Your natural rhythm',
-        icon: Moon,
-        options: [
-            { value: 'night_owl', label: 'Night owl', emoji: '🦉' },
-            { value: 'early_bird', label: 'Early bird', emoji: '🐦' },
-            { value: 'depends', label: 'Depends on the day', emoji: '☁️' },
-        ],
-    },
-    {
-        id: 'socialVibe',
-        title: 'Friday night energy?',
-        subtitle: 'How you love to unwind',
-        icon: Sparkle,
-        options: [
-            { value: 'party', label: 'Out with people', emoji: '🪩' },
-            { value: 'chill_in', label: 'Chill night in', emoji: '🛋️' },
-            { value: 'both', label: 'Honestly, both', emoji: '✌️' },
-        ],
-    },
-    {
-        id: 'driveStyle',
-        title: 'How do you move through life?',
-        subtitle: 'Your general approach',
-        icon: Brain,
-        options: [
-            { value: 'career_focused', label: 'Career-focused', emoji: '🚀' },
-            { value: 'spontaneous', label: 'Spontaneous', emoji: '🎲' },
-            { value: 'balanced', label: 'Balanced', emoji: '⚖️' },
-        ],
-    },
-    {
-        id: 'convoStyle',
-        title: 'Your ideal conversation?',
-        subtitle: 'When you really vibe with someone',
-        icon: ChatCircleText,
-        options: [
-            { value: 'deep_talks', label: 'Deep talks', emoji: '🌊' },
-            { value: 'light_banter', label: 'Light banter', emoji: '😂' },
-            { value: 'both', label: 'Mix of both', emoji: '🎭' },
-        ],
-    },
-    {
-        id: 'socialBattery',
-        title: 'How do you recharge?',
-        subtitle: 'Your social energy style',
-        icon: BatteryHigh,
-        options: [
-            { value: 'introvert', label: 'Solo time', emoji: '🧘' },
-            { value: 'ambivert', label: 'Mix it up', emoji: '🌗' },
-            { value: 'extrovert', label: 'People energy', emoji: '🌟' },
-        ],
-    },
-    {
-        id: 'idealDateVibe',
-        title: 'Dream first date?',
-        subtitle: 'Helps us set you up right',
-        icon: ClockCountdown,
-        options: [
-            { value: 'coffee', label: 'Coffee chat', emoji: '☕' },
-            { value: 'walk', label: 'Walk and talk', emoji: '🚶' },
-            { value: 'dinner', label: 'Dinner out', emoji: '🍽️' },
-            { value: 'casual_hangout', label: 'Casual hangout', emoji: '🎮' },
-        ],
-    },
-    {
-        id: 'musicGenres',
-        title: 'What is on your playlist?',
-        subtitle: 'Pick every genre that fits',
-        icon: MusicNotes,
-        multi: true,
-        options: [
-            { value: 'afrobeats', label: 'Afrobeats', emoji: '🥁' },
-            { value: 'hiphop', label: 'Hip-Hop', emoji: '🎤' },
-            { value: 'rnb', label: 'R&B', emoji: '🎶' },
-            { value: 'pop', label: 'Pop', emoji: '🎧' },
-            { value: 'indie', label: 'Indie', emoji: '🎸' },
-            { value: 'electronic', label: 'Electronic', emoji: '🎛️' },
-            { value: 'classical', label: 'Classical', emoji: '🎻' },
-            { value: 'gospel', label: 'Gospel', emoji: '🙏' },
-        ],
-    },
-];
+const PERSONALITY_ICONS: Record<
+    string,
+    React.ComponentType<{ size: number; color: string; weight?: 'fill' }>
+> = {
+    sleepSchedule: Moon,
+    socialVibe: Sparkle,
+    driveStyle: Brain,
+    convoStyle: ChatCircleText,
+    socialBattery: BatteryHigh,
+    idealDateVibe: ClockCountdown,
+    musicGenres: MusicNotes,
+};
+
+const QUESTIONS: Question[] = PERSONALITY_QUESTIONS.map((question) => ({
+    id: question.id as keyof PersonalityAnswers,
+    title: question.title,
+    subtitle: question.subtitle,
+    icon: PERSONALITY_ICONS[question.id],
+    options: question.options,
+    multi: question.multi,
+}));
 
 const TOTAL = QUESTIONS.length;
 

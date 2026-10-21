@@ -1,3 +1,5 @@
+import type { ConfirmationBalance } from "@/lib/payments/confirmation-balance";
+
 export type PaymentStatusResult =
     | { status: "not_found" }
     | { status: "forbidden" }
@@ -14,4 +16,6 @@ export type PaymentStatusResult =
           canUseCredit: boolean;
           canChooseRefund: boolean;
           userPaymentStatus: string | null;
+          confirmationBalance: ConfirmationBalance;
+          canConfirmWithBalance: boolean;
       };

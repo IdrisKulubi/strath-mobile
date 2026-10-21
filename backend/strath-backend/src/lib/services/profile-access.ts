@@ -1,13 +1,8 @@
-import { eq } from "drizzle-orm";
-
-import { profiles } from "@/db/schema";
-import { db } from "@/lib/db";
+import { selectProfileAccessFlags } from "@/lib/db/queries/profiles";
 import { isFaceVerificationPassed } from "@/lib/services/face-verification-policy";
 
 export async function getProfileAccessState(userId: string) {
-    const profile = await db.query.profiles.findFirst({
-        where: eq(profiles.userId, userId),
-    });
+    const profile = await selectProfileAccessFlags(userId);
 
     if (!profile) {
         return {

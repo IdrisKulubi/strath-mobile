@@ -2,12 +2,18 @@ import { eq } from "drizzle-orm";
 
 import { appFeatureFlags } from "@/db/schema";
 import { db } from "@/lib/db";
+import { redis } from "@/lib/redis";
+
+const FEATURE_FLAG_CACHE_PREFIX = "feature_flag:";
+const FEATURE_FLAG_TTL_SECONDS = 5 * 60;
 
 export const APP_FEATURE_KEYS = {
     demoLoginEnabled: "demo_login_enabled",
     signupCapEnabled: "signup_cap_enabled",
     adminMatchPreviewEnabled: "admin_match_preview_enabled",
     paymentsEnabled: "payments_enabled",
+    rescheduleEnabled: "reschedule_enabled",
+    matchmakerPersonalizationV2: "matchmaker_personalization_v2",
 } as const;
 
 // Default caps applied when the flag row is missing config or for any
@@ -25,18 +31,128 @@ export interface SignupCapConfig {
     maxOther: number;
 }
 
+export const MATCHMAKER_V2_ROLLOUT_PERCENTAGES = [0, 5, 25, 50, 100] as const;
+export type MatchmakerV2RolloutPercentage = typeof MATCHMAKER_V2_ROLLOUT_PERCENTAGES[number];
+export const MATCHMAKER_DAILY_SEARCH_LIMIT_MIN = 1;
+export const MATCHMAKER_DAILY_SEARCH_LIMIT_MAX = 10;
+export const DEFAULT_MATCHMAKER_DAILY_SEARCH_LIMIT = Math.min(
+    MATCHMAKER_DAILY_SEARCH_LIMIT_MAX,
+    Math.max(
+        MATCHMAKER_DAILY_SEARCH_LIMIT_MIN,
+        Number.parseInt(process.env.MATCHMAKER_DAILY_SEARCH_LIMIT || "3", 10) || 3,
+    ),
+);
+
+export interface MatchmakerV2RolloutConfig {
+    percentage: MatchmakerV2RolloutPercentage;
+    internalUserIds: string[];
+    rollbackReady: boolean;
+    stageStartedAt: string | null;
+    dailySearchLimit: number;
+}
+
+function featureFlagCacheKey(key: string) {
+    return `${FEATURE_FLAG_CACHE_PREFIX}${key}`;
+}
+
+export async function invalidateFeatureFlagCache(key?: string) {
+    try {
+        if (key) {
+            await redis.del(featureFlagCacheKey(key));
+            return;
+        }
+
+        const keys = Object.values(APP_FEATURE_KEYS).map((flagKey) => featureFlagCacheKey(flagKey));
+        if (keys.length > 0) {
+            await redis.del(...keys);
+        }
+    } catch (error) {
+        console.warn("[feature-flags] cache invalidation failed", error);
+    }
+}
+
 export async function isFeatureEnabled(key: string, fallback = false) {
+    try {
+        const cached = await redis.get<boolean>(featureFlagCacheKey(key));
+        if (typeof cached === "boolean") {
+            return cached;
+        }
+    } catch (error) {
+        console.warn("[feature-flags] cache read failed", error);
+    }
+
     const flag = await db.query.appFeatureFlags.findFirst({
         where: eq(appFeatureFlags.key, key),
     });
+    const enabled = flag?.enabled ?? fallback;
 
-    return flag?.enabled ?? fallback;
+    try {
+        await redis.set(featureFlagCacheKey(key), enabled, { ex: FEATURE_FLAG_TTL_SECONDS });
+    } catch (error) {
+        console.warn("[feature-flags] cache write failed", error);
+    }
+
+    return enabled;
 }
 
 export async function getFeatureFlag(key: string) {
     return db.query.appFeatureFlags.findFirst({
         where: eq(appFeatureFlags.key, key),
     });
+}
+
+export function parseMatchmakerV2RolloutConfig(config: unknown): MatchmakerV2RolloutConfig {
+    const raw = config && typeof config === "object" && !Array.isArray(config) ? config as Record<string, unknown> : {};
+    const requestedPercentage = Number(raw.percentage ?? 100);
+    const percentage = MATCHMAKER_V2_ROLLOUT_PERCENTAGES.includes(requestedPercentage as MatchmakerV2RolloutPercentage)
+        ? requestedPercentage as MatchmakerV2RolloutPercentage
+        : 0;
+    const internalUserIds = Array.isArray(raw.internalUserIds)
+        ? [...new Set(raw.internalUserIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim()))].slice(0, 500)
+        : [];
+    const stageStartedAt = typeof raw.stageStartedAt === "string" && !Number.isNaN(Date.parse(raw.stageStartedAt)) ? raw.stageStartedAt : null;
+    const requestedDailySearchLimit = Number(raw.dailySearchLimit ?? DEFAULT_MATCHMAKER_DAILY_SEARCH_LIMIT);
+    const dailySearchLimit = Number.isInteger(requestedDailySearchLimit)
+        && requestedDailySearchLimit >= MATCHMAKER_DAILY_SEARCH_LIMIT_MIN
+        && requestedDailySearchLimit <= MATCHMAKER_DAILY_SEARCH_LIMIT_MAX
+        ? requestedDailySearchLimit
+        : DEFAULT_MATCHMAKER_DAILY_SEARCH_LIMIT;
+    return { percentage, internalUserIds, rollbackReady: raw.rollbackReady === true, stageStartedAt, dailySearchLimit };
+}
+
+export function stableRolloutBucket(userId: string) {
+    let hash = 2166136261;
+    for (let index = 0; index < userId.length; index += 1) {
+        hash ^= userId.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0) % 100;
+}
+
+export function isUserInMatchmakerV2Rollout(input: { masterEnabled: boolean; config: MatchmakerV2RolloutConfig; userId?: string | null }) {
+    if (!input.masterEnabled) return false;
+    if (input.userId && input.config.internalUserIds.includes(input.userId)) return true;
+    if (!input.userId) return input.config.percentage === 100;
+    return stableRolloutBucket(input.userId) < input.config.percentage;
+}
+
+export async function getMatchmakerV2Rollout(userId?: string | null) {
+    const flag = await getFeatureFlag(APP_FEATURE_KEYS.matchmakerPersonalizationV2);
+    const config = parseMatchmakerV2RolloutConfig(flag?.config);
+    return {
+        enabled: isUserInMatchmakerV2Rollout({ masterEnabled: flag?.enabled ?? false, config, userId }),
+        masterEnabled: flag?.enabled ?? false,
+        config,
+        updatedAt: flag?.updatedAt ?? null,
+    };
+}
+
+export async function isMatchmakerPersonalizationV2EnabledForUser(userId: string) {
+    return (await getMatchmakerV2Rollout(userId)).enabled;
+}
+
+export async function getMatchmakerDailySearchLimit() {
+    return (await getMatchmakerV2Rollout()).config.dailySearchLimit;
 }
 
 function parseNonNegativeInt(value: unknown, fallback: number) {
@@ -68,10 +184,13 @@ export async function getSignupCapFlag() {
     };
 }
 
-export async function getPublicFeatureFlags() {
-    const demoLoginEnabled = await isFeatureEnabled(APP_FEATURE_KEYS.demoLoginEnabled, false);
-    const signupCapEnabled = await isFeatureEnabled(APP_FEATURE_KEYS.signupCapEnabled, false);
-    const paymentsEnabled = await isFeatureEnabled(APP_FEATURE_KEYS.paymentsEnabled, false);
+export async function getPublicFeatureFlags(userId?: string | null) {
+    const [demoLoginEnabled, signupCapEnabled, paymentsEnabled, matchmakerV2Rollout] = await Promise.all([
+        isFeatureEnabled(APP_FEATURE_KEYS.demoLoginEnabled, false),
+        isFeatureEnabled(APP_FEATURE_KEYS.signupCapEnabled, false),
+        isFeatureEnabled(APP_FEATURE_KEYS.paymentsEnabled, false),
+        getMatchmakerV2Rollout(userId),
+    ]);
 
     return {
         demoLoginEnabled,
@@ -79,5 +198,6 @@ export async function getPublicFeatureFlags() {
         // messaging during onboarding. Numbers are intentionally not exposed.
         signupCapEnabled,
         paymentsEnabled,
+        matchmakerPersonalizationV2: matchmakerV2Rollout.enabled,
     };
 }

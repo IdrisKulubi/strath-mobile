@@ -1,10 +1,15 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { dateMatches, matches, profiles } from "@/db/schema";
+import { dateMatches, matches } from "@/db/schema";
 import { eq, or, and, desc } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
-import { computeCompatibility } from "@/lib/services/compatibility-service";
+import { computeCompatibilityMany } from "@/lib/services/compatibility-service";
+import {
+    getPrimaryProfilePhoto,
+    getProfileFirstName,
+    selectProfileCardsByUserIds,
+} from "@/lib/db/queries/profiles";
 
 export const dynamic = "force-dynamic";
 
@@ -38,23 +43,20 @@ export async function GET(req: NextRequest) {
             )
             .orderBy(desc(dateMatches.createdAt));
 
+        const otherUserIds = dateMatchRows.map((dm) =>
+            dm.userAId === session.user.id ? dm.userBId : dm.userAId,
+        );
+        const [profileMap, compatibilityMap] = await Promise.all([
+            selectProfileCardsByUserIds(otherUserIds),
+            computeCompatibilityMany(session.user.id, otherUserIds),
+        ]);
+
         const result = await Promise.all(
             dateMatchRows.map(async (dm) => {
                 const otherUserId = dm.userAId === session.user.id ? dm.userBId : dm.userAId;
-                const otherProfile = await db.query.profiles.findFirst({
-                    where: eq(profiles.userId, otherUserId),
-                    with: { user: true },
-                });
-                const primaryPhoto =
-                    (Array.isArray(otherProfile?.photos) ? otherProfile.photos[0] : null)
-                    ?? otherProfile?.profilePhoto
-                    ?? otherProfile?.user?.profilePhoto
-                    ?? otherProfile?.user?.image
-                    ?? undefined;
+                const otherProfile = profileMap.get(otherUserId);
+                const compatibility = compatibilityMap.get(otherUserId) ?? { score: 0, reasons: [] };
 
-                const { score, reasons } = await computeCompatibility(session.user.id, otherUserId);
-
-                // Look up the chat match (created when date request was accepted)
                 const chatMatch = await db.query.matches.findFirst({
                     where: or(
                         and(eq(matches.user1Id, dm.userAId), eq(matches.user2Id, dm.userBId)),
@@ -68,11 +70,11 @@ export async function GET(req: NextRequest) {
                     requestId: dm.requestId,
                     withUser: {
                         id: otherUserId,
-                        firstName: otherProfile?.firstName ?? otherProfile?.user?.name?.split(" ")[0] ?? "Unknown",
+                        firstName: otherProfile ? getProfileFirstName(otherProfile) : "Unknown",
                         age: otherProfile?.age ?? 0,
-                        profilePhoto: primaryPhoto,
-                        compatibilityScore: score,
-                        compatibilityReasons: reasons,
+                        profilePhoto: otherProfile ? getPrimaryProfilePhoto(otherProfile) : undefined,
+                        compatibilityScore: compatibility.score,
+                        compatibilityReasons: compatibility.reasons,
                     },
                     vibe: dm.vibe,
                     arrangementStatus: toArrangementStatus(dm),

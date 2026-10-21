@@ -25,7 +25,8 @@ export default function PaymentSuccessScreen() {
                 <ActivityIndicator color={colors.primary} />
                 <RNText style={[styles.title, { color: colors.foreground }]}>Payment confirmed</RNText>
                 <RNText style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                    Returning you to StrathSpace…
+                    Date Setup Fee paid. Covers 2 dates. 1 is reserved for this match. Returning you to
+                    StrathSpace…
                 </RNText>
             </View>
         </Screen>

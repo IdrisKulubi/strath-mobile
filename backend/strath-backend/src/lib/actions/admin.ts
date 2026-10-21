@@ -16,13 +16,27 @@ import {
     appFeatureFlags,
     adminBroadcasts,
     candidatePairHistory,
+    recommendationEvents,
+    userMatchInterests,
+    matchmakerSessions,
+    matchmakerMessages,
 } from "@/db/schema";
-import { eq, desc, count, and, or, gte, sql, isNotNull, isNull, inArray, ne } from "drizzle-orm";
+import { eq, desc, count, and, or, gte, sql, isNotNull, isNull, inArray, ne, ilike, lt } from "drizzle-orm";
 import { logEvent, EVENT_TYPES } from "@/lib/analytics";
 import { revalidatePath } from "next/cache";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
-import { APP_FEATURE_KEYS, parseSignupCapConfig, type SignupCapConfig } from "@/lib/feature-flags";
+import {
+    APP_FEATURE_KEYS,
+    getMatchmakerDailySearchLimit,
+    MATCHMAKER_DAILY_SEARCH_LIMIT_MAX,
+    MATCHMAKER_DAILY_SEARCH_LIMIT_MIN,
+    parseMatchmakerV2RolloutConfig,
+    parseSignupCapConfig,
+    type SignupCapConfig,
+    invalidateFeatureFlagCache,
+} from "@/lib/feature-flags";
+import { invalidateMatchExcludedUserIdsCache } from "@/lib/services/match-exclusion-service";
 import {
     admitEveryoneFromWaitlist,
     admitOrWaitlist,
@@ -377,6 +391,22 @@ export async function getAdminDailyDiscoveryHealth() {
         decisionRate: health.shownEvents > 0 ? Math.round((health.decisions / health.shownEvents) * 100) : 0,
         interestedRate: health.decisions > 0 ? Math.round((health.interested / health.decisions) * 100) : 0,
     };
+}
+
+export async function getAdminPhotoIntelligenceOverview() {
+    await requireAdmin();
+    const { getPhotoIntelligenceAdminOverview } = await import(
+        "@/lib/services/photo-intelligence-admin"
+    );
+    return getPhotoIntelligenceAdminOverview();
+}
+
+export async function getAdminProfileIntelligenceOverview() {
+    await requireAdmin();
+    const { getProfileIntelligenceAdminOverview } = await import(
+        "@/lib/services/profile-intelligence-admin"
+    );
+    return getProfileIntelligenceAdminOverview();
 }
 
 export async function moveMutualMatchToArranging(mutualMatchId: string) {
@@ -1133,6 +1163,8 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
         "Let admin accounts receive daily discovery results for QA while keeping admins out of normal users' candidate pools.",
     [APP_FEATURE_KEYS.paymentsEnabled]:
         "Require KES 499 Date Setup Fee (Paystack) before slot confirmation. Default off.",
+    [APP_FEATURE_KEYS.matchmakerPersonalizationV2]:
+        "Switch from V1 (five daily profiles with Today and Interested) to V2 (matchmaker Home with a dedicated Likes tab). Default off.",
 };
 
 const FLAG_LABELS: Record<string, string> = {
@@ -1140,7 +1172,111 @@ const FLAG_LABELS: Record<string, string> = {
     [APP_FEATURE_KEYS.signupCapEnabled]: "Signup Cap (Soft Launch)",
     [APP_FEATURE_KEYS.adminMatchPreviewEnabled]: "Admin Match Preview",
     [APP_FEATURE_KEYS.paymentsEnabled]: "Date Setup Fee (Payments)",
+    [APP_FEATURE_KEYS.matchmakerPersonalizationV2]: "Home & Matchmaker Experience V2",
 };
+
+export type HomeExperienceMetrics = {
+    exposedUsers: number;
+    profileOpens: number;
+    interested: number;
+    passes: number;
+    mutualMatches: number;
+    interestedConversionPct: number;
+    mutualConversionPct: number;
+};
+
+export type HomeExperienceComparison = {
+    sevenDays: Record<"v1" | "v2", HomeExperienceMetrics>;
+    thirtyDays: Record<"v1" | "v2", HomeExperienceMetrics>;
+};
+
+function emptyHomeExperienceMetrics(): HomeExperienceMetrics {
+    return {
+        exposedUsers: 0,
+        profileOpens: 0,
+        interested: 0,
+        passes: 0,
+        mutualMatches: 0,
+        interestedConversionPct: 0,
+        mutualConversionPct: 0,
+    };
+}
+
+async function getHomeExperienceMetricsForPeriod(days: number) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const versions = { v1: emptyHomeExperienceMetrics(), v2: emptyHomeExperienceMetrics() };
+
+    const [exposures, outcomes, mutuals] = await Promise.all([
+        db
+            .select({
+                version: sql<string>`${analyticsEvents.metadata}->>'version'`,
+                count: sql<number>`count(distinct ${analyticsEvents.userId})::int`,
+            })
+            .from(analyticsEvents)
+            .where(and(
+                eq(analyticsEvents.eventType, EVENT_TYPES.HOME_EXPERIENCE_EXPOSED),
+                gte(analyticsEvents.createdAt, since),
+            ))
+            .groupBy(sql`${analyticsEvents.metadata}->>'version'`),
+        db
+            .select({
+                source: recommendationEvents.source,
+                profileOpens: sql<number>`count(*) filter (where ${recommendationEvents.viewedAt} is not null)::int`,
+                interested: sql<number>`count(*) filter (where ${recommendationEvents.decision} = 'open_to_meet')::int`,
+                passes: sql<number>`count(*) filter (where ${recommendationEvents.decision} = 'passed')::int`,
+            })
+            .from(recommendationEvents)
+            .where(and(
+                inArray(recommendationEvents.source, ["daily_recommendations", "matchmaker"]),
+                gte(recommendationEvents.shownAt, since),
+            ))
+            .groupBy(recommendationEvents.source),
+        db
+            .select({
+                source: userMatchInterests.source,
+                count: sql<number>`count(distinct ${userMatchInterests.matchedCandidatePairId})::int`,
+            })
+            .from(userMatchInterests)
+            .where(and(
+                inArray(userMatchInterests.source, ["daily_recommendations", "matchmaker"]),
+                isNotNull(userMatchInterests.matchedCandidatePairId),
+                gte(userMatchInterests.decidedAt, since),
+            ))
+            .groupBy(userMatchInterests.source),
+    ]);
+
+    for (const row of exposures) {
+        if (row.version === "v1" || row.version === "v2") versions[row.version].exposedUsers = Number(row.count ?? 0);
+    }
+    for (const row of outcomes) {
+        const version = row.source === "matchmaker" ? "v2" : "v1";
+        versions[version].profileOpens = Number(row.profileOpens ?? 0);
+        versions[version].interested = Number(row.interested ?? 0);
+        versions[version].passes = Number(row.passes ?? 0);
+    }
+    for (const row of mutuals) {
+        const version = row.source === "matchmaker" ? "v2" : "v1";
+        versions[version].mutualMatches = Number(row.count ?? 0);
+    }
+    for (const version of ["v1", "v2"] as const) {
+        const metrics = versions[version];
+        if (metrics.exposedUsers > 0) {
+            metrics.interestedConversionPct = Math.round((metrics.interested / metrics.exposedUsers) * 1000) / 10;
+            metrics.mutualConversionPct = Math.round((metrics.mutualMatches / metrics.exposedUsers) * 1000) / 10;
+        }
+    }
+
+    return versions;
+}
+
+export async function getHomeExperienceComparison(): Promise<HomeExperienceComparison> {
+    await requireAdmin();
+    const [sevenDays, thirtyDays] = await Promise.all([
+        getHomeExperienceMetricsForPeriod(7),
+        getHomeExperienceMetricsForPeriod(30),
+    ]);
+    return { sevenDays, thirtyDays };
+}
 
 const SUPPORTED_FLAG_KEYS = new Set<string>(Object.values(APP_FEATURE_KEYS));
 
@@ -1155,7 +1291,7 @@ export async function getAdminFeatureFlags() {
         return {
             key,
             label: FLAG_LABELS[key] ?? key,
-            description: row?.description ?? FLAG_DESCRIPTIONS[key] ?? "",
+            description: FLAG_DESCRIPTIONS[key] ?? row?.description ?? "",
             enabled: row?.enabled ?? false,
             config: row?.config ?? {},
             updatedAt: row?.updatedAt?.toISOString() ?? null,
@@ -1168,6 +1304,15 @@ export async function setAdminFeatureFlag(key: string, enabled: boolean) {
 
     if (!SUPPORTED_FLAG_KEYS.has(key)) {
         throw new Error("Unsupported feature flag");
+    }
+    if (key === APP_FEATURE_KEYS.matchmakerPersonalizationV2 && enabled) {
+        const current = await db.query.appFeatureFlags.findFirst({ where: eq(appFeatureFlags.key, key) });
+        if (!parseMatchmakerV2RolloutConfig(current?.config).rollbackReady) {
+            return {
+                ok: false as const,
+                message: "Save rollback readiness before enabling Home & Matchmaker Experience V2.",
+            };
+        }
     }
 
     await db
@@ -1182,12 +1327,281 @@ export async function setAdminFeatureFlag(key: string, enabled: boolean) {
             target: appFeatureFlags.key,
             set: {
                 enabled,
+                description: FLAG_DESCRIPTIONS[key] ?? null,
                 updatedByUserId: session.user.id,
                 updatedAt: new Date(),
             },
         });
 
+    await invalidateFeatureFlagCache(key);
     revalidatePath("/admin/feature-flags");
+    return {
+        ok: true as const,
+        message: enabled ? "Feature enabled." : "Feature disabled.",
+    };
+}
+
+export async function updateAdminMatchmakerV2Rollout(formData: FormData) {
+    const session = await requireAdmin();
+    const current = await db.query.appFeatureFlags.findFirst({ where: eq(appFeatureFlags.key, APP_FEATURE_KEYS.matchmakerPersonalizationV2) });
+    const currentConfig = parseMatchmakerV2RolloutConfig(current?.config);
+    const requested = parseMatchmakerV2RolloutConfig({
+        percentage: Number(formData.get("percentage")),
+        rollbackReady: formData.get("rollbackReady") === "on",
+        internalUserIds: String(formData.get("internalUserIds") ?? "").split(","),
+        dailySearchLimit: currentConfig.dailySearchLimit,
+    });
+    if (requested.percentage > currentConfig.percentage && currentConfig.percentage >= 5 && currentConfig.percentage < 100) {
+        const stageStartedAt = currentConfig.stageStartedAt ? new Date(currentConfig.stageStartedAt).getTime() : current?.updatedAt.getTime() ?? Date.now();
+        if (Date.now() - stageStartedAt < 24 * 60 * 60 * 1000) {
+            return {
+                ok: false as const,
+                message: "Hold the current external rollout stage for one complete Nairobi quota-reset cycle before advancing.",
+            };
+        }
+    }
+    const config = {
+        ...requested,
+        stageStartedAt: requested.percentage === currentConfig.percentage ? currentConfig.stageStartedAt : new Date().toISOString(),
+    };
+    await db.insert(appFeatureFlags).values({
+        key: APP_FEATURE_KEYS.matchmakerPersonalizationV2,
+        enabled: false,
+        description: FLAG_DESCRIPTIONS[APP_FEATURE_KEYS.matchmakerPersonalizationV2],
+        config: { ...config },
+        updatedByUserId: session.user.id,
+    }).onConflictDoUpdate({
+        target: appFeatureFlags.key,
+        set: { config: { ...config }, updatedByUserId: session.user.id, updatedAt: new Date() },
+    });
+    await invalidateFeatureFlagCache(APP_FEATURE_KEYS.matchmakerPersonalizationV2);
+    revalidatePath("/admin/feature-flags");
+    return {
+        ok: true as const,
+        message: "Rollout controls saved. You can now use the master toggle above.",
+    };
+}
+
+function getCurrentNairobiDay() {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Africa/Nairobi",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).format(new Date());
+}
+
+export type AdminMatchmakerQuotaUser = {
+    userId: string;
+    name: string;
+    email: string;
+    used: number;
+    limit: number;
+    remaining: number;
+};
+
+export async function searchAdminUsersForMatchmakerQuota(query: string): Promise<AdminMatchmakerQuotaUser[]> {
+    await requireAdmin();
+    const trimmed = query.trim();
+    if (trimmed.length < 2) return [];
+
+    const pattern = `%${trimmed}%`;
+    const rows = await db
+        .select({
+            userId: user.id,
+            userName: user.name,
+            email: user.email,
+            firstName: profiles.firstName,
+            lastName: profiles.lastName,
+        })
+        .from(user)
+        .leftJoin(profiles, eq(profiles.userId, user.id))
+        .where(or(
+            ilike(user.id, pattern),
+            ilike(user.email, pattern),
+            ilike(user.name, pattern),
+            ilike(profiles.firstName, pattern),
+            ilike(profiles.lastName, pattern),
+            sql`concat_ws(' ', ${profiles.firstName}, ${profiles.lastName}) ilike ${pattern}`,
+        ))
+        .limit(8);
+
+    if (rows.length === 0) return [];
+    const sessions = await db.query.matchmakerSessions.findMany({
+        where: and(
+            inArray(matchmakerSessions.userId, rows.map((row) => row.userId)),
+            eq(matchmakerSessions.sessionDay, getCurrentNairobiDay()),
+            eq(matchmakerSessions.status, "active"),
+        ),
+        orderBy: [desc(matchmakerSessions.updatedAt)],
+    });
+    const sessionByUserId = new Map(sessions.map((session) => [session.userId, session]));
+    const configuredLimit = await getMatchmakerDailySearchLimit();
+
+    return rows.map((row) => {
+        const session = sessionByUserId.get(row.userId);
+        const used = session?.dailySearchCount ?? 0;
+        const limit = session?.searchLimit ?? configuredLimit;
+        return {
+            userId: row.userId,
+            name: [row.firstName, row.lastName].filter(Boolean).join(" ") || row.userName || "Unknown user",
+            email: row.email,
+            used,
+            limit,
+            remaining: Math.max(0, limit - used),
+        };
+    });
+}
+
+export async function updateAdminMatchmakerDailySearchLimit(formData: FormData) {
+    const session = await requireAdmin();
+    const dailySearchLimit = Number(formData.get("dailySearchLimit"));
+    if (
+        !Number.isInteger(dailySearchLimit)
+        || dailySearchLimit < MATCHMAKER_DAILY_SEARCH_LIMIT_MIN
+        || dailySearchLimit > MATCHMAKER_DAILY_SEARCH_LIMIT_MAX
+    ) {
+        return {
+            ok: false as const,
+            message: `Daily suggestions must be between ${MATCHMAKER_DAILY_SEARCH_LIMIT_MIN} and ${MATCHMAKER_DAILY_SEARCH_LIMIT_MAX}.`,
+        };
+    }
+
+    const currentFlag = await db.query.appFeatureFlags.findFirst({
+        where: eq(appFeatureFlags.key, APP_FEATURE_KEYS.matchmakerPersonalizationV2),
+    });
+    const currentConfig = parseMatchmakerV2RolloutConfig(currentFlag?.config);
+    const sessionDay = getCurrentNairobiDay();
+    const reactivatedSessions = await db.query.matchmakerSessions.findMany({
+        where: and(
+            eq(matchmakerSessions.status, "active"),
+            eq(matchmakerSessions.sessionDay, sessionDay),
+            eq(matchmakerSessions.state, "limit_reached"),
+            lt(matchmakerSessions.dailySearchCount, dailySearchLimit),
+        ),
+        columns: { id: true },
+    });
+
+    const upsertLimit = db
+        .insert(appFeatureFlags)
+        .values({
+            key: APP_FEATURE_KEYS.matchmakerPersonalizationV2,
+            enabled: false,
+            description: FLAG_DESCRIPTIONS[APP_FEATURE_KEYS.matchmakerPersonalizationV2],
+            config: { ...currentConfig, dailySearchLimit },
+            updatedByUserId: session.user.id,
+        })
+        .onConflictDoUpdate({
+            target: appFeatureFlags.key,
+            set: {
+                config: { ...currentConfig, dailySearchLimit },
+                updatedByUserId: session.user.id,
+                updatedAt: new Date(),
+            },
+        });
+    const updateActiveLimits = db
+        .update(matchmakerSessions)
+        .set({ searchLimit: dailySearchLimit, updatedAt: new Date() })
+        .where(and(
+            eq(matchmakerSessions.status, "active"),
+            eq(matchmakerSessions.sessionDay, sessionDay),
+        ));
+
+    if (reactivatedSessions.length > 0) {
+        const sessionIds = reactivatedSessions.map((row) => row.id);
+        const reactivateSessions = db
+            .update(matchmakerSessions)
+            .set({
+                state: "ready_to_search",
+                metadata: sql`${matchmakerSessions.metadata} || ${JSON.stringify({ limitMode: "idle" })}::jsonb`,
+                updatedAt: new Date(),
+            })
+            .where(inArray(matchmakerSessions.id, sessionIds));
+        const addQuotaMessages = db.insert(matchmakerMessages).values(sessionIds.map((sessionId) => ({
+            sessionId,
+            role: "assistant" as const,
+            kind: "search_plan" as const,
+            text: "You have more suggestions available. Continue with your current search or tell me what to change.",
+            quickReplies: ["Go ahead and search", "Change something"],
+            metadata: { source: "admin_quota_increase", dailySearchLimit },
+        })));
+        await db.batch([upsertLimit, updateActiveLimits, reactivateSessions, addQuotaMessages]);
+    } else {
+        await db.batch([upsertLimit, updateActiveLimits]);
+    }
+
+    revalidatePath("/admin/feature-flags");
+    return {
+        ok: true as const,
+        message: `Daily suggestions set to ${dailySearchLimit}. Active sessions were updated${reactivatedSessions.length > 0 ? ` and ${reactivatedSessions.length} users received more suggestions` : ""}.`,
+    };
+}
+
+export async function resetAdminMatchmakerQuotaForUser(userId: string) {
+    const adminSession = await requireAdmin();
+    const target = await db.query.user.findFirst({
+        where: eq(user.id, userId),
+        columns: { id: true, name: true, email: true },
+    });
+    if (!target) return { ok: false as const, message: "User not found." };
+
+    const dailySearchLimit = await getMatchmakerDailySearchLimit();
+    const activeSession = await db.query.matchmakerSessions.findFirst({
+        where: and(
+            eq(matchmakerSessions.userId, userId),
+            eq(matchmakerSessions.sessionDay, getCurrentNairobiDay()),
+            eq(matchmakerSessions.status, "active"),
+        ),
+        orderBy: [desc(matchmakerSessions.updatedAt)],
+    });
+
+    if (!activeSession) {
+        return {
+            ok: true as const,
+            message: `${target.name || target.email} has no session today and will receive all ${dailySearchLimit} suggestions when they open Matchmaker.`,
+        };
+    }
+
+    const hasPlan = Object.keys(activeSession.currentPlan ?? {}).length > 0;
+    const wasAtLimit = activeSession.state === "limit_reached";
+    const resetSession = db
+        .update(matchmakerSessions)
+        .set({
+            dailySearchCount: 0,
+            searchLimit: dailySearchLimit,
+            state: wasAtLimit
+                ? (hasPlan ? "ready_to_search" : "collecting_intent")
+                : activeSession.state,
+            metadata: sql`${matchmakerSessions.metadata} || ${JSON.stringify({
+                limitMode: "idle",
+                adminQuotaResetAt: new Date().toISOString(),
+                adminQuotaResetBy: adminSession.user.id,
+            })}::jsonb`,
+            updatedAt: new Date(),
+        })
+        .where(eq(matchmakerSessions.id, activeSession.id));
+
+    if (wasAtLimit) {
+        const addResetMessage = db.insert(matchmakerMessages).values({
+            sessionId: activeSession.id,
+            role: "assistant",
+            kind: hasPlan ? "search_plan" : "text",
+            text: hasPlan
+                ? "Your suggestions have been reset. Continue with your current search or tell me what to change."
+                : "Your suggestions have been reset. Tell me who you would like to meet.",
+            quickReplies: hasPlan ? ["Go ahead and search", "Change something"] : [],
+            metadata: { source: "admin_quota_reset", dailySearchLimit },
+        });
+        await db.batch([resetSession, addResetMessage]);
+    } else {
+        await resetSession;
+    }
+
+    revalidatePath("/admin/feature-flags");
+    return {
+        ok: true as const,
+        message: `${target.name || target.email} now has ${dailySearchLimit} suggestions available.`,
+    };
 }
 
 // ─── Signup cap (soft launch) ────────────────────────────────────────────────
@@ -1260,6 +1674,7 @@ export async function updateAdminSignupCapConfig(formData: FormData) {
             },
         });
 
+    await invalidateFeatureFlagCache(APP_FEATURE_KEYS.signupCapEnabled);
     // If the cap was raised, try to release anyone now within the new limits.
     const stats = await getAdmissionStats();
     const buckets: GenderBucket[] = ["male", "female", "other"];
@@ -1367,6 +1782,7 @@ export async function openAppToEveryone() {
             },
         });
 
+    await invalidateFeatureFlagCache(APP_FEATURE_KEYS.signupCapEnabled);
     const released = await admitEveryoneFromWaitlist();
     revalidatePath("/admin/feature-flags");
     return released;
@@ -1560,6 +1976,7 @@ export async function setUserRole(userId: string, role: "user" | "admin") {
     await requireAdmin();
     await db.update(user).set({ role }).where(eq(user.id, userId));
     await db.update(profiles).set({ role }).where(eq(profiles.userId, userId));
+    await invalidateMatchExcludedUserIdsCache();
     revalidatePath("/admin/users");
 }
 

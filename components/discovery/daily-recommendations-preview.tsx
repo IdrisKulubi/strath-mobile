@@ -1,9 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Text } from '@/components/ui/text';
-import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
-import { useTheme } from '@/hooks/use-theme';
 import {
   RankedRecommendation,
   RecommendationDecision,
@@ -22,7 +19,6 @@ interface DailyRecommendationsPreviewProps {
   onFocusedIndexChange?: (index: number) => void;
   cardHeight: number;
   itemWidthRatio?: number;
-  sectionCompact?: boolean;
 }
 
 function buildIdentityLine(recommendation: RankedRecommendation) {
@@ -65,9 +61,7 @@ export function DailyRecommendationsPreview({
   onFocusedIndexChange,
   cardHeight,
   itemWidthRatio,
-  sectionCompact = false,
 }: DailyRecommendationsPreviewProps) {
-  const { colors } = useTheme();
   const recommendations = useMemo(() => rawRecommendations.slice(0, 5), [rawRecommendations]);
 
   const cardDataList = useMemo(
@@ -105,17 +99,6 @@ export function DailyRecommendationsPreview({
 
   return (
     <View style={styles.section}>
-      <View style={[styles.header, sectionCompact && styles.headerCompact]}>
-        <Text style={[sectionCompact ? styles.titleCompact : styles.title, { color: colors.foreground }]}>
-          Today&apos;s five
-        </Text>
-        {!sectionCompact ? (
-          <Text variant="muted" style={{ color: colors.mutedForeground }}>
-            Intros refresh in ~12h
-          </Text>
-        ) : null}
-      </View>
-
       <FocusMatchCarousel
         items={cardDataList}
         keyExtractor={(item) => item.id}
@@ -123,6 +106,7 @@ export function DailyRecommendationsPreview({
         onIndexChange={onFocusedIndexChange}
         cardHeight={cardHeight}
         itemWidthRatio={itemWidthRatio}
+        showFraction={false}
       />
     </View>
   );
@@ -131,19 +115,5 @@ export function DailyRecommendationsPreview({
 const styles = StyleSheet.create({
   section: {
     flex: 1,
-  },
-  header: {
-    paddingHorizontal: SPACING.screenX,
-    marginBottom: SPACING.compact,
-    gap: SPACING.micro,
-  },
-  headerCompact: {
-    marginBottom: SPACING.tight,
-  },
-  title: {
-    ...TYPOGRAPHY.title,
-  },
-  titleCompact: {
-    ...TYPOGRAPHY.headline,
   },
 });

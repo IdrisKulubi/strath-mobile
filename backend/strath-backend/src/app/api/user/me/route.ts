@@ -7,9 +7,11 @@ import { successResponse, errorResponse } from "@/lib/api-response";
 import { resetAgentContext } from "@/services/agent-context";
 import { syncProfilePhotoAssetsForUser } from "@/lib/services/profile-photo-assets";
 import { reanalyzeUserPhotos } from "@/lib/services/photo-intelligence-service";
+import { ensureProfileIntelligenceJob } from "@/lib/services/profile-intelligence-service";
 import { admitOrWaitlist, getWaitlistViewFor } from "@/lib/services/admission-service";
 import { getSessionWithBearerFallback } from "@/lib/security";
 import { ZodError } from "zod";
+import { buildWaitlistViewForProfile, selectCurrentUserProfile } from "@/lib/db/queries/profiles";
 
 function formatProfileValidationError(error: ZodError) {
     const promptResponseIssue = error.issues.find(
@@ -37,12 +39,7 @@ export async function GET(req: NextRequest) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
 
-        const profile = await db.query.profiles.findFirst({
-            where: eq(profiles.userId, session.user.id),
-            with: {
-                user: true,
-            },
-        });
+        const profile = await selectCurrentUserProfile(session.user.id);
 
         if (!profile) {
             console.info("[GET /api/user/me] Authenticated user has no profile yet; returning onboarding state", {
@@ -51,10 +48,11 @@ export async function GET(req: NextRequest) {
             return successResponse(null);
         }
 
-        // Attach a lightweight waitlist view so the mobile client can route to
-        // the waitlist screen without a second round-trip. `null` for admitted
-        // or not-yet-gated users.
-        const waitlist = await getWaitlistViewFor(session.user.id).catch((err) => {
+        const waitlist = await buildWaitlistViewForProfile({
+            waitlistStatus: profile.waitlistStatus,
+            waitlistPosition: profile.waitlistPosition,
+            gender: profile.gender,
+        }).catch((err) => {
             console.error("[GET /api/user/me] waitlist view failed:", err);
             return null;
         });
@@ -180,6 +178,18 @@ export async function PATCH(req: NextRequest) {
                 console.error("[PATCH /api/user/me] Failed to reanalyze profile photos:", photoAnalysisError);
             });
         }
+
+        ensureProfileIntelligenceJob({
+            userId: session.user.id,
+            jobType: "profile_refresh",
+            metadata: {
+                source: "profile_update",
+                profileId: resultProfile.id,
+                photoCount: verificationPhotoUrls.length,
+            },
+        }).catch((intelligenceError) => {
+            console.error("[PATCH /api/user/me] Failed to enqueue profile intelligence refresh:", intelligenceError);
+        });
 
         // Soft-launch admission gate: when a user flips profileCompleted/isComplete
         // to true, decide whether they're admitted or placed on the waitlist.

@@ -1,4 +1,4 @@
-import { ThemeProvider as NavThemeProvider } from '@react-navigation/native';
+import { ThemeProvider as NavThemeProvider } from 'expo-router/react-navigation';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
@@ -17,7 +17,6 @@ import { LaunchExperience } from '@/components/intro/launch-experience';
 import { NoInternetScreen } from '@/components/no-internet-screen';
 import { OfflineBanner } from '@/components/offline-banner';
 import { SessionBootstrap } from '@/components/session-bootstrap';
-import { AppFeedbackNudge } from '@/components/feedback/app-feedback-nudge';
 import { useNetwork } from '@/hooks/use-network';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { PaymentDeepLinkHandler } from '@/components/payment/payment-deep-link-handler';
@@ -28,6 +27,8 @@ import {
 import { usePresenceHeartbeat } from '@/hooks/use-presence-heartbeat';
 import { hasCompletedIntroSlides } from '@/lib/intro-storage';
 import { isAuthenticated } from '@/lib/auth-helpers';
+import { QuestionnaireRouteGate } from '@/components/questionnaire/route-gate';
+import { MatchCelebrationProvider } from '@/components/questionnaire/match-celebration';
 
 ExpoSplashScreen.preventAutoHideAsync();
 
@@ -63,6 +64,7 @@ function RootLayoutNav({ hasAuthToken }: { hasAuthToken: boolean }) {
         <Stack.Screen name="chat/[matchId]" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="verification" />
+        <Stack.Screen name="questions" options={{ gestureEnabled: false }} />
         <Stack.Screen name="waitlist" options={{ gestureEnabled: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Modal' }} />
         <Stack.Screen name="settings" />
@@ -77,7 +79,6 @@ function RootLayoutNav({ hasAuthToken }: { hasAuthToken: boolean }) {
         <Stack.Screen name="app-feedback" options={{ presentation: 'modal' }} />
       </Stack>
       <OfflineBanner />
-      <AppFeedbackNudge hasAuthToken={hasAuthToken} />
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
     </NavThemeProvider>
   );
@@ -113,8 +114,7 @@ export default function RootLayout() {
 
     async function prepare() {
       try {
-        const [, slidesDone, authed] = await Promise.all([
-          new Promise<void>((resolve) => setTimeout(resolve, 350)),
+        const [slidesDone, authed] = await Promise.all([
           hasCompletedIntroSlides(),
           isAuthenticated(),
         ]);
@@ -161,7 +161,11 @@ export default function RootLayout() {
                 <>
                   <SessionBootstrap />
                   <NotificationsBootstrap>
-                    <RootLayoutNav hasAuthToken={bootstrap.hasAuthToken} />
+                    <QuestionnaireRouteGate>
+                      <MatchCelebrationProvider>
+                        <RootLayoutNav hasAuthToken={bootstrap.hasAuthToken} />
+                      </MatchCelebrationProvider>
+                    </QuestionnaireRouteGate>
                   </NotificationsBootstrap>
                 </>
               )}

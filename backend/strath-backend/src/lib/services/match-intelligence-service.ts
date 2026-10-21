@@ -8,6 +8,7 @@ import {
     dailyShortlists,
     mutualMatches,
     profiles,
+    profileIntelligence,
     recommendationEvents,
     user,
     userMatchInterests,
@@ -16,10 +17,21 @@ import {
 } from "@/db/schema";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
 import { faceVerifiedProfileWhereClause, hasCompletedInitialFaceVerification } from "@/lib/matchmaking-pool-eligibility";
-import { collectUsersIPassedIds } from "@/lib/matching/candidate-pool-policy";
+import {
+    collectUsersIPassedIds,
+    collectDyadExcludedIds,
+    collectRecentlyShownIds,
+    buildRecommendationCooldownTiers,
+    computeRecommendationExposurePenalty,
+    nairobiDayKey,
+    resolveRecommendationCooldownDays,
+    shortlistDayKeysWithinCooldown,
+} from "@/lib/matching/candidate-pool-policy";
+import { getExistingPairMap } from "@/lib/matching/dyad-history";
 import {
     canonicalizePairUsers,
     CANDIDATE_PAIR_EXPIRY_HOURS,
+    EXPIRED_PAIR_COOLDOWN_DAYS,
     getCurrentUserDecision,
     recordCandidatePairHistory,
     respondToCandidatePair,
@@ -37,6 +49,14 @@ import {
     recordProfileLike,
     recordProfilePass,
 } from "@/lib/services/profile-interaction-service";
+import { recordMatchmakerFeedback } from "@/lib/services/matchmaker-memory-service";
+import { trackMatchmakerEvent } from "@/lib/services/matchmaker-analytics-service";
+import {
+    calculateActivityScore,
+    calculateResponseScore as calculateBehaviorResponseScore,
+} from "@/lib/services/profile-intelligence-scoring";
+import { refreshProfileBehaviorSignalsForUsers } from "@/lib/services/profile-intelligence-service";
+import { finalRecommendationScore as calculateFinalRecommendationScore } from "@/lib/services/recommendation-score";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
@@ -57,6 +77,7 @@ export type MatchType =
 export type RecommendationSource =
     | "daily_recommendations"
     | "browse"
+    | "matchmaker"
     | "admin_curated"
     | "available_now";
 
@@ -69,6 +90,7 @@ type ProfileRow = typeof profiles.$inferSelect;
 type UserRow = typeof user.$inferSelect;
 type PreferenceRow = typeof userMatchPreferences.$inferSelect;
 type SignalRow = typeof userMatchSignals.$inferSelect;
+type ProfileIntelligenceRow = typeof profileIntelligence.$inferSelect;
 type CandidateProfile = ProfileRow & { user?: UserRow | null };
 
 export interface BrowseFilters {
@@ -128,14 +150,7 @@ export interface PreferenceInput {
 const DEFAULT_PREFERENCE_MODE: PreferenceMode = "surprise_me";
 const DAILY_LIMIT = 5;
 const MAX_BROWSE_LIMIT = 50;
-
-function startOfUtcDay(date = new Date()) {
-    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
-function utcDayKey(date = new Date()) {
-    return startOfUtcDay(date).toISOString().slice(0, 10);
-}
+const RECOMMENDATION_REPEAT_COOLDOWN_DAYS = Number(process.env.RECOMMENDATION_REPEAT_COOLDOWN_DAYS) || 7;
 
 function isEligiblePoolCandidate(profile: CandidateProfile | null | undefined): profile is CandidateProfile {
     if (!profile || profile.user?.deletedAt) return false;
@@ -158,15 +173,7 @@ function unique<T>(values: T[]) {
 }
 
 function scoreActivityFromDate(lastActive: Date | string | null | undefined, now = new Date()) {
-    if (!lastActive) return 35;
-    const lastActiveAt = lastActive instanceof Date ? lastActive : new Date(lastActive);
-    const minutes = (now.getTime() - lastActiveAt.getTime()) / 60000;
-    if (minutes <= 10) return 100;
-    if (minutes <= 60) return 92;
-    if (minutes <= 24 * 60) return 82;
-    if (minutes <= 3 * 24 * 60) return 66;
-    if (minutes <= 7 * 24 * 60) return 45;
-    return 20;
+    return calculateActivityScore(lastActive, now);
 }
 
 function activityStatusFromScore(score: number): RankedRecommendation["activityStatus"] {
@@ -205,8 +212,15 @@ function scoreProfileQuality(profile: ProfileRow) {
 
 function scoreResponse(signal: SignalRow | null | undefined) {
     if (!signal) return 55;
-    const base = signal.responseRate > 0 ? signal.responseRate : 55;
-    return clampScore(base - signal.ghostingPenalty - Math.min(15, signal.noResponseCount * 3));
+    if (signal.responseRate > 0) {
+        return clampScore(signal.responseRate - signal.ghostingPenalty - Math.min(15, signal.noResponseCount * 3));
+    }
+    return calculateBehaviorResponseScore({
+        openToMeetCount: signal.openToMeetCount,
+        passCount: signal.passCount,
+        noResponseCount: signal.noResponseCount,
+        ghostingPenalty: signal.ghostingPenalty,
+    });
 }
 
 export function scoreDiversity(me: Pick<ProfileRow, "course" | "university" | "interests" | "personalityAnswers" | "lifestyleAnswers">, them: Pick<ProfileRow, "course" | "university" | "interests" | "personalityAnswers" | "lifestyleAnswers">) {
@@ -287,7 +301,11 @@ export function finalRecommendationScore(input: {
     mutualProbabilityScore: number;
     preferenceFitScore: number;
     profileQualityScore: number;
+    profileCompletenessScore?: number;
+    candidateStrengthScore?: number;
+    reciprocalInterestScore?: number;
     photoQualityScore?: number;
+    photoPresentationScore?: number;
     photoPreferenceScore?: number;
     photoVisualDiversityScore?: number;
     photoQualityPenalty?: number;
@@ -296,37 +314,7 @@ export function finalRecommendationScore(input: {
     activeHoldPenalty: number;
     isFirstSessionUser?: boolean;
 }) {
-    const weights =
-        input.preferenceMode === "active_only"
-            ? { compatibility: 0.1, activity: 0.35, response: 0.25, availability: 0.1, diversity: 0.05, mutual: 0.1, preference: 0.05, quality: 0.05 }
-            : input.preferenceMode === "serious_matches"
-                ? { compatibility: 0.2, activity: 0.15, response: 0.25, availability: 0.15, diversity: 0.05, mutual: 0.15, preference: 0.05, quality: 0.05 }
-                : input.preferenceMode === "different_from_me"
-                    ? { compatibility: 0.18, activity: 0.2, response: 0.18, availability: 0.08, diversity: 0.18, mutual: 0.1, preference: 0.08, quality: 0.05 }
-                    : { compatibility: 0.25, activity: 0.22, response: 0.18, availability: 0.08, diversity: 0.08, mutual: 0.11, preference: 0.08, quality: 0.05 };
-
-    const photoWeights = input.isFirstSessionUser
-        ? { quality: 0.08, preference: 0.03, visualDiversity: 0.02 }
-        : { quality: 0.08, preference: 0.05, visualDiversity: 0.05 };
-
-    const score =
-        input.compatibilityScore * weights.compatibility +
-        input.activityScore * weights.activity +
-        input.responseScore * weights.response +
-        input.availabilityScore * weights.availability +
-        input.diversityScore * weights.diversity +
-        input.mutualProbabilityScore * weights.mutual +
-        input.preferenceFitScore * weights.preference +
-        input.profileQualityScore * weights.quality +
-        (input.photoQualityScore ?? 50) * photoWeights.quality +
-        (input.photoPreferenceScore ?? 50) * photoWeights.preference +
-        (input.photoVisualDiversityScore ?? 50) * photoWeights.visualDiversity -
-        (input.photoQualityPenalty ?? 0) -
-        input.ghostingPenalty -
-        input.passRiskPenalty -
-        input.activeHoldPenalty;
-
-    return clampScore(score);
+    return calculateFinalRecommendationScore(input);
 }
 
 function buildReason(
@@ -507,6 +495,15 @@ async function getCandidateSignals(userIds: string[]) {
     return new Map(rows.map((row) => [row.userId, row]));
 }
 
+async function getCandidateIntelligence(userIds: string[]) {
+    if (userIds.length === 0) return new Map<string, ProfileIntelligenceRow>();
+    const rows = await readDb
+        .select()
+        .from(profileIntelligence)
+        .where(inArray(profileIntelligence.userId, userIds));
+    return new Map(rows.map((row) => [row.userId, row]));
+}
+
 async function getIncomingOpenInterestMap(viewerUserId: string, candidateUserIds: string[]) {
     if (candidateUserIds.length === 0) return new Map<string, Date>();
     const rows = await readDb
@@ -543,17 +540,50 @@ async function getViewerDecisionMap(viewerUserId: string, candidateUserIds: stri
     return new Map(rows.map((row) => [row.candidateUserId, row.decision]));
 }
 
+async function getRecentlyShownCandidateIds(viewerUserId: string, cooldownDays: number) {
+    const dayKeys = shortlistDayKeysWithinCooldown(cooldownDays);
+    const since = new Date(Date.now() - cooldownDays * 24 * 60 * 60 * 1000);
+
+    const [shortlistRows, eventRows] = await Promise.all([
+        readDb
+            .select({ candidateUserId: dailyShortlists.candidateUserId })
+            .from(dailyShortlists)
+            .where(
+                and(
+                    eq(dailyShortlists.viewerUserId, viewerUserId),
+                    inArray(dailyShortlists.shortlistDay, dayKeys),
+                ),
+            ),
+        readDb
+            .select({ candidateUserId: recommendationEvents.candidateUserId })
+            .from(recommendationEvents)
+            .where(
+                and(
+                    eq(recommendationEvents.viewerUserId, viewerUserId),
+                    gte(recommendationEvents.shownAt, since),
+                    inArray(recommendationEvents.decision, ["shown", "viewed"]),
+                ),
+            ),
+    ]);
+
+    return collectRecentlyShownIds(
+        shortlistRows.map((row) => row.candidateUserId),
+        eventRows.map((row) => row.candidateUserId),
+    );
+}
+
 async function getEligibleCandidateProfiles(viewerUserId: string, filters: BrowseFilters = {}) {
     const viewerProfile = await readDb.query.profiles.findFirst({
         where: eq(profiles.userId, viewerUserId),
     });
     if (!viewerProfile) return { viewerProfile: null, candidates: [] as CandidateProfile[] };
 
-    const [poolExcludedIds, blockedIds, passedIds, existingDyads] = await Promise.all([
+    const [poolExcludedIds, blockedIds, passedIds, existingDyads, existingPairMap] = await Promise.all([
         resolveMatchExcludedUserIds(),
         getBlockedUserIds(viewerUserId),
         getUsersIPassedIds(viewerUserId),
         getExistingDyadIds(viewerUserId),
+        getExistingPairMap(viewerUserId),
     ]);
     const allowAdminPreview = poolExcludedIds.has(viewerUserId) && await isAdminMatchPreviewUser(viewerUserId);
     if (poolExcludedIds.has(viewerUserId) && !allowAdminPreview) {
@@ -564,39 +594,75 @@ async function getEligibleCandidateProfiles(viewerUserId: string, filters: Brows
         return { viewerProfile, candidates: [] as CandidateProfile[] };
     }
 
-    const excludedIds = unique([
+    const dyadCooldownCutoff = new Date(Date.now() - EXPIRED_PAIR_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
+    const dyadExcludedIds = collectDyadExcludedIds(existingPairMap, dyadCooldownCutoff);
+    const baseExcludedIds = unique([
         viewerUserId,
         ...poolExcludedIds,
         ...blockedIds,
         ...passedIds,
         ...existingDyads,
+        ...dyadExcludedIds,
     ]);
 
     const targetGenders = getTargetGenders(viewerProfile.gender, viewerProfile.interestedIn as string[] | null);
+    const cooldownTiers = buildRecommendationCooldownTiers(RECOMMENDATION_REPEAT_COOLDOWN_DAYS);
+    const eligibleCountsByTier = new Map<number, number>();
+    const candidatesByTier = new Map<number, CandidateProfile[]>();
+    const recentlyShownCountsByTier = new Map<number, number>();
+    let appliedRecentlyShownCount = 0;
 
-    const candidates = await readDb.query.profiles.findMany({
-        where: and(
-            notInArray(profiles.userId, excludedIds),
-            eq(profiles.isVisible, true),
-            eq(profiles.profileCompleted, true),
-            eq(profiles.discoveryPaused, false),
-            eq(profiles.incognitoMode, false),
-            filters.university ? eq(profiles.university, filters.university) : undefined,
-            filters.course ? eq(profiles.course, filters.course) : undefined,
-            filters.ageMin ? gte(profiles.age, filters.ageMin) : undefined,
-            filters.ageMax ? sql`${profiles.age} <= ${filters.ageMax}` : undefined,
-            faceVerifiedProfileWhereClause(),
-            targetGenders.length > 0 ? inArray(profiles.gender, targetGenders) : undefined,
-        ),
-        with: { user: true },
-        limit: 250,
+    for (const tier of cooldownTiers) {
+        const recentlyShownIds = await getRecentlyShownCandidateIds(viewerUserId, tier);
+        recentlyShownCountsByTier.set(tier, recentlyShownIds.size);
+        const excludedIds = unique([...baseExcludedIds, ...recentlyShownIds]);
+
+        const candidates = await readDb.query.profiles.findMany({
+            where: and(
+                notInArray(profiles.userId, excludedIds),
+                eq(profiles.isVisible, true),
+                eq(profiles.profileCompleted, true),
+                eq(profiles.discoveryPaused, false),
+                eq(profiles.incognitoMode, false),
+                filters.university ? eq(profiles.university, filters.university) : undefined,
+                filters.course ? eq(profiles.course, filters.course) : undefined,
+                filters.ageMin ? gte(profiles.age, filters.ageMin) : undefined,
+                filters.ageMax ? sql`${profiles.age} <= ${filters.ageMax}` : undefined,
+                faceVerifiedProfileWhereClause(),
+                targetGenders.length > 0 ? inArray(profiles.gender, targetGenders) : undefined,
+            ),
+            with: { user: true },
+            limit: 250,
+        });
+
+        const now = new Date();
+        const eligibleCandidates = candidates
+            .filter((candidate) => !candidate.user?.deletedAt)
+            .filter((candidate) => isReciprocalGenderMatch(viewerProfile.gender, candidate.gender, candidate.interestedIn as string[] | null))
+            .filter((candidate) => !filters.activeRecently || scoreActivityFromDate(candidate.user?.lastActive ?? candidate.lastActive, now) >= 55);
+
+        eligibleCountsByTier.set(tier, eligibleCandidates.length);
+        candidatesByTier.set(tier, eligibleCandidates);
+    }
+
+    const { cooldownDays, fallbackTier } = resolveRecommendationCooldownDays({
+        tiers: cooldownTiers,
+        minRequired: DAILY_LIMIT,
+        eligibleCountsByTier,
     });
+    const eligibleCandidates = candidatesByTier.get(cooldownDays) ?? [];
+    appliedRecentlyShownCount = recentlyShownCountsByTier.get(cooldownDays) ?? 0;
 
-    const now = new Date();
-    const eligibleCandidates = candidates
-        .filter((candidate) => !candidate.user?.deletedAt)
-        .filter((candidate) => isReciprocalGenderMatch(viewerProfile.gender, candidate.gender, candidate.interestedIn as string[] | null))
-        .filter((candidate) => !filters.activeRecently || scoreActivityFromDate(candidate.user?.lastActive ?? candidate.lastActive, now) >= 55);
+    if (fallbackTier > 0) {
+        console.log("[match-intelligence] sparsePoolFallback", {
+            viewerUserId,
+            requestedCooldownDays: RECOMMENDATION_REPEAT_COOLDOWN_DAYS,
+            appliedCooldownDays: cooldownDays,
+            fallbackTier,
+            eligibleCountsByTier: Object.fromEntries(eligibleCountsByTier),
+            recentlyShownCountsByTier: Object.fromEntries(recentlyShownCountsByTier),
+        });
+    }
 
     console.log("[match-intelligence] eligible pool", {
         viewerUserId,
@@ -609,8 +675,11 @@ async function getEligibleCandidateProfiles(viewerUserId: string, filters: Brows
         blockedCount: blockedIds.size,
         passedCount: passedIds.size,
         existingDyadsCount: existingDyads.size,
-        excludedIdsCount: excludedIds.length,
-        rawCandidateCount: candidates.length,
+        dyadExcludedCount: dyadExcludedIds.size,
+        recentlyShownCooldownDays: cooldownDays,
+        recentlyShownCount: appliedRecentlyShownCount,
+        excludedIdsCount: baseExcludedIds.length + appliedRecentlyShownCount,
+        rawCandidateCount: eligibleCandidates.length,
         eligibleCandidateCount: eligibleCandidates.length,
         filters,
     });
@@ -643,10 +712,11 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
         ? Date.now() - new Date(viewerAccount.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000
         : false;
 
-    const [candidatePreferences, candidateSignals, exposureCounts, holdEntries, incomingInterestMap, viewerDecisionMap, photoSignalsMap] =
+    const [candidatePreferences, candidateSignals, candidateIntelligence, exposureCounts, holdEntries, incomingInterestMap, viewerDecisionMap, photoSignalsMap] =
         await Promise.all([
         getCandidatePreferences(candidateUserIds),
         getCandidateSignals(candidateUserIds),
+        getCandidateIntelligence(candidateUserIds),
         getRecentExposureCounts(viewerUserId),
         Promise.all(candidateUserIds.map(async (candidateUserId) => [candidateUserId, await isUserOnMatchHold(candidateUserId)] as const)),
         getIncomingOpenInterestMap(viewerUserId, candidateUserIds),
@@ -683,19 +753,33 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             hasUsableProfilePhoto: false,
         };
         const compatibilityScore = compatibility.score;
-        const activityScore = scoreActivityFromDate(candidate.user?.lastActive ?? candidate.lastActive);
-        const responseScore = scoreResponse(candidateSignal);
+        const intelligence = candidateIntelligence.get(candidate.userId);
+        const activityScore = intelligence?.activityScore ?? scoreActivityFromDate(candidate.user?.lastActive ?? candidate.lastActive);
+        const responseScore = intelligence?.responseScore ?? scoreResponse(candidateSignal);
         const availabilityScore = scoreAvailability(candidatePreference);
         const diversityScore = scoreDiversity(viewerProfile, candidate);
         const profileQualityScore = scoreProfileQuality(candidate);
         const photoQualityScore = photoSignal.photoQualityScore || 50;
+        const photoPresentationScore = intelligence?.photoPresentationScore ?? photoQualityScore;
+        const profileCompletenessScore = intelligence?.profileCompletenessScore ?? profileQualityScore;
+        const candidateStrengthScore = intelligence?.candidateStrengthScore;
         const photoPreferenceScore = await calculatePhotoPreferenceScore({
             viewerUserId,
             candidateUserId: candidate.userId,
         });
         const photoVisualDiversityScore = 50;
         const hasIncomingOpenInterest = incomingInterestMap.has(candidate.userId);
-        const baseMutualProbabilityScore = clampScore((compatibilityScore * 0.45) + (responseScore * 0.3) + (activityScore * 0.15) + (availabilityScore * 0.1));
+        const reciprocalInterestScore = hasIncomingOpenInterest ? 100 : (intelligence?.inboundInterestScore ?? 0);
+        const baseMutualProbabilityScore = intelligence
+            ? clampScore(
+                (compatibilityScore * 0.35) +
+                (responseScore * 0.25) +
+                (activityScore * 0.15) +
+                (availabilityScore * 0.1) +
+                (intelligence.inboundInterestScore * 0.08) +
+                (intelligence.mutualConversionScore * 0.07),
+            )
+            : clampScore((compatibilityScore * 0.45) + (responseScore * 0.3) + (activityScore * 0.15) + (availabilityScore * 0.1));
         const mutualProbabilityScore = hasIncomingOpenInterest ? 100 : baseMutualProbabilityScore;
         const preferenceFit = preferenceFitScore({
             preferenceMode: modePreference,
@@ -705,7 +789,7 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             diversityScore,
             availabilityScore,
         });
-        const exposurePenalty = Math.min(20, (exposureCounts.get(candidate.userId) ?? 0) * 5);
+        const exposurePenalty = computeRecommendationExposurePenalty(exposureCounts.get(candidate.userId) ?? 0);
         const passRiskPenalty = candidateSignal?.passRiskPenalty ?? 0;
         const ghostingPenalty = candidateSignal?.ghostingPenalty ?? 0;
         const activeHoldPenalty = usersOnHold.has(candidate.userId) ? 8 : 0;
@@ -732,7 +816,11 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             mutualProbabilityScore,
             preferenceFitScore: preferenceFit,
             profileQualityScore,
+            profileCompletenessScore,
+            candidateStrengthScore,
+            reciprocalInterestScore,
             photoQualityScore,
+            photoPresentationScore,
             photoPreferenceScore,
             photoVisualDiversityScore,
             photoQualityPenalty,
@@ -770,6 +858,8 @@ async function rankCandidates(viewerUserId: string, filters: BrowseFilters = {})
             mutualProbabilityScore,
             preferenceFitScore: preferenceFit,
             profileQualityScore,
+            profileCompletenessScore,
+            candidateStrengthScore: candidateStrengthScore ?? null,
             hasIncomingOpenInterest,
             incomingInterestAt: incomingInterestMap.get(candidate.userId)?.toISOString() ?? null,
             ghostingPenalty,
@@ -833,9 +923,24 @@ function targetDailyMix(preferenceMode: PreferenceMode): MatchType[] {
     }
 }
 
-function applyDailyMix(ranked: RankedRecommendation[], preferenceMode: PreferenceMode) {
+export function applyDailyMix(ranked: RankedRecommendation[], preferenceMode: PreferenceMode) {
     const selected: RankedRecommendation[] = [];
     const used = new Set<string>();
+
+    const addFirst = (predicate: (item: RankedRecommendation) => boolean, max = 1) => {
+        for (const item of ranked) {
+            if (selected.length >= DAILY_LIMIT || selected.filter(predicate).length >= max) break;
+            if (used.has(item.candidateUserId) || !predicate(item)) continue;
+            selected.push(item);
+            used.add(item.candidateUserId);
+        }
+    };
+
+    addFirst((item) => item.mutualProbabilityScore >= 95, 2);
+    addFirst((item) => item.matchType === "high_activity" && item.activityScore >= 80 && item.responseScore >= 65, 2);
+    addFirst((item) => item.matchType === "complementary" || item.matchType === "discovery", 1);
+    addFirst((item) => item.profileQualityScore >= 80 && item.finalScore >= 65, 1);
+
     for (const matchType of targetDailyMix(preferenceMode)) {
         const next = ranked.find((item) => item.matchType === matchType && !used.has(item.candidateUserId));
         if (!next) continue;
@@ -852,7 +957,7 @@ function applyDailyMix(ranked: RankedRecommendation[], preferenceMode: Preferenc
 }
 
 async function getTodaysStableDailyRecommendations(userId: string): Promise<RankedRecommendation[]> {
-    const shortlistDay = utcDayKey();
+    const shortlistDay = nairobiDayKey();
     const rows = await readDb
         .select()
         .from(dailyShortlists)
@@ -1046,7 +1151,7 @@ export async function getDailyRecommendations(userId: string) {
             reason: item.reason,
         })),
     });
-    const shortlistDay = utcDayKey();
+    const shortlistDay = nairobiDayKey();
     const nextPosition = await getDailyShortlistRowCount(userId, shortlistDay);
     await persistDailyShortlistEntries({
         viewerUserId: userId,
@@ -1414,6 +1519,7 @@ export async function handleRecommendationDecision(input: {
     decision: Exclude<RecommendationDecision, "shown" | "viewed" | "ignored">;
     source: RecommendationSource;
     matchType?: MatchType;
+    syncMatchmakerMemory?: boolean;
 }) {
     if (input.viewerUserId === input.candidateUserId) {
         throw new Error("Cannot decide on your own profile");
@@ -1445,6 +1551,28 @@ export async function handleRecommendationDecision(input: {
         });
     }
 
+    if (input.source === "matchmaker") {
+        trackMatchmakerEvent({
+            event: input.decision === "open_to_meet" ? "interested" : "pass",
+            userId: input.viewerUserId,
+            candidateUserId: input.candidateUserId,
+            metadata: { matchType: input.matchType ?? null },
+        }).catch(() => undefined);
+        if (input.syncMatchmakerMemory !== false) {
+            await recordMatchmakerFeedback({
+                userId: input.viewerUserId,
+                candidateUserId: input.candidateUserId,
+                outcome: input.decision === "open_to_meet" ? "interested" : "passed",
+                metadata: {
+                    source: "recommendation_decision",
+                    matchType: input.matchType,
+                },
+            }).catch((error) => {
+                console.warn("[match-intelligence] matchmaker memory update failed", error);
+            });
+        }
+    }
+
     await updateSignalsAfterDecision(input.viewerUserId, input.decision);
     const interest = await upsertDirectedInterest({
         eventId: event.id,
@@ -1453,6 +1581,9 @@ export async function handleRecommendationDecision(input: {
         decision: input.decision,
         source: input.source,
         matchType: input.matchType,
+    });
+    refreshProfileBehaviorSignalsForUsers([input.viewerUserId, input.candidateUserId]).catch((error) => {
+        console.warn("[match-intelligence] profile behavior signal refresh failed", error);
     });
 
     console.log("[match-intelligence] directed interest updated", {
@@ -1501,10 +1632,18 @@ export async function handleRecommendationDecision(input: {
             viewerUserId: input.viewerUserId,
             candidateUserId: input.candidateUserId,
         });
-        return { event, interest, pair: pair ?? null, mutual: mutual ?? null, mutualMatchCreated: Boolean(mutual) };
+        const mutualMatchCreated = Boolean(mutual);
+        if (mutualMatchCreated && input.source === "matchmaker") {
+            trackMatchmakerEvent({ event: "mutual_created", userId: input.viewerUserId, candidateUserId: input.candidateUserId, metadata: { pairId: pair?.id ?? null } }).catch(() => undefined);
+        }
+        if (!mutualMatchCreated) {
+            await recordOneSidedIncomingLike(input.viewerUserId, input.candidateUserId);
+        }
+        return { event, interest, pair: pair ?? null, mutual: mutual ?? null, mutualMatchCreated };
     }
 
     if (!reverseInterest) {
+        await recordOneSidedIncomingLike(input.viewerUserId, input.candidateUserId);
         return { event, interest, pair: null, mutual: null, mutualMatchCreated: false };
     }
 
@@ -1524,11 +1663,50 @@ export async function handleRecommendationDecision(input: {
         mutualMatchCreated: Boolean(result.mutual),
     });
 
+    const mutualMatchCreated = Boolean(result.mutual);
+    if (mutualMatchCreated && input.source === "matchmaker") {
+        trackMatchmakerEvent({ event: "mutual_created", userId: input.viewerUserId, candidateUserId: input.candidateUserId, metadata: { pairId: result.pair.id } }).catch(() => undefined);
+    }
+    if (!mutualMatchCreated) {
+        await recordOneSidedIncomingLike(input.viewerUserId, input.candidateUserId);
+    }
+
     return {
         event,
         interest,
         pair: result.pair,
         mutual: result.mutual,
-        mutualMatchCreated: Boolean(result.mutual),
+        mutualMatchCreated,
     };
+}
+
+export async function ensurePermanentCandidatePass(input: {
+    viewerUserId: string;
+    candidateUserId: string;
+    source?: RecommendationSource;
+}) {
+    const existing = await readDb.query.userMatchInterests.findFirst({
+        where: and(
+            eq(userMatchInterests.viewerUserId, input.viewerUserId),
+            eq(userMatchInterests.candidateUserId, input.candidateUserId),
+            eq(userMatchInterests.decision, "passed"),
+        ),
+    });
+    if (existing) return { interest: existing, created: false };
+
+    const result = await handleRecommendationDecision({
+        viewerUserId: input.viewerUserId,
+        candidateUserId: input.candidateUserId,
+        decision: "passed",
+        source: input.source ?? "matchmaker",
+        syncMatchmakerMemory: false,
+    });
+    return { interest: result.interest, created: true };
+}
+
+async function recordOneSidedIncomingLike(swiperId: string, swipedId: string) {
+    const { recordIncomingLike } = await import("@/lib/services/incoming-like-service");
+    await recordIncomingLike({ swiperId, swipedId }).catch((error) => {
+        console.warn("[match-intelligence] incoming like notification failed", error);
+    });
 }

@@ -30,6 +30,8 @@ export async function initializeTransaction(
             dateMatchId: input.dateMatchId,
             userId: input.userId,
             reference: input.reference,
+            purchase_type: "confirmation_pack",
+            pack_size: getPaymentConfig().packSize,
         },
     });
 

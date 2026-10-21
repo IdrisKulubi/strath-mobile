@@ -14,37 +14,46 @@ function getGreeting(): string {
 
 interface HomeHeaderProps {
     firstName?: string;
-    matchCount?: number;
-    focusedIndex?: number;
     compact?: boolean;
+    showSubtitle?: boolean;
 }
 
-export function HomeHeader({ firstName, matchCount, focusedIndex, compact = false }: HomeHeaderProps) {
+export function HomeHeader({
+    firstName,
+    compact = false,
+    showSubtitle = false,
+}: HomeHeaderProps) {
     const { colors } = useTheme();
     const greeting = getGreeting();
-    const visibleCount = matchCount && matchCount > 0 ? Math.min(matchCount, 5) : 0;
-
-    const subtitle =
-        visibleCount > 0 && focusedIndex !== undefined
-            ? `Profile ${focusedIndex + 1} of ${visibleCount}`
-            : visibleCount > 0
-              ? `${visibleCount} ${visibleCount === 1 ? 'profile' : 'profiles'} in today's shortlist`
-              : 'Your introduction is being prepared';
 
     return (
         <View style={[styles.container, compact && styles.containerCompact]}>
-            <Text
-                style={[
-                    compact ? styles.greetingCompact : styles.greeting,
-                    { color: colors.foreground },
-                ]}
-            >
-                {greeting}
-                {firstName ? `, ${firstName}` : ''}
-            </Text>
-            <Text variant="muted" style={[styles.subtitle, { color: colors.mutedForeground }]}>
-                {subtitle}
-            </Text>
+            <View style={styles.greetingRow}>
+                <Text
+                    style={[
+                        compact ? styles.greetingCompact : styles.greeting,
+                        { color: colors.foreground },
+                    ]}
+                >
+                    {greeting}
+                    {firstName ? ', ' : ''}
+                </Text>
+                {firstName ? (
+                    <Text
+                        style={[
+                            compact ? styles.greetingCompact : styles.greeting,
+                            { color: colors.primary },
+                        ]}
+                    >
+                        {firstName}
+                    </Text>
+                ) : null}
+            </View>
+            {showSubtitle ? (
+                <Text variant="muted" style={[styles.subtitle, { color: colors.mutedForeground }]}>
+                    Your introduction is being prepared
+                </Text>
+            ) : null}
         </View>
     );
 }
@@ -58,11 +67,20 @@ const styles = StyleSheet.create({
     },
     containerCompact: {
         paddingTop: SPACING.compact,
-        paddingBottom: SPACING.tight,
+        paddingBottom: SPACING.micro,
         gap: SPACING.micro,
+    },
+    greetingRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'baseline',
     },
     greeting: {
         ...TYPOGRAPHY.display,
+        fontSize: 40,
+        lineHeight: 44,
+        fontWeight: '800',
+        letterSpacing: 0,
     },
     greetingCompact: {
         ...TYPOGRAPHY.title,

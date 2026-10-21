@@ -10,6 +10,7 @@ import {
     mutualMatches,
     profiles,
     user,
+    userMatchInterests,
 } from "@/db/schema";
 import {
     collectUsersIPassedIds,
@@ -18,6 +19,7 @@ import {
     shouldSkipCandidateForExistingDyad,
     type FairnessRelaxConfig,
 } from "@/lib/matching/candidate-pool-policy";
+import { getExistingPairMap } from "@/lib/matching/dyad-history";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { getTargetGenders, isReciprocalGenderMatch } from "@/lib/gender-preferences";
 import {
@@ -28,7 +30,12 @@ import { expireQueuedPairsForUser, isUserOnMatchHold } from "@/lib/services/matc
 import { getPaymentsEnabled } from "@/lib/payments/payment-flags";
 import { buildDateMatchPaymentInsert } from "@/lib/payments/payment-init";
 import { assignMeetupSlot } from "@/lib/services/meetup-slot-service";
-import { isAdminMatchPreviewUser, resolveMatchExcludedUserIds } from "@/lib/services/match-exclusion-service";
+import { isAdminMatchPreviewUser, resolveMatchExcludedUserIds, type MatchExclusionContext } from "@/lib/services/match-exclusion-service";
+import {
+    getPrimaryProfilePhoto,
+    getProfileFirstName,
+    selectProfileCardsByUserIds,
+} from "@/lib/db/queries/profiles";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
 
@@ -232,55 +239,6 @@ export async function getActiveExposureCount(userId: string) {
     return result[0]?.count ?? 0;
 }
 
-type PairAggregate = {
-    hasClosedOrMutual: boolean;
-    hasActive: boolean;
-    oldestExpiredCreatedAt: Date | null;
-};
-
-/**
- * Aggregates all candidate_pairs rows per (userId, otherUserId).
- * closed/mutual = never recreate this dyad. active/queued = already in flight.
- * expired = cooldown applies before re-pairing the same two people.
- * Fixes bug where multiple rows (e.g. closed + expired) caused passed users to reappear.
- */
-async function getExistingPairMap(userId: string): Promise<Map<string, PairAggregate>> {
-    const rows = await readDb
-        .select()
-        .from(candidatePairs)
-        .where(
-            or(
-                eq(candidatePairs.userAId, userId),
-                eq(candidatePairs.userBId, userId),
-            ),
-        );
-
-    const byOther = new Map<string, PairAggregate>();
-
-    for (const row of rows) {
-        const other = getOtherUserId(row, userId);
-        const existing = byOther.get(other) ?? {
-            hasClosedOrMutual: false,
-            hasActive: false,
-            oldestExpiredCreatedAt: null as Date | null,
-        };
-
-        if (row.status === "closed" || row.status === "mutual") existing.hasClosedOrMutual = true;
-        if (row.status === "active" || row.status === "queued") existing.hasActive = true;
-        if (row.status === "expired") {
-            const expiredAt = row.updatedAt ?? row.createdAt;
-            existing.oldestExpiredCreatedAt =
-                !existing.oldestExpiredCreatedAt || expiredAt > existing.oldestExpiredCreatedAt
-                    ? expiredAt
-                    : existing.oldestExpiredCreatedAt;
-        }
-
-        byOther.set(other, existing);
-    }
-
-    return byOther;
-}
-
 async function getBlockedUserIds(userId: string) {
     const [blockedRows, blockedByRows] = await Promise.all([
         readDb
@@ -305,25 +263,34 @@ async function getBlockedUserIds(userId: string) {
  * is enforced separately via {@link getExistingPairMap} `hasClosedOrMutual`.
  */
 async function getUsersIPassedIds(userId: string): Promise<Set<string>> {
-    const rows = await readDb
-        .select({
-            userAId: candidatePairs.userAId,
-            userBId: candidatePairs.userBId,
-            aDecision: candidatePairs.aDecision,
-            bDecision: candidatePairs.bDecision,
-        })
-        .from(candidatePairs)
-        .where(
-            and(
-                eq(candidatePairs.status, "closed"),
-                or(
-                    and(eq(candidatePairs.userAId, userId), eq(candidatePairs.aDecision, "passed")),
-                    and(eq(candidatePairs.userBId, userId), eq(candidatePairs.bDecision, "passed")),
+    const [pairRows, interestRows] = await Promise.all([
+        readDb
+            .select({
+                userAId: candidatePairs.userAId,
+                userBId: candidatePairs.userBId,
+                aDecision: candidatePairs.aDecision,
+                bDecision: candidatePairs.bDecision,
+            })
+            .from(candidatePairs)
+            .where(
+                and(
+                    eq(candidatePairs.status, "closed"),
+                    or(
+                        and(eq(candidatePairs.userAId, userId), eq(candidatePairs.aDecision, "passed")),
+                        and(eq(candidatePairs.userBId, userId), eq(candidatePairs.bDecision, "passed")),
+                    ),
                 ),
             ),
-        );
+        readDb
+            .select({ candidateUserId: userMatchInterests.candidateUserId })
+            .from(userMatchInterests)
+            .where(and(eq(userMatchInterests.viewerUserId, userId), eq(userMatchInterests.decision, "passed"))),
+    ]);
 
-    return collectUsersIPassedIds(userId, rows);
+    return new Set([
+        ...collectUsersIPassedIds(userId, pairRows),
+        ...interestRows.map((row) => row.candidateUserId),
+    ]);
 }
 
 async function getMatchedUserIds(userId: string) {
@@ -697,7 +664,7 @@ export async function getHasUpcomingQueuedForUser(userId: string): Promise<boole
     return row.length > 0;
 }
 
-async function findPromotableQueuedPairForUser(userId: string, now: Date) {
+async function findPromotableQueuedPairForUser(userId: string, now: Date, context?: MatchExclusionContext) {
     const candidates = await readDb
         .select()
         .from(candidatePairs)
@@ -720,8 +687,8 @@ async function findPromotableQueuedPairForUser(userId: string, now: Date) {
         if (await hasOpenSlotClearingWindowForUser(other, now)) {
             continue;
         }
-        const otherActive = await getActiveCandidatePairsForUser(other);
-        if (otherActive.length < DAILY_CANDIDATE_PAIR_LIMIT) {
+        const otherActiveCount = await countActiveCandidatePairsForUser(other, context);
+        if (otherActiveCount < DAILY_CANDIDATE_PAIR_LIMIT) {
             return row;
         }
     }
@@ -732,7 +699,7 @@ async function findPromotableQueuedPairForUser(userId: string, now: Date) {
  * Activates the next due queued introduction for this user (if any), when neither side already has an active card.
  * Returns true if a row was promoted.
  */
-export async function promoteDueQueuedPairsForUser(userId: string): Promise<boolean> {
+export async function promoteDueQueuedPairsForUser(userId: string, context?: MatchExclusionContext): Promise<boolean> {
     const now = new Date();
     if (await hasActiveOneSidedInterestForUser(userId, now)) {
         return false;
@@ -742,12 +709,12 @@ export async function promoteDueQueuedPairsForUser(userId: string): Promise<bool
         return false;
     }
 
-    const selfActive = await getActiveCandidatePairsForUser(userId);
-    if (selfActive.length >= DAILY_CANDIDATE_PAIR_LIMIT) {
+    const selfActiveCount = await countActiveCandidatePairsForUser(userId, context);
+    if (selfActiveCount >= DAILY_CANDIDATE_PAIR_LIMIT) {
         return false;
     }
 
-    const row = await findPromotableQueuedPairForUser(userId, now);
+    const row = await findPromotableQueuedPairForUser(userId, now, context);
     if (!row) {
         return false;
     }
@@ -795,8 +762,15 @@ export async function promoteDueQueuedPairsForUser(userId: string): Promise<bool
     return false;
 }
 
-export async function generateCandidatePairsForUser(userId: string, options: { notify?: boolean } = {}) {
+export async function generateCandidatePairsForUser(
+    userId: string,
+    options: { notify?: boolean; context?: MatchExclusionContext } = {},
+) {
     console.log("[candidate-pairs] generateCandidatePairsForUser", { userId });
+
+    const context = options.context ?? {
+        matchExcludedUserIds: await resolveMatchExcludedUserIds(),
+    };
 
     await expireCandidatePairs();
 
@@ -807,7 +781,7 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
 
     if (await hasActiveOneSidedInterestForUser(userId)) {
         console.log("[candidate-pairs] HOLD: user has one-sided interest in flight - skip generation", { userId });
-        return getActiveCandidatePairsForUser(userId);
+        return getActiveCandidatePairsForUser(userId, context);
     }
 
     const openSlotClearingWindow = await getOpenSlotClearingWindowForUser(userId);
@@ -817,12 +791,12 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
             pairId: openSlotClearingWindow.id,
             windowExpiresAt: openSlotClearingWindow.expiresAt,
         });
-        return getActiveCandidatePairsForUser(userId);
+        return getActiveCandidatePairsForUser(userId, context);
     }
 
-    await promoteDueQueuedPairsForUser(userId);
+    await promoteDueQueuedPairsForUser(userId, context);
 
-    const existingActivePairs = await getActiveCandidatePairsForUser(userId);
+    const existingActivePairs = await getActiveCandidatePairsForUser(userId, context);
     if (existingActivePairs.some((pair) => pair.currentUserDecision === "open_to_meet")) {
         console.log("[candidate-pairs] HOLD: existing active interest - returning hold card", { userId });
         return existingActivePairs;
@@ -855,8 +829,9 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
         return [];
     }
 
-    const matchExcludedUserIds = await resolveMatchExcludedUserIds();
-    const allowAdminPreview = matchExcludedUserIds.has(userId) && await isAdminMatchPreviewUser(userId);
+    const matchExcludedUserIds = context.matchExcludedUserIds;
+    const allowAdminPreview = matchExcludedUserIds.has(userId)
+        && await isAdminMatchPreviewUser(userId, { sessionUserRole: context.sessionUserRole });
     if (matchExcludedUserIds.has(userId) && !allowAdminPreview) {
         console.log("[candidate-pairs] SKIP: user excluded from daily matchmaking (admin / staff list)", {
             userId,
@@ -1160,14 +1135,50 @@ export async function generateCandidatePairsForUser(userId: string, options: { n
         }
     }
 
-    const result = await getActiveCandidatePairsForUser(userId);
+    const result = await getActiveCandidatePairsForUser(userId, context);
     console.log("[candidate-pairs] created", result.length, "active pairs for user");
     return result;
 }
 
-export async function getActiveCandidatePairsForUser(userId: string) {
-    const matchExcludedUserIds = await resolveMatchExcludedUserIds();
-    if (matchExcludedUserIds.has(userId) && !(await isAdminMatchPreviewUser(userId))) {
+function getActiveCandidatePairWhere(userId: string, now: Date, createdAtCutoff: Date) {
+    return and(
+        eq(candidatePairs.status, "active"),
+        gte(candidatePairs.expiresAt, now),
+        gte(candidatePairs.createdAt, createdAtCutoff),
+        or(
+            eq(candidatePairs.userAId, userId),
+            eq(candidatePairs.userBId, userId),
+        ),
+    );
+}
+
+export async function countActiveCandidatePairsForUser(userId: string, context?: MatchExclusionContext): Promise<number> {
+    const matchExcludedUserIds = context?.matchExcludedUserIds ?? await resolveMatchExcludedUserIds();
+    if (
+        matchExcludedUserIds.has(userId)
+        && !(await isAdminMatchPreviewUser(userId, { sessionUserRole: context?.sessionUserRole }))
+    ) {
+        return 0;
+    }
+
+    const now = new Date();
+    const expiryMs = CANDIDATE_PAIR_EXPIRY_HOURS * 60 * 60 * 1000;
+    const createdAtCutoff = new Date(now.getTime() - expiryMs);
+
+    const [row] = await readDb
+        .select({ count: sql<number>`count(*)::int` })
+        .from(candidatePairs)
+        .where(getActiveCandidatePairWhere(userId, now, createdAtCutoff));
+
+    return row?.count ?? 0;
+}
+
+export async function getActiveCandidatePairsForUser(userId: string, context?: MatchExclusionContext) {
+    const matchExcludedUserIds = context?.matchExcludedUserIds ?? await resolveMatchExcludedUserIds();
+    if (
+        matchExcludedUserIds.has(userId)
+        && !(await isAdminMatchPreviewUser(userId, { sessionUserRole: context?.sessionUserRole }))
+    ) {
         return [];
     }
 
@@ -1178,17 +1189,7 @@ export async function getActiveCandidatePairsForUser(userId: string) {
     const rows = await readDb
         .select()
         .from(candidatePairs)
-        .where(
-            and(
-                eq(candidatePairs.status, "active"),
-                gte(candidatePairs.expiresAt, now),
-                gte(candidatePairs.createdAt, createdAtCutoff),
-                or(
-                    eq(candidatePairs.userAId, userId),
-                    eq(candidatePairs.userBId, userId),
-                ),
-            ),
-        )
+        .where(getActiveCandidatePairWhere(userId, now, createdAtCutoff))
         .orderBy(desc(candidatePairs.compatibilityScore), desc(candidatePairs.createdAt));
 
     return formatCandidatePairRowsForUser(userId, rows, now, matchExcludedUserIds);
@@ -1210,33 +1211,23 @@ export async function isAdminCuratedCandidatePair(pairId: string) {
     return Boolean(row);
 }
 
-export async function getActiveAdminCuratedCandidatePairsForUser(userId: string) {
-    const matchExcludedUserIds = await resolveMatchExcludedUserIds();
-    if (matchExcludedUserIds.has(userId) && !(await isAdminMatchPreviewUser(userId))) {
-        return [];
-    }
-
+export async function getActiveAdminCuratedCandidatePairsForUser(userId: string, context?: MatchExclusionContext) {
+    const matchExcludedUserIds = context?.matchExcludedUserIds ?? await resolveMatchExcludedUserIds();
     const now = new Date();
 
-    const curatedRows = await readDb
-        .select({ pairId: candidatePairHistory.pairId })
-        .from(candidatePairHistory)
-        .where(
+    const rows = await readDb
+        .select({ pair: candidatePairs })
+        .from(candidatePairs)
+        .innerJoin(
+            candidatePairHistory,
             and(
+                eq(candidatePairHistory.pairId, candidatePairs.id),
                 eq(candidatePairHistory.eventType, "generated"),
                 ADMIN_MANAGED_PAIR_SOURCE_FILTER,
             ),
-        );
-
-    const curatedPairIds = [...new Set(curatedRows.map((row) => row.pairId))];
-    if (curatedPairIds.length === 0) return [];
-
-    const rows = await readDb
-        .select()
-        .from(candidatePairs)
+        )
         .where(
             and(
-                inArray(candidatePairs.id, curatedPairIds),
                 eq(candidatePairs.status, "active"),
                 or(
                     eq(candidatePairs.userAId, userId),
@@ -1246,7 +1237,12 @@ export async function getActiveAdminCuratedCandidatePairsForUser(userId: string)
         )
         .orderBy(desc(candidatePairs.compatibilityScore), desc(candidatePairs.createdAt));
 
-    return formatCandidatePairRowsForUser(userId, rows, now, matchExcludedUserIds, {
+    const uniquePairs = new Map<string, CandidatePairRow>();
+    for (const row of rows) {
+        uniquePairs.set(row.pair.id, row.pair);
+    }
+
+    return formatCandidatePairRowsForUser(userId, [...uniquePairs.values()], now, matchExcludedUserIds, {
         includeExcludedPartners: true,
     });
 }
@@ -1258,58 +1254,58 @@ async function formatCandidatePairRowsForUser(
     matchExcludedUserIds: Set<string>,
     options?: { includeExcludedPartners?: boolean },
 ) {
-    const result = await Promise.all(
-        rows.map(async (pair) => {
-            const otherUserId = getOtherUserId(pair, userId);
-            if (!options?.includeExcludedPartners && matchExcludedUserIds.has(otherUserId)) {
-                return null;
-            }
-            const profile = await readDb.query.profiles.findFirst({
-                where: eq(profiles.userId, otherUserId),
-                with: { user: true },
-            });
+    const visibleRows = rows.filter((pair) => {
+        const otherUserId = getOtherUserId(pair, userId);
+        return options?.includeExcludedPartners || !matchExcludedUserIds.has(otherUserId);
+    });
 
-            if (!profile) return null;
-            if (!hasCompletedInitialFaceVerification(profile)) return null;
+    const otherUserIds = visibleRows.map((pair) => getOtherUserId(pair, userId));
+    const profileByUserId = await selectProfileCardsByUserIds(otherUserIds);
 
-            const interests = Array.isArray(profile.interests) ? profile.interests : [];
-            const personalityAnswers = profile.personalityAnswers as Record<string, unknown> | null;
-            const personalityTags: string[] = [];
-            if (personalityAnswers?.sleepSchedule) personalityTags.push(String(personalityAnswers.sleepSchedule).replace(/_/g, " "));
-            if (personalityAnswers?.socialBattery) personalityTags.push(String(personalityAnswers.socialBattery).replace(/_/g, " "));
-            if (personalityAnswers?.convoStyle) personalityTags.push(String(personalityAnswers.convoStyle).replace(/_/g, " "));
+    const result = visibleRows.map((pair) => {
+        const otherUserId = getOtherUserId(pair, userId);
+        const profile = profileByUserId.get(otherUserId);
 
-            return {
-                pairId: pair.id,
-                userId: otherUserId,
-                firstName: profile.firstName || profile.user?.name?.split(" ")[0] || "Unknown",
-                age: profile.age ?? 0,
-                profilePhoto: profile.profilePhoto ?? profile.user?.profilePhoto ?? profile.user?.image,
-                compatibilityScore: pair.compatibilityScore,
-                reasons: pair.matchReasons,
-                bio: profile.bio ?? profile.aboutMe ?? undefined,
-                interests,
-                personalityTags,
-                course: profile.course ?? undefined,
-                university: profile.university ?? undefined,
-                currentUserDecision: getCurrentUserDecision(pair, userId),
-                status: pair.status,
-                expiresAt: pair.expiresAt.toISOString(),
-                expiresInMs: Math.max(0, pair.expiresAt.getTime() - now.getTime()),
-            };
-        }),
-    );
+        if (!profile) return null;
+        if (!hasCompletedInitialFaceVerification(profile)) return null;
 
-    const visibleRows = result
+        const interests = Array.isArray(profile.interests) ? profile.interests : [];
+        const personalityAnswers = profile.personalityAnswers as Record<string, unknown> | null;
+        const personalityTags: string[] = [];
+        if (personalityAnswers?.sleepSchedule) personalityTags.push(String(personalityAnswers.sleepSchedule).replace(/_/g, " "));
+        if (personalityAnswers?.socialBattery) personalityTags.push(String(personalityAnswers.socialBattery).replace(/_/g, " "));
+        if (personalityAnswers?.convoStyle) personalityTags.push(String(personalityAnswers.convoStyle).replace(/_/g, " "));
+
+        return {
+            pairId: pair.id,
+            userId: otherUserId,
+            firstName: getProfileFirstName(profile),
+            age: profile.age ?? 0,
+            profilePhoto: getPrimaryProfilePhoto(profile),
+            compatibilityScore: pair.compatibilityScore,
+            reasons: pair.matchReasons,
+            bio: profile.bio ?? profile.aboutMe ?? undefined,
+            interests,
+            personalityTags,
+            course: profile.course ?? undefined,
+            university: profile.university ?? undefined,
+            currentUserDecision: getCurrentUserDecision(pair, userId),
+            status: pair.status,
+            expiresAt: pair.expiresAt.toISOString(),
+            expiresInMs: Math.max(0, pair.expiresAt.getTime() - now.getTime()),
+        };
+    });
+
+    const formattedRows = result
         .filter((row): row is NonNullable<typeof row> => Boolean(row))
         .sort((left, right) => right.compatibilityScore - left.compatibilityScore);
 
-    const pendingInterestRows = visibleRows.filter((row) => row.currentUserDecision === "open_to_meet");
+    const pendingInterestRows = formattedRows.filter((row) => row.currentUserDecision === "open_to_meet");
     if (pendingInterestRows.length > 0) {
         return pendingInterestRows.slice(0, 1);
     }
 
-    return visibleRows.slice(0, DAILY_CANDIDATE_PAIR_LIMIT);
+    return formattedRows.slice(0, DAILY_CANDIDATE_PAIR_LIMIT);
 }
 
 export async function getCandidatePairByIdForUser(pairId: string, userId: string) {
@@ -1576,6 +1572,17 @@ export async function respondToCandidatePair(
                 });
             }
         }
+
+        if (decision === "open_to_meet" && result.pair.status === "active") {
+            const partnerUserId = result.pair.userAId === userId
+                ? result.pair.userBId
+                : result.pair.userAId;
+            const { recordIncomingLike } = await import("@/lib/services/incoming-like-service");
+            void recordIncomingLike({ swiperId: userId, swipedId: partnerUserId }).catch((err) => {
+                console.warn("[candidate-pairs] incoming like notification failed", err);
+            });
+        }
+
         return { pair: result.pair, mutual: result.mutual };
     });
 }

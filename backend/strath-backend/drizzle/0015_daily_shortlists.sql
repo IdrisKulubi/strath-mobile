@@ -38,7 +38,7 @@ WITH first_daily_events AS (
         "id",
         "viewer_user_id",
         "candidate_user_id",
-        ("shown_at" AT TIME ZONE 'UTC')::date::text AS "shortlist_day",
+        ("shown_at" AT TIME ZONE 'Africa/Nairobi')::date::text AS "shortlist_day",
         "match_type",
         "final_score",
         "compatibility_score",
@@ -49,7 +49,7 @@ WITH first_daily_events AS (
         "metadata",
         "shown_at",
         row_number() OVER (
-            PARTITION BY "viewer_user_id", ("shown_at" AT TIME ZONE 'UTC')::date, "candidate_user_id"
+            PARTITION BY "viewer_user_id", ("shown_at" AT TIME ZONE 'Africa/Nairobi')::date, "candidate_user_id"
             ORDER BY "shown_at" ASC
         ) AS "candidate_rank"
     FROM "recommendation_events"

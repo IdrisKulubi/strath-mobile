@@ -10,10 +10,12 @@ export default function AdminRestoreMatchPage() {
                     <RotateCcw className="size-5" strokeWidth={1.75} />
                 </div>
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight text-white">Restore match</h1>
+                    <h1 className="text-2xl font-semibold tracking-tight text-white">
+                        Restore & create match
+                    </h1>
                     <p className="mt-1 max-w-2xl text-sm leading-relaxed text-white/50">
-                        When someone passed or cancelled by mistake, recreate the intro between two
-                        people. They will both get a fresh candidate card in the app.
+                        Create a mutual match between any two users, or restore a pending intro after a
+                        mistaken pass or cancel.
                     </p>
                 </div>
             </div>

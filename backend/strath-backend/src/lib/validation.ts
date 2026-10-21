@@ -66,6 +66,7 @@ export const swipeSchema = z.object({
 
 export const messageSchema = z.object({
     content: z.string().min(1),
+    clientRequestId: z.string().min(8).max(128).optional(),
 });
 
 export const reportSchema = z.object({
@@ -109,6 +110,28 @@ export const matchHoldCancelSchema = z.object({
     notes: z.string().max(500).optional().nullable(),
 });
 
+export const meetupRescheduleRequestSchema = z.object({
+    mutualMatchId: z.string().uuid(),
+    proposedScheduledAt: z.string().datetime(),
+});
+
+export const meetupRescheduleRespondSchema = z.discriminatedUnion("action", [
+    z.object({
+        requestId: z.string().uuid(),
+        action: z.literal("accept"),
+    }),
+    z.object({
+        requestId: z.string().uuid(),
+        action: z.literal("decline"),
+        declineReason: z.string().trim().min(3).max(500),
+        counterScheduledAt: z.string().datetime(),
+    }),
+]);
+
+export const meetupRescheduleCancelSchema = z.object({
+    mutualMatchId: z.string().uuid(),
+});
+
 export const APP_FEEDBACK_CATEGORIES = [
     "feature_request",
     "bug",
@@ -119,6 +142,23 @@ export const APP_FEEDBACK_CATEGORIES = [
 
 export const appFeedbackSchema = z.object({
     category: z.enum(APP_FEEDBACK_CATEGORIES),
-    message: z.string().trim().min(3, "Please write a bit more").max(1000),
+    message: z.string().trim().max(1000).default(""),
     anonymous: z.boolean().optional().default(false),
+    source: z.enum(["app", "matchmaker_v2"]).optional().default("app"),
+    rating: z.number().int().min(1).max(5).optional(),
+}).superRefine((value, context) => {
+    if (value.source === "app" && value.message.length < 3) {
+        context.addIssue({
+            code: "custom",
+            path: ["message"],
+            message: "Please write a bit more",
+        });
+    }
+    if (value.source === "matchmaker_v2" && value.rating === undefined) {
+        context.addIssue({
+            code: "custom",
+            path: ["rating"],
+            message: "Please choose a rating",
+        });
+    }
 });

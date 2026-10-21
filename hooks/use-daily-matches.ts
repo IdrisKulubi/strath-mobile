@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-helpers';
 import { isVerificationRequiredError, parseApiError } from '@/lib/api-errors';
+import type { RescheduleViewerState } from '@/lib/reschedule-types';
+import { getDailyMatchesPollInterval } from '@/lib/daily-matches-polling';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -37,6 +39,7 @@ export interface SlotConfirmationState {
     viewerSlotConfirmed: boolean;
     partnerSlotConfirmed: boolean;
     needsSlotConfirmation: boolean;
+    reschedule?: RescheduleViewerState;
 }
 
 export interface MatchHold {
@@ -93,6 +96,7 @@ function normalizeMatchHold(hold: MatchHold & { slotConfirmation?: SlotConfirmat
             viewerSlotConfirmed: slot?.viewerSlotConfirmed ?? false,
             partnerSlotConfirmed: slot?.partnerSlotConfirmed ?? false,
             needsSlotConfirmation: slot?.needsSlotConfirmation ?? false,
+            reschedule: slot?.reschedule,
         },
     };
 }
@@ -125,22 +129,7 @@ export function useDailyMatches() {
             };
         },
         staleTime: 60 * 1000,
-        refetchInterval: (query) => {
-            const data = query.state.data;
-            if (!data) return false;
-            if (data.mode === 'hold' && data.hold?.autoReleaseAt) {
-                const ms = new Date(data.hold.autoReleaseAt).getTime() - Date.now();
-                return ms > 0 ? ms : 1000;
-            }
-            if (data.mode === 'manual_curation') return 30 * 1000;
-            const matches = data.matches ?? [];
-            if (matches.length === 0) return 60 * 1000;
-            const now = Date.now();
-            const soonestMs = Math.min(...matches.map((m) => new Date(m.expiresAt).getTime()));
-            const msUntilExpiry = soonestMs - now;
-            if (msUntilExpiry <= 0) return 1000;
-            return msUntilExpiry;
-        },
+        refetchInterval: (query) => getDailyMatchesPollInterval(query.state.data),
     });
 
     return {
@@ -148,6 +137,13 @@ export function useDailyMatches() {
         verificationRequired: isVerificationRequiredError(query.error),
     };
 }
+
+export type CancelMatchHoldResponse = {
+    status: string;
+    credited?: boolean;
+    creditAmountCents?: number | null;
+    dateMatchId?: string | null;
+};
 
 export function useCancelMatchHold() {
     const queryClient = useQueryClient();
@@ -170,12 +166,16 @@ export function useCancelMatchHold() {
             if (!res.ok) {
                 throw await parseApiError(res, `Failed to cancel match hold (${res.status})`);
             }
-            return payload;
+            const json = await res.json();
+            const data = (json?.data ?? json) as CancelMatchHoldResponse;
+            return { ...payload, ...data };
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['candidatePairs', 'daily'] });
             queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
             queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+            queryClient.invalidateQueries({ queryKey: ['paymentStatus'] });
+            queryClient.invalidateQueries({ queryKey: ['dates', 'history'] });
         },
     });
 }

@@ -1,4 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { AppState, type AppStateStatus } from "react-native";
 import { getAuthToken } from "@/lib/auth-helpers";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -16,6 +18,7 @@ export interface ConnectionRequest {
             yearOfStudy: number | null;
             university: string | null;
             photos: string[] | null;
+            age?: number | null;
         } | null;
     };
 }
@@ -62,10 +65,23 @@ async function respondToRequest(targetUserId: string, action: "like" | "pass") {
 }
 
 export function useConnectionRequests() {
+    const [isAppActive, setIsAppActive] = useState(true);
+
+    useEffect(() => {
+        const handleAppStateChange = (nextAppState: AppStateStatus) => {
+            setIsAppActive(nextAppState === "active");
+        };
+
+        const subscription = AppState.addEventListener("change", handleAppStateChange);
+        return () => subscription?.remove();
+    }, []);
+
     return useQuery({
         queryKey: ["connection-requests"],
         queryFn: fetchConnectionRequests,
-        staleTime: 15 * 1000,
+        staleTime: 60 * 1000,
+        refetchInterval: isAppActive ? 60 * 1000 : false,
+        refetchIntervalInBackground: false,
     });
 }
 

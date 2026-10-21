@@ -15,10 +15,9 @@ import {
     getFaceVerificationMinimumMatchCount,
     getFaceVerificationThresholdVersion,
 } from "@/lib/services/face-verification-policy";
-import { resolveFaceVerificationOutcome } from "@/lib/services/face-verification-decision";
+import { isStrongSingleFaceMatch, resolveFaceVerificationOutcome } from "@/lib/services/face-verification-decision";
 import {
     compareFacesWithRekognition,
-    detectFacesWithRekognition,
     isRekognitionSourceFaceNotFoundError,
 } from "@/lib/services/face-verification-provider-rekognition";
 import { getFaceVerificationComparisonBytes } from "@/lib/services/face-verification-storage";
@@ -256,9 +255,16 @@ function selectTargetAssetKeysForVerification(
     const knownKeys = new Set(assets.map((asset) => asset.objectKey));
     const uniqueRequestedKeys = Array.from(new Set(requestedKeys));
 
-    const orderedKeys = uniqueRequestedKeys.filter((key) => {
-        return knownKeys.size === 0 || knownKeys.has(key);
-    });
+    const metadataByKey = new Map(assets.map((asset) => [asset.objectKey, asset]));
+    const orderedKeys = uniqueRequestedKeys
+        .filter((key) => knownKeys.size === 0 || knownKeys.has(key))
+        .sort((left, right) => {
+            const leftAsset = metadataByKey.get(left);
+            const rightAsset = metadataByKey.get(right);
+            const leftReady = leftAsset?.lastAnalyzedAt && leftAsset.verificationReady && leftAsset.faceCount === 1 ? 1 : 0;
+            const rightReady = rightAsset?.lastAnalyzedAt && rightAsset.verificationReady && rightAsset.faceCount === 1 ? 1 : 0;
+            return rightReady - leftReady;
+        });
 
     return orderedKeys.slice(0, getFaceVerificationMaxProfileComparisons());
 }
@@ -301,7 +307,7 @@ async function compareTargetPhoto(input: {
     try {
         const assetMetadata = photoAssetMap.get(targetAssetKey);
 
-        if (assetMetadata?.faceCount === 0) {
+        if (assetMetadata?.lastAnalyzedAt && assetMetadata.faceCount !== 1) {
             return {
                 selfieFaceNotDetected: false,
                 sourceFacesDetected: 1,
@@ -311,11 +317,11 @@ async function compareTargetPhoto(input: {
                     targetAssetKey,
                     similarity: null,
                     faceConfidence: input.sourceFaceConfidence,
-                    facesDetected: 0,
-                    qualityFlags: ["no_face_detected"],
+                    facesDetected: assetMetadata.faceCount,
+                    qualityFlags: [assetMetadata.faceCount === 0 ? "no_face_detected" : "multiple_target_faces"],
                     decision: "not_matched",
                     rawProviderResponseRedacted: {
-                        targetFacesDetected: 0,
+                        targetFacesDetected: assetMetadata.faceCount,
                         fromAssetMetadata: true,
                     },
                 },
@@ -323,31 +329,6 @@ async function compareTargetPhoto(input: {
         }
 
         const targetBytes = await getFaceVerificationComparisonBytes(targetAssetKey);
-        const targetFacesDetected = assetMetadata?.faceCount ?? null;
-
-        if (targetFacesDetected === null) {
-            const targetFaceDetection = await detectFacesWithRekognition(targetBytes);
-            if (targetFaceDetection.facesDetected === 0) {
-                return {
-                    selfieFaceNotDetected: false,
-                    sourceFacesDetected: 1,
-                    sourceFaceConfidence: input.sourceFaceConfidence,
-                    result: {
-                        sourceAssetKey,
-                        targetAssetKey,
-                        similarity: null,
-                        faceConfidence: input.sourceFaceConfidence,
-                        facesDetected: 0,
-                        qualityFlags: ["no_face_detected"],
-                        decision: "not_matched",
-                        rawProviderResponseRedacted: {
-                            targetFacesDetected: 0,
-                        },
-                    },
-                };
-            }
-        }
-
         const result = await compareFacesWithRekognition(sourceBytes, targetBytes, similarityThreshold);
         const sourceFaceFromCompare = result.rawProviderResponseRedacted.sourceFaceConfidence;
         const parsedSourceConfidence =
@@ -364,7 +345,7 @@ async function compareTargetPhoto(input: {
                 faceConfidence: result.faceConfidence,
                 facesDetected: result.facesDetected,
                 qualityFlags: result.qualityFlags,
-                decision: (result.similarity ?? 0) >= similarityThreshold ? "matched" : "not_matched",
+                decision: isStrongSingleFaceMatch(result, similarityThreshold) ? "matched" : "not_matched",
                 rawProviderResponseRedacted: result.rawProviderResponseRedacted,
             },
         };
@@ -404,11 +385,6 @@ async function compareTargetPhoto(input: {
 
 function getRequiredMatchCount(targetAssetCount: number) {
     const configuredMinimum = getFaceVerificationMinimumMatchCount();
-
-    if (targetAssetCount <= 2) {
-        return 1;
-    }
-
     return Math.min(configuredMinimum, targetAssetCount);
 }
 

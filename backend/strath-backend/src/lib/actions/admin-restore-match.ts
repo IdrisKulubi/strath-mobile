@@ -22,6 +22,7 @@ import {
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { sendPushNotification } from "@/lib/notifications";
 import { NOTIFICATION_TYPES } from "@/lib/notification-types";
+import { createAdminMutualMatchBetweenUsers } from "@/lib/services/admin-mutual-match-service";
 
 const BUSY_PAIR_STATUSES = ["active", "queued", "mutual"] as const;
 const HOLD_MUTUAL_STATUSES = ["mutual", "being_arranged", "upcoming"] as const;
@@ -241,33 +242,58 @@ export async function getRestoreMatchHistoryForUser(
     return { user: anchor, history };
 }
 
-export async function adminRestoreMatchBetweenUsers(input: {
-    anchorUserId: string;
-    partnerUserId: string;
+export type AdminRestoreMatchResult =
+    | { ok: true; pairId: string; mutualMatchId?: string; dateMatchId?: string }
+    | { ok: false; error: string; hint?: string };
+
+const RELEASE_HOLD_HINT =
+    'Turn on "Release current hold" under match options, then try again.';
+
+type AdminMatchPairSource = "admin_restore" | "admin_curated";
+
+async function adminMatchBetweenUsers(input: {
+    userAId: string;
+    userBId: string;
     note?: string;
-    /** Close in-flight mutual/date hold before creating a fresh intro. */
     forceReleaseHolds?: boolean;
-}): Promise<{ pairId: string }> {
+    source: AdminMatchPairSource;
+    defaultNote: string;
+    pushTitle: string;
+    pushBody: string;
+}): Promise<AdminRestoreMatchResult> {
     const session = await requireAdmin();
 
-    const { anchorUserId, partnerUserId } = input;
-    if (!anchorUserId || !partnerUserId || anchorUserId === partnerUserId) {
-        throw new Error("Choose two different users");
+    const { userAId, userBId } = input;
+    if (!userAId || !userBId || userAId === userBId) {
+        return { ok: false, error: "Choose two different users" };
     }
 
-    const blockReason = await getBlockingReasonBetweenUsers(anchorUserId, partnerUserId);
+    const [summaryA, summaryB] = await Promise.all([
+        loadUserSummary(userAId),
+        loadUserSummary(userBId),
+    ]);
+    if (!summaryA || !summaryB) {
+        return { ok: false, error: "One or both users were not found" };
+    }
+
+    const blockReason = await getBlockingReasonBetweenUsers(userAId, userBId);
     if (blockReason && !input.forceReleaseHolds) {
-        throw new Error(`${blockReason}. Enable "Release current hold" to replace it.`);
+        return {
+            ok: false,
+            error: blockReason,
+            hint: RELEASE_HOLD_HINT,
+        };
     }
 
-    const { userAId: canonicalAId, userBId: canonicalBId } = canonicalizePairUsers(
-        anchorUserId,
-        partnerUserId,
-    );
+    const { userAId: canonicalAId, userBId: canonicalBId } = canonicalizePairUsers(userAId, userBId);
     const compatibility = await computeCompatibility(canonicalAId, canonicalBId);
     const now = new Date();
     const expiresAt = MANUAL_CURATED_PAIR_EXPIRES_AT;
-    const adminNote = input.note?.trim() || "Admin restored intro after mistaken pass or cancel";
+    const adminNote = input.note?.trim() || input.defaultNote;
+    const supersedeReason =
+        input.source === "admin_restore"
+            ? "superseded_by_admin_restore"
+            : "superseded_by_admin_curated_match";
 
     const created = await db.transaction(async (tx) => {
         if (input.forceReleaseHolds) {
@@ -275,12 +301,12 @@ export async function adminRestoreMatchBetweenUsers(input: {
                 where: and(
                     or(
                         and(
-                            eq(mutualMatches.userAId, anchorUserId),
-                            eq(mutualMatches.userBId, partnerUserId),
+                            eq(mutualMatches.userAId, userAId),
+                            eq(mutualMatches.userBId, userBId),
                         ),
                         and(
-                            eq(mutualMatches.userAId, partnerUserId),
-                            eq(mutualMatches.userBId, anchorUserId),
+                            eq(mutualMatches.userAId, userBId),
+                            eq(mutualMatches.userBId, userAId),
                         ),
                     ),
                     inArray(mutualMatches.status, [...HOLD_MUTUAL_STATUSES]),
@@ -330,8 +356,8 @@ export async function adminRestoreMatchBetweenUsers(input: {
                 fromStatus: existing.status,
                 toStatus: "closed",
                 metadata: {
-                    source: "admin_restore",
-                    reason: "superseded_by_admin_restore",
+                    source: input.source,
+                    reason: supersedeReason,
                     adminUserId: session.user.id,
                     note: adminNote,
                 },
@@ -362,10 +388,10 @@ export async function adminRestoreMatchBetweenUsers(input: {
             eventType: "generated",
             toStatus: "active",
             metadata: {
-                source: "admin_restore",
+                source: input.source,
                 adminUserId: session.user.id,
-                anchorUserId,
-                partnerUserId,
+                userAId,
+                userBId,
                 note: adminNote,
                 forceReleaseHolds: Boolean(input.forceReleaseHolds),
             },
@@ -384,8 +410,8 @@ export async function adminRestoreMatchBetweenUsers(input: {
             .filter((row) => row.pushToken)
             .map((row) =>
                 sendPushNotification(row.pushToken!, {
-                    title: "Someone is back on your radar",
-                    body: "Open StrathSpace to see your updated intro.",
+                    title: input.pushTitle,
+                    body: input.pushBody,
                     data: {
                         type: NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH,
                         pairId: created.id,
@@ -398,5 +424,66 @@ export async function adminRestoreMatchBetweenUsers(input: {
     revalidatePath("/admin/restore-match");
     revalidatePath("/admin/matchmaking");
 
-    return { pairId: created.id };
+    return { ok: true, pairId: created.id };
+}
+
+/** Recreate an intro after a mistaken pass or cancel. */
+export async function adminRestoreMatchBetweenUsers(input: {
+    anchorUserId: string;
+    partnerUserId: string;
+    note?: string;
+    forceReleaseHolds?: boolean;
+}): Promise<AdminRestoreMatchResult> {
+    return adminMatchBetweenUsers({
+        userAId: input.anchorUserId,
+        userBId: input.partnerUserId,
+        note: input.note,
+        forceReleaseHolds: input.forceReleaseHolds,
+        source: "admin_restore",
+        defaultNote: "Admin restored intro after mistaken pass or cancel",
+        pushTitle: "Someone is back on your radar",
+        pushBody: "Open StrathSpace to see your updated intro.",
+    });
+}
+
+/** Create a mutual match between any two users (both interested, meetup flow starts). */
+export async function adminCreateMatchBetweenUsers(input: {
+    userAId: string;
+    userBId: string;
+    note?: string;
+    forceReleaseHolds?: boolean;
+}): Promise<AdminRestoreMatchResult> {
+    const session = await requireAdmin();
+
+    const { userAId, userBId } = input;
+    if (!userAId || !userBId || userAId === userBId) {
+        return { ok: false, error: "Choose two different users" };
+    }
+
+    const [summaryA, summaryB] = await Promise.all([
+        loadUserSummary(userAId),
+        loadUserSummary(userBId),
+    ]);
+    if (!summaryA || !summaryB) {
+        return { ok: false, error: "One or both users were not found" };
+    }
+
+    const blockReason = await getBlockingReasonBetweenUsers(userAId, userBId);
+    const result = await createAdminMutualMatchBetweenUsers({
+        userAId,
+        userBId,
+        adminUserId: session.user.id,
+        note: input.note,
+        forceReleaseHolds: input.forceReleaseHolds,
+        blockReason,
+    });
+
+    if (result.ok) {
+        revalidatePath("/admin/restore-match");
+        revalidatePath("/admin/matchmaking");
+        revalidatePath("/admin/pending-dates");
+        revalidatePath("/admin/date-requests");
+    }
+
+    return result;
 }

@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
-import { Text } from '@/components/ui/text';
+import { View, Pressable, StyleSheet, Text } from 'react-native';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
 import { useRouter } from 'expo-router';
@@ -12,15 +11,17 @@ interface ChatHeaderProps {
     partnerImage?: string | null;
     isOnline?: boolean;
     onMorePress?: () => void;
+    onBackPress?: () => void;
 }
 
-export function ChatHeader({ partnerName, partnerImage, isOnline = false, onMorePress }: ChatHeaderProps) {
+export function ChatHeader({ partnerName, partnerImage, isOnline = false, onMorePress, onBackPress }: ChatHeaderProps) {
     const { colors } = useTheme();
     const router = useRouter();
 
     const handleBack = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.back();
+        if (onBackPress) onBackPress();
+        else router.back();
     };
 
     const initial = partnerName.charAt(0).toUpperCase();
@@ -29,6 +30,8 @@ export function ChatHeader({ partnerName, partnerImage, isOnline = false, onMore
         <View style={[styles.container, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
             {/* Back Button */}
             <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Back to messages"
                 style={styles.backButton}
                 onPress={handleBack}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -42,7 +45,7 @@ export function ChatHeader({ partnerName, partnerImage, isOnline = false, onMore
                     <CachedImage uri={partnerImage} style={styles.avatar} fallbackType="avatar" />
                 ) : (
                     <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
-                        <Text className="text-white text-lg font-bold">{initial}</Text>
+                        <Text style={[styles.avatarInitial, { color: colors.primaryForeground }]}>{initial}</Text>
                     </View>
                 )}
                 {isOnline && (
@@ -52,16 +55,18 @@ export function ChatHeader({ partnerName, partnerImage, isOnline = false, onMore
 
             {/* Name */}
             <View style={styles.infoContainer}>
-                <Text className="text-foreground text-[17px] font-semibold" numberOfLines={1}>
+                <Text style={[styles.partnerName, { color: colors.foreground }]} numberOfLines={1}>
                     {partnerName}
                 </Text>
                 {isOnline && (
-                    <Text className="text-muted-foreground text-[13px]">Online</Text>
+                    <Text style={[styles.onlineLabel, { color: colors.mutedForeground }]}>Online</Text>
                 )}
             </View>
 
             {/* More Button */}
             <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Conversation options"
                 style={styles.moreButton}
                 onPress={onMorePress}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -99,6 +104,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
+    avatarInitial: { fontSize: 18, fontWeight: '700' },
+    partnerName: { fontSize: 17, fontWeight: '600' },
+    onlineLabel: { fontSize: 13 },
     onlineIndicator: {
         position: 'absolute',
         bottom: 0,

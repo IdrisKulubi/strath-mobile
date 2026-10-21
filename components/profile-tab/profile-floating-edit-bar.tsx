@@ -1,7 +1,8 @@
 import React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { getGlassTabBarHeight } from '@/components/navigation/glass-tab-bar';
 import { SPACING } from '@/lib/design-tokens';
 
 import { ProfileEditProfileButton } from './profile-edit-profile-button';
@@ -14,7 +15,8 @@ interface ProfileFloatingEditBarProps {
 }
 
 export function ProfileFloatingEditBar({ onEditPress }: ProfileFloatingEditBarProps) {
-    const tabBarHeight = useBottomTabBarHeight();
+    const insets = useSafeAreaInsets();
+    const tabBarHeight = getGlassTabBarHeight(insets.bottom);
 
     return (
         <View pointerEvents="box-none" style={[styles.host, { bottom: tabBarHeight }]}>
@@ -24,7 +26,7 @@ export function ProfileFloatingEditBar({ onEditPress }: ProfileFloatingEditBarPr
 }
 
 export function profileScrollBottomInset(tabBarHeight?: number): number {
-    const tab = tabBarHeight ?? (Platform.OS === 'ios' ? 94 : 74);
+    const tab = tabBarHeight ?? getGlassTabBarHeight();
     return tab + PROFILE_FLOATING_BAR_HEIGHT + SPACING.tight;
 }
 

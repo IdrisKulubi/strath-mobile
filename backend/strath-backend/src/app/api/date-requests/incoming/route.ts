@@ -1,10 +1,15 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { dateRequests, profiles } from "@/db/schema";
+import { dateRequests } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { getSessionWithFallback } from "@/lib/auth-helpers";
-import { computeCompatibility } from "@/lib/services/compatibility-service";
+import { computeCompatibilityMany } from "@/lib/services/compatibility-service";
+import {
+    getPrimaryProfilePhoto,
+    getProfileFirstName,
+    selectProfileCardsByUserIds,
+} from "@/lib/db/queries/profiles";
 
 export const dynamic = "force-dynamic";
 
@@ -25,44 +30,38 @@ export async function GET(req: NextRequest) {
             .where(eq(dateRequests.toUserId, session.user.id))
             .orderBy(desc(dateRequests.createdAt));
 
-        const result = await Promise.all(
-            requests.map(async (r) => {
-                const fromProfile = await db.query.profiles.findFirst({
-                    where: eq(profiles.userId, r.fromUserId),
-                    with: { user: true },
-                });
-                const primaryPhoto =
-                    (Array.isArray(fromProfile?.photos) ? fromProfile.photos[0] : null)
-                    ?? fromProfile?.profilePhoto
-                    ?? fromProfile?.user?.profilePhoto
-                    ?? fromProfile?.user?.image
-                    ?? undefined;
+        const fromUserIds = requests.map((request) => request.fromUserId);
+        const [profileMap, compatibilityMap] = await Promise.all([
+            selectProfileCardsByUserIds(fromUserIds),
+            computeCompatibilityMany(session.user.id, fromUserIds),
+        ]);
 
-                const base = {
-                    id: r.fromUserId as string,
-                    firstName: fromProfile?.firstName ?? fromProfile?.user?.name?.split(" ")[0] ?? "Unknown",
-                    age: fromProfile?.age ?? 0,
-                    profilePhoto: primaryPhoto,
-                };
+        const result = requests.map((r) => {
+            const fromProfile = profileMap.get(r.fromUserId);
+            const compatibility = compatibilityMap.get(r.fromUserId) ?? { score: 0, reasons: [] };
 
-                const { score, reasons } = await computeCompatibility(session.user.id, r.fromUserId);
+            const base = {
+                id: r.fromUserId as string,
+                firstName: fromProfile ? getProfileFirstName(fromProfile) : "Unknown",
+                age: fromProfile?.age ?? 0,
+                profilePhoto: fromProfile ? getPrimaryProfilePhoto(fromProfile) : undefined,
+            };
 
-                return {
-                    id: r.id,
-                    fromUserId: r.fromUserId,
-                    toUserId: r.toUserId,
-                    vibe: r.vibe,
-                    message: r.message ?? undefined,
-                    status: r.status,
-                    createdAt: r.createdAt.toISOString(),
-                    fromUser: {
-                        ...base,
-                        compatibilityScore: score,
-                        compatibilityReasons: reasons,
-                    },
-                };
-            })
-        );
+            return {
+                id: r.id,
+                fromUserId: r.fromUserId,
+                toUserId: r.toUserId,
+                vibe: r.vibe,
+                message: r.message ?? undefined,
+                status: r.status,
+                createdAt: r.createdAt.toISOString(),
+                fromUser: {
+                    ...base,
+                    compatibilityScore: compatibility.score,
+                    compatibilityReasons: compatibility.reasons,
+                },
+            };
+        });
 
         return successResponse(result);
     } catch (error) {

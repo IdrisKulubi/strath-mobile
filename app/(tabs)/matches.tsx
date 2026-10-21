@@ -6,6 +6,7 @@ import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { useMatches, Match } from '@/hooks/use-matches';
 import { useConnectionRequests, useRespondToConnectionRequest, type ConnectionRequest } from '@/hooks/use-connection-requests';
+import { getIncomingLikeMeta, getIncomingLikeTimeAgo } from '@/lib/incoming-like-utils';
 import { useCancelSentConnection, useSentConnections, type SentConnection } from '@/hooks/use-sent-connections';
 import { useAllMissions } from '@/hooks/use-missions';
 import { useNotificationCounts } from '@/hooks/use-notification-counts';
@@ -307,29 +308,9 @@ export default function MatchesScreen() {
         setShowArchivedSheet(true);
     };
 
-    const getTimeAgo = useCallback((iso: string) => {
-        const created = new Date(iso);
-        const diffMs = Date.now() - created.getTime();
-        if (!Number.isFinite(diffMs) || diffMs < 0) return '';
-        const mins = Math.floor(diffMs / 60000);
-        if (mins < 1) return 'now';
-        if (mins < 60) return `${mins}m`;
-        const hours = Math.floor(mins / 60);
-        if (hours < 24) return `${hours}h`;
-        const days = Math.floor(hours / 24);
-        return `${days}d`;
-    }, []);
+    const getTimeAgo = useCallback((iso: string) => getIncomingLikeTimeAgo(iso), []);
 
-    const getRequestMeta = useCallback((r: ConnectionRequest) => {
-        const parts: string[] = [];
-        const course = r.fromUser.profile?.course;
-        const year = r.fromUser.profile?.yearOfStudy;
-        const university = r.fromUser.profile?.university;
-        if (course) parts.push(course);
-        if (year) parts.push(`Year ${year}`);
-        if (university) parts.push(university);
-        return parts.length > 0 ? parts.join(' • ') : 'Wants to connect';
-    }, []);
+    const getRequestMeta = useCallback((r: ConnectionRequest) => getIncomingLikeMeta(r), []);
 
     return (
         <SafeAreaView

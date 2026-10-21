@@ -63,6 +63,19 @@ export interface Profile {
     religion?: string;
     languages?: string[];
     interestedIn?: string[]; // Genders the user wants to see: ['male', 'female', 'other']
+    personalityAnswers?: {
+        sleepSchedule?: string;
+        socialVibe?: string;
+        driveStyle?: string;
+        convoStyle?: string;
+        socialBattery?: string;
+        idealDateVibe?: string;
+        musicGenres?: string[];
+    };
+    lifestyleAnswers?: {
+        relationshipGoal?: string;
+        outingFrequency?: string;
+    };
     user?: {
         name: string;
         email: string;

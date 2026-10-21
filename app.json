@@ -3,16 +3,15 @@
     "owner": "vehemgroup",
     "name": "strathSpace",
     "slug": "strathSpace",
-    "version": "2.0.2",
+    "version": "2.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "strathspace",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.strathspace.mobile",
-      "buildNumber": "10",
+      "buildNumber": "16",
       "usesAppleSignIn": true,
       "icon": {
         "light": "./assets/images/icon.png",
@@ -30,13 +29,12 @@
     },
     "android": {
       "package": "com.strathspace.android",
-      "versionCode": 18,
+      "versionCode": 23,
       "icon": "./assets/images/android-app-icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-adaptive-foreground.png",
         "backgroundColor": "#fce7f3"
       },
-      "edgeToEdgeEnabled": true,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
@@ -52,12 +50,13 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash.png",
+          "image": "./assets/images/logos/LOGO.png",
+          "imageWidth": 88,
           "resizeMode": "contain",
-          "backgroundColor": "#FAF6F8",
+          "backgroundColor": "#F5F2F4",
           "dark": {
-            "image": "./assets/images/splash.png",
-            "backgroundColor": "#0f0a14"
+            "image": "./assets/images/logos/LOGO.png",
+            "backgroundColor": "#0D0B0D"
           }
         }
       ],
@@ -66,7 +65,12 @@
       "@react-native-community/datetimepicker",
       "expo-location",
       "expo-font",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-image",
+      "expo-status-bar",
+      "expo-audio",
+      "expo-notifications",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,14 +1,32 @@
 # StrathSpace Payments — Phased Build Plan
 
-This folder breaks the **Date Setup Fee** feature into small, independently
+This folder breaks the **Date Confirmation Pack** feature into small, independently
 buildable, independently testable phases. **Do not build everything at once.**
 Build one phase, test it using the "How to test" section in that phase's doc,
 get it green, then move to the next phase.
 
 The original product spec lives in [`../payment.md`](../payment.md). This folder
 is the *engineering execution plan* and supersedes `payment.md` where they
-disagree (because `payment.md` assumed a generic "vibe-check → confirm" flow that
-does not match the real codebase).
+disagree.
+
+---
+
+## Current priority: Two-Confirmation Pack
+
+**Start here:** [`two-confirmation-pack.md`](./two-confirmation-pack.md)
+
+This is the active plan to change from per-date KSh 499 to **KSh 499 for 2 reusable
+date confirmations**, using the existing `user_credits` table as the balance ledger.
+
+```txt
+Pay KSh 499 once → 2 date confirmations
+Payment only shown after a mutual match
+Confirmation spent only when both confirm and date setup proceeds
+Second match uses remaining balance (no second payment)
+```
+
+The original per-date build phases (1–12 below) remain as the foundation. The
+two-confirmation pack plan extends them.
 
 ---
 
@@ -16,12 +34,15 @@ does not match the real codebase).
 
 | Decision | Choice |
 |---|---|
-| **Model** | Non-refundable **Date Setup Fee** (paying for StrathSpace to set up/coordinate the date). NOT a subscription, NOT unlocking digital features. |
-| **Amount** | **KES 499 per person** (`49900` cents for Paystack). Both people pay → KES 998 per confirmed date. |
+| **Model** | **Date Confirmation Pack** — KSh 499 for 2 reusable confirmations. NOT a subscription, NOT unlocking digital features. |
+| **Amount** | **KSh 499 per pack** (`49900` cents for Paystack). Grants **2** confirmations per person. |
+| **When to pay** | Only after a **mutual match** exists, on the **Confirm your match** screen. |
+| **Spend rule** | A confirmation is spent only when **both** users confirm and `tryFinalizeConfirmedMeetup` succeeds. |
+| **Balance storage** | Reuse `user_credits` table with confirmation-specific `reason` values. |
 | **Rail** | **Paystack** (supports M-Pesa + cards + webhooks). |
-| **Gate placement** | **Payment IS the slot confirmation.** The existing "Confirm your slot" tap becomes "Pay KES 499 to confirm." |
+| **Gate placement** | Confirm tap requires payment **or** available confirmation balance. |
 | **Checkout surface** | **Hosted `/payments` web page** opened from the app in a browser/WebView, deep-links back via `strathspace://`. Store-safe (offline-service fee, not IAP). |
-| **One-paid expiry** | If the window expires with only one person paid, auto-convert the paid amount to **StrathSpace credit** (with an option to request a refund). |
+| **Ghosting / expiry** | Restore reserved confirmations; do not spend on failed matches. |
 | **Rollout** | Everything behind a `payments_enabled` feature flag, **default OFF**. The free flow keeps working until we flip it on. |
 
 ---
@@ -32,34 +53,54 @@ Today (free): mutual match → system assigns a Wed/Sat slot → each user taps
 **Confirm** (`confirmMeetupSlot`) → when both confirm in the window,
 `tryFinalizeConfirmedMeetup` schedules the date.
 
-After payments (flag ON): the **Confirm tap requires a successful KES 499
-payment first.** Paying = confirming.
+After pack model (flag ON):
 
 ```txt
 Mutual match created
         ↓
 System assigns slot (Wed 17:30 / Sat 15:00 EAT) + slotConfirmBy deadline
         ↓
-Each user opens "Pay KES 499 to confirm"   ← NEW (only when payments_enabled)
+"Confirm your match" screen
         ↓
-Paystack checkout (hosted web page) → webhook + verify confirm payment server-side
+User has confirmation balance?
+   ├─ Yes → tap Confirm (uses 1 credit, no Paystack)
+   └─ No  → "Pay KSh 499" → Paystack → grant 2 confirmations → reserve 1
         ↓
-On verified payment → set that user's userA/BSlotConfirmedAt
+Partner does the same
         ↓
-Both paid + both inside window → tryFinalizeConfirmedMeetup → date scheduled (upcoming)
+Both confirmed → spend 1 confirmation each → tryFinalizeConfirmedMeetup → date scheduled
         ↓
-If slotConfirmBy passes & not both paid → match expires
-        → if one paid: auto-credit the payer (refund option), flag the no-payer
+Next match: user with 1 credit left skips Paystack
+        ↓
+If slotConfirmBy passes & not both confirmed → match expires
+        → restore reserved confirmations (nothing spent)
 ```
 
-> Key rule: a paid-but-unmatched user must **never** be left stuck. On expiry we
-> release both users back to matching and protect the one who paid.
+> Key rule: a user who confirmed but was ghosted must **never** lose a confirmation.
+> On expiry we release both users and restore any reserved credits.
 
 ---
 
-## Build order (each is its own doc)
+## Build order
 
-Build strictly top to bottom. Later phases depend on earlier ones.
+### Pack model (active — build these next)
+
+See [`two-confirmation-pack.md`](./two-confirmation-pack.md) for full detail.
+
+| # | Phase | Doc | Ships value on its own? |
+|---|---|---|---|
+| P1 | Product rules & state language | [`two-confirmation-pack.md`](./two-confirmation-pack.md#phase-1--product-rules--state-language) | Spec only |
+| P2 | Backend credit model (`user_credits`) | [`two-confirmation-pack.md`](./two-confirmation-pack.md#phase-2--backend-credit-model-using-user_credits) | Foundation |
+| P3 | Paystack pack purchase flow | [`two-confirmation-pack.md`](./two-confirmation-pack.md#phase-3--paystack-pack-purchase-flow) | Buy pack end-to-end |
+| P4 | Confirm match consumption flow | [`two-confirmation-pack.md`](./two-confirmation-pack.md#phase-4--confirm-match-consumption-flow) | Core behavior change |
+| P5 | Expiry, cancel, refund, restore | [`two-confirmation-pack.md`](./two-confirmation-pack.md#phase-5--expiry-cancel-refund-and-restore-rules) | No stuck users |
+| P6 | Mobile UI/UX flow | [`two-confirmation-pack.md`](./two-confirmation-pack.md#phase-6--mobile-uiux-flow) | User-facing clarity |
+| P7 | Admin, observability, support | [`two-confirmation-pack.md`](./two-confirmation-pack.md#phase-7--admin-observability-and-support) | Ops visibility |
+| P8 | Testing & rollout | [`two-confirmation-pack.md`](./two-confirmation-pack.md#phase-8--testing--rollout) | Safe launch |
+
+Minimum to ship pack model: **P1–P6** plus existing foundation phases 1–8 and 10 below.
+
+### Original per-date foundation (completed)
 
 | # | Phase | Doc | Ships value on its own? |
 |---|---|---|---|
@@ -119,7 +160,18 @@ make it operationally complete.
 
 ## Status tracker
 
-Tick these off as phases land.
+### Pack model (active)
+
+- [ ] P1 — Product rules & state language
+- [ ] P2 — Backend credit model
+- [ ] P3 — Paystack pack purchase
+- [ ] P4 — Confirm consumption flow
+- [ ] P5 — Expiry / cancel / restore
+- [ ] P6 — Mobile UI/UX
+- [ ] P7 — Admin & observability
+- [ ] P8 — Testing & rollout
+
+### Original foundation (completed)
 
 - [ ] Phase 1 — DB schema + flag
 - [x] Phase 2 — Paystack client + token

@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api-client';
 interface NotificationCounts {
     unopenedMatches: number;
     unreadMessages: number;
+    incomingLikes?: number;
     datesAttention?: number;
     slotConfirmPending?: number;
     partnerWaitingOnYou?: number;
@@ -26,6 +27,7 @@ async function fetchNotificationCounts(): Promise<NotificationCounts> {
         return {
             unopenedMatches: 0,
             unreadMessages: 0,
+            incomingLikes: 0,
             datesAttention: 0,
             slotConfirmPending: 0,
             partnerWaitingOnYou: 0,
@@ -39,6 +41,7 @@ async function fetchNotificationCounts(): Promise<NotificationCounts> {
     const data = result.data || {
         unopenedMatches: 0,
         unreadMessages: 0,
+        incomingLikes: 0,
         datesAttention: 0,
         slotConfirmPending: 0,
         partnerWaitingOnYou: 0,
@@ -89,9 +92,9 @@ export function useNotificationCounts() {
     const { data, isLoading, refetch } = useQuery({
         queryKey: ['notificationCounts'],
         queryFn: fetchNotificationCounts,
-        refetchInterval: isAppActive ? 15000 : false, // Poll every 15s when active
+        refetchInterval: isAppActive ? 60_000 : false,
         refetchIntervalInBackground: false,
-        staleTime: 10000, // Consider data stale after 10s
+        staleTime: 30_000,
         gcTime: 5 * 60 * 1000, // Keep in cache for 5 min
         retry: 1,
     });
@@ -112,6 +115,7 @@ export function useNotificationCounts() {
     return {
         unopenedMatches: data?.unopenedMatches ?? 0,
         unreadMessages: data?.unreadMessages ?? 0,
+        incomingLikes: data?.incomingLikes ?? 0,
         datesAttention: data?.datesAttention ?? 0,
         slotConfirmPending: data?.slotConfirmPending ?? 0,
         partnerWaitingOnYou: data?.partnerWaitingOnYou ?? 0,

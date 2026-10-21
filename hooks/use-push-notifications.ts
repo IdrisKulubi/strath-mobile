@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
 
 import {
@@ -8,6 +9,8 @@ import {
     type AppNotificationType,
 } from '@/lib/services/notifications-service';
 import { useToast } from '@/components/ui/toast';
+import type { PublicFeatureFlags } from '@/hooks/use-payments-enabled';
+import { getIncomingLikeRoute } from '@/lib/home-experience-routing';
 import {
     configureAndroidNotificationChannel,
     registerPushTokenIfGranted,
@@ -26,12 +29,19 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
         case NOTIFICATION_TYPES.MEETUP_SLOT_ASSIGNED:
         case NOTIFICATION_TYPES.MEETUP_PARTNER_CONFIRMED:
         case NOTIFICATION_TYPES.MEETUP_CONFIRM_REMINDER:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_REQUESTED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_COUNTERED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_ACCEPTED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_CANCELLED:
         case NOTIFICATION_TYPES.PAYMENT_REQUIRED:
         case NOTIFICATION_TYPES.PAYMENT_PARTNER_PAID:
         case NOTIFICATION_TYPES.PAYMENT_BOTH_PAID:
         case NOTIFICATION_TYPES.CREDIT_GRANTED:
         case NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH:
+        case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
         case NOTIFICATION_TYPES.MATCH:
+        case NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH:
+        case NOTIFICATION_TYPES.QUESTIONNAIRE_LIKE:
             return 'accent';
 
         case NOTIFICATION_TYPES.PAYMENT_EXPIRING:
@@ -46,7 +56,10 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
     }
 }
 
-function resolveRoute(data: NotificationPayload): string | null {
+export function resolveNotificationRoute(
+    data: NotificationPayload,
+    isV2Enabled = false,
+): string | null {
     if (data.route) {
         if (data.route.includes('payments')) {
             return '/(tabs)/dates';
@@ -55,7 +68,13 @@ function resolveRoute(data: NotificationPayload): string | null {
     }
 
     switch (data.type) {
+        case NOTIFICATION_TYPES.QUESTIONNAIRE_LIKE:
+            return '/dating/likes';
+        case NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH:
+            return data.matchId ? `/dating-chat/${encodeURIComponent(data.matchId)}` : '/dating/messages';
         case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
+            return getIncomingLikeRoute(isV2Enabled);
+
         case NOTIFICATION_TYPES.DATE_REQUEST_ACCEPTED:
         case NOTIFICATION_TYPES.DATE_REQUEST_DECLINED:
         case NOTIFICATION_TYPES.MUTUAL_MATCH:
@@ -63,6 +82,8 @@ function resolveRoute(data: NotificationPayload): string | null {
         case NOTIFICATION_TYPES.DATE_SCHEDULED:
         case NOTIFICATION_TYPES.DATE_CANCELLED:
         case NOTIFICATION_TYPES.MEETUP_PARTNER_CONFIRMED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_ACCEPTED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_CANCELLED:
         case NOTIFICATION_TYPES.PAYMENT_REQUIRED:
         case NOTIFICATION_TYPES.PAYMENT_PARTNER_PAID:
         case NOTIFICATION_TYPES.PAYMENT_BOTH_PAID:
@@ -70,6 +91,13 @@ function resolveRoute(data: NotificationPayload): string | null {
         case NOTIFICATION_TYPES.PAYMENT_EXPIRED:
         case NOTIFICATION_TYPES.CREDIT_GRANTED:
         case NOTIFICATION_TYPES.REFUND_COMPLETED:
+            return '/(tabs)/dates';
+
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_REQUESTED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_COUNTERED:
+            if (data.requestId) {
+                return `/(tabs)/dates?rescheduleRequestId=${encodeURIComponent(data.requestId)}`;
+            }
             return '/(tabs)/dates';
 
         case NOTIFICATION_TYPES.FEEDBACK_PROMPT:
@@ -102,13 +130,28 @@ function resolveRoute(data: NotificationPayload): string | null {
     }
 }
 
+function invalidateMessagingCaches(
+    queryClient: ReturnType<typeof useQueryClient>,
+    matchId?: string,
+) {
+    if (matchId) {
+        queryClient.invalidateQueries({ queryKey: ['chat', matchId] });
+    }
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    queryClient.invalidateQueries({ queryKey: ['matches'] });
+    queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
+    queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+}
+
 export function usePushNotifications(options?: {
     onTokenRegistered?: (token: string | null) => void;
 }) {
     const toast = useToast();
     const router = useRouter();
+    const queryClient = useQueryClient();
     const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
 
+    const lastResponseId = useRef<string | null>(null);
     const notificationReceivedListener = useRef<Notifications.EventSubscription | null>(null);
     const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null);
 
@@ -141,25 +184,66 @@ export function usePushNotifications(options?: {
                 const data = (content.data || {}) as NotificationPayload;
                 const message = content.body || content.title || 'New notification';
 
-                toast.show({
-                    message,
-                    variant: toastVariantFor(data.type),
-                    position: 'top',
-                    duration: 4000,
-                    showInModal: true,
-                });
-            });
+                if (data.type === NOTIFICATION_TYPES.MESSAGE) {
+                    invalidateMessagingCaches(queryClient, data.matchId);
+                }
 
-        notificationResponseListener.current =
-            Notifications.addNotificationResponseReceivedListener((response) => {
-                const content = response.notification.request.content;
-                const data = (content.data || {}) as NotificationPayload;
+                if (data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH || data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_LIKE || data.type === NOTIFICATION_TYPES.MESSAGE) {
+                    queryClient.invalidateQueries({ queryKey: ['questionnaire'] });
+                    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                }
 
-                const route = resolveRoute(data);
-                if (route) {
-                    router.push(route as any);
+                if (data.type === NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED) {
+                    queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
+                    queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+                }
+
+                if (data.type !== NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH) {
+                    toast.show({
+                        message,
+                        variant: toastVariantFor(data.type),
+                        position: 'top',
+                        duration: 4000,
+                        showInModal: true,
+                    });
                 }
             });
+
+        const handleResponse = (response: Notifications.NotificationResponse) => {
+            const responseId = response.notification.request.identifier;
+            if (lastResponseId.current === responseId) return;
+            lastResponseId.current = responseId;
+            const content = response.notification.request.content;
+            const data = (content.data || {}) as NotificationPayload;
+
+            if (data.type === NOTIFICATION_TYPES.MESSAGE) {
+                invalidateMessagingCaches(queryClient, data.matchId);
+            }
+
+            if (data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH || data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_LIKE || data.type === NOTIFICATION_TYPES.MESSAGE) {
+                queryClient.invalidateQueries({ queryKey: ['questionnaire'] });
+                queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            }
+
+            if (data.type === NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED) {
+                queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
+                queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+            }
+
+            const flags = queryClient.getQueryData<PublicFeatureFlags>(['publicFeatureFlags']);
+            const route = resolveNotificationRoute(
+                data,
+                Boolean(flags?.matchmakerPersonalizationV2),
+            );
+            if (route) {
+                router.push(route as any);
+                void Notifications.clearLastNotificationResponseAsync().catch((error) => console.warn('[Notifications] Could not clear response', error));
+            }
+        };
+        notificationResponseListener.current = Notifications.addNotificationResponseReceivedListener(handleResponse);
+        void Notifications.getLastNotificationResponseAsync().then((response) => {
+            if (response) handleResponse(response);
+        }).catch((error) => console.warn('[Notifications] Launch response unavailable', error));
 
         return () => {
             notificationReceivedListener.current?.remove();

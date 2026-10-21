@@ -23,6 +23,8 @@ function makeRow(overrides: Partial<MutualRow>): MutualRow {
         slotConfirmBy: new Date(Date.now() + 86400000),
         assignedSlot: "wednesday",
         slotConfirmReminderSentAt: null,
+        pendingRescheduleRequestId: null,
+        reschedulePausedExpiryAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
         ...overrides,

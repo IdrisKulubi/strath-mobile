@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import {
     Pressable,
     StyleSheet,
@@ -9,26 +9,21 @@ import {
     type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '@/hooks/use-theme';
-import { useConfirmMeetupSlot } from '@/hooks/use-confirm-meetup-slot';
-import { usePayToConfirm } from '@/hooks/use-pay-to-confirm';
-import { usePaymentStatus } from '@/hooks/use-payment-status';
-import { usePaymentsEnabled } from '@/hooks/use-payments-enabled';
-import { useNotificationPermissionPrompt } from '@/context/notification-permission-context';
-import { useToast } from '@/components/ui/toast';
-import { PaymentCreditActions } from '@/components/dates/payment-credit-actions';
+import { useMeetupSlotConfirmController } from '@/hooks/use-meetup-slot-confirm-controller';
+import { ConfirmationBalancePill } from '@/components/dates/confirmation-balance-pill';
 import { PaymentStatusBanner } from '@/components/dates/payment-status-banner';
 import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
-import {
-    formatPaymentAmount,
-    getPaymentUiCopy,
-    resolvePaymentUiPhase,
-} from '@/lib/payment-ui';
+import { getGhostSafetyLine } from '@/lib/confirmation-copy';
+import { MeetupRescheduleAfterConfirmHint } from '@/components/dates/meetup-reschedule-after-confirm-hint';
+import { MeetupRescheduleSection } from '@/components/dates/meetup-reschedule-section';
 import { formatConfirmBy, formatMeetupSlot, MEETUP_WINDOWS_COPY } from '@/lib/meetup-slot';
+import type { RescheduleViewerState } from '@/lib/reschedule-types';
 
-export interface MeetupSlotConfirmProps {
+export type MeetupSlotConfirmController = ReturnType<typeof useMeetupSlotConfirmController>;
+
+export interface MeetupSlotConfirmContentProps {
     mutualMatchId: string;
     dateMatchId?: string | null;
     partnerFirstName: string;
@@ -37,11 +32,18 @@ export interface MeetupSlotConfirmProps {
     viewerSlotConfirmed: boolean;
     partnerSlotConfirmed: boolean;
     confirmWindowOpen: boolean;
+    reschedule?: RescheduleViewerState;
     layout?: 'inline' | 'modal';
+    hidePrimaryCta?: boolean;
+    controller: MeetupSlotConfirmController;
     style?: StyleProp<ViewStyle>;
 }
 
-export function MeetupSlotConfirm({
+export interface MeetupSlotConfirmProps extends Omit<MeetupSlotConfirmContentProps, 'controller'> {
+    controller?: MeetupSlotConfirmController;
+}
+
+export function MeetupSlotConfirmContent({
     mutualMatchId,
     dateMatchId,
     partnerFirstName,
@@ -50,144 +52,39 @@ export function MeetupSlotConfirm({
     viewerSlotConfirmed,
     partnerSlotConfirmed,
     confirmWindowOpen,
+    reschedule,
     layout = 'inline',
+    hidePrimaryCta = false,
+    controller,
     style,
-}: MeetupSlotConfirmProps) {
+}: MeetupSlotConfirmContentProps) {
     const { colors } = useTheme();
-    const toast = useToast();
-    const confirm = useConfirmMeetupSlot();
-    const payToConfirm = usePayToConfirm();
-    const { paymentsEnabled } = usePaymentsEnabled();
-    const { data: paymentStatus } = usePaymentStatus(dateMatchId ?? undefined);
-    const { promptIfAppropriate } = useNotificationPermissionPrompt();
     const primaryFill = colors.primary;
     const isModal = layout === 'modal';
 
-    const amountLabel = formatPaymentAmount(
-        paymentStatus?.amount ?? 499,
-        paymentStatus?.currency ?? 'KES',
-    );
-
-    const paymentPhase = resolvePaymentUiPhase({
+    const {
         paymentsEnabled,
-        paymentStatus,
-        viewerSlotConfirmed,
-        partnerSlotConfirmed,
-    });
-
-    const paymentCopy = getPaymentUiCopy(paymentPhase, partnerFirstName, amountLabel);
-
-    const isPending = paymentsEnabled ? payToConfirm.isPending : confirm.isPending;
-
-    const canAct =
-        confirmWindowOpen
-        && !viewerSlotConfirmed
-        && !isPending
-        && paymentPhase !== 'expired_unpaid'
-        && paymentPhase !== 'expired_refund_choice'
-        && paymentPhase !== 'both_paid'
-        && paymentPhase !== 'paid_waiting';
-
-    const partnerLine = useMemo(() => {
-        if (paymentsEnabled && paymentCopy.partnerLine) {
-            return paymentCopy.partnerLine;
-        }
-        if (viewerSlotConfirmed) {
-            return partnerSlotConfirmed
-                ? 'You both confirmed.'
-                : `Waiting for ${partnerFirstName} to confirm.`;
-        }
-        if (partnerSlotConfirmed) {
-            return `${partnerFirstName} confirmed. Tap below to lock in.`;
-        }
-        return `Confirm your assigned time with ${partnerFirstName}.`;
-    }, [
-        paymentsEnabled,
-        paymentCopy.partnerLine,
-        viewerSlotConfirmed,
-        partnerSlotConfirmed,
-        partnerFirstName,
-    ]);
-
-    const showToastForOutcome = async (outcome: string) => {
-        if (outcome === 'finalized') {
-            toast.show({
-                message: 'Date confirmed. See you on campus.',
-                variant: 'success',
-            });
-        } else if (outcome === 'paid_waiting') {
-            toast.show({
-                message: `You are confirmed. Waiting for ${partnerFirstName}.`,
-                variant: 'default',
-            });
-        } else if (outcome === 'confirmed') {
-            toast.show({
-                message: `Waiting for ${partnerFirstName} to confirm.`,
-                variant: 'default',
-            });
-        } else if (outcome === 'cancelled' || outcome === 'unpaid') {
-            toast.show({
-                message: 'Payment was not completed. Your date is still pending.',
-                variant: 'default',
-            });
-        }
-        await promptIfAppropriate({
-            context: 'after_confirm',
-            partnerName: partnerFirstName,
-        });
-    };
-
-    const handlePrimaryAction = () => {
-        if (!canAct) return;
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-        if (paymentsEnabled && dateMatchId) {
-            payToConfirm.mutate(
-                { mutualMatchId, dateMatchId, partnerFirstName },
-                {
-                    onSuccess: (result) => {
-                        void showToastForOutcome(result.outcome);
-                    },
-                    onError: (error) => {
-                        toast.show({
-                            message:
-                                error instanceof Error
-                                    ? error.message
-                                    : 'Could not start payment. Try again.',
-                            variant: 'danger',
-                        });
-                    },
-                },
-            );
-            return;
-        }
-
-        confirm.mutate(mutualMatchId, {
-            onSuccess: async (data) => {
-                if (data?.status === 'finalized') {
-                    await showToastForOutcome('finalized');
-                } else {
-                    await showToastForOutcome('confirmed');
-                }
-            },
-            onError: () => {
-                toast.show({
-                    message: 'Could not confirm right now. Try again.',
-                    variant: 'danger',
-                });
-            },
-        });
-    };
-
-    const primaryCtaLabel = paymentsEnabled
-        ? isPending
-            ? 'Opening checkout…'
-            : paymentCopy.primaryCta ?? 'Confirm date'
-        : isPending
-          ? 'Confirming…'
-          : 'Confirm date';
+        confirmationBalance,
+        paymentCopy,
+        canAct,
+        showConfirmedState,
+        partnerLine,
+        primaryCtaLabel,
+        handlePrimaryAction,
+    } = controller;
 
     const bodyCopy = paymentsEnabled && paymentCopy.body ? paymentCopy.body : null;
+    const fairUseLine =
+        paymentsEnabled && paymentCopy.fairUseLine && !isModal ? paymentCopy.fairUseLine : null;
+    const ghostSafetyLine =
+        paymentsEnabled && isModal && !hidePrimaryCta && !showConfirmedState && canAct
+            ? getGhostSafetyLine(partnerFirstName)
+            : null;
+
+    const balancePill =
+        paymentsEnabled && confirmationBalance.total > 0 && !(isModal && hidePrimaryCta) ? (
+            <ConfirmationBalancePill balance={confirmationBalance} />
+        ) : null;
 
     const confirmedBlock = (
         <View
@@ -224,16 +121,6 @@ export function MeetupSlotConfirm({
         </TouchableOpacity>
     );
 
-    const creditBlock =
-        dateMatchId && paymentsEnabled ? (
-            <PaymentCreditActions
-                dateMatchId={dateMatchId}
-                onCreditApplied={() => {
-                    void showToastForOutcome('paid_waiting');
-                }}
-            />
-        ) : null;
-
     const statusBanner =
         dateMatchId && paymentsEnabled ? (
             <PaymentStatusBanner
@@ -246,17 +133,13 @@ export function MeetupSlotConfirm({
 
     if (isModal) {
         return (
-            <View
-                style={[
-                    styles.modalPanel,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                    style,
-                ]}
-            >
+            <View style={[styles.modalPanel, style]}>
                 <View style={styles.modalBody}>
+                    {balancePill}
+
                     {scheduledAt ? (
-                        <View style={[styles.modalSlotHero, { backgroundColor: colors.muted }]}>
-                            <Ionicons name="calendar-outline" size={22} color={primaryFill} />
+                        <View style={styles.modalSlotRow}>
+                            <Ionicons name="calendar-outline" size={20} color={primaryFill} />
                             <RNText style={[styles.modalSlotText, { color: colors.foreground }]}>
                                 {formatMeetupSlot(scheduledAt)}
                             </RNText>
@@ -269,19 +152,36 @@ export function MeetupSlotConfirm({
                         </RNText>
                     ) : null}
 
-                    <RNText style={[styles.modalVenueCopy, { color: colors.mutedForeground }]}>
-                        {MEETUP_WINDOWS_COPY}
-                    </RNText>
+                    {!scheduledAt ? (
+                        <RNText style={[styles.modalVenueCopy, { color: colors.mutedForeground }]}>
+                            {MEETUP_WINDOWS_COPY}
+                        </RNText>
+                    ) : null}
 
-                    {bodyCopy ? (
+                    {bodyCopy && !hidePrimaryCta ? (
                         <RNText style={[styles.paymentBody, { color: colors.mutedForeground }]}>
                             {bodyCopy}
                         </RNText>
                     ) : null}
 
-                    <RNText style={[styles.modalPartnerLine, { color: colors.mutedForeground }]}>
-                        {partnerLine}
-                    </RNText>
+                    {!hidePrimaryCta ? (
+                        <RNText style={[styles.modalPartnerLine, { color: colors.mutedForeground }]}>
+                            {partnerLine}
+                        </RNText>
+                    ) : null}
+
+                    {ghostSafetyLine ? (
+                        <RNText style={[styles.ghostSafetyLine, { color: colors.mutedForeground }]}>
+                            {ghostSafetyLine}
+                        </RNText>
+                    ) : null}
+
+                    <MeetupRescheduleAfterConfirmHint
+                        layout="modal"
+                        reschedule={reschedule}
+                        viewerSlotConfirmed={viewerSlotConfirmed}
+                        confirmWindowOpen={confirmWindowOpen}
+                    />
 
                     {statusBanner}
 
@@ -294,11 +194,22 @@ export function MeetupSlotConfirm({
                     ) : null}
                 </View>
 
-                {viewerSlotConfirmed || paymentPhase === 'paid_waiting' || paymentPhase === 'both_paid'
-                    ? confirmedBlock
-                    : primaryButton}
+                {!hidePrimaryCta
+                    ? showConfirmedState
+                        ? confirmedBlock
+                        : primaryButton
+                    : showConfirmedState
+                      ? confirmedBlock
+                      : null}
 
-                {creditBlock}
+                <MeetupRescheduleSection
+                    layout="modal"
+                    mutualMatchId={mutualMatchId}
+                    dateMatchId={dateMatchId}
+                    partnerFirstName={partnerFirstName}
+                    viewerSlotConfirmed={viewerSlotConfirmed}
+                    reschedule={reschedule}
+                />
             </View>
         );
     }
@@ -314,10 +225,9 @@ export function MeetupSlotConfirm({
                 style,
             ]}
         >
-            <RNText style={[styles.title, { color: colors.foreground }]}>Your StrathSpace date</RNText>
-            <RNText style={[styles.windowsCopy, { color: colors.mutedForeground }]}>
-                {MEETUP_WINDOWS_COPY}
-            </RNText>
+            <RNText style={[styles.title, { color: colors.foreground }]}>Confirm your match</RNText>
+
+            {balancePill}
 
             {scheduledAt ? (
                 <View style={styles.slotRow}>
@@ -334,15 +244,34 @@ export function MeetupSlotConfirm({
                 </RNText>
             ) : null}
 
+            {!scheduledAt ? (
+                <RNText style={[styles.windowsCopy, { color: colors.mutedForeground }]}>
+                    {MEETUP_WINDOWS_COPY}
+                </RNText>
+            ) : null}
+
             {bodyCopy ? (
                 <RNText style={[styles.paymentBody, { color: colors.mutedForeground }]}>{bodyCopy}</RNText>
             ) : null}
 
             <RNText style={[styles.partnerLine, { color: colors.mutedForeground }]}>{partnerLine}</RNText>
 
+            {fairUseLine ? (
+                <RNText style={[styles.fairUseLine, { color: colors.mutedForeground }]}>
+                    {fairUseLine}
+                </RNText>
+            ) : null}
+
+            <MeetupRescheduleAfterConfirmHint
+                layout="inline"
+                reschedule={reschedule}
+                viewerSlotConfirmed={viewerSlotConfirmed}
+                confirmWindowOpen={confirmWindowOpen}
+            />
+
             {statusBanner}
 
-            {viewerSlotConfirmed || paymentPhase === 'paid_waiting' || paymentPhase === 'both_paid' ? (
+            {showConfirmedState ? (
                 confirmedBlock
             ) : (
                 <Pressable
@@ -378,8 +307,38 @@ export function MeetupSlotConfirm({
                 </RNText>
             ) : null}
 
-            {creditBlock}
+            <MeetupRescheduleSection
+                layout="inline"
+                mutualMatchId={mutualMatchId}
+                dateMatchId={dateMatchId}
+                partnerFirstName={partnerFirstName}
+                viewerSlotConfirmed={viewerSlotConfirmed}
+                reschedule={reschedule}
+            />
         </View>
+    );
+}
+
+export function MeetupSlotConfirm({
+    controller: externalController,
+    partnerSlotConfirmed,
+    ...contentProps
+}: MeetupSlotConfirmProps) {
+    const internalController = useMeetupSlotConfirmController({
+        mutualMatchId: contentProps.mutualMatchId,
+        dateMatchId: contentProps.dateMatchId,
+        partnerFirstName: contentProps.partnerFirstName,
+        viewerSlotConfirmed: contentProps.viewerSlotConfirmed,
+        partnerSlotConfirmed,
+        confirmWindowOpen: contentProps.confirmWindowOpen,
+    });
+
+    return (
+        <MeetupSlotConfirmContent
+            {...contentProps}
+            partnerSlotConfirmed={partnerSlotConfirmed}
+            controller={externalController ?? internalController}
+        />
     );
 }
 
@@ -392,33 +351,33 @@ const styles = StyleSheet.create({
     },
     modalPanel: {
         width: '100%',
-        borderRadius: RADIUS.lg,
-        borderWidth: StyleSheet.hairlineWidth,
-        padding: SPACING.comfortable,
-        gap: SPACING.section,
+        gap: SPACING.tight,
         alignItems: 'center',
     },
     modalBody: {
         width: '100%',
         alignItems: 'center',
-        gap: SPACING.compact,
+        gap: SPACING.micro,
     },
-    modalSlotHero: {
+    modalSlotRow: {
         width: '100%',
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: SPACING.tight,
-        paddingVertical: SPACING.section,
-        paddingHorizontal: SPACING.base,
-        borderRadius: RADIUS.md,
+        paddingVertical: SPACING.micro,
     },
     modalSlotText: {
         ...TYPOGRAPHY.title,
+        fontWeight: '700',
         textAlign: 'center',
+        letterSpacing: -0.3,
     },
     modalDeadline: {
         ...TYPOGRAPHY.caption,
+        fontSize: 12,
         textAlign: 'center',
-        fontWeight: '600',
+        fontWeight: '500',
     },
     modalVenueCopy: {
         ...TYPOGRAPHY.caption,
@@ -433,6 +392,13 @@ const styles = StyleSheet.create({
     modalPartnerLine: {
         ...TYPOGRAPHY.caption,
         textAlign: 'center',
+    },
+    ghostSafetyLine: {
+        ...TYPOGRAPHY.caption,
+        textAlign: 'center',
+        fontWeight: '600',
+        lineHeight: 18,
+        paddingHorizontal: SPACING.tight,
     },
     modalClosedCopy: {
         textAlign: 'center',
@@ -489,6 +455,11 @@ const styles = StyleSheet.create({
     },
     partnerLine: {
         fontSize: 13,
+        lineHeight: 18,
+    },
+    fairUseLine: {
+        ...TYPOGRAPHY.caption,
+        textAlign: 'center',
         lineHeight: 18,
     },
     confirmPill: {

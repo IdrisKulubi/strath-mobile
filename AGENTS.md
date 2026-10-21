@@ -1,0 +1,36 @@
+# StrathSpace project instructions
+
+## Design direction
+
+The user approved **Option 1: Rising sheet** on 2026-09-24. Preserve this direction in future design, coding, review, and fix tasks without requiring the user to repeat it.
+The user later approved the dark option rows and dark bottom action pill shown in [the control reference](docs/onboarding-concepts/option-rows-action-pill.png). Apply those shared Rising controls throughout onboarding; the heart-and-chevron pill remains a tap button unless a separate interaction is requested.
+
+Before UI work, read:
+1. [DESIGN.md](DESIGN.md) for shared visual tokens.
+2. [Onboarding design contract](docs/onboarding-redesign/design-contract.md) for the approved onboarding interaction and reference image.
+3. [Master tracker](docs/onboarding-redesign/master.md) and the requested phase document for scope, dependencies, and current evidence.
+
+Use the same shared visual language elsewhere in the mobile app, but the rising-sheet interaction is specific to onboarding. Backend-only work does not require an unrelated UI redesign.
+
+## Working agreement
+
+- Implement only the requested phase or explicitly requested fix. A request to continue the redesign means the next eligible incomplete phase in the master tracker, one phase per task unless the user explicitly requests more.
+- Read actual code and preserve existing user changes. Never reset or overwrite unrelated work.
+- Reuse and evolve existing components, theme tokens, auth, upload, verification, and questionnaire contracts.
+- One active prompt at a time. Follow-ups arrive automatically. No importance slider, accumulated questionnaire form, or privacy-choice beat. Optional context stays in the normal sequence.
+- Single-choice taps advance after clear feedback; multi-select and text input use Continue. Final saves, consent, permissions, and destructive actions remain explicit.
+- When an onboarding text field is focused, keep the entered text and caret visible above the keyboard; scroll the active field into view and keep the action reachable.
+- The generated image is a visual reference, not executable specification. Written design contract wins over invented mockup copy and artifacts.
+- Preserve scoring values, privacy, adult eligibility, routing, and existing user data. No silent backend or product-rule changes.
+- Before ending a phase task, update its checklist and evidence, then master status, blockers, and next action. Mark Done only after the stated acceptance checks pass. Record unavailable checks honestly.
+- Do not start the next phase automatically after completing the requested phase. Finish with the result, validation, remaining limits, and next phase.
+- Current user instructions can change scope or design. Record an explicit design change in the contract and decision log; never treat these files as higher priority than the user's request.
+- The 2026-09-30 user decision supersedes the earlier compatibility-answer privacy rule: all saved questionnaire answers and their optional notes, including answers previously marked private, appear in another person's profile details. Keep birth dates, authentication details, drafts, and matching internals out of that view.
+- The 2026-09-30 user decision also removes the questionnaire account-ID cohort. When the schema and global questionnaire switches are ready, every authenticated account enters the new dating shell; incomplete legacy profiles use `/dating-setup` and keep existing verification/waitlist eligibility checks.
+- In the partner-answer beat, treat the person's own answer and acceptable partner answers as independent. Show every substantive catalogue option, including the person's own answer, as a selectable checkbox; exclude only disclosure-only options such as “Prefer not to say.” Start new partner answers with nothing selected and require at least one selection before Continue. Existing saved partner selections remain selected when edited, but changing the personal answer clears them so the person chooses again. Show Select all for lists longer than two; it must be reversible.
+
+## Verification
+
+Run checks relevant to changed behavior from this repository directory. Known scripts: `npm run lint`, `npm run test:questionnaire-ui`, `npm run typecheck:questionnaire`. The last command covers the questionnaire only, not every onboarding/auth file. Inspect TypeScript configuration for broader changes and report existing baseline failures separately. Visual evidence must come from the implemented UI; generated concept images do not prove completion.
+
+Guidance uses Codex's project instruction mechanism: [official AGENTS.md documentation](https://learn.chatgpt.com/docs/agent-configuration/agents-md). This file guides work; it is not an automated CI enforcement mechanism.

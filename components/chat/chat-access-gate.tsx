@@ -61,11 +61,11 @@ export function ChatAccessGate({ match, partnerName, partnerImage }: ChatAccessG
             )}
 
             <Text style={[styles.title, { color: colors.foreground }]}>
-                Confirm your date to message
+                Confirm your match to message
             </Text>
 
             <Text style={[styles.body, { color: colors.mutedForeground }]}>
-                Confirm your assigned meetup with {partnerName} before you can read or send messages here.
+                Confirm your assigned meetup with {partnerName} before you can message here.
             </Text>
 
             {partnerWaiting ? (
@@ -83,12 +83,14 @@ export function ChatAccessGate({ match, partnerName, partnerImage }: ChatAccessG
             {match.needsSlotConfirmation && match.confirmBy ? (
                 <MeetupSlotConfirm
                     mutualMatchId={match.id}
+                    dateMatchId={match.legacyDateMatchId ?? undefined}
                     partnerFirstName={match.withUser.firstName}
                     scheduledAt={match.scheduledAt ?? null}
                     confirmBy={match.confirmBy}
                     viewerSlotConfirmed={Boolean(match.viewerSlotConfirmed)}
                     partnerSlotConfirmed={Boolean(match.partnerSlotConfirmed)}
                     confirmWindowOpen={Boolean(match.confirmWindowOpen)}
+                    reschedule={match.reschedule}
                     style={styles.confirmBlock}
                 />
             ) : null}

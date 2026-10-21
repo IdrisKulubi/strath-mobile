@@ -2,35 +2,14 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { user, session as sessionTable, profiles } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { auth } from "@/lib/auth";
 import { successResponse, errorResponse } from "@/lib/api-response";
-
-// Helper to get session with Bearer token fallback
-async function getSessionWithFallback(req: NextRequest) {
-    let session = await auth.api.getSession({ headers: req.headers });
-
-    // Fallback: Manual token check if getSession fails (for Bearer token auth from mobile)
-    if (!session) {
-        const authHeader = req.headers.get('authorization');
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            const token = authHeader.split(' ')[1];
-            const dbSession = await db.query.session.findFirst({
-                where: eq(sessionTable.token, token),
-                with: { user: true }
-            });
-
-            if (dbSession && dbSession.expiresAt > new Date()) {
-                session = { session: dbSession, user: dbSession.user } as any;
-            }
-        }
-    }
-    return session;
-}
+import { removeQuestionnaireDataForAccount } from "@/lib/questionnaire/phase5-service";
+import { getSessionWithBearerFallback } from "@/lib/security";
 
 // DELETE /api/user/delete-account - Soft delete user account
 export async function DELETE(request: NextRequest) {
     try {
-        const session = await getSessionWithFallback(request);
+        const session = await getSessionWithBearerFallback(request);
         if (!session?.user?.id) {
             return errorResponse("Unauthorized", 401);
         }
@@ -54,6 +33,10 @@ export async function DELETE(request: NextRequest) {
                 discoveryPaused: true,
             })
             .where(eq(profiles.userId, userId));
+
+        // Remove questionnaire preference/answer data and end new connections.
+        // Conversation and message records remain available for safety/audit retention.
+        await removeQuestionnaireDataForAccount(userId);
 
         // Delete all sessions to log them out everywhere
         await db.delete(sessionTable)

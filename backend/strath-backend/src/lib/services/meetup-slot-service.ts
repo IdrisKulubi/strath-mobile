@@ -14,6 +14,19 @@ export interface AssignedMeetupSlot {
     confirmBy: Date;
 }
 
+/** One selectable Wed/Sat window for reschedule (Phase 2+). */
+export type MeetupSlotOption = {
+    slot: MeetupSlotKind;
+    scheduledAt: Date;
+    confirmBy: Date;
+};
+
+export interface ListUpcomingMeetupSlotOptionsParams {
+    count?: number;
+    excludeScheduledAt?: Date;
+    config?: MeetupSlotConfig;
+}
+
 export interface MeetupSlotConfig {
     wednesdayHour: number;
     wednesdayMinute: number;
@@ -190,6 +203,56 @@ export function assignLegacyArrangingSlot(
     return { slot: "wednesday", scheduledAt, confirmBy };
 }
 
+function confirmByForScheduledAt(scheduledAt: Date, config: MeetupSlotConfig): Date {
+    return new Date(scheduledAt.getTime() - config.confirmLeadHours * 60 * 60 * 1000);
+}
+
+function isSameMeetupInstant(a: Date, b: Date): boolean {
+    return a.getTime() === b.getTime();
+}
+
+/**
+ * Upcoming Wed/Sat meetup windows for reschedule pickers (Africa/Nairobi).
+ * Walks forward in chronological order: next Wed or Sat after cursor, whichever is sooner,
+ * then repeats. Skips slots whose confirm deadline has passed and the current assignment.
+ */
+export function listUpcomingMeetupSlotOptions(
+    now: Date,
+    options: ListUpcomingMeetupSlotOptionsParams = {},
+): MeetupSlotOption[] {
+    const count = options.count ?? 4;
+    const config = options.config ?? getMeetupSlotConfig();
+    const excludeScheduledAt = options.excludeScheduledAt;
+
+    const result: MeetupSlotOption[] = [];
+    let cursor = now;
+    const maxIterations = Math.max(count * 16, 32);
+
+    for (let i = 0; i < maxIterations && result.length < count; i++) {
+        const nextWednesday = getNextMeetupOccurrence("wednesday", cursor, config);
+        const nextSaturday = getNextMeetupOccurrence("saturday", cursor, config);
+
+        const pickWednesday = nextWednesday.getTime() <= nextSaturday.getTime();
+        const slot: MeetupSlotKind = pickWednesday ? "wednesday" : "saturday";
+        const scheduledAt = pickWednesday ? nextWednesday : nextSaturday;
+        const confirmBy = confirmByForScheduledAt(scheduledAt, config);
+
+        cursor = new Date(scheduledAt.getTime() + 1);
+
+        if (confirmBy.getTime() <= now.getTime()) {
+            continue;
+        }
+
+        if (excludeScheduledAt && isSameMeetupInstant(scheduledAt, excludeScheduledAt)) {
+            continue;
+        }
+
+        result.push({ slot, scheduledAt, confirmBy });
+    }
+
+    return result;
+}
+
 export function assignMeetupSlot(
     mutualAt: Date,
     config: MeetupSlotConfig = getMeetupSlotConfig(),
@@ -197,9 +260,7 @@ export function assignMeetupSlot(
     const nairobi = getNairobiParts(mutualAt);
     const slot = pickSlotKindForMatchDay(nairobi.dayOfWeek);
     const scheduledAt = getNextMeetupOccurrence(slot, mutualAt, config);
-    const confirmBy = new Date(
-        scheduledAt.getTime() - config.confirmLeadHours * 60 * 60 * 1000,
-    );
+    const confirmBy = confirmByForScheduledAt(scheduledAt, config);
 
     return { slot, scheduledAt, confirmBy };
 }

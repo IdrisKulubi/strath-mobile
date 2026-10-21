@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { PaymentCheckoutClient } from "@/app/payments/payment-checkout-client";
+import { PaymentInvalidState, PaymentWebShell } from "@/components/payments/payment-web-shell";
 import { getPaymentConfig } from "@/lib/payments/config";
 import { getPaymentCheckoutContext } from "@/lib/payments/payment-checkout-service";
 
@@ -21,9 +21,9 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
 
     if (!token?.trim()) {
         return (
-            <PaymentShell>
-                <InvalidLink message="This payment link is missing or incomplete. Open it again from the StrathSpace app." />
-            </PaymentShell>
+            <PaymentWebShell>
+                <PaymentInvalidState message="This payment link is missing or incomplete. Open it again from the StrathSpace app." />
+            </PaymentWebShell>
         );
     }
 
@@ -31,14 +31,14 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
 
     if (context.status === "invalid") {
         return (
-            <PaymentShell>
-                <InvalidLink message="This payment link has expired or is invalid. Reopen checkout from the StrathSpace app." />
-            </PaymentShell>
+            <PaymentWebShell>
+                <PaymentInvalidState message="This payment link has expired or is invalid. Reopen checkout from the StrathSpace app." />
+            </PaymentWebShell>
         );
     }
 
     return (
-        <PaymentShell>
+        <PaymentWebShell>
             <PaymentCheckoutClient
                 paymentToken={token.trim()}
                 dateMatchId={context.dateMatchId}
@@ -51,31 +51,6 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
                 blockReason={context.blockReason}
                 appReturnUrl={appReturnUrl}
             />
-        </PaymentShell>
-    );
-}
-
-function PaymentShell({ children }: { children: React.ReactNode }) {
-    return (
-        <div className="min-h-dvh bg-zinc-950 text-zinc-200 antialiased">
-            <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-5 py-10 sm:px-8">
-                <Link
-                    href="/"
-                    className="mb-8 text-center text-sm text-white/50 transition-colors hover:text-white"
-                >
-                    StrathSpace
-                </Link>
-                {children}
-            </div>
-        </div>
-    );
-}
-
-function InvalidLink({ message }: { message: string }) {
-    return (
-        <div className="space-y-4 text-center">
-            <h1 className="text-2xl font-semibold text-white">Link unavailable</h1>
-            <p className="text-sm text-zinc-400">{message}</p>
-        </div>
+        </PaymentWebShell>
     );
 }

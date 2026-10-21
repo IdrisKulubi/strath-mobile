@@ -1,11 +1,5 @@
 {
   "crons": [
-   
-    {
-      "path": "/api/cron/pulse-cleanup",
-      "schedule": "0 */6 * * *"
-    },
-  
     {
       "path": "/api/cron/candidate-pairs",
       "schedule": "0 * * * *"
@@ -16,7 +10,11 @@
     },
     {
       "path": "/api/worker/face-verification",
-      "schedule": "* * * * *"
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/push-delivery",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
