@@ -1,0 +1,206 @@
+"use client";
+
+import Link from "next/link";
+import { type ComponentType } from "react";
+import { usePathname } from "next/navigation";
+import {
+    BarChart3,
+    BrainCircuit,
+    Image,
+    Clock3,
+    CalendarCheck2,
+    CalendarClock,
+    Timer,
+    Wallet,
+    Flag,
+    Mail,
+    ChevronDown,
+    ClipboardList,
+    LayoutDashboard,
+    MapPinned,
+    Megaphone,
+    Bell,
+    ShieldCheck,
+    Sparkles,
+    Users,
+    RotateCcw,
+    MessageSquareText,
+} from "lucide-react";
+
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+    Sidebar,
+    SidebarContent,
+    SidebarFooter,
+    SidebarGroup,
+    SidebarGroupContent,
+    SidebarGroupLabel,
+    SidebarHeader,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+    SidebarMenuSub,
+    SidebarMenuSubButton,
+    SidebarMenuSubItem,
+} from "@/components/ui/sidebar";
+
+type NavItem = {
+    href: string;
+    label: string;
+    icon: ComponentType<{ className?: string }>;
+};
+
+type NavGroup = {
+    label: string;
+    icon: ComponentType<{ className?: string }>;
+    items: NavItem[];
+};
+
+const topLevelItems: NavItem[] = [
+    { href: "/admin", label: "Overview", icon: LayoutDashboard },
+];
+
+const groups: NavGroup[] = [
+    {
+        label: "Operations",
+        icon: ClipboardList,
+        items: [
+            { href: "/admin/verification", label: "Verification", icon: ShieldCheck },
+            { href: "/admin/matchmaking", label: "Matchmaking", icon: Sparkles },
+            { href: "/admin/restore-match", label: "Restore & match", icon: RotateCcw },
+            { href: "/admin/date-requests", label: "Match Activity", icon: ClipboardList },
+            { href: "/admin/meetup-slots", label: "Slot confirmation", icon: Timer },
+            { href: "/admin/payments", label: "Payments", icon: Wallet },
+            { href: "/admin/pending-dates", label: "Arranging", icon: CalendarClock },
+            { href: "/admin/scheduled-dates", label: "Upcoming", icon: CalendarCheck2 },
+            { href: "/admin/history", label: "History", icon: Clock3 },
+            { href: "/admin/locations", label: "Locations", icon: MapPinned },
+            { href: "/admin/feature-flags", label: "Feature Flags", icon: Flag },
+            { href: "/admin/broadcast", label: "Broadcast", icon: Megaphone },
+            { href: "/admin/campaigns", label: "Campaigns", icon: Mail },
+        ],
+    },
+    {
+        label: "Insights",
+        icon: Sparkles,
+        items: [
+            { href: "/admin/users", label: "Users", icon: Users },
+            { href: "/admin/metrics", label: "Metrics", icon: BarChart3 },
+            { href: "/admin/metrics/questionnaire", label: "Questionnaire analytics", icon: BrainCircuit },
+            { href: "/admin/feedback", label: "Feedback", icon: MessageSquareText },
+            { href: "/admin/profile-intelligence", label: "Profile Intelligence", icon: BrainCircuit },
+            { href: "/admin/photo-intelligence", label: "Photo Intelligence", icon: Image },
+            { href: "/admin/push-notifications", label: "Push notifications", icon: Bell },
+        ],
+    },
+];
+
+function isActive(pathname: string, href: string) {
+    if (href === "/admin/metrics") return pathname === href;
+    return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export function AdminSidebar() {
+    const pathname = usePathname();
+
+    return (
+        <Sidebar collapsible="icon" variant="inset" className="border-r-0">
+            <SidebarHeader>
+                <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton size="lg" asChild tooltip="Strathspace Admin">
+                            <Link href="/admin">
+                                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                                    <Sparkles className="size-4" />
+                                </div>
+                                <div className="grid flex-1 text-left text-sm leading-tight">
+                                    <span className="truncate font-semibold">Strathspace</span>
+                                    <span className="truncate text-xs text-muted-foreground">Admin Console</span>
+                                </div>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
+            </SidebarHeader>
+
+            <SidebarContent>
+                <SidebarGroup>
+                    <SidebarGroupLabel>Main</SidebarGroupLabel>
+                    <SidebarGroupContent>
+                        <SidebarMenu>
+                            {topLevelItems.map((item) => (
+                                <SidebarMenuItem key={item.href}>
+                                    <SidebarMenuButton
+                                        asChild
+                                        isActive={isActive(pathname, item.href)}
+                                        tooltip={item.label}
+                                    >
+                                        <Link href={item.href}>
+                                            <item.icon />
+                                            <span>{item.label}</span>
+                                        </Link>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            ))}
+                        </SidebarMenu>
+                    </SidebarGroupContent>
+                </SidebarGroup>
+
+                {groups.map((group) => {
+                    const open = group.items.some((item) => isActive(pathname, item.href));
+
+                    return (
+                        <SidebarGroup key={group.label}>
+                            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+                            <SidebarGroupContent>
+                                <SidebarMenu>
+                                    <Collapsible defaultOpen={open} className="group/collapsible">
+                                        <SidebarMenuItem>
+                                            <CollapsibleTrigger asChild>
+                                                <SidebarMenuButton tooltip={group.label}>
+                                                    <group.icon />
+                                                    <span>{group.label}</span>
+                                                    <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                                                </SidebarMenuButton>
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent>
+                                                <SidebarMenuSub>
+                                                    {group.items.map((item) => (
+                                                        <SidebarMenuSubItem key={item.href}>
+                                                            <SidebarMenuSubButton
+                                                                asChild
+                                                                isActive={isActive(pathname, item.href)}
+                                                            >
+                                                                <Link href={item.href}>
+                                                                    <item.icon />
+                                                                    <span>{item.label}</span>
+                                                                </Link>
+                                                            </SidebarMenuSubButton>
+                                                        </SidebarMenuSubItem>
+                                                    ))}
+                                                </SidebarMenuSub>
+                                            </CollapsibleContent>
+                                        </SidebarMenuItem>
+                                    </Collapsible>
+                                </SidebarMenu>
+                            </SidebarGroupContent>
+                        </SidebarGroup>
+                    );
+                })}
+            </SidebarContent>
+
+            <SidebarFooter>
+                <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton asChild tooltip="Back to App" className="text-muted-foreground">
+                            <Link href="/app/discover">
+                                <Sparkles />
+                                <span>Back to App</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
+            </SidebarFooter>
+        </Sidebar>
+    );
+}

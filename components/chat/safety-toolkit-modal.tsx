@@ -10,6 +10,7 @@ import {
 import { useTheme } from '@/hooks/use-theme';
 import { X, Shield, Flag, Prohibit, XCircle } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
+import { RADIUS } from '@/lib/design-tokens';
 
 interface SafetyToolkitModalProps {
     visible: boolean;
@@ -51,7 +52,7 @@ export function SafetyToolkitModal({
             <TouchableWithoutFeedback onPress={onClose}>
                 <View style={styles.overlay}>
                     <TouchableWithoutFeedback>
-                        <View style={[styles.sheet, { backgroundColor: colors.card }]}>
+                        <View style={[styles.sheet, { backgroundColor: colors.sheet }]}>
                             {/* Handle */}
                             <View style={styles.handleRow}>
                                 <View style={[styles.handle, { backgroundColor: colors.border }]} />
@@ -72,10 +73,10 @@ export function SafetyToolkitModal({
                             <View style={styles.options}>
                                 {/* Unmatch */}
                                 <Pressable
-                                    style={styles.option}
+                                    style={[styles.option, { backgroundColor: colors.control, borderColor: colors.controlBorder }]}
                                     onPress={() => handleAction(onUnmatch)}
                                 >
-                                    <XCircle size={22} color="#FF3B30" />
+                                    <XCircle size={22} color={colors.destructive} />
                                     <View style={styles.optionText}>
                                         <Text style={[styles.optionTitle, { color: textColor }]}>
                                             UNMATCH FROM {partnerName.toUpperCase()}
@@ -88,10 +89,10 @@ export function SafetyToolkitModal({
 
                                 {/* Block */}
                                 <Pressable
-                                    style={styles.option}
+                                    style={[styles.option, { backgroundColor: colors.control, borderColor: colors.controlBorder }]}
                                     onPress={() => handleAction(onBlock)}
                                 >
-                                    <Prohibit size={22} color={textColor} />
+                                    <Prohibit size={22} color={colors.primaryText} />
                                     <View style={styles.optionText}>
                                         <Text style={[styles.optionTitle, { color: textColor }]}>
                                             BLOCK {partnerName.toUpperCase()}
@@ -104,10 +105,10 @@ export function SafetyToolkitModal({
 
                                 {/* Report */}
                                 <Pressable
-                                    style={styles.option}
+                                    style={[styles.option, { backgroundColor: colors.control, borderColor: colors.controlBorder }]}
                                     onPress={() => handleAction(onReport)}
                                 >
-                                    <Flag size={22} color="#FF3B30" />
+                                    <Flag size={22} color={colors.destructive} />
                                     <View style={styles.optionText}>
                                         <Text style={[styles.optionTitle, { color: textColor }]}>
                                             REPORT {partnerName.toUpperCase()}
@@ -120,10 +121,10 @@ export function SafetyToolkitModal({
 
                                 {/* Safety Center */}
                                 <Pressable
-                                    style={styles.option}
+                                    style={[styles.option, { backgroundColor: colors.control, borderColor: colors.controlBorder }]}
                                     onPress={() => handleAction(onSafetyCenter)}
                                 >
-                                    <Shield size={22} color="#007AFF" />
+                                    <Shield size={22} color={colors.primaryText} />
                                     <View style={styles.optionText}>
                                         <Text style={[styles.optionTitle, { color: textColor }]}>
                                             ACCESS SAFETY CENTER
@@ -149,8 +150,8 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     sheet: {
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
+        borderTopLeftRadius: RADIUS.sheet,
+        borderTopRightRadius: RADIUS.sheet,
         paddingBottom: 48,
     },
     handleRow: {
@@ -180,7 +181,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'flex-start',
         gap: 16,
-        marginBottom: 24,
+        marginBottom: 10,
+        minHeight: 72,
+        padding: 14,
+        borderRadius: RADIUS.row,
+        borderWidth: 1,
     },
     optionText: {
         flex: 1,

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const PROMPT_RESPONSE_MAX_LENGTH = 150;
+
 export const updateProfileSchema = z.object({
     bio: z.string().max(500).nullable().optional(),
     age: z.number().min(18).max(100).nullable().optional(),
@@ -16,6 +18,10 @@ export const updateProfileSchema = z.object({
     firstName: z.string().nullable().optional(),
     lastName: z.string().nullable().optional(),
     phoneNumber: z.string().nullable().optional(),
+    currentLocation: z.string().nullable().optional(),
+    locationLatitude: z.string().nullable().optional(),
+    locationLongitude: z.string().nullable().optional(),
+    locationPermissionStatus: z.enum(["granted", "denied", "undetermined", "unknown"]).nullable().optional(),
     drinkingPreference: z.string().nullable().optional(),
     workoutFrequency: z.string().nullable().optional(),
     socialMediaUsage: z.string().nullable().optional(),
@@ -37,7 +43,9 @@ export const updateProfileSchema = z.object({
     qualities: z.array(z.string()).nullable().optional(),
     prompts: z.array(z.object({
         promptId: z.string(),
-        response: z.string().max(150),
+        response: z.string()
+            .trim()
+            .max(PROMPT_RESPONSE_MAX_LENGTH, `Prompt answers must be ${PROMPT_RESPONSE_MAX_LENGTH} characters or fewer.`),
     })).nullable().optional(),
     aboutMe: z.string().max(500).nullable().optional(),
     height: z.string().nullable().optional(),
@@ -58,6 +66,7 @@ export const swipeSchema = z.object({
 
 export const messageSchema = z.object({
     content: z.string().min(1),
+    clientRequestId: z.string().min(8).max(128).optional(),
 });
 
 export const reportSchema = z.object({
@@ -89,4 +98,67 @@ export const dateFeedbackSchema = z.object({
     rating: z.number().min(1).max(5),
     meetAgain: z.enum(["yes", "maybe", "no"]),
     textFeedback: z.string().max(500).optional(),
+});
+
+export const matchHoldCancelSchema = z.object({
+    reason: z.enum([
+        "no_longer_interested",
+        "scheduling_conflict",
+        "safety_concern",
+        "other",
+    ]),
+    notes: z.string().max(500).optional().nullable(),
+});
+
+export const meetupRescheduleRequestSchema = z.object({
+    mutualMatchId: z.string().uuid(),
+    proposedScheduledAt: z.string().datetime(),
+});
+
+export const meetupRescheduleRespondSchema = z.discriminatedUnion("action", [
+    z.object({
+        requestId: z.string().uuid(),
+        action: z.literal("accept"),
+    }),
+    z.object({
+        requestId: z.string().uuid(),
+        action: z.literal("decline"),
+        declineReason: z.string().trim().min(3).max(500),
+        counterScheduledAt: z.string().datetime(),
+    }),
+]);
+
+export const meetupRescheduleCancelSchema = z.object({
+    mutualMatchId: z.string().uuid(),
+});
+
+export const APP_FEEDBACK_CATEGORIES = [
+    "feature_request",
+    "bug",
+    "general",
+    "complaint",
+    "other",
+] as const;
+
+export const appFeedbackSchema = z.object({
+    category: z.enum(APP_FEEDBACK_CATEGORIES),
+    message: z.string().trim().max(1000).default(""),
+    anonymous: z.boolean().optional().default(false),
+    source: z.enum(["app", "matchmaker_v2"]).optional().default("app"),
+    rating: z.number().int().min(1).max(5).optional(),
+}).superRefine((value, context) => {
+    if (value.source === "app" && value.message.length < 3) {
+        context.addIssue({
+            code: "custom",
+            path: ["message"],
+            message: "Please write a bit more",
+        });
+    }
+    if (value.source === "matchmaker_v2" && value.rating === undefined) {
+        context.addIssue({
+            code: "custom",
+            path: ["rating"],
+            message: "Please choose a rating",
+        });
+    }
 });

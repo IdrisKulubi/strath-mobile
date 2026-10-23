@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { profiles } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -7,59 +6,58 @@ import { updateProfileSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { resetAgentContext } from "@/services/agent-context";
 import { syncProfilePhotoAssetsForUser } from "@/lib/services/profile-photo-assets";
+import { reanalyzeUserPhotos } from "@/lib/services/photo-intelligence-service";
+import { ensureProfileIntelligenceJob } from "@/lib/services/profile-intelligence-service";
+import { admitOrWaitlist, getWaitlistViewFor } from "@/lib/services/admission-service";
+import { getSessionWithBearerFallback } from "@/lib/security";
 import { ZodError } from "zod";
+import { buildWaitlistViewForProfile, selectCurrentUserProfile } from "@/lib/db/queries/profiles";
 
-type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
+function formatProfileValidationError(error: ZodError) {
+    const promptResponseIssue = error.issues.find(
+        (issue) => issue.path[0] === "prompts" && issue.path[2] === "response",
+    );
+
+    if (promptResponseIssue) {
+        return "One of your prompt answers is too long. Please keep each answer under 150 characters.";
+    }
+
+    const issue = error.issues[0];
+    if (!issue) {
+        return "Some profile details need a quick fix before we can save them.";
+    }
+
+    const field = issue.path.length > 0 ? issue.path.join(".") : "profile";
+    return `Please check ${field}: ${issue.message}`;
+}
 
 export async function GET(req: NextRequest) {
     try {
-        let session: AuthSession = await auth.api.getSession({ headers: req.headers });
-
-        // Fallback: Manual token check if getSession fails (e.g. Bearer token issue)
-        if (!session) {
-            const authHeader = req.headers.get('authorization');
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                const token = authHeader.split(' ')[1];
-
-                // Import session table dynamically to avoid circular deps if any, or just use db
-                const { session: sessionTable } = await import("@/db/schema");
-
-                const dbSession = await db.query.session.findFirst({
-                    where: eq(sessionTable.token, token),
-                    with: {
-                        user: true
-                    }
-                });
-
-                if (dbSession) {
-                    const now = new Date();
-                    if (dbSession.expiresAt > now) {
-                        // Construct a session object compatible with what we need
-                        session = {
-                            session: dbSession,
-                            user: dbSession.user
-                        } as unknown as AuthSession;
-                    }
-                }
-            }
-        }
+        const session = await getSessionWithBearerFallback(req);
 
         if (!session) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
 
-        const profile = await db.query.profiles.findFirst({
-            where: eq(profiles.userId, session.user.id),
-            with: {
-                user: true,
-            },
-        });
+        const profile = await selectCurrentUserProfile(session.user.id);
 
         if (!profile) {
-            return errorResponse(new Error("Profile not found"), 404);
+            console.info("[GET /api/user/me] Authenticated user has no profile yet; returning onboarding state", {
+                userId: session.user.id,
+            });
+            return successResponse(null);
         }
 
-        return successResponse(profile);
+        const waitlist = await buildWaitlistViewForProfile({
+            waitlistStatus: profile.waitlistStatus,
+            waitlistPosition: profile.waitlistPosition,
+            gender: profile.gender,
+        }).catch((err) => {
+            console.error("[GET /api/user/me] waitlist view failed:", err);
+            return null;
+        });
+
+        return successResponse({ ...profile, waitlist });
     } catch (error) {
         return errorResponse(error);
     }
@@ -67,37 +65,7 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
     try {
-        let session: AuthSession = await auth.api.getSession({ headers: req.headers });
-
-        // Fallback: Manual token check if getSession fails
-        if (!session) {
-            const authHeader = req.headers.get('authorization');
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                const token = authHeader.split(' ')[1];
-                const { session: sessionTable } = await import("@/db/schema");
-                const dbSession = await db.query.session.findFirst({
-                    where: eq(sessionTable.token, token),
-                    with: { user: true }
-                });
-
-                if (dbSession) {
-                    const now = new Date();
-                    if (dbSession.expiresAt > now) {
-                        session = {
-                            session: dbSession,
-                            user: dbSession.user
-                        } as unknown as AuthSession;
-                    } else {
-                        console.error('[PATCH /api/user/me] Session expired');
-                        return errorResponse(new Error("Session expired. Please log in again."), 401);
-                    }
-                } else {
-                    console.error('[PATCH /api/user/me] Token not found in database');
-                }
-            } else {
-                console.error('[PATCH /api/user/me] No authorization header');
-            }
-        }
+        const session = await getSessionWithBearerFallback(req);
 
         if (!session) {
             return errorResponse(new Error("Unauthorized. Please log in again."), 401);
@@ -131,6 +99,15 @@ export async function PATCH(req: NextRequest) {
         const shouldUpdateAiConsent = Object.prototype.hasOwnProperty.call(filteredData, "aiConsentGranted");
         if (shouldUpdateAiConsent) {
             (filteredData as Record<string, unknown>).aiConsentUpdatedAt = new Date();
+        }
+        const shouldUpdateLocation = [
+            "currentLocation",
+            "locationLatitude",
+            "locationLongitude",
+            "locationPermissionStatus",
+        ].some((key) => Object.prototype.hasOwnProperty.call(filteredData, key));
+        if (shouldUpdateLocation) {
+            (filteredData as Record<string, unknown>).locationUpdatedAt = new Date();
         }
         console.log('[PATCH /api/user/me] Filtered data keys:', Object.keys(filteredData));
 
@@ -196,14 +173,56 @@ export async function PATCH(req: NextRequest) {
             console.error("[PATCH /api/user/me] Failed to sync profile photo assets:", photoAssetError);
         });
 
-        return successResponse(resultProfile);
+        if (verificationPhotoUrls.length > 0) {
+            reanalyzeUserPhotos(session.user.id).catch((photoAnalysisError) => {
+                console.error("[PATCH /api/user/me] Failed to reanalyze profile photos:", photoAnalysisError);
+            });
+        }
+
+        ensureProfileIntelligenceJob({
+            userId: session.user.id,
+            jobType: "profile_refresh",
+            metadata: {
+                source: "profile_update",
+                profileId: resultProfile.id,
+                photoCount: verificationPhotoUrls.length,
+            },
+        }).catch((intelligenceError) => {
+            console.error("[PATCH /api/user/me] Failed to enqueue profile intelligence refresh:", intelligenceError);
+        });
+
+        // Soft-launch admission gate: when a user flips profileCompleted/isComplete
+        // to true, decide whether they're admitted or placed on the waitlist.
+        // admitOrWaitlist is idempotent — repeat PATCH calls are safe.
+        const isCompletingProfile =
+            filteredData.profileCompleted === true || filteredData.isComplete === true;
+        let admission: Awaited<ReturnType<typeof admitOrWaitlist>> | null = null;
+        if (isCompletingProfile && resultProfile) {
+            try {
+                admission = await admitOrWaitlist(session.user.id);
+            } catch (admissionError) {
+                console.error("[PATCH /api/user/me] admission failed:", admissionError);
+                // Fail open — don't block the user on admission infra errors.
+                admission = { status: "admitted", position: null };
+            }
+        }
+
+        const waitlist = await getWaitlistViewFor(session.user.id).catch((err) => {
+            console.error("[PATCH /api/user/me] waitlist view failed:", err);
+            return null;
+        });
+
+        return successResponse({
+            ...resultProfile,
+            waitlist,
+            admission: admission ?? null,
+        });
     } catch (error: unknown) {
         console.error('[PATCH /api/user/me] Error:', error);
         
         // Check for Zod validation errors
         if (error instanceof ZodError) {
-            const message = error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ') || 'Validation error';
-            return errorResponse(new Error(message), 400);
+            return errorResponse(new Error(formatProfileValidationError(error)), 400);
         }
         
         return errorResponse(error);

@@ -7,7 +7,7 @@ export function UserActions({ userId, isSuspended, role }: { userId: string; isS
     const [isPending, startTransition] = useTransition();
 
     return (
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="flex gap-1.5 flex-wrap" onClick={(event) => event.stopPropagation()}>
             {isSuspended ? (
                 <button
                     onClick={() => startTransition(() => reinstateUser(userId))}

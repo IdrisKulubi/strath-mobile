@@ -1,4 +1,4 @@
-import { ThemeProvider as NavThemeProvider } from '@react-navigation/native';
+import { ThemeProvider as NavThemeProvider } from 'expo-router/react-navigation';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
@@ -15,10 +15,20 @@ import { ThemeProvider, useThemeContext } from '@/context/theme-context';
 import { ToastProvider } from '@/components/ui/toast';
 import { LaunchExperience } from '@/components/intro/launch-experience';
 import { NoInternetScreen } from '@/components/no-internet-screen';
+import { OfflineBanner } from '@/components/offline-banner';
+import { SessionBootstrap } from '@/components/session-bootstrap';
 import { useNetwork } from '@/hooks/use-network';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
+import { PaymentDeepLinkHandler } from '@/components/payment/payment-deep-link-handler';
+import {
+  NotificationPermissionProvider,
+  useNotificationPermissionPrompt,
+} from '@/context/notification-permission-context';
 import { usePresenceHeartbeat } from '@/hooks/use-presence-heartbeat';
 import { hasCompletedIntroSlides } from '@/lib/intro-storage';
+import { isAuthenticated } from '@/lib/auth-helpers';
+import { QuestionnaireRouteGate } from '@/components/questionnaire/route-gate';
+import { MatchCelebrationProvider } from '@/components/questionnaire/match-celebration';
 
 ExpoSplashScreen.preventAutoHideAsync();
 
@@ -26,11 +36,17 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-function RootLayoutNav() {
+function RootLayoutNav({ hasAuthToken }: { hasAuthToken: boolean }) {
   const { theme } = useThemeContext();
-  const { isConnected, isLoading, refresh } = useNetwork();
+  const { isOffline, isLoading, refresh } = useNetwork();
 
-  if (!isLoading && !isConnected) {
+  // Only show the full-screen "No Internet" takeover for truly unauthenticated
+  // users (first-launch / login flow). Authenticated users should stay in the
+  // app with a subtle banner + their cached data — losing Wi-Fi should never
+  // feel like being logged out.
+  const showFullOfflineScreen = !hasAuthToken && !isLoading && isOffline;
+
+  if (showFullOfflineScreen) {
     return (
       <NavThemeProvider value={theme === 'dark' ? NavigationDarkTheme : NavigationLightTheme}>
         <NoInternetScreen onRetry={refresh} />
@@ -41,13 +57,15 @@ function RootLayoutNav() {
 
   return (
     <NavThemeProvider value={theme === 'dark' ? NavigationDarkTheme : NavigationLightTheme}>
-        <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="chat/[matchId]" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="verification" />
+        <Stack.Screen name="questions" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="waitlist" options={{ gestureEnabled: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Modal' }} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="edit-profile" />
@@ -56,20 +74,39 @@ function RootLayoutNav() {
         <Stack.Screen name="ui-preview" />
         <Stack.Screen name="profile/[userId]" />
         <Stack.Screen name="feedback/[dateId]" />
+        <Stack.Screen name="payments/success" options={{ animation: 'fade' }} />
+        <Stack.Screen name="payments/failed" options={{ animation: 'fade' }} />
+        <Stack.Screen name="app-feedback" options={{ presentation: 'modal' }} />
       </Stack>
+      <OfflineBanner />
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
     </NavThemeProvider>
   );
 }
 
-function NotificationsBootstrap() {
-  usePushNotifications();
+function PushNotificationListeners() {
+  const { setExpoPushToken } = useNotificationPermissionPrompt();
+  usePushNotifications({ onTokenRegistered: setExpoPushToken });
   usePresenceHeartbeat();
-  return null;
+  return <PaymentDeepLinkHandler />;
+}
+
+function NotificationsBootstrap({ children }: { children: React.ReactNode }) {
+  return (
+    <NotificationPermissionProvider>
+      <PushNotificationListeners />
+      {children}
+    </NotificationPermissionProvider>
+  );
+}
+
+interface BootstrapState {
+  isNewUserIntro: boolean;
+  hasAuthToken: boolean;
 }
 
 export default function RootLayout() {
-  const [bootstrap, setBootstrap] = useState<{ isNewUserIntro: boolean } | null>(null);
+  const [bootstrap, setBootstrap] = useState<BootstrapState | null>(null);
   const [showLaunch, setShowLaunch] = useState(true);
 
   useEffect(() => {
@@ -77,17 +114,16 @@ export default function RootLayout() {
 
     async function prepare() {
       try {
-        const [, slidesDone] = await Promise.all([
-          new Promise<void>((resolve) => setTimeout(resolve, 350)),
+        const [slidesDone, authed] = await Promise.all([
           hasCompletedIntroSlides(),
+          isAuthenticated(),
         ]);
         if (!cancelled) {
-          setBootstrap({ isNewUserIntro: !slidesDone });
+          setBootstrap({ isNewUserIntro: !slidesDone, hasAuthToken: authed });
         }
-      } catch (e) {
-        console.warn(e);
+      } catch {
         if (!cancelled) {
-          setBootstrap({ isNewUserIntro: true });
+          setBootstrap({ isNewUserIntro: true, hasAuthToken: false });
         }
       } finally {
         if (!cancelled) {
@@ -123,8 +159,14 @@ export default function RootLayout() {
                 />
               ) : (
                 <>
-                  <NotificationsBootstrap />
-                  <RootLayoutNav />
+                  <SessionBootstrap />
+                  <NotificationsBootstrap>
+                    <QuestionnaireRouteGate>
+                      <MatchCelebrationProvider>
+                        <RootLayoutNav hasAuthToken={bootstrap.hasAuthToken} />
+                      </MatchCelebrationProvider>
+                    </QuestionnaireRouteGate>
+                  </NotificationsBootstrap>
                 </>
               )}
             </ToastProvider>

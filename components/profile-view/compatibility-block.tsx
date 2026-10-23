@@ -1,110 +1,71 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Text } from '@/components/ui/text';
+import React, { useMemo } from 'react';
+import { StyleSheet, Text as RNText, View } from 'react-native';
+
+import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { formatMatchReasonsLine } from '@/lib/match-reason-format';
+import { getMatchTier } from '@/lib/match-tier';
 import { useTheme } from '@/hooks/use-theme';
-import { CompatibilityBar } from '@/components/home/compatibility-bar';
 
 interface CompatibilityBlockProps {
     score: number;
     reasons: string[];
 }
 
+/**
+ * Qualitative compatibility on profile detail. Score drives tier copy only;
+ * reasons are shown as plain language, not template chips.
+ */
 export function CompatibilityBlock({ score, reasons }: CompatibilityBlockProps) {
     const { colors, isDark } = useTheme();
+    const tier = getMatchTier(score);
+
+    const reasonsSentence = useMemo(
+        () => formatMatchReasonsLine(reasons, 4),
+        [reasons],
+    );
 
     return (
-        <View style={[styles.container, {
-            backgroundColor: isDark ? 'rgba(233,30,140,0.08)' : 'rgba(233,30,140,0.05)',
-            borderColor: colors.primary + '30',
-        }]}>
-            <View style={styles.scoreRow}>
-                <View style={styles.scoreLabelWrap}>
-                    <Ionicons name="sparkles" size={14} color={colors.primary} />
-                    <Text style={[styles.scoreLabel, { color: colors.mutedForeground }]}>
-                        Compatibility
-                    </Text>
-                </View>
-                <Text style={[styles.scoreNumber, { color: colors.primary }]}>
-                    {score}% match
-                </Text>
+        <View
+            style={[
+                styles.container,
+                {
+                    backgroundColor: isDark ? colors.card : colors.muted,
+                    borderColor: colors.border,
+                },
+            ]}
+        >
+            <View style={styles.header}>
+                <RNText style={[styles.title, { color: colors.foreground }]}>{tier.label}</RNText>
+                <RNText style={[styles.helper, { color: colors.mutedForeground }]}>{tier.helper}</RNText>
             </View>
 
-            <CompatibilityBar score={score} animationDelay={300} />
-
-            {reasons.length > 0 && (
-                <View style={styles.reasonsWrap}>
-                    <Text style={[styles.reasonsLabel, { color: colors.mutedForeground }]}>
-                        Why you might click
-                    </Text>
-                    <View style={styles.reasonChips}>
-                        {reasons.map((reason, i) => (
-                            <View
-                                key={i}
-                                style={[styles.chip, {
-                                    backgroundColor: isDark ? 'rgba(233,30,140,0.15)' : 'rgba(233,30,140,0.1)',
-                                    borderColor: colors.primary + '40',
-                                }]}
-                            >
-                                <Text style={[styles.chipText, { color: colors.primary }]}>
-                                    {reason}
-                                </Text>
-                            </View>
-                        ))}
-                    </View>
-                </View>
-            )}
+            {reasonsSentence ? (
+                <RNText style={[styles.reasonsLine, { color: colors.mutedForeground }]}>
+                    {reasonsSentence}
+                </RNText>
+            ) : null}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        borderRadius: 16,
-        borderWidth: 1,
-        padding: 16,
-        gap: 12,
+        borderRadius: RADIUS.md,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: SPACING.base,
+        gap: SPACING.compact,
     },
-    scoreRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+    header: {
+        gap: SPACING.micro,
     },
-    scoreLabelWrap: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
+    title: {
+        ...TYPOGRAPHY.headline,
     },
-    scoreLabel: {
-        fontSize: 13,
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
+    helper: {
+        ...TYPOGRAPHY.caption,
     },
-    scoreNumber: {
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    reasonsWrap: {
-        gap: 8,
-    },
-    reasonsLabel: {
-        fontSize: 12,
-        fontWeight: '500',
-    },
-    reasonChips: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 6,
-    },
-    chip: {
-        borderRadius: 20,
-        borderWidth: 1,
-        paddingHorizontal: 12,
-        paddingVertical: 5,
-    },
-    chipText: {
-        fontSize: 13,
-        fontWeight: '600',
+    reasonsLine: {
+        ...TYPOGRAPHY.caption,
+        lineHeight: 18,
     },
 });

@@ -104,7 +104,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfileDetail | nul
         firstName: profile?.firstName ?? profile?.user?.name?.split(' ')[0] ?? 'Unknown',
         lastName: profile?.lastName ?? undefined,
         age: profile?.age ?? 0,
-        profilePhoto: profile?.profilePhoto ?? profile?.user?.profilePhoto ?? profile?.user?.image,
+        profilePhoto: photos[0] ?? profile?.profilePhoto ?? profile?.user?.profilePhoto ?? profile?.user?.image,
         compatibilityScore: compat?.score ?? 0,
         reasons: compat?.reasons ?? [],
         pairId: compat?.pairId ?? undefined,

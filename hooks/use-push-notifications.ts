@@ -1,31 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Device from 'expo-device';
-import Constants from 'expo-constants';
+import { useQueryClient } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
 
 import {
-    NotificationsService,
     NOTIFICATION_TYPES,
     type NotificationPayload,
     type AppNotificationType,
 } from '@/lib/services/notifications-service';
 import { useToast } from '@/components/ui/toast';
+import type { PublicFeatureFlags } from '@/hooks/use-payments-enabled';
+import { getIncomingLikeRoute } from '@/lib/home-experience-routing';
+import {
+    configureAndroidNotificationChannel,
+    registerPushTokenIfGranted,
+} from '@/lib/push-registration';
 
-// Re-export for consumers that only need the type
 export type { AppNotificationType };
-
-const ANDROID_CHANNEL_ID = 'default';
-
-function getProjectId(): string | undefined {
-    return (
-        (Constants.expoConfig as any)?.extra?.eas?.projectId ||
-        (Constants as any)?.easConfig?.projectId
-    );
-}
-
-// ─── Toast variant per notification type ─────────────────────────────────────
 
 type ToastVariant = 'default' | 'accent' | 'warning' | 'danger';
 
@@ -33,12 +24,27 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
     switch (type) {
         case NOTIFICATION_TYPES.MUTUAL_MATCH:
         case NOTIFICATION_TYPES.DATE_REQUEST_ACCEPTED:
+        case NOTIFICATION_TYPES.DATE_ARRANGING:
         case NOTIFICATION_TYPES.DATE_SCHEDULED:
+        case NOTIFICATION_TYPES.MEETUP_SLOT_ASSIGNED:
+        case NOTIFICATION_TYPES.MEETUP_PARTNER_CONFIRMED:
+        case NOTIFICATION_TYPES.MEETUP_CONFIRM_REMINDER:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_REQUESTED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_COUNTERED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_ACCEPTED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_CANCELLED:
+        case NOTIFICATION_TYPES.PAYMENT_REQUIRED:
+        case NOTIFICATION_TYPES.PAYMENT_PARTNER_PAID:
+        case NOTIFICATION_TYPES.PAYMENT_BOTH_PAID:
+        case NOTIFICATION_TYPES.CREDIT_GRANTED:
+        case NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH:
+        case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
         case NOTIFICATION_TYPES.MATCH:
+        case NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH:
+        case NOTIFICATION_TYPES.QUESTIONNAIRE_LIKE:
             return 'accent';
 
-        case NOTIFICATION_TYPES.CALL_REMINDER:
-        case NOTIFICATION_TYPES.CALL:
+        case NOTIFICATION_TYPES.PAYMENT_EXPIRING:
             return 'warning';
 
         case NOTIFICATION_TYPES.DATE_REQUEST_DECLINED:
@@ -50,30 +56,50 @@ function toastVariantFor(type?: AppNotificationType): ToastVariant {
     }
 }
 
-// ─── Deep-link resolver ───────────────────────────────────────────────────────
-// Returns a router-compatible path string or null if no navigation needed.
-
-function resolveRoute(data: NotificationPayload): string | null {
-    // Explicit override always wins
-    if (data.route) return data.route;
+export function resolveNotificationRoute(
+    data: NotificationPayload,
+    isV2Enabled = false,
+): string | null {
+    if (data.route) {
+        if (data.route.includes('payments')) {
+            return '/(tabs)/dates';
+        }
+        return data.route;
+    }
 
     switch (data.type) {
-        // Both incoming invite and sent invite accepted → Dates tab (Incoming section)
+        case NOTIFICATION_TYPES.QUESTIONNAIRE_LIKE:
+            return '/dating/likes';
+        case NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH:
+            return data.matchId ? `/dating-chat/${encodeURIComponent(data.matchId)}` : '/dating/messages';
         case NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED:
+            return getIncomingLikeRoute(isV2Enabled);
+
         case NOTIFICATION_TYPES.DATE_REQUEST_ACCEPTED:
         case NOTIFICATION_TYPES.DATE_REQUEST_DECLINED:
         case NOTIFICATION_TYPES.MUTUAL_MATCH:
+        case NOTIFICATION_TYPES.DATE_ARRANGING:
         case NOTIFICATION_TYPES.DATE_SCHEDULED:
         case NOTIFICATION_TYPES.DATE_CANCELLED:
+        case NOTIFICATION_TYPES.MEETUP_PARTNER_CONFIRMED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_ACCEPTED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_CANCELLED:
+        case NOTIFICATION_TYPES.PAYMENT_REQUIRED:
+        case NOTIFICATION_TYPES.PAYMENT_PARTNER_PAID:
+        case NOTIFICATION_TYPES.PAYMENT_BOTH_PAID:
+        case NOTIFICATION_TYPES.PAYMENT_EXPIRING:
+        case NOTIFICATION_TYPES.PAYMENT_EXPIRED:
+        case NOTIFICATION_TYPES.CREDIT_GRANTED:
+        case NOTIFICATION_TYPES.REFUND_COMPLETED:
             return '/(tabs)/dates';
 
-        // 3-min call reminder → vibe-check screen
-        case NOTIFICATION_TYPES.CALL_REMINDER:
-        case NOTIFICATION_TYPES.CALL:
-            if (data.matchId) return `/vibe-check/${data.matchId}`;
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_REQUESTED:
+        case NOTIFICATION_TYPES.MEETUP_RESCHEDULE_COUNTERED:
+            if (data.requestId) {
+                return `/(tabs)/dates?rescheduleRequestId=${encodeURIComponent(data.requestId)}`;
+            }
             return '/(tabs)/dates';
 
-        // Post-date feedback prompt → feedback screen with dateId + name
         case NOTIFICATION_TYPES.FEEDBACK_PROMPT:
             if (data.dateId) {
                 const name = data.name ? `?name=${encodeURIComponent(data.name)}` : '';
@@ -81,7 +107,6 @@ function resolveRoute(data: NotificationPayload): string | null {
             }
             return '/(tabs)/dates';
 
-        // Legacy message / match
         case NOTIFICATION_TYPES.MESSAGE:
             if (data.matchId) return `/chat/${data.matchId}`;
             return null;
@@ -89,69 +114,48 @@ function resolveRoute(data: NotificationPayload): string | null {
         case NOTIFICATION_TYPES.MATCH:
             return '/(tabs)/dates';
 
+        case NOTIFICATION_TYPES.NEW_CANDIDATE_MATCH:
+        case NOTIFICATION_TYPES.MEETUP_SLOT_ASSIGNED:
+        case NOTIFICATION_TYPES.MEETUP_CONFIRM_REMINDER:
+            return '/(tabs)';
+
+        case NOTIFICATION_TYPES.ADMITTED_FROM_WAITLIST:
+            return '/';
+
+        case NOTIFICATION_TYPES.ADMIN_ANNOUNCEMENT:
+            return null;
+
         default:
             return null;
     }
 }
 
-// ─── Android channel ──────────────────────────────────────────────────────────
-
-async function configureAndroidChannel() {
-    if (Platform.OS !== 'android') return;
-
-    await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
-        name: 'Default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        sound: 'default',
-        enableVibrate: true,
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-    });
+function invalidateMessagingCaches(
+    queryClient: ReturnType<typeof useQueryClient>,
+    matchId?: string,
+) {
+    if (matchId) {
+        queryClient.invalidateQueries({ queryKey: ['chat', matchId] });
+    }
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    queryClient.invalidateQueries({ queryKey: ['matches'] });
+    queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
+    queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
 }
 
-// ─── Token registration ───────────────────────────────────────────────────────
-
-async function registerForPushNotificationsAsync(): Promise<string | null> {
-    if (!Device.isDevice) {
-        console.log('[Notifications] Must use physical device for push notifications');
-        return null;
-    }
-
-    const existingStatus = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus.status;
-
-    if (finalStatus !== 'granted') {
-        const requestStatus = await Notifications.requestPermissionsAsync();
-        finalStatus = requestStatus.status;
-    }
-
-    if (finalStatus !== 'granted') {
-        console.log('[Notifications] Permission not granted');
-        return null;
-    }
-
-    const projectId = getProjectId();
-    if (!projectId) {
-        console.warn('[Notifications] Missing EAS projectId; cannot fetch Expo push token');
-        return null;
-    }
-
-    const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
-    return tokenResponse.data;
-}
-
-// ─── Hook ─────────────────────────────────────────────────────────────────────
-
-export function usePushNotifications() {
+export function usePushNotifications(options?: {
+    onTokenRegistered?: (token: string | null) => void;
+}) {
     const toast = useToast();
     const router = useRouter();
+    const queryClient = useQueryClient();
     const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
 
+    const lastResponseId = useRef<string | null>(null);
     const notificationReceivedListener = useRef<Notifications.EventSubscription | null>(null);
     const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null);
 
     useEffect(() => {
-        // Foreground: show alert + sound + badge
         Notifications.setNotificationHandler({
             handleNotification: async () => ({
                 shouldShowAlert: true,
@@ -162,61 +166,91 @@ export function usePushNotifications() {
             }),
         });
 
-        configureAndroidChannel().catch((e) =>
-            console.warn('[Notifications] Failed configuring Android channel', e)
+        configureAndroidNotificationChannel().catch((e) =>
+            console.warn('[Notifications] Failed configuring Android channel', e),
         );
 
-        registerForPushNotificationsAsync()
-            .then(async (token) => {
+        registerPushTokenIfGranted()
+            .then((token) => {
                 if (!token) return;
                 setExpoPushToken(token);
-                try {
-                    await NotificationsService.registerPushToken(token);
-                    console.log('[Notifications] Push token registered');
-                } catch (e) {
-                    console.warn('[Notifications] Failed to register token with backend', e);
-                }
+                options?.onTokenRegistered?.(token);
             })
             .catch((e) => console.warn('[Notifications] Token registration error', e));
 
-        // ── Foreground: show in-app toast ────────────────────────────────────
         notificationReceivedListener.current =
             Notifications.addNotificationReceivedListener((notification) => {
                 const content = notification.request.content;
                 const data = (content.data || {}) as NotificationPayload;
                 const message = content.body || content.title || 'New notification';
 
-                toast.show({
-                    message,
-                    variant: toastVariantFor(data.type),
-                    position: 'top',
-                    duration: 4000,
-                    showInModal: true,
-                });
-            });
+                if (data.type === NOTIFICATION_TYPES.MESSAGE) {
+                    invalidateMessagingCaches(queryClient, data.matchId);
+                }
 
-        // ── Background/killed: handle tap → navigate ─────────────────────────
-        notificationResponseListener.current =
-            Notifications.addNotificationResponseReceivedListener((response) => {
-                const content = response.notification.request.content;
-                const data = (content.data || {}) as NotificationPayload;
+                if (data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH || data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_LIKE || data.type === NOTIFICATION_TYPES.MESSAGE) {
+                    queryClient.invalidateQueries({ queryKey: ['questionnaire'] });
+                    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                }
 
-                console.log('[Notifications] Tapped notification type:', data.type);
+                if (data.type === NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED) {
+                    queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
+                    queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+                }
 
-                const route = resolveRoute(data);
-                if (route) {
-                    console.log('[Notifications] Navigating to:', route);
-                    router.push(route as any);
+                if (data.type !== NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH) {
+                    toast.show({
+                        message,
+                        variant: toastVariantFor(data.type),
+                        position: 'top',
+                        duration: 4000,
+                        showInModal: true,
+                    });
                 }
             });
+
+        const handleResponse = (response: Notifications.NotificationResponse) => {
+            const responseId = response.notification.request.identifier;
+            if (lastResponseId.current === responseId) return;
+            lastResponseId.current = responseId;
+            const content = response.notification.request.content;
+            const data = (content.data || {}) as NotificationPayload;
+
+            if (data.type === NOTIFICATION_TYPES.MESSAGE) {
+                invalidateMessagingCaches(queryClient, data.matchId);
+            }
+
+            if (data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_MATCH || data.type === NOTIFICATION_TYPES.QUESTIONNAIRE_LIKE || data.type === NOTIFICATION_TYPES.MESSAGE) {
+                queryClient.invalidateQueries({ queryKey: ['questionnaire'] });
+                queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            }
+
+            if (data.type === NOTIFICATION_TYPES.DATE_REQUEST_RECEIVED) {
+                queryClient.invalidateQueries({ queryKey: ['connection-requests'] });
+                queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+            }
+
+            const flags = queryClient.getQueryData<PublicFeatureFlags>(['publicFeatureFlags']);
+            const route = resolveNotificationRoute(
+                data,
+                Boolean(flags?.matchmakerPersonalizationV2),
+            );
+            if (route) {
+                router.push(route as any);
+                void Notifications.clearLastNotificationResponseAsync().catch((error) => console.warn('[Notifications] Could not clear response', error));
+            }
+        };
+        notificationResponseListener.current = Notifications.addNotificationResponseReceivedListener(handleResponse);
+        void Notifications.getLastNotificationResponseAsync().then((response) => {
+            if (response) handleResponse(response);
+        }).catch((error) => console.warn('[Notifications] Launch response unavailable', error));
 
         return () => {
             notificationReceivedListener.current?.remove();
             notificationResponseListener.current?.remove();
         };
-        // Stable refs — intentionally omit toast/router to avoid re-registering listeners
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    return { expoPushToken };
+    return { expoPushToken, setExpoPushToken };
 }

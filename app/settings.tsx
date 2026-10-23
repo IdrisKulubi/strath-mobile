@@ -5,10 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
 import { useProfile } from '@/hooks/use-profile';
 import { useAiConsent } from '@/hooks/use-ai-consent';
-import { authClient } from '@/lib/auth-client';
-import { getAuthToken } from '@/lib/auth-helpers';
+import { clearSession, getAuthToken } from '@/lib/auth-helpers';
 import { AI_CONSENT_DISCLOSURE, AI_PROVIDER_NAME } from '@/lib/ai-consent';
-import * as SecureStore from 'expo-secure-store';
+import { useNotificationPermissionPrompt } from '@/context/notification-permission-context';
+import { getPushPermissionStatus } from '@/lib/notification-permission-prompt';
+import { enablePushNotificationsFromUserAction } from '@/lib/push-registration';
 
 export default function SettingsScreen() {
     const router = useRouter();
@@ -17,6 +18,7 @@ export default function SettingsScreen() {
     const { hasAiConsent, grantAiConsent, revokeAiConsent, isAiConsentUpdating } = useAiConsent();
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const { promptIfAppropriate } = useNotificationPermissionPrompt();
 
     const handleAiConsentToggle = (nextValue: boolean) => {
         if (isAiConsentUpdating) return;
@@ -71,34 +73,22 @@ export default function SettingsScreen() {
     const handleOpenNotificationSettings = async () => {
         try {
             await Linking.openSettings();
-        } catch (error) {
-            console.error('Failed to open settings:', error);
+        } catch {
             Alert.alert('Notifications', 'Unable to open system settings. Please open your phone settings and manage notifications for Strathspace.');
         }
     };
 
-    const clearAllLocalData = async () => {
-        try {
-            // Clear SecureStore items used by auth
-            const keysToDelete = [
-                'strathspace_session_token',
-                'strathspace_session',
-                'strathspace_user',
-                'strathspace.session_token',
-                'strathspace.session',
-                'strathspace.user',
-            ];
-            
-            for (const key of keysToDelete) {
-                try {
-                    await SecureStore.deleteItemAsync(key);
-                } catch {
-                    // Key might not exist, continue
-                }
-            }
-        } catch (error) {
-            console.error('Error clearing local data:', error);
+    const handleNotificationsPress = async () => {
+        const status = await getPushPermissionStatus();
+        if (status === 'granted') {
+            await handleOpenNotificationSettings();
+            return;
         }
+        if (status === 'denied') {
+            await enablePushNotificationsFromUserAction();
+            return;
+        }
+        await promptIfAppropriate({ context: 'settings' });
     };
 
     const handleLogout = () => {
@@ -113,20 +103,13 @@ export default function SettingsScreen() {
                     onPress: async () => {
                         setIsLoggingOut(true);
                         try {
-                            // Sign out from the server
-                            await authClient.signOut();
-                            
-                            // Clear all local data
-                            await clearAllLocalData();
-                            
-                            // Navigate to login
-                            router.replace('/(auth)/login');
+                            // clearSession() signs out on the server AND wipes
+                            // every known local storage key (Better Auth
+                            // cookies, Apple fallback, profile cache).
+                            await clearSession();
                         } catch (error) {
-                            console.error('Logout error:', error);
-                            // Even if server signout fails, clear local data and redirect
-                            await clearAllLocalData();
-                            router.replace('/(auth)/login');
                         } finally {
+                            router.replace('/(auth)/login');
                             setIsLoggingOut(false);
                         }
                     }
@@ -178,8 +161,7 @@ export default function SettingsScreen() {
                                                 throw new Error(errorData.error || 'Failed to delete account');
                                             }
 
-                                            // Clear all local data
-                                            await clearAllLocalData();
+                                            await clearSession();
 
                                             Alert.alert(
                                                 "Account Deleted",
@@ -192,7 +174,6 @@ export default function SettingsScreen() {
                                                 ]
                                             );
                                         } catch (error) {
-                                            console.error('Delete account error:', error);
                                             Alert.alert(
                                                 "Error",
                                                 error instanceof Error ? error.message : "Failed to delete account. Please try again."
@@ -254,8 +235,8 @@ export default function SettingsScreen() {
                     <Switch
                         value={value as boolean}
                         onValueChange={onValueChange}
-                        trackColor={{ false: '#767577', true: colors.primary }}
-                        thumbColor={Platform.OS === 'ios' ? '#fff' : (value ? '#fff' : '#f4f3f4')}
+                        trackColor={{ false: colors.muted, true: colors.primary }}
+                        thumbColor={Platform.OS === 'ios' ? colors.primaryForeground : (value ? colors.primaryForeground : colors.muted)}
                     />
                 )}
 
@@ -330,9 +311,9 @@ export default function SettingsScreen() {
                     <SettingItem
                         label="Notifications"
                         type="link"
-                        description="Manage notification preferences in your system settings"
+                        description="Enable alerts for matches, date confirmations, and messages"
                         icon="notifications-outline"
-                        onPress={handleOpenNotificationSettings}
+                        onPress={handleNotificationsPress}
                     />
                 </SettingCard>
 
@@ -352,6 +333,17 @@ export default function SettingsScreen() {
                         icon="shield-checkmark-outline"
                         onPress={() => router.push('/legal?section=privacy')}
                         value={hasAiConsent ? 'Allowed' : 'Off'}
+                    />
+                </SettingCard>
+
+                {/* Feedback */}
+                <SettingCard title="Feedback">
+                    <SettingItem
+                        label="Send Feedback"
+                        type="link"
+                        icon="chatbubble-ellipses-outline"
+                        description="Feature requests, bug reports, or anything you'd like us to hear."
+                        onPress={() => router.push('/app-feedback')}
                     />
                 </SettingCard>
 

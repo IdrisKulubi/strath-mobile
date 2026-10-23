@@ -1,49 +1,91 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, SafeAreaView, StatusBar, Alert } from 'react-native';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { View, StyleSheet, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import { useTheme } from '@/hooks/use-theme';
 import { OnboardingData } from '../../components/digital-dna/types';
 import {
     WelcomeSplash,
     TermsAcceptance,
     TheEssentials,
+    CoreProfileStep,
+    CampusBasicsStep,
     PhotoMoment,
-    VibeCheckGame,
-    BubblePicker,
-    QuickFire,
-    PersonalityStep,
-    LifestyleStep,
-    OpeningLine,
-    ProfileDetailsStep,
+    ProfilePromptStep,
     LaunchCelebration,
 } from '../../components/onboarding';
 import { useImageUpload } from '@/hooks/use-image-upload';
-import { getAuthToken, clearSession, getCurrentUser } from '@/lib/auth-helpers';
+import { getAuthToken, clearSession, getCurrentUser, getCurrentUserId } from '@/lib/auth-helpers';
+import { setCachedProfile } from '@/lib/session-cache';
+import { devError, devLog } from '@/lib/dev-log';
 
-// Steps: 0=Splash, 1=Terms, 2=Essentials, 3=Photos, 4=VibeCheck, 5=Bubbles, 6=QuickFire, 7=Personality, 8=Lifestyle, 9=OpeningLine, 10=ProfileDetails, 11=Celebration
-type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+// Steps: 0=Splash, 1=Terms, 2=Essentials, 3=CoreProfile, 4=CampusBasics, 5=Photos, 6=Prompt, 7=Celebration
+type OnboardingStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+const PROMPT_RESPONSE_MAX_LENGTH = 150;
+const LEGACY_DRAFT_VERSION = 1;
+const legacyDraftKey = (userId: string) => `legacy_onboarding_draft_v1_${userId}`;
+
+type LegacyDetails = Pick<OnboardingData,
+    'firstName' | 'lastName' | 'phoneNumber' | 'age' | 'gender' | 'lookingFor' | 'zodiacSign'
+    | 'yearOfStudy' | 'interests' | 'currentLocation' | 'locationLatitude' | 'locationLongitude' | 'locationPermissionStatus'
+> & { relationshipGoal?: string };
+
+type LegacyDraft = { version: number; step: OnboardingStep; birthDate: string; consentAccepted: boolean; details: LegacyDetails; photos?: string[]; prompts?: OnboardingData['prompts'] };
+
+const getProfileSetupErrorMessage = (responseData: any, status: number) => {
+    const serverMessage =
+        typeof responseData?.message === 'string'
+            ? responseData.message
+            : typeof responseData?.error === 'string'
+            ? responseData.error
+            : '';
+
+    const promptIssues = Array.isArray(responseData?.details)
+        ? responseData.details.filter((issue: any) => Array.isArray(issue?.path) && issue.path[0] === 'prompts')
+        : [];
+
+    if (promptIssues.some((issue: any) => issue?.code === 'too_big' || String(issue?.message || '').includes('150'))) {
+        return 'One of your prompt answers is too long. Please keep each answer under 150 characters.';
+    }
+
+    if (serverMessage.includes('prompts') && serverMessage.includes('150')) {
+        return 'One of your prompt answers is too long. Please keep each answer under 150 characters.';
+    }
+
+    return serverMessage || `We could not save your profile right now. Please try again. (${status})`;
+};
 
 export default function OnboardingScreen() {
     const router = useRouter();
+    const { isDark } = useTheme();
     const [step, setStep] = useState<OnboardingStep>(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const submitInFlight = useRef(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const [legacyBirthDate, setLegacyBirthDate] = useState('');
+    const [consentAccepted, setConsentAccepted] = useState(false);
+    const [draftUserId, setDraftUserId] = useState<string | null>(null);
+    const [draftLoaded, setDraftLoaded] = useState(false);
     const { uploadImage } = useImageUpload();
 
     const [formData, setFormData] = useState<OnboardingData>({
-        // Essentials
         firstName: '',
         lastName: '',
         phoneNumber: '',
-        university: 'Strathmore University',
+        currentLocation: '',
+        locationLatitude: '',
+        locationLongitude: '',
+        locationPermissionStatus: 'unknown',
+        university: '',
         course: '',
         yearOfStudy: '',
         age: '',
         gender: '',
         lookingFor: '',
         zodiacSign: '',
-        // Photos
         photos: [],
-        // Vibe Check results
         personalityType: '',
         loveLanguage: '',
         sleepingHabits: '',
@@ -51,24 +93,18 @@ export default function OnboardingScreen() {
         workoutFrequency: '',
         socialMediaUsage: '',
         communicationStyle: '',
-        // Interests
         interests: [],
-        // Quick Fire
         height: '',
         education: '',
         smoking: '',
         politics: '',
         religion: '',
         languages: [],
-        // Personality step
         personalityAnswers: {},
-        // Lifestyle step
         lifestyleAnswers: {},
-        // Opening Line
         prompts: [],
         aboutMe: '',
         bio: '',
-        // Others
         qualities: [],
         instagram: '',
         spotify: '',
@@ -77,7 +113,45 @@ export default function OnboardingScreen() {
         showActiveStatus: true,
     });
 
-    // Pre-populate name from auth user info (Apple/Google), with email fallback
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                const userId = await getCurrentUserId();
+                if (!userId || cancelled) return;
+                const raw = await SecureStore.getItemAsync(legacyDraftKey(userId));
+                if (raw && !cancelled) {
+                    const draft = JSON.parse(raw) as LegacyDraft;
+                    if (draft.version === LEGACY_DRAFT_VERSION && draft.consentAccepted && draft.details) {
+                        const { relationshipGoal, ...details } = draft.details;
+                        setFormData((current) => ({ ...current, ...details, photos: draft.photos ?? [], prompts: draft.prompts ?? [], lifestyleAnswers: { ...current.lifestyleAnswers, relationshipGoal } }));
+                        setLegacyBirthDate(draft.birthDate);
+                        setStep(Math.max(1, Math.min(7, draft.step)) as OnboardingStep);
+                        setConsentAccepted(true);
+                    }
+                }
+                setDraftUserId(userId);
+            } catch { /* Onboarding remains available when a local draft cannot be read. */ }
+            finally { if (!cancelled) setDraftLoaded(true); }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    useEffect(() => {
+        if (!draftLoaded || !draftUserId || !consentAccepted) return;
+        const details: LegacyDetails = {
+            firstName: formData.firstName, lastName: formData.lastName, phoneNumber: formData.phoneNumber,
+            age: formData.age, gender: formData.gender, lookingFor: formData.lookingFor, zodiacSign: formData.zodiacSign,
+            yearOfStudy: formData.yearOfStudy, interests: formData.interests, currentLocation: formData.currentLocation,
+            locationLatitude: formData.locationLatitude, locationLongitude: formData.locationLongitude,
+            locationPermissionStatus: formData.locationPermissionStatus,
+            relationshipGoal: formData.lifestyleAnswers.relationshipGoal,
+        };
+        const draft: LegacyDraft = { version: LEGACY_DRAFT_VERSION, step, birthDate: legacyBirthDate, consentAccepted, details, photos: formData.photos, prompts: formData.prompts };
+        const timer = setTimeout(() => { void SecureStore.setItemAsync(legacyDraftKey(draftUserId), JSON.stringify(draft)).catch(() => {}); }, 300);
+        return () => clearTimeout(timer);
+    }, [draftLoaded, draftUserId, consentAccepted, step, legacyBirthDate, formData]);
+
     useEffect(() => {
         const normalizeToken = (token: string) =>
             token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
@@ -104,8 +178,6 @@ export default function OnboardingScreen() {
             const localPart = localPartRaw.trim();
             const domain = domainRaw.trim();
 
-            // Apple private relay addresses are anonymous aliases (e.g. random strings)
-            // and should not be used to infer names.
             if (domain === 'privaterelay.appleid.com') {
                 return { firstName: '', lastName: '' };
             }
@@ -113,7 +185,6 @@ export default function OnboardingScreen() {
             const hasSeparator = /[._-]/.test(localPart);
             const hasDigits = /\d/.test(localPart);
 
-            // Heuristic: likely alias/random handle, avoid generating garbage names.
             if (!hasSeparator && hasDigits && localPart.length >= 8) {
                 return { firstName: '', lastName: '' };
             }
@@ -129,7 +200,6 @@ export default function OnboardingScreen() {
                 return { firstName: '', lastName: '' };
             }
 
-            // If what's left is mostly short fragments, don't treat it as a real name.
             if (tokens.every((token) => token.length <= 2)) {
                 return { firstName: '', lastName: '' };
             }
@@ -137,7 +207,7 @@ export default function OnboardingScreen() {
             const firstName = normalizeToken(tokens[0]);
             const lastName = tokens.length > 1
                 ? tokens.slice(1).map(normalizeToken).join(' ')
-                : 'Student';
+                : '';
 
             return { firstName, lastName };
         };
@@ -153,15 +223,11 @@ export default function OnboardingScreen() {
             const emailName = fromEmail(email);
 
             if (!firstName || genericFirstNames.has(firstName.toLowerCase())) {
-                firstName = emailName.firstName || firstName;
+                firstName = emailName.firstName;
             }
 
             if (!lastName) {
-                lastName = emailName.lastName || 'Student';
-            }
-
-            if (!firstName) {
-                firstName = 'Campus';
+                lastName = emailName.lastName;
             }
 
             return { firstName, lastName };
@@ -178,8 +244,8 @@ export default function OnboardingScreen() {
                 const firstName = normalized.firstName;
                 const lastName = normalized.lastName;
 
-                if (firstName) {
-                    console.log('[Onboarding] Pre-populating name from auth user data');
+                if (firstName || lastName) {
+                    devLog('[Onboarding] Pre-populating name from auth user data');
                     setFormData((prev) => ({
                         ...prev,
                         firstName: prev.firstName || firstName,
@@ -187,10 +253,10 @@ export default function OnboardingScreen() {
                     }));
                 }
             } catch (error) {
-                console.log('[Onboarding] Could not load user data:', error);
+                devLog('[Onboarding] Could not load user data:', error);
             }
         };
-        
+
         loadUserData();
     }, []);
 
@@ -199,36 +265,35 @@ export default function OnboardingScreen() {
     }, []);
 
     const submitData = async () => {
+        if (submitInFlight.current) return;
+        submitInFlight.current = true;
         setIsSubmitting(true);
         setSubmitError(null);
-        console.log('[Onboarding] Starting profile submission...');
-        
+        devLog('[Onboarding] Starting profile submission...');
+
         try {
-            // Get auth token (works with both Better Auth and Apple Sign In)
             const token = await getAuthToken();
-            console.log('[Onboarding] Token retrieved:', token ? `${token.substring(0, 20)}...` : 'null');
+            devLog('[Onboarding] Token retrieved:', token ? `${token.substring(0, 20)}...` : 'null');
 
             if (!token) {
                 throw new Error('Not authenticated. Please log in again.');
             }
 
-            // Upload photos first
-            console.log('[Onboarding] Photos to upload:', formData.photos.length);
+            devLog('[Onboarding] Photos to upload:', formData.photos.length);
             let uploadedPhotos = [...formData.photos];
             if (uploadedPhotos.length > 0) {
                 uploadedPhotos = await Promise.all(uploadedPhotos.map(async (photo, index) => {
                     if (photo && !photo.startsWith('http')) {
-                        console.log(`[Onboarding] Uploading photo ${index + 1}...`);
+                        devLog(`[Onboarding] Uploading photo ${index + 1}...`);
                         const uploaded = await uploadImage(photo);
-                        console.log(`[Onboarding] Photo ${index + 1} uploaded:`, uploaded ? 'success' : 'failed');
+                        devLog(`[Onboarding] Photo ${index + 1} uploaded:`, uploaded ? 'success' : 'failed');
                         return uploaded;
                     }
                     return photo;
                 }));
             }
-            console.log('[Onboarding] Photos after upload:', uploadedPhotos);
+            devLog('[Onboarding] Photos after upload:', uploadedPhotos);
 
-            // Convert lookingFor to interestedIn array for matching algorithm
             const getInterestedIn = (lookingFor: string): string[] => {
                 switch (lookingFor) {
                     case 'women':
@@ -242,43 +307,31 @@ export default function OnboardingScreen() {
                 }
             };
 
-            // Prepare data for API - convert string fields to proper types
-            console.log('[Onboarding] formData BEFORE creating payload:', {
-                loveLanguage: formData.loveLanguage,
-                communicationStyle: formData.communicationStyle,
-                sleepingHabits: formData.sleepingHabits,
-                workoutFrequency: formData.workoutFrequency,
-                socialMediaUsage: formData.socialMediaUsage,
-                drinkingPreference: formData.drinkingPreference,
-                personalityType: formData.personalityType,
-            });
-            
+            const sanitizedPrompts = (formData.prompts || [])
+                .filter((prompt) => prompt.promptId && prompt.response)
+                .map((prompt) => ({
+                    ...prompt,
+                    response: prompt.response.trim().slice(0, PROMPT_RESPONSE_MAX_LENGTH),
+                }));
+
             const payload = {
                 ...formData,
+                lifestyleAnswers: {
+                    ...formData.lifestyleAnswers,
+                    relationshipGoal: formData.lifestyleAnswers.relationshipGoal,
+                },
+                prompts: sanitizedPrompts,
                 photos: uploadedPhotos,
+                profilePhoto: uploadedPhotos[0] ?? undefined,
                 age: formData.age ? parseInt(String(formData.age)) : undefined,
                 yearOfStudy: formData.yearOfStudy ? parseInt(String(formData.yearOfStudy)) : undefined,
-                interestedIn: getInterestedIn(formData.lookingFor), // Set interestedIn from lookingFor selection
+                interestedIn: getInterestedIn(formData.lookingFor),
                 isComplete: true,
                 profileCompleted: true,
             };
 
-            console.log('[Onboarding] Payload keys:', Object.keys(payload));
-            console.log('[Onboarding] Vibe check fields in payload:', {
-                loveLanguage: payload.loveLanguage,
-                communicationStyle: payload.communicationStyle,
-                sleepingHabits: payload.sleepingHabits,
-                workoutFrequency: payload.workoutFrequency,
-                socialMediaUsage: payload.socialMediaUsage,
-                drinkingPreference: payload.drinkingPreference,
-                personalityType: payload.personalityType,
-                qualities: payload.qualities,
-                prompts: payload.prompts,
-                height: payload.height,
-                smoking: payload.smoking,
-                religion: payload.religion,
-            });
-            console.log('[Onboarding] API URL:', `${process.env.EXPO_PUBLIC_API_URL}/api/user/me`);
+            devLog('[Onboarding] Payload keys:', Object.keys(payload));
+            devLog('[Onboarding] API URL:', `${process.env.EXPO_PUBLIC_API_URL}/api/user/me`);
 
             const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/user/me`, {
                 method: 'PATCH',
@@ -289,24 +342,23 @@ export default function OnboardingScreen() {
                 body: JSON.stringify(payload),
             });
 
-            console.log('[Onboarding] Response status:', response.status);
-            
+            devLog('[Onboarding] Response status:', response.status);
+
             const responseText = await response.text();
-            console.log('[Onboarding] Response text:', responseText.substring(0, 500));
-            
+            devLog('[Onboarding] Response text:', responseText.substring(0, 500));
+
             let responseData: any = {};
             try {
                 responseData = JSON.parse(responseText);
             } catch {
-                console.error('[Onboarding] Failed to parse response as JSON');
+                devError('[Onboarding] Failed to parse response as JSON');
             }
-            
+
             if (!response.ok) {
-                console.error('[Onboarding] Profile update failed:', response.status, responseData);
-                
-                // Handle 401 Unauthorized - session expired or invalid
+                devError('[Onboarding] Profile update failed:', response.status, responseData);
+
                 if (response.status === 401) {
-                    console.log('[Onboarding] Session expired - redirecting to login');
+                    devLog('[Onboarding] Session expired - redirecting to login');
                     await clearSession();
                     Alert.alert(
                         'Session Expired',
@@ -315,19 +367,30 @@ export default function OnboardingScreen() {
                     );
                     return;
                 }
-                
-                const errorMessage = responseData.error || responseData.message || `Server error: ${response.status}`;
-                throw new Error(errorMessage);
+
+                throw new Error(getProfileSetupErrorMessage(responseData, response.status));
             }
 
-            console.log('[Onboarding] Profile saved successfully!');
+            devLog('[Onboarding] Profile saved successfully!');
+            if (draftUserId) {
+                try { await SecureStore.deleteItemAsync(legacyDraftKey(draftUserId)); } catch { /* The server result remains authoritative. */ }
+            }
+            if (responseData?.data?.userId) {
+                await setCachedProfile(responseData.data.userId, responseData.data);
+            }
 
-            // Continue into the face verification checkpoint before matchmaking access.
+            const admission = responseData?.data?.admission;
+            if (admission?.status === 'waitlisted') {
+                router.replace('/waitlist' as any);
+                return;
+            }
+
             router.replace('/verification' as any);
         } catch (error: any) {
-            console.error('[Onboarding] Error:', error.message || error);
+            devError('[Onboarding] Error:', error.message || error);
             setSubmitError(error.message || 'Failed to save your profile. Please try again.');
         } finally {
+            submitInFlight.current = false;
             setIsSubmitting(false);
         }
     };
@@ -338,7 +401,6 @@ export default function OnboardingScreen() {
 
     const renderStep = () => {
         switch (step) {
-            // Step 0: Welcome Splash
             case 0:
                 return (
                     <WelcomeSplash
@@ -350,15 +412,14 @@ export default function OnboardingScreen() {
                     />
                 );
 
-            // Step 1: Terms & Privacy Acceptance (Required by Apple Guideline 1.2)
             case 1:
                 return (
                     <TermsAcceptance
-                        onAccept={() => setStep(2)}
+                        onAccept={() => { setConsentAccepted(true); setStep(2); }}
+                        onBack={() => setStep(0)}
                     />
                 );
 
-            // Step 2: The Essentials (Name, Phone, Birthday/Zodiac, Gender, Looking For)
             case 2:
                 return (
                     <TheEssentials
@@ -366,156 +427,92 @@ export default function OnboardingScreen() {
                             firstName: formData.firstName,
                             lastName: formData.lastName,
                             phoneNumber: formData.phoneNumber,
-                            age: typeof formData.age === 'string' ? parseInt(formData.age) || 0 : formData.age || 0,
-                            zodiacSign: formData.zodiacSign,
-                            gender: formData.gender,
-                            lookingFor: formData.lookingFor,
                         }}
                         onUpdate={(data) => updateData(data as Partial<OnboardingData>)}
                         onNext={() => setStep(3)}
+                        onBack={() => setStep(1)}
                     />
                 );
 
-            // Step 3: Photo Moment
             case 3:
                 return (
-                    <PhotoMoment
-                        photos={formData.photos}
-                        onUpdate={(photos) => updateData({ photos })}
-                        onNext={() => setStep(4)}
+                    <CoreProfileStep
+                        globalStepIndex={3}
+                        data={{
+                            age: formData.age,
+                            zodiacSign: formData.zodiacSign,
+                            gender: formData.gender,
+                            lookingFor: formData.lookingFor,
+                            relationshipGoal: formData.lifestyleAnswers.relationshipGoal || '',
+                        }}
+                        onUpdate={(updates) => {
+                            const nextUpdates: Partial<OnboardingData> = {};
+                            if (updates.age !== undefined) nextUpdates.age = String(updates.age);
+                            if (updates.zodiacSign !== undefined) nextUpdates.zodiacSign = updates.zodiacSign;
+                            if (updates.gender !== undefined) nextUpdates.gender = updates.gender as OnboardingData['gender'];
+                            if (updates.lookingFor !== undefined) nextUpdates.lookingFor = updates.lookingFor;
+                            if (updates.relationshipGoal !== undefined) {
+                                nextUpdates.lifestyleAnswers = {
+                                    ...formData.lifestyleAnswers,
+                                    relationshipGoal: updates.relationshipGoal,
+                                };
+                            }
+                            updateData(nextUpdates);
+                        }}
+                        onComplete={() => setStep(4)}
+                        onBackToEssentials={() => setStep(2)}
+                        initialBirthDate={legacyBirthDate}
+                        onBirthDateChange={setLegacyBirthDate}
                     />
                 );
 
-            // Step 4: Vibe Check Game (This or That)
             case 4:
                 return (
-                    <VibeCheckGame
-                        onComplete={(results) => {
-                            updateData({
-                                personalityType: results.personalityType,
-                                communicationStyle: results.communicationStyle,
-                                sleepingHabits: results.sleepingHabits,
-                                workoutFrequency: results.workoutFrequency,
-                                socialMediaUsage: results.socialMediaUsage,
-                                drinkingPreference: results.drinkingPreference,
-                                loveLanguage: results.loveLanguage,
-                            });
-                            setStep(5);
+                    <CampusBasicsStep
+                        globalStepIndex={4}
+                        data={{
+                            yearOfStudy: formData.yearOfStudy,
+                            interests: formData.interests,
+                            currentLocation: formData.currentLocation,
+                            locationLatitude: formData.locationLatitude,
+                            locationLongitude: formData.locationLongitude,
+                            locationPermissionStatus: formData.locationPermissionStatus,
                         }}
+                        onUpdate={(updates) => updateData(updates as Partial<OnboardingData>)}
+                        onComplete={() => setStep(5)}
+                        onBackToCoreProfile={() => setStep(3)}
                     />
                 );
 
-            // Step 5: Bubble Picker for Interests
             case 5:
                 return (
-                    <BubblePicker
-                        interests={formData.interests}
-                        onComplete={(interests) => {
-                            updateData({ interests });
-                            setStep(6);
-                        }}
-                        minSelection={3}
-                        maxSelection={10}
+                    <PhotoMoment
+                        globalStepIndex={5}
+                        photos={formData.photos}
+                        onUpdate={(photos) => updateData({ photos })}
+                        onNext={() => setStep(6)}
+                        onBack={() => setStep(4)}
                     />
                 );
 
-            // Step 6: Quick Fire (Height, Year, Drinking, Smoking, Religion)
             case 6:
                 return (
-                    <QuickFire
-                        data={{
-                            height: formData.height,
-                            course: formData.course,
-                            yearOfStudy: typeof formData.yearOfStudy === 'string' 
-                                ? parseInt(formData.yearOfStudy) || undefined 
-                                : formData.yearOfStudy,
-                            drinkingPreference: formData.drinkingPreference,
-                            smoking: formData.smoking,
-                            religion: formData.religion,
-                            education: formData.education,
-                        }}
-                        onUpdate={(data) => {
-                            const updates: Partial<OnboardingData> = {};
-                            if (data.height !== undefined) updates.height = data.height;
-                            if (data.course !== undefined) updates.course = data.course;
-                            if (data.yearOfStudy !== undefined) updates.yearOfStudy = String(data.yearOfStudy);
-                            if (data.drinkingPreference !== undefined) updates.drinkingPreference = data.drinkingPreference;
-                            if (data.smoking !== undefined) updates.smoking = data.smoking;
-                            if (data.religion !== undefined) updates.religion = data.religion;
-                            if (data.education !== undefined) updates.education = data.education;
-                            updateData(updates);
-                        }}
-                        onComplete={() => setStep(7)}
-                    />
-                );
-
-            // Step 7: Personality questions
-            case 7:
-                return (
-                    <PersonalityStep
-                        data={formData.personalityAnswers}
-                        onComplete={(answers) => {
-                            updateData({ personalityAnswers: answers });
-                            setStep(8);
-                        }}
-                        onBack={() => setStep(6)}
-                    />
-                );
-
-            // Step 8: Lifestyle questions
-            case 8:
-                return (
-                    <LifestyleStep
-                        data={formData.lifestyleAnswers}
-                        onComplete={(answers) => {
-                            updateData({ lifestyleAnswers: answers });
-                            setStep(9);
-                        }}
-                        onBack={() => setStep(7)}
-                    />
-                );
-
-            // Step 9: Opening Line (Prompts + Bio)
-            case 9:
-                return (
-                    <OpeningLine
+                    <ProfilePromptStep
+                        globalStepIndex={6}
                         prompts={formData.prompts}
-                        aboutMe={formData.aboutMe}
-                        onUpdate={(data) => {
-                            if (data.prompts) updateData({ prompts: data.prompts });
-                            if (data.aboutMe) updateData({ aboutMe: data.aboutMe, bio: data.aboutMe });
-                        }}
-                        onComplete={() => setStep(10)}
+                        onUpdate={(prompts) => updateData({ prompts })}
+                        onComplete={() => setStep(7)}
+                        onBack={() => setStep(5)}
                     />
                 );
 
-            // Step 10: Remaining profile details
-            case 10:
-                return (
-                    <ProfileDetailsStep
-                        data={{
-                            course: formData.course,
-                            education: formData.education,
-                            politics: formData.politics,
-                            languages: formData.languages,
-                            qualities: formData.qualities,
-                            instagram: formData.instagram,
-                            spotify: formData.spotify,
-                            snapchat: formData.snapchat,
-                        }}
-                        onUpdate={(data) => updateData(data as Partial<OnboardingData>)}
-                        onComplete={() => setStep(11)}
-                        onBack={() => setStep(9)}
-                    />
-                );
-
-            // Step 11: Launch Celebration
-            case 11:
+            case 7:
                 return (
                     <LaunchCelebration
                         userName={formData.firstName}
                         mainPhoto={formData.photos[0]}
                         onComplete={handleCelebrationComplete}
+                        onBack={() => setStep(6)}
                         onRetry={handleCelebrationComplete}
                         isLoading={isSubmitting}
                         hasError={!!submitError}
@@ -529,8 +526,11 @@ export default function OnboardingScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" />
+        <SafeAreaView
+            style={styles.container}
+            edges={step <= 4 ? [] : ['top', 'bottom']}
+        >
+            <StatusBar style={isDark ? 'light' : 'dark'} />
             <View style={styles.content}>
                 {renderStep()}
             </View>
@@ -541,7 +541,7 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0f0d23',
+        backgroundColor: 'transparent',
     },
     content: {
         flex: 1,

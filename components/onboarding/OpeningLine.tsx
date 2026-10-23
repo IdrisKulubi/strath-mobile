@@ -15,8 +15,10 @@ import Animated, {
     SlideInUp,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
 import * as Haptics from 'expo-haptics';
 import { ChatCircle, PencilSimple, Sparkle, Lightbulb } from 'phosphor-react-native';
+import { PROMPT_OPTIONS } from '@/constants/profile-options';
 
 interface OpeningLineProps {
     prompts: { promptId: string; response: string }[];
@@ -25,18 +27,12 @@ interface OpeningLineProps {
     onComplete: () => void;
 }
 
-const PROMPT_OPTIONS = [
-    "Two truths and a lie...",
-    "The way to my heart is...",
-    "My most controversial opinion is...",
-    "The best trip I ever took was...",
-    "I'm looking for someone who...",
-    "My secret talent is...",
-    "I geek out on...",
-    "A perfect Sunday looks like...",
-    "My most irrational fear is...",
-    "If I could have dinner with anyone...",
-];
+const LEGACY_PROMPT_IDS = new Set(['dating_style', 'confession', 'favorite_way']);
+const PROMPT_OPTION_STRINGS = PROMPT_OPTIONS.filter((prompt) => !LEGACY_PROMPT_IDS.has(prompt.id)).map(
+    (prompt) => prompt.id
+);
+
+const PROMPT_RESPONSE_MAX_LENGTH = 150;
 
 const PromptChip = ({
     prompt,
@@ -115,10 +111,7 @@ export function OpeningLine({ prompts, aboutMe, onUpdate, onComplete }: OpeningL
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-            <LinearGradient
-                colors={['#0f0d23', '#1a0d2e', '#0f0d23']}
-                style={StyleSheet.absoluteFill}
-            />
+            <OnboardingScreenBackdrop />
 
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
@@ -137,7 +130,7 @@ export function OpeningLine({ prompts, aboutMe, onUpdate, onComplete }: OpeningL
                         </Text>
 
                         <View style={styles.promptsContainer}>
-                            {PROMPT_OPTIONS.map((prompt, index) => (
+                            {PROMPT_OPTION_STRINGS.map((prompt, index) => (
                                 <PromptChip
                                     key={prompt}
                                     prompt={prompt}
@@ -167,7 +160,7 @@ export function OpeningLine({ prompts, aboutMe, onUpdate, onComplete }: OpeningL
                             placeholder="Your answer here..."
                             placeholderTextColor="#64748b"
                             multiline
-                            maxLength={200}
+                            maxLength={PROMPT_RESPONSE_MAX_LENGTH}
                             value={answer}
                             onChangeText={setAnswer}
                             autoFocus
@@ -175,7 +168,7 @@ export function OpeningLine({ prompts, aboutMe, onUpdate, onComplete }: OpeningL
 
                         <View style={styles.charCount}>
                             <Text style={[styles.charCountText, answer.length >= 10 && styles.charCountValid]}>
-                                {answer.length}/200
+                                {answer.length}/{PROMPT_RESPONSE_MAX_LENGTH}
                             </Text>
                             {answer.length < 10 && (
                                 <Text style={styles.charCountHint}>Min 10 characters</Text>

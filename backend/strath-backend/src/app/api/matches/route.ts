@@ -118,6 +118,11 @@ export async function GET(req: NextRequest) {
             const isUser1 = match.user1Id === userId;
             const partner = isUser1 ? match.user2 : match.user1;
             const currentUserProfile = isUser1 ? match.user1.profile : match.user2.profile;
+            const primaryPartnerPhoto =
+                (Array.isArray(partner.profile?.photos) ? partner.profile.photos[0] : null)
+                ?? partner.profile?.profilePhoto
+                ?? partner.image
+                ?? null;
             
             // Check if this match is unopened for the current user
             const isNew = isUser1 ? !match.user1Opened : !match.user2Opened;
@@ -141,9 +146,10 @@ export async function GET(req: NextRequest) {
                 partner: {
                     id: partner.id,
                     name: partner.name,
-                    image: partner.image,
+                    image: primaryPartnerPhoto,
                     profile: partner.profile ? {
                         ...partner.profile,
+                        profilePhoto: primaryPartnerPhoto,
                         interests: partner.profile.interests || [],
                     } : null,
                     lastActive: partner.lastActive?.toISOString() || null,

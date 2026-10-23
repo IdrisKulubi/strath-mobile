@@ -54,7 +54,7 @@ export function UpcomingDateCard({ date, index, onCancel }: UpcomingDateCardProp
             style={[
                 styles.card,
                 {
-                    backgroundColor: isDark ? colors.card : '#fff',
+                    backgroundColor: colors.card,
                     borderColor: colors.border,
                 },
             ]}
@@ -72,9 +72,9 @@ export function UpcomingDateCard({ date, index, onCancel }: UpcomingDateCardProp
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>Upcoming Date</Text>
                     <Text style={[styles.name, { color: colors.foreground }]}>{date.withUser.firstName}</Text>
                 </View>
-                <View style={[styles.confirmedBadge, { backgroundColor: '#10b98118' }]}>
-                    <Ionicons name="checkmark-circle" size={14} color="#10b981" />
-                    <Text style={styles.confirmedText}>Confirmed</Text>
+                <View style={[styles.confirmedBadge, { backgroundColor: `${colors.success}18` }]}>
+                    <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                    <Text style={[styles.confirmedText, { color: colors.success }]}>Confirmed</Text>
                 </View>
             </View>
 
@@ -120,13 +120,13 @@ export function UpcomingDateCard({ date, index, onCancel }: UpcomingDateCardProp
                     style={({ pressed }) => [
                         styles.cancelBtn,
                         {
-                            borderColor: '#FF3B3030',
+                            borderColor: `${colors.destructive}30`,
                             backgroundColor: isDark ? 'rgba(255,59,48,0.08)' : 'rgba(255,59,48,0.05)',
                             opacity: pressed ? 0.7 : 1,
                         },
                     ]}
                 >
-                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                    <Text style={[styles.cancelBtnText, { color: colors.destructive }]}>Cancel</Text>
                 </Pressable>
             </View>
         </Animated.View>

@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-helpers';
 import { isVerificationRequiredError, parseApiError } from '@/lib/api-errors';
+import type { RescheduleViewerState } from '@/lib/reschedule-types';
+import { getDailyMatchesPollInterval } from '@/lib/daily-matches-polling';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -23,9 +25,80 @@ export interface DailyMatch {
     expiresInMs: number;
 }
 
+export type MatchHoldStatus =
+    | 'mutual'
+    | 'being_arranged'
+    | 'upcoming'
+    | 'completed_pending_feedback';
+
+export interface SlotConfirmationState {
+    assignedSlot: 'wednesday' | 'saturday' | null;
+    scheduledAt: string | null;
+    confirmBy: string | null;
+    confirmWindowOpen: boolean;
+    viewerSlotConfirmed: boolean;
+    partnerSlotConfirmed: boolean;
+    needsSlotConfirmation: boolean;
+    reschedule?: RescheduleViewerState;
+}
+
+export interface MatchHold {
+    mutualMatchId: string;
+    candidatePairId: string;
+    partnerUserId: string;
+    partner: {
+        firstName: string | null;
+        age: number | null;
+        profilePhoto: string | null;
+        course: string | null;
+        university: string | null;
+    };
+    status: MatchHoldStatus;
+    venueName: string | null;
+    venueAddress: string | null;
+    scheduledAt: string | null;
+    dateMatchId: string | null;
+    needsFeedback: boolean;
+    autoReleaseAt: string | null;
+    createdAt: string;
+    slotConfirmation: SlotConfirmationState;
+}
+
+export type MatchHoldCancelReason =
+    | 'no_longer_interested'
+    | 'scheduling_conflict'
+    | 'safety_concern'
+    | 'other';
+
+export interface ManualCuration {
+    title: string;
+    subtitle: string;
+}
+
 export interface DailyMatchesResponse {
+    mode: 'matches' | 'hold' | 'manual_curation';
     matches: DailyMatch[];
-    nextPairsAvailableAt?: string;
+    /** True when a queued introduction is scheduled for a future UTC day (no timer shown). */
+    hasUpcomingQueued?: boolean;
+    hold?: MatchHold | null;
+    manualCuration?: ManualCuration | null;
+}
+
+function normalizeMatchHold(hold: MatchHold & { slotConfirmation?: SlotConfirmationState }): MatchHold {
+    const slot = hold.slotConfirmation;
+    return {
+        ...hold,
+        slotConfirmation: {
+            assignedSlot: slot?.assignedSlot ?? null,
+            scheduledAt: slot?.scheduledAt ?? hold.scheduledAt ?? null,
+            confirmBy: slot?.confirmBy ?? null,
+            confirmWindowOpen: slot?.confirmWindowOpen ?? false,
+            viewerSlotConfirmed: slot?.viewerSlotConfirmed ?? false,
+            partnerSlotConfirmed: slot?.partnerSlotConfirmed ?? false,
+            needsSlotConfirmation: slot?.needsSlotConfirmation ?? false,
+            reschedule: slot?.reschedule,
+        },
+    };
 }
 
 export function useDailyMatches() {
@@ -33,7 +106,7 @@ export function useDailyMatches() {
         queryKey: ['candidatePairs', 'daily'],
         queryFn: async (): Promise<DailyMatchesResponse> => {
             const token = await getAuthToken();
-            if (!token) return { matches: [] };
+            if (!token) return { mode: 'matches', matches: [] };
             const res = await fetch(`${API_URL}/api/home/daily-matches`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
@@ -41,28 +114,70 @@ export function useDailyMatches() {
                 throw await parseApiError(res, `Failed to fetch daily matches (${res.status})`);
             }
             const json = await res.json();
+            const data = json?.data ?? {};
+            const mode = data.mode === 'hold'
+                ? 'hold'
+                : data.mode === 'manual_curation'
+                    ? 'manual_curation'
+                    : 'matches';
             return {
-                matches: json?.data?.matches ?? [],
-                nextPairsAvailableAt: json?.data?.nextPairsAvailableAt,
+                mode,
+                matches: Array.isArray(data.matches) ? data.matches : [],
+                hasUpcomingQueued: Boolean(data.hasUpcomingQueued),
+                hold: data.hold ? normalizeMatchHold(data.hold) : null,
+                manualCuration: data.manualCuration ?? null,
             };
         },
-        staleTime: 60 * 1000, // 1 minute — ensures fresh pairs after expiry, pull-to-refresh always refetches
-        // Auto-refetch when the soonest displayed match expires so cards disappear without pull-to-refresh
-        refetchInterval: (query) => {
-            const matches = query.state.data?.matches ?? [];
-            if (matches.length === 0) return false;
-            const now = Date.now();
-            const soonestMs = Math.min(...matches.map((m) => new Date(m.expiresAt).getTime()));
-            const msUntilExpiry = soonestMs - now;
-            if (msUntilExpiry <= 0) return 1000; // already expired, refetch in 1s
-            return msUntilExpiry;
-        },
+        staleTime: 60 * 1000,
+        refetchInterval: (query) => getDailyMatchesPollInterval(query.state.data),
     });
 
     return {
         ...query,
         verificationRequired: isVerificationRequiredError(query.error),
     };
+}
+
+export type CancelMatchHoldResponse = {
+    status: string;
+    credited?: boolean;
+    creditAmountCents?: number | null;
+    dateMatchId?: string | null;
+};
+
+export function useCancelMatchHold() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (payload: {
+            mutualMatchId: string;
+            reason: MatchHoldCancelReason;
+            notes?: string | null;
+        }) => {
+            const token = await getAuthToken();
+            if (!token) throw new Error('Not authenticated');
+            const res = await fetch(`${API_URL}/api/me/match-hold/cancel`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+                throw await parseApiError(res, `Failed to cancel match hold (${res.status})`);
+            }
+            const json = await res.json();
+            const data = (json?.data ?? json) as CancelMatchHoldResponse;
+            return { ...payload, ...data };
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['candidatePairs', 'daily'] });
+            queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
+            queryClient.invalidateQueries({ queryKey: ['notificationCounts'] });
+            queryClient.invalidateQueries({ queryKey: ['paymentStatus'] });
+            queryClient.invalidateQueries({ queryKey: ['dates', 'history'] });
+        },
+    });
 }
 
 const ALREADY_RESPONDED_MSG = 'You have already responded to this pair';

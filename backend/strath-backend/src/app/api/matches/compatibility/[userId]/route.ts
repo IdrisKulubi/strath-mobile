@@ -1,32 +1,15 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { profiles, candidatePairs } from "@/db/schema";
+import { candidatePairs, userMatchInterests } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { computeCompatibility } from "@/lib/services/compatibility-service";
 import { canonicalizePairUsers } from "@/lib/services/candidate-pairs-service";
+import { canViewUserProfile } from "@/lib/services/profile-view-access";
+import { getSessionWithBearerFallback } from "@/lib/security";
+import { selectProfileAccessFlags } from "@/lib/db/queries/profiles";
 
 export const dynamic = "force-dynamic";
-
-async function getSessionWithFallback(req: NextRequest) {
-    let session = await auth.api.getSession({ headers: req.headers });
-    if (!session) {
-        const authHeader = req.headers.get("authorization");
-        if (authHeader?.startsWith("Bearer ")) {
-            const token = authHeader.split(" ")[1];
-            const { session: sessionTable } = await import("@/db/schema");
-            const dbSession = await db.query.session.findFirst({
-                where: eq(sessionTable.token, token),
-                with: { user: true },
-            });
-            if (dbSession && dbSession.expiresAt > new Date()) {
-                session = { session: dbSession, user: dbSession.user } as any;
-            }
-        }
-    }
-    return session;
-}
 
 /**
  * GET /api/matches/compatibility/[userId]
@@ -39,7 +22,7 @@ export async function GET(
     { params }: { params: Promise<{ userId: string }> }
 ) {
     try {
-        const session = await getSessionWithFallback(req);
+        const session = await getSessionWithBearerFallback(req);
         if (!session?.user?.id) {
             return errorResponse(new Error("Unauthorized"), 401);
         }
@@ -49,17 +32,25 @@ export async function GET(
             return errorResponse(new Error("Missing userId"), 400);
         }
 
-        const targetProfile = await db.query.profiles.findFirst({
-            where: eq(profiles.userId, targetUserId),
+        const targetProfile = await selectProfileAccessFlags(targetUserId);
+
+        if (!targetProfile) {
+            return errorResponse(new Error("User not found"), 404);
+        }
+
+        const canViewProfile = await canViewUserProfile({
+            viewerUserId: session.user.id,
+            targetUserId,
+            targetIsVisible: targetProfile.isVisible ?? false,
         });
 
-        if (!targetProfile || !targetProfile.isVisible) {
+        if (!canViewProfile) {
             return errorResponse(new Error("User not found"), 404);
         }
 
         const { userAId, userBId } = canonicalizePairUsers(session.user.id, targetUserId);
 
-        const [{ score, reasons }, activePair] = await Promise.all([
+        const [{ score, reasons }, activePair, directedInterest] = await Promise.all([
             computeCompatibility(session.user.id, targetUserId),
             db.query.candidatePairs.findFirst({
                 where: and(
@@ -68,16 +59,26 @@ export async function GET(
                     inArray(candidatePairs.status, ["active", "mutual"])
                 ),
             }),
+            db.query.userMatchInterests.findFirst({
+                where: and(
+                    eq(userMatchInterests.viewerUserId, session.user.id),
+                    eq(userMatchInterests.candidateUserId, targetUserId),
+                ),
+            }),
         ]);
+
+        const pairDecision =
+            activePair?.userAId === session.user.id
+                ? activePair.aDecision
+                : activePair?.bDecision;
 
         return successResponse({
             score,
             reasons: reasons.length > 0 ? reasons : ["Potential match"],
             pairId: activePair?.id ?? null,
-            currentUserDecision:
-                activePair?.userAId === session.user.id
-                    ? activePair.aDecision
-                    : activePair?.bDecision ?? "pending",
+            currentUserDecision: pairDecision && pairDecision !== "pending"
+                ? pairDecision
+                : directedInterest?.decision ?? pairDecision ?? "pending",
         });
     } catch (error) {
         console.error("[matches/compatibility/[userId]] Error:", error);

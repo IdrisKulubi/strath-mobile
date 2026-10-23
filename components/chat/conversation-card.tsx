@@ -1,9 +1,12 @@
+/* Reanimated gesture shared values are mutable by design. */
+/* eslint-disable react-hooks/immutability */
 import React from 'react';
 import { View, Pressable, StyleSheet, Alert, Dimensions } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
-import { Match, getRelativeTime, getLastActiveStatus } from '@/hooks/use-matches';
+import type { Conversation } from '@/hooks/use-conversations';
+import { getRelativeTime, getLastActiveStatus } from '@/lib/messaging/format-time';
 import * as Haptics from 'expo-haptics';
 import Animated, {
     useAnimatedStyle,
@@ -15,66 +18,65 @@ import Animated, {
     Extrapolation,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Archive, BellSlash, Bell } from 'phosphor-react-native';
+import { Archive, BellSlash, Bell, Trash } from 'phosphor-react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 80;
 const ACTION_WIDTH = 160;
 
 interface ConversationCardProps {
-    match: Match;
-    onPress: (match: Match) => void;
-    onArchive?: (match: Match) => void;
-    onDelete?: (match: Match) => void;
-    onMute?: (match: Match) => void;
+    conversation: Conversation;
+    onPress: (conversation: Conversation) => void;
+    onArchive?: (conversation: Conversation) => void;
+    onDelete?: (conversation: Conversation) => void;
+    onMute?: (conversation: Conversation) => void;
     isMuted?: boolean;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export function ConversationCard({ match, onPress, onArchive, onDelete, onMute, isMuted = false }: ConversationCardProps) {
-    const { isDark } = useTheme();
+export function ConversationCard({
+    conversation,
+    onPress,
+    onArchive,
+    onDelete,
+    onMute,
+    isMuted = false,
+}: ConversationCardProps) {
+    const { colors, isDark } = useTheme();
     const translateX = useSharedValue(0);
     const scale = useSharedValue(1);
 
-    // Get display info
-    const partnerName = match.partner.name ||
-        (match.partner.profile?.firstName
-            ? `${match.partner.profile.firstName} ${match.partner.profile.lastName || ''}`.trim()
-            : 'Unknown');
-
-    const avatarUri = match.partner.image ||
-        match.partner.profile?.profilePhoto ||
-        (match.partner.profile?.photos?.[0]);
-
+    const partnerName = conversation.partner.name || 'Unknown';
+    const avatarUri = conversation.partner.image;
     const initial = partnerName.charAt(0).toUpperCase();
-    const lastMessageText = match.lastMessage?.content || 'Start a conversation';
-    const lastMessageTime = match.lastMessage?.createdAt
-        ? getRelativeTime(match.lastMessage.createdAt)
-        : getRelativeTime(match.createdAt);
+    const lastMessageText =
+        conversation.lastMessage?.content ?? 'Say hello — you matched!';
+    const lastMessageTime = conversation.lastMessage?.createdAt
+        ? getRelativeTime(conversation.lastMessage.createdAt)
+        : getRelativeTime(conversation.createdAt);
 
-    const unreadCount = match.unreadCount || 0;
+    const unreadCount = conversation.unreadCount || 0;
     const hasUnread = unreadCount > 0;
-    const { text: activeStatus, isOnline } = getLastActiveStatus(match.partner.lastActive);
+    const { text: activeStatus, isOnline } = getLastActiveStatus(conversation.partner.lastActive);
 
     const handlePress = () => {
         if (Math.abs(translateX.value) < 10) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            onPress(match);
+            onPress(conversation);
         }
     };
 
     const handleArchive = () => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         translateX.value = withTiming(0);
-        onArchive?.(match);
+        onArchive?.(conversation);
     };
 
     const handleDelete = () => {
         Alert.alert(
-            'Delete Conversation',
-            `Are you sure you want to delete your conversation with ${partnerName}? This cannot be undone.`,
+            'Remove from inbox',
+            `Remove your conversation with ${partnerName} from this device? The message history stays available if a new message arrives.`,
             [
                 { 
                     text: 'Cancel', 
@@ -84,12 +86,12 @@ export function ConversationCard({ match, onPress, onArchive, onDelete, onMute, 
                     }
                 },
                 {
-                    text: 'Delete',
+                    text: 'Remove',
                     style: 'destructive',
                     onPress: () => {
                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                         translateX.value = withTiming(-SCREEN_WIDTH, {}, () => {
-                            if (onDelete) runOnJS(onDelete)(match);
+                            if (onDelete) runOnJS(onDelete)(conversation);
                         });
                     },
                 },
@@ -113,22 +115,22 @@ export function ConversationCard({ match, onPress, onArchive, onDelete, onMute, 
             partnerName,
             'What would you like to do?',
             [
-                {
+                ...(onMute ? [{
                     text: isMuted ? 'Unmute Notifications' : 'Mute Notifications',
                     onPress: () => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        onMute?.(match);
+                        onMute?.(conversation);
                     },
-                },
+                }] : []),
                 {
                     text: 'Archive Chat',
                     onPress: () => {
                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                        onArchive?.(match);
+                        onArchive?.(conversation);
                     },
                 },
                 {
-                    text: 'Delete Chat',
+                    text: 'Remove from inbox',
                     style: 'destructive',
                     onPress: handleDelete,
                 },
@@ -176,26 +178,32 @@ export function ConversationCard({ match, onPress, onArchive, onDelete, onMute, 
             {/* Swipe Actions */}
             <Animated.View style={[styles.actionsContainer, actionsStyle]}>
                 <Pressable
-                    style={[styles.actionButton, isMuted ? styles.unmuteButton : styles.muteButton]}
+                    style={[styles.actionButton, { backgroundColor: onMute ? (isMuted ? colors.warning : colors.accent) : colors.destructive }]}
                     onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         translateX.value = withSpring(0);
-                        onMute?.(match);
+                        if (onMute) {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            onMute(conversation);
+                        } else {
+                            handleDelete();
+                        }
                     }}
                 >
-                    {isMuted ? (
-                        <Bell size={20} color="#fff" weight="bold" />
+                    {!onMute ? (
+                        <Trash size={20} color={colors.primaryForeground} weight="bold" />
+                    ) : isMuted ? (
+                        <Bell size={20} color={colors.primaryForeground} weight="bold" />
                     ) : (
-                        <BellSlash size={20} color="#fff" weight="bold" />
+                        <BellSlash size={20} color={colors.primaryForeground} weight="bold" />
                     )}
-                    <Text style={styles.actionText}>{isMuted ? 'Unmute' : 'Mute'}</Text>
+                    <Text style={[styles.actionText, { color: colors.primaryForeground }]}>{onMute ? (isMuted ? 'Unmute' : 'Mute') : 'Remove'}</Text>
                 </Pressable>
                 <Pressable
-                    style={[styles.actionButton, styles.archiveButton]}
+                    style={[styles.actionButton, styles.archiveButton, { backgroundColor: colors.success }]}
                     onPress={handleArchive}
                 >
-                    <Archive size={20} color="#fff" weight="bold" />
-                    <Text style={styles.actionText}>Archive</Text>
+                    <Archive size={20} color={colors.primaryForeground} weight="bold" />
+                    <Text style={[styles.actionText, { color: colors.primaryForeground }]}>Archive</Text>
                 </Pressable>
             </Animated.View>
 
@@ -205,7 +213,7 @@ export function ConversationCard({ match, onPress, onArchive, onDelete, onMute, 
                     style={[
                         styles.card,
                         {
-                            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#ffffff',
+                            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : colors.card,
                             borderColor: hasUnread 
                                 ? 'rgba(236, 72, 153, 0.3)' 
                                 : (isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'),
@@ -224,16 +232,13 @@ export function ConversationCard({ match, onPress, onArchive, onDelete, onMute, 
                             {avatarUri ? (
                                 <CachedImage uri={avatarUri} style={styles.avatar} fallbackType="avatar" />
                             ) : (
-                                <LinearGradient
-                                    colors={['#ec4899', '#f43f5e']}
-                                    style={styles.avatarPlaceholder}
-                                >
-                                    <Text style={styles.avatarInitial}>{initial}</Text>
-                                </LinearGradient>
+                                <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
+                                    <Text style={[styles.avatarInitial, { color: colors.primaryForeground }]}>{initial}</Text>
+                                </View>
                             )}
                             {/* Online indicator */}
                             {isOnline && (
-                                <View style={[styles.onlineIndicator, { borderColor: isDark ? '#0f0d23' : '#fff' }]}>
+                                <View style={[styles.onlineIndicator, { borderColor: colors.background, backgroundColor: colors.success }]}>
                                     <View style={styles.onlineDot} />
                                 </View>
                             )}
@@ -247,7 +252,7 @@ export function ConversationCard({ match, onPress, onArchive, onDelete, onMute, 
                                 <Text
                                     style={[
                                         styles.name,
-                                        { color: isDark ? '#fff' : '#1a1a2e' },
+                                        { color: colors.foreground },
                                         hasUnread && styles.nameBold,
                                     ]}
                                     numberOfLines={1}
@@ -256,15 +261,15 @@ export function ConversationCard({ match, onPress, onArchive, onDelete, onMute, 
                                     {partnerName}
                                 </Text>
                                 {isMuted && (
-                                    <BellSlash size={14} color={isDark ? '#64748b' : '#9ca3af'} weight="bold" style={{ marginLeft: 6 }} />
+                                    <BellSlash size={14} color={colors.mutedForeground} weight="bold" style={{ marginLeft: 6 }} />
                                 )}
                                 {!isOnline && (
-                                    <Text style={[styles.activeStatus, { color: isDark ? '#64748b' : '#9ca3af' }]}>
+                                    <Text style={[styles.activeStatus, { color: colors.mutedForeground }]}>
                                         · {activeStatus}
                                     </Text>
                                 )}
                             </View>
-                            <Text style={[styles.time, { color: hasUnread ? '#ec4899' : (isDark ? '#64748b' : '#9ca3af') }]}>
+                            <Text style={[styles.time, { color: hasUnread ? colors.primary : colors.mutedForeground }]}>
                                 {lastMessageTime}
                             </Text>
                         </View>
@@ -275,8 +280,8 @@ export function ConversationCard({ match, onPress, onArchive, onDelete, onMute, 
                                     styles.preview,
                                     {
                                         color: hasUnread 
-                                            ? (isDark ? '#fff' : '#1a1a2e') 
-                                            : (isDark ? '#94a3b8' : '#6b7280'),
+                                            ? colors.foreground 
+                                            : colors.mutedForeground,
                                     },
                                     hasUnread && styles.previewBold,
                                 ]}
@@ -285,8 +290,8 @@ export function ConversationCard({ match, onPress, onArchive, onDelete, onMute, 
                                 {lastMessageText}
                             </Text>
                             {hasUnread && (
-                                <View style={styles.unreadBadge}>
-                                    <Text style={styles.unreadText}>
+                                <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
+                                    <Text style={[styles.unreadText, { color: colors.primaryForeground }]}>
                                         {unreadCount > 99 ? '99+' : unreadCount}
                                     </Text>
                                 </View>

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import Animated, {
     useSharedValue,
@@ -120,76 +120,13 @@ export function CardStack({ profiles, onSwipe, onInfoPress, showAura = false }: 
         );
     });
 
-    // Animated styles for background cards
-    const secondCardStyle = useAnimatedStyle(() => {
-        const scaleValue = interpolate(
-            Math.abs(translateX.value),
-            [0, SWIPE_THRESHOLD],
-            [0.95, 1],
-            Extrapolation.CLAMP
-        );
-        const translateYValue = interpolate(
-            Math.abs(translateX.value),
-            [0, SWIPE_THRESHOLD],
-            [10, 0],
-            Extrapolation.CLAMP
-        );
-        return {
-            transform: [
-                { scale: scaleValue },
-                { translateY: translateYValue },
-            ],
-        };
-    });
-
-    const thirdCardStyle = useAnimatedStyle(() => {
-        const scaleValue = interpolate(
-            Math.abs(translateX.value),
-            [0, SWIPE_THRESHOLD],
-            [0.9, 0.95],
-            Extrapolation.CLAMP
-        );
-        const translateYValue = interpolate(
-            Math.abs(translateX.value),
-            [0, SWIPE_THRESHOLD],
-            [20, 10],
-            Extrapolation.CLAMP
-        );
-        return {
-            transform: [
-                { scale: scaleValue },
-                { translateY: translateYValue },
-            ],
-        };
-    });
-
     if (profiles.length === 0) {
         return null;
     }
 
     return (
         <View style={styles.container}>
-            {/* Third card (bottom) */}
-            {profiles[2] && (
-                <Animated.View style={[styles.cardContainer, styles.backgroundCard, thirdCardStyle]}>
-                    <SwipeCard
-                        profile={profiles[2]}
-                        onInfoPress={() => onInfoPress?.(profiles[2])}
-                    />
-                </Animated.View>
-            )}
-
-            {/* Second card (middle) */}
-            {profiles[1] && (
-                <Animated.View style={[styles.cardContainer, styles.backgroundCard, secondCardStyle]}>
-                    <SwipeCard
-                        profile={profiles[1]}
-                        onInfoPress={() => onInfoPress?.(profiles[1])}
-                    />
-                </Animated.View>
-            )}
-
-            {/* Top card (interactive) */}
+            {/* Render only the active profile instead of stacking previews behind it */}
             {profiles[0] && (
                 <GestureDetector gesture={panGesture}>
                     <Animated.View style={[styles.cardContainer, topCardStyle]}>
@@ -216,8 +153,5 @@ const styles = StyleSheet.create({
     },
     cardContainer: {
         position: 'absolute',
-    },
-    backgroundCard: {
-        zIndex: -1,
     },
 });

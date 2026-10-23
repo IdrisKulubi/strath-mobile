@@ -10,7 +10,6 @@ import Animated, {
     useSharedValue,
     withSpring,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 interface MatchCardProps {
@@ -24,7 +23,7 @@ interface MatchCardProps {
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = true }: MatchCardProps) {
-    const { isDark } = useTheme();
+    const { colors, isDark } = useTheme();
     const scale = useSharedValue(1);
 
     // Get display info
@@ -112,7 +111,7 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
             style={[
                 styles.card,
                 {
-                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#ffffff',
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : colors.card,
                     borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
                 },
                 cardStyle,
@@ -129,16 +128,13 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
                     {avatarUri ? (
                         <CachedImage uri={avatarUri} style={styles.avatar} fallbackType="avatar" />
                     ) : (
-                        <LinearGradient
-                            colors={['#ec4899', '#f43f5e']}
-                            style={styles.avatarPlaceholder}
-                        >
-                            <Text style={styles.avatarInitial}>{initial}</Text>
-                        </LinearGradient>
+                        <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
+                            <Text style={[styles.avatarInitial, { color: colors.primaryForeground }]}>{initial}</Text>
+                        </View>
                     )}
                     {/* Online indicator */}
                     {isOnline && (
-                        <View style={[styles.onlineIndicator, { borderColor: isDark ? '#0f0d23' : '#fff' }]}>
+                        <View style={[styles.onlineIndicator, { borderColor: colors.background, backgroundColor: colors.success }]}>
                             <View style={styles.onlineDot} />
                         </View>
                     )}
@@ -146,8 +142,8 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
 
                 {/* Unread badge */}
                 {hasUnread && (
-                    <View style={styles.unreadBadge}>
-                        <Text style={styles.unreadText}>
+                    <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
+                        <Text style={[styles.unreadText, { color: colors.primaryForeground }]}>
                             {unreadCount > 99 ? '99+' : unreadCount}
                         </Text>
                     </View>
@@ -160,14 +156,14 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
                 <View style={styles.topRow}>
                     <View style={styles.nameRow}>
                         <Text
-                            style={[styles.name, { color: isDark ? '#fff' : '#1a1a2e' }]}
+                            style={[styles.name, { color: colors.foreground }]}
                             numberOfLines={1}
                         >
                             {partnerName}
                         </Text>
-                        {hasUnread && <View style={styles.newDot} />}
+                        {hasUnread && <View style={[styles.newDot, { backgroundColor: colors.primary }]} />}
                     </View>
-                    <Text style={[styles.time, { color: isDark ? '#64748b' : '#9ca3af' }]}>
+                    <Text style={[styles.time, { color: colors.mutedForeground }]}>
                         {lastMessageTime}
                     </Text>
                 </View>
@@ -180,11 +176,11 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
                     ]}>
                         <View style={[
                             styles.statusDot,
-                            { backgroundColor: isOnline ? '#10b981' : '#64748b' }
+                            { backgroundColor: isOnline ? colors.success : colors.mutedForeground }
                         ]} />
                         <Text style={[
                             styles.statusText,
-                            { color: isOnline ? '#10b981' : (isDark ? '#64748b' : '#9ca3af') }
+                            { color: isOnline ? colors.success : colors.mutedForeground }
                         ]}>
                             {activeStatus}
                         </Text>
@@ -197,7 +193,7 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
                         style={[
                             styles.preview,
                             {
-                                color: hasUnread ? (isDark ? '#fff' : '#1a1a2e') : (isDark ? '#94a3b8' : '#6b7280'),
+                                color: hasUnread ? colors.foreground : colors.mutedForeground,
                                 fontWeight: hasUnread ? '600' : '400',
                             }
                         ]}
@@ -212,7 +208,7 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
                             { backgroundColor: isDark ? 'rgba(236, 72, 153, 0.15)' : 'rgba(236, 72, 153, 0.1)' }
                         ]}
                     >
-                        <Text style={styles.icebreakerText}>Tap to say hi! 👋</Text>
+                        <Text style={[styles.icebreakerText, { color: colors.primary }]}>Tap to say hi! 👋</Text>
                     </View>
                 )}
 
@@ -220,15 +216,10 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
                 <View style={styles.bottomRow}>
                     {/* Spark score */}
                     <View style={styles.sparkContainer}>
-                        <LinearGradient
-                            colors={['#ec4899', '#f43f5e']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={styles.sparkBadge}
-                        >
-                            <Ionicons name="sparkles" size={11} color="#fff" />
-                            <Text style={styles.sparkText}>{sparkScore}%</Text>
-                        </LinearGradient>
+                        <View style={[styles.sparkBadge, { backgroundColor: colors.primary }]}>
+                            <Ionicons name="sparkles" size={11} color={colors.primaryForeground} />
+                            <Text style={[styles.sparkText, { color: colors.primaryForeground }]}>{sparkScore}%</Text>
+                        </View>
                     </View>
 
                     {/* Interests */}
@@ -242,7 +233,7 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
                                         { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' }
                                     ]}
                                 >
-                                    <Text style={[styles.interestText, { color: isDark ? '#94a3b8' : '#6b7280' }]}>
+                                    <Text style={[styles.interestText, { color: colors.mutedForeground }]}>
                                         {interest}
                                     </Text>
                                 </View>
@@ -256,7 +247,7 @@ export function MatchCard({ match, onPress, onArchive, onUnmatch, showOptions = 
             <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={isDark ? '#64748b' : '#9ca3af'}
+                color={colors.mutedForeground}
                 style={styles.chevron}
             />
         </AnimatedPressable>

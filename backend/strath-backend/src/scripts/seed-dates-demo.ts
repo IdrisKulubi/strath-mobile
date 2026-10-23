@@ -450,7 +450,7 @@ async function main() {
             candidatePairId: pairIds.call,
             userAId: DEMO_MAIN_ID,
             userBId: "demo-dates-call",
-            status: "call_pending",
+            status: "mutual",
             legacyMatchId: callLegacyMatchId,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -532,7 +532,7 @@ async function main() {
     console.log(`Login email: ${DEMO_EMAIL}`);
     console.log(`Login password: ${DEMO_PASSWORD}`);
     console.log(`Demo session token: ${DEMO_SESSION_TOKEN}`);
-    console.log("Dates sections seeded: mutual, call_pending, being_arranged, upcoming, history.");
+    console.log("Dates sections seeded: mutual, being_arranged, upcoming, history.");
 }
 
 main().catch((error) => {

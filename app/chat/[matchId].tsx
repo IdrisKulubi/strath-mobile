@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useEffect, useState, useMemo } from 'react';
 import {
     View,
     FlatList,
@@ -10,19 +10,18 @@ import {
     Alert,
     Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 import { useChat, Message } from '@/hooks/use-chat';
-import { useMatches } from '@/hooks/use-matches';
+import { useConversations, findConversation } from '@/hooks/use-conversations';
 import { useUnmatch } from '@/hooks/use-unmatch';
-import { MessageBubble, ChatInput, ChatHeader } from '@/components/chat';
+import { MessageBubble, ChatInput, ChatHeader, ChatAccessGate } from '@/components/chat';
+import { useMutualMatches, isChatThreadUnlocked, isChatThreadReadable } from '@/hooks/use-date-requests';
 import { SafetyToolkitModal } from '@/components/chat/safety-toolkit-modal';
 import { BlockReportModal } from '@/components/discover/block-report-modal';
-import { MissionCard } from '@/components/matches/mission-card';
-import { VibeCheckPrompt } from '@/components/vibe-check';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
     useAnimatedStyle,
@@ -36,23 +35,33 @@ import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 100;
-
 export default function ChatScreen() {
     const { matchId } = useLocalSearchParams<{ matchId: string }>();
     const { colors, colorScheme } = useTheme();
+    const insets = useSafeAreaInsets();
     const router = useRouter();
     const flatListRef = useRef<FlatList>(null);
 
-    // Modal states
     const [isSafetyModalVisible, setIsSafetyModalVisible] = useState(false);
     const [blockReportModalVisible, setBlockReportModalVisible] = useState(false);
     const [blockReportMode, setBlockReportMode] = useState<'block' | 'report'>('block');
+    const [draftMessage, setDraftMessage] = useState('');
+    const [isComposerFocused, setIsComposerFocused] = useState(false);
 
-    // Swipe to go back
     const translateX = useSharedValue(0);
 
-    // Hooks
     const { mutate: unmatch } = useUnmatch();
+    const { data: mutualDates = [], isLoading: mutualDatesLoading } = useMutualMatches();
+
+    const mutualMatch = useMemo(
+        () => mutualDates.find((m) => m.legacyMatchId === matchId),
+        [mutualDates, matchId],
+    );
+
+    const chatReadable = !mutualMatch || isChatThreadReadable(mutualMatch);
+    const chatSendable = mutualMatch
+        ? isChatThreadUnlocked(mutualMatch)
+        : true;
 
     const {
         messages,
@@ -60,19 +69,46 @@ export default function ChatScreen() {
         sendMessage,
         isSending,
         currentUserId,
-    } = useChat(matchId || '');
+        isAccessDenied,
+        isError,
+        error,
+        refetch,
+        canSend,
+    } = useChat(matchId || '', {
+        enabled: chatReadable,
+        pausePolling: isComposerFocused,
+    });
 
-    // Get partner info from matches
-    const { data: matchesData } = useMatches();
-    const currentMatch = matchesData?.matches?.find(m => m.id === matchId);
-    const partner = currentMatch?.partner;
+    const showFullAccessGate = !chatReadable || (isAccessDenied && !mutualMatch);
+    const showSendGate = chatReadable && mutualMatch && !chatSendable;
+    const composerDisabled = showFullAccessGate || !chatSendable || !canSend;
 
-    // Track previous message count to know when new messages arrive
-    const prevMessageCountRef = useRef(messages.length);
-
-    // Scroll to bottom only when NEW messages arrive (not on every poll)
     useEffect(() => {
-        if (messages.length > prevMessageCountRef.current && flatListRef.current) {
+        setDraftMessage('');
+    }, [matchId]);
+
+    const { data: conversations } = useConversations();
+    const thread = findConversation(conversations, matchId || '');
+    const partner = thread
+        ? {
+              id: thread.partner.id,
+              name: thread.partner.name,
+              image: thread.partner.image ?? undefined,
+          }
+        : undefined;
+
+    const prevMessageCountRef = useRef(messages.length);
+    const isComposerFocusedRef = useRef(isComposerFocused);
+    useEffect(() => {
+        isComposerFocusedRef.current = isComposerFocused;
+    }, [isComposerFocused]);
+
+    useEffect(() => {
+        if (
+            messages.length > prevMessageCountRef.current
+            && flatListRef.current
+            && !isComposerFocusedRef.current
+        ) {
             setTimeout(() => {
                 flatListRef.current?.scrollToEnd({ animated: true });
             }, 100);
@@ -82,13 +118,13 @@ export default function ChatScreen() {
 
     const handleSend = useCallback((content: string) => {
         sendMessage(content);
+        setDraftMessage('');
     }, [sendMessage]);
 
     const goBack = useCallback(() => {
         router.back();
     }, [router]);
 
-    // Safety Actions
     const handleUnmatch = useCallback(() => {
         setIsSafetyModalVisible(false);
 
@@ -111,9 +147,9 @@ export default function ChatScreen() {
                                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                                     router.back();
                                 },
-                                onError: (error) => {
+                                onError: (err) => {
                                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                                    Alert.alert('Error', error.message || 'Failed to unmatch. Please try again.');
+                                    Alert.alert('Error', err.message || 'Failed to unmatch. Please try again.');
                                 },
                             }
                         );
@@ -141,16 +177,13 @@ export default function ChatScreen() {
 
     const handleSafetyCenter = useCallback(() => {
         setIsSafetyModalVisible(false);
-        // TODO: Navigate to safety center
         Alert.alert('Safety Center', 'Safety Center coming soon! For now, you can block or report users if needed.');
     }, []);
 
     const handleBlockReportSuccess = useCallback(() => {
-        // Navigate back after successful block/report
         router.back();
     }, [router]);
 
-    // Swipe right to go back gesture
     const swipeGesture = Gesture.Pan()
         .activeOffsetX([20, SCREEN_WIDTH])
         .onUpdate((event) => {
@@ -182,7 +215,6 @@ export default function ChatScreen() {
         ),
     }));
 
-    // Memoize messages for stable reference in renderItem
     const messagesRef = useRef(messages);
     useEffect(() => {
         messagesRef.current = messages;
@@ -190,7 +222,6 @@ export default function ChatScreen() {
 
     const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
         const isOwn = item.senderId === currentUserId;
-        // Access messages via ref to avoid dependency causing re-renders
         const prevMessages = messagesRef.current;
         const showTimestamp = index === 0 ||
             (index > 0 && prevMessages[index - 1] &&
@@ -203,87 +234,160 @@ export default function ChatScreen() {
                 showTimestamp={showTimestamp}
             />
         );
-    }, [currentUserId]); // Only depend on currentUserId, not messages
+    }, [currentUserId]);
 
     const keyExtractor = useCallback((item: Message) => item.id, []);
 
-    // Sticky mission banner collapse state
-    const [missionExpanded, setMissionExpanded] = useState(false);
-    const missionHeight = useSharedValue(0);
-    const missionOpacity = useSharedValue(0);
-
-    const toggleMission = useCallback(() => {
-        const next = !missionExpanded;
-        setMissionExpanded(next);
-        missionHeight.value = withSpring(next ? 1 : 0, { damping: 22, stiffness: 260 });
-        missionOpacity.value = withSpring(next ? 1 : 0, { damping: 22, stiffness: 260 });
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }, [missionExpanded, missionHeight, missionOpacity]);
-
-    const missionBodyStyle = useAnimatedStyle(() => ({
-        maxHeight: interpolate(missionHeight.value, [0, 1], [0, 300], Extrapolation.CLAMP),
-        opacity: missionOpacity.value,
-        overflow: 'hidden',
-    }));
-
-    // Header component for the list (Matched date)
     const renderListHeader = useCallback(() => {
-        if (!currentMatch) return null;
-        const date = new Date(currentMatch.createdAt || Date.now());
-        const dateString = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' });
+        if (!thread) return null;
+        const date = new Date(thread.createdAt);
+        const dateString = date.toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'numeric',
+            year: 'numeric',
+        });
 
         return (
             <View style={styles.listHeader}>
                 <View style={styles.matchedTextContainer}>
-                    <Text style={styles.matchedText}>
-                        YOU CONNECTED WITH {partner?.profile?.firstName?.toUpperCase() || 'THEM'} ON {dateString}
+                    <Text style={[styles.matchedText, { color: colors.mutedForeground }]}>
+                        YOU CONNECTED WITH {(partner?.name ?? 'them').toUpperCase()} ON {dateString}
                     </Text>
                 </View>
             </View>
         );
-    }, [currentMatch, partner]);
+    }, [thread, partner?.name, colors.mutedForeground]);
 
-    // Loading state - only show skeletons on the VERY FIRST load when no messages exist
-    if (isInitialLoading && messages.length === 0) {
-        return (
-            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-                <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
-                <ChatHeader
-                    partnerName={partner?.name || 'Loading...'}
-                    partnerImage={partner?.image}
-                />
-                <View style={styles.loadingContainer}>
-                    {[1, 2, 3, 4, 5].map((i) => (
-                        <View key={i} style={[styles.skeletonRow, i % 2 === 0 ? styles.skeletonRight : styles.skeletonLeft]}>
-                            <Skeleton
-                                width={i % 2 === 0 ? 200 : 150}
-                                height={50}
-                                borderRadius={18}
-                            />
-                        </View>
-                    ))}
-                </View>
-            </SafeAreaView>
-        );
-    }
+    const renderErrorState = () => (
+        <View style={styles.emptyContainer}>
+            <Text style={{ color: colors.foreground, fontSize: 17, fontWeight: '600', textAlign: 'center', marginBottom: 8 }}>
+                Couldn&apos;t load messages
+            </Text>
+            <Text style={{ color: colors.mutedForeground, fontSize: 15, textAlign: 'center', marginBottom: 16 }}>
+                {error instanceof Error ? error.message : 'Check your connection and try again.'}
+            </Text>
+            <Pressable
+                onPress={() => refetch()}
+                style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            >
+                <Text style={{ color: colors.primaryForeground, fontWeight: '600' }}>Retry</Text>
+            </Pressable>
+        </View>
+    );
 
-    // Empty state
     const renderEmptyState = () => (
         <View style={styles.emptyContainer}>
-            <Text className="text-muted-foreground text-center text-base mt-8">
+            <Text style={{ color: colors.mutedForeground, textAlign: 'center', fontSize: 16, marginTop: 32 }}>
                 No messages yet.{'\n'}Say hi to {partner?.name || 'your connection'}! 👋
             </Text>
         </View>
     );
 
+    const renderLoadingSkeleton = () => (
+        <View style={styles.loadingContainer}>
+            {[1, 2, 3, 4, 5].map((i) => (
+                <View key={i} style={[styles.skeletonRow, i % 2 === 0 ? styles.skeletonRight : styles.skeletonLeft]}>
+                    <Skeleton
+                        width={i % 2 === 0 ? 200 : 150}
+                        height={50}
+                        borderRadius={18}
+                    />
+                </View>
+            ))}
+        </View>
+    );
+
+    const renderMessageArea = () => {
+        if (showFullAccessGate && mutualMatch) {
+            return (
+                <ChatAccessGate
+                    match={mutualMatch}
+                    partnerName={partner?.name ?? mutualMatch.withUser.firstName}
+                    partnerImage={partner?.image ?? mutualMatch.withUser.profilePhoto}
+                />
+            );
+        }
+
+        if (showFullAccessGate && mutualDatesLoading) {
+            return renderLoadingSkeleton();
+        }
+
+        if (showFullAccessGate) {
+            return (
+                <View style={styles.emptyContainer}>
+                    <Text style={{ color: colors.foreground, textAlign: 'center', fontSize: 18, fontWeight: '600', marginBottom: 8 }}>
+                        Confirm your date to message
+                    </Text>
+                    <Text style={{ color: colors.mutedForeground, textAlign: 'center', fontSize: 16 }}>
+                        Open the Dates tab to confirm your meetup before chatting with{' '}
+                        {partner?.name || 'your match'}.
+                    </Text>
+                </View>
+            );
+        }
+
+        if (isInitialLoading && messages.length === 0) {
+            return renderLoadingSkeleton();
+        }
+
+        if (isError && messages.length === 0) {
+            return renderErrorState();
+        }
+
+        return (
+            <>
+                {isError ? (
+                    <Pressable
+                        onPress={() => refetch()}
+                        style={[styles.errorBanner, { backgroundColor: colors.destructive }]}
+                    >
+                        <Text style={{ color: colors.primaryForeground, fontSize: 13, flex: 1 }}>
+                            Couldn&apos;t refresh messages. Tap to retry.
+                        </Text>
+                    </Pressable>
+                ) : null}
+
+                {showSendGate && mutualMatch ? (
+                    <View style={[styles.sendGateBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Text style={{ color: colors.foreground, fontSize: 14, fontWeight: '600' }}>
+                            Confirm your date to send messages
+                        </Text>
+                        <Text style={{ color: colors.mutedForeground, fontSize: 13, marginTop: 4 }}>
+                            You can read messages below. Confirm on Dates to reply.
+                        </Text>
+                    </View>
+                ) : null}
+
+                <FlatList
+                    ref={flatListRef}
+                    style={styles.messageFlatList}
+                    data={messages}
+                    renderItem={renderMessage}
+                    keyExtractor={keyExtractor}
+                    contentContainerStyle={[
+                        styles.messageList,
+                        messages.length === 0 && !isError && styles.emptyList,
+                    ]}
+                    ListHeaderComponent={renderListHeader}
+                    ListEmptyComponent={isError ? null : renderEmptyState}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                />
+            </>
+        );
+    };
+
+    const composerPlaceholder = showFullAccessGate || !chatSendable
+        ? 'Confirm your date to message'
+        : 'Type a message';
+
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
-            {/* Backdrop that shows when swiping */}
             <Animated.View
                 style={[
                     StyleSheet.absoluteFill,
                     { backgroundColor: '#000' },
-                    backdropStyle
+                    backdropStyle,
                 ]}
                 pointerEvents="none"
             />
@@ -294,74 +398,30 @@ export default function ChatScreen() {
                         <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
 
                         <ChatHeader
-                            partnerName={partner?.name || 'Chat'}
+                            partnerName={partner?.name || (isInitialLoading ? 'Loading...' : 'Chat')}
                             partnerImage={partner?.image}
                             onMorePress={() => setIsSafetyModalVisible(true)}
                         />
-
-                        {/* ── Sticky Mission Banner ── */}
-                        {!!matchId && (
-                            <View
-                                style={[styles.missionBanner, { backgroundColor: colors.card, borderColor: colors.border }]}
-                            >
-                                <Pressable
-                                    onPress={toggleMission}
-                                    style={styles.missionPill}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={missionExpanded ? 'Collapse mission' : 'Expand mission'}
-                                >
-                                    <Text style={[styles.missionPillText, { color: colors.primary }]}>
-                                        🎯 Mission
-                                    </Text>
-                                    <Text style={[styles.missionChevron, { color: colors.mutedForeground }]}>
-                                        {missionExpanded ? '▲' : '▼'}
-                                    </Text>
-                                </Pressable>
-                                <Animated.View style={missionBodyStyle}>
-                                    <MissionCard matchId={matchId} compact />
-                                </Animated.View>
-                            </View>
-                        )}
-
-                        {/* ── Vibe Check Prompt ── */}
-                        {!!matchId && (
-                            <VibeCheckPrompt
-                                matchId={matchId}
-                                partnerFirstName={partner?.profile?.firstName ?? partner?.name?.split(' ')[0]}
-                                compact
-                            />
-                        )}
 
                         <KeyboardAvoidingView
                             style={styles.keyboardView}
                             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                             keyboardVerticalOffset={0}
                         >
-                            <FlatList
-                                ref={flatListRef}
-                                data={messages}
-                                renderItem={renderMessage}
-                                keyExtractor={keyExtractor}
-                                contentContainerStyle={[
-                                    styles.messageList,
-                                    messages.length === 0 && styles.emptyList,
-                                ]}
-                                ListHeaderComponent={renderListHeader}
-                                ListEmptyComponent={renderEmptyState}
-                                showsVerticalScrollIndicator={false}
-                                onContentSizeChange={() => {
-                                    if (messages.length > 0) {
-                                        flatListRef.current?.scrollToEnd({ animated: false });
-                                    }
-                                }}
-                            />
+                            <View style={styles.messageArea}>
+                                {renderMessageArea()}
+                            </View>
 
                             <ChatInput
+                                value={draftMessage}
+                                onChangeText={setDraftMessage}
                                 onSend={handleSend}
                                 isSending={isSending}
-                                onMediaPress={() => console.log('Media')}
-                                onGifPress={() => console.log('GIF')}
-                                onMusicPress={() => console.log('Music')}
+                                disabled={composerDisabled}
+                                placeholder={composerPlaceholder}
+                                bottomInset={isComposerFocused ? 0 : insets.bottom}
+                                onFocus={() => setIsComposerFocused(true)}
+                                onBlur={() => setIsComposerFocused(false)}
                             />
                         </KeyboardAvoidingView>
 
@@ -378,7 +438,6 @@ export default function ChatScreen() {
                 </Animated.View>
             </GestureDetector>
 
-            {/* Block/Report Modal */}
             {partner && (
                 <BlockReportModal
                     visible={blockReportModalVisible}
@@ -399,6 +458,12 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     keyboardView: {
+        flex: 1,
+    },
+    messageArea: {
+        flex: 1,
+    },
+    messageFlatList: {
         flex: 1,
     },
     messageList: {
@@ -441,32 +506,28 @@ const styles = StyleSheet.create({
         paddingBottom: 4,
     },
     matchedText: {
-        color: '#636366',
         fontSize: 11,
         fontWeight: '600',
         textAlign: 'center',
         letterSpacing: 0.5,
     },
-    missionBanner: {
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        paddingHorizontal: 4,
-        paddingTop: 2,
-        paddingBottom: 4,
+    retryButton: {
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 24,
     },
-    missionPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+    errorBanner: {
         paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingVertical: 10,
+        marginHorizontal: 16,
+        marginTop: 8,
+        borderRadius: 8,
     },
-    missionPillText: {
-        fontSize: 13,
-        fontWeight: '700',
-        letterSpacing: 0.2,
-    },
-    missionChevron: {
-        fontSize: 10,
-        fontWeight: '600',
+    sendGateBanner: {
+        marginHorizontal: 16,
+        marginTop: 8,
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
     },
 });

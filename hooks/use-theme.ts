@@ -22,6 +22,8 @@ export function useTheme() {
     };
 }
 
+export type ThemeColors = (typeof Colors)['light'] | (typeof Colors)['dark'];
+
 // Type helper for color names
 export type ColorName = keyof typeof Colors.light;
 
@@ -31,8 +33,8 @@ export function getColor(colorName: ColorName, scheme: 'light' | 'dark' = 'light
 }
 
 // Helper to create themed styles
-export function createThemedStyles<T extends Record<string, any>>(
-    stylesFn: (colors: typeof Colors.light, isDark: boolean) => T
+export function createThemedStyles<T extends Record<string, unknown>>(
+    stylesFn: (colors: ThemeColors, isDark: boolean) => T
 ) {
     return (colorScheme: 'light' | 'dark') => {
         const colors = Colors[colorScheme];

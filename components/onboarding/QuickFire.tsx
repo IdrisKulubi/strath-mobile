@@ -15,6 +15,7 @@ import Animated, {
     SlideInRight,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
 import * as Haptics from 'expo-haptics';
 import {
     Ruler,
@@ -212,10 +213,7 @@ export function QuickFire({ data, onUpdate, onComplete }: QuickFireProps) {
 
     return (
         <View style={styles.container}>
-            <LinearGradient
-                colors={['#0f0d23', '#1a0d2e', '#0f0d23']}
-                style={StyleSheet.absoluteFill}
-            />
+            <OnboardingScreenBackdrop />
 
             {/* Progress */}
             <View style={styles.progressContainer}>

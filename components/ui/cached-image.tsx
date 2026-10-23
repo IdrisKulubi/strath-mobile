@@ -51,6 +51,8 @@ interface CachedImageProps {
     contentFit?: ImageContentFit;
     useExpoImage?: boolean;
     placeholder?: string;
+    priority?: 'low' | 'normal' | 'high';
+    allowDownscaling?: boolean;
 }
 
 /**
@@ -68,6 +70,8 @@ export function CachedImage({
     contentFit = 'cover',
     useExpoImage = true,
     placeholder,
+    priority = 'normal',
+    allowDownscaling = true,
 }: CachedImageProps) {
     const { colors } = useTheme();
 
@@ -150,6 +154,8 @@ export function CachedImage({
                     onError={handleError}
                     transition={200}
                     cachePolicy="memory-disk"
+                    priority={priority}
+                    allowDownscaling={allowDownscaling}
                 />
             );
         }
@@ -177,6 +183,8 @@ export function CachedImage({
                 onError={handleError}
                 transition={200}
                 cachePolicy="memory-disk"
+                priority={priority}
+                allowDownscaling={allowDownscaling}
             />
         );
     }

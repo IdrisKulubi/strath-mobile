@@ -2,13 +2,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { getAuthToken } from '@/lib/auth-helpers';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+import { apiFetch } from '@/lib/api-client';
 
 interface NotificationCounts {
     unopenedMatches: number;
     unreadMessages: number;
+    incomingLikes?: number;
     datesAttention?: number;
+    slotConfirmPending?: number;
+    partnerWaitingOnYou?: number;
+    homeAttention?: number;
+    datesActionable?: number;
     total: number;
 }
 
@@ -20,25 +24,31 @@ async function fetchNotificationCounts(): Promise<NotificationCounts> {
 
     if (!token) {
         console.log('[NotificationCounts] No token, returning zeros');
-        return { unopenedMatches: 0, unreadMessages: 0, datesAttention: 0, total: 0 };
+        return {
+            unopenedMatches: 0,
+            unreadMessages: 0,
+            incomingLikes: 0,
+            datesAttention: 0,
+            slotConfirmPending: 0,
+            partnerWaitingOnYou: 0,
+            homeAttention: 0,
+            datesActionable: 0,
+            total: 0,
+        };
     }
 
-    const response = await fetch(`${API_URL}/api/notifications/counts`, {
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
-    });
-
-    if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        console.error('[NotificationCounts] Error:', response.status, text);
-        // Throw so React Query keeps the last successful value instead of overwriting with zeros
-        throw new Error(`Failed to fetch notification counts (${response.status})`);
-    }
-
-    const result = await response.json();
-    const data = result.data || { unopenedMatches: 0, unreadMessages: 0, datesAttention: 0, total: 0 };
+    const result = await apiFetch<{ data?: NotificationCounts }>('/api/notifications/counts');
+    const data = result.data || {
+        unopenedMatches: 0,
+        unreadMessages: 0,
+        incomingLikes: 0,
+        datesAttention: 0,
+        slotConfirmPending: 0,
+        partnerWaitingOnYou: 0,
+        homeAttention: 0,
+        datesActionable: 0,
+        total: 0,
+    };
     console.log('[NotificationCounts] Fetched:', data);
     return data;
 }
@@ -55,19 +65,9 @@ async function markMatchAsOpened(matchId: string): Promise<void> {
         return;
     }
 
-    const response = await fetch(`${API_URL}/api/matches/${matchId}/opened`, {
+    await apiFetch(`/api/matches/${matchId}/opened`, {
         method: 'PATCH',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
     });
-
-    console.log('[NotificationCounts] Mark as opened response:', response.status);
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        console.error('[NotificationCounts] Mark as opened failed:', error);
-    }
 }
 
 /**
@@ -92,9 +92,9 @@ export function useNotificationCounts() {
     const { data, isLoading, refetch } = useQuery({
         queryKey: ['notificationCounts'],
         queryFn: fetchNotificationCounts,
-        refetchInterval: isAppActive ? 15000 : false, // Poll every 15s when active
+        refetchInterval: isAppActive ? 60_000 : false,
         refetchIntervalInBackground: false,
-        staleTime: 10000, // Consider data stale after 10s
+        staleTime: 30_000,
         gcTime: 5 * 60 * 1000, // Keep in cache for 5 min
         retry: 1,
     });
@@ -115,7 +115,12 @@ export function useNotificationCounts() {
     return {
         unopenedMatches: data?.unopenedMatches ?? 0,
         unreadMessages: data?.unreadMessages ?? 0,
+        incomingLikes: data?.incomingLikes ?? 0,
         datesAttention: data?.datesAttention ?? 0,
+        slotConfirmPending: data?.slotConfirmPending ?? 0,
+        partnerWaitingOnYou: data?.partnerWaitingOnYou ?? 0,
+        homeAttention: data?.homeAttention ?? 0,
+        datesActionable: data?.datesActionable ?? 0,
         totalNotifications: data?.total ?? 0,
         isLoading,
         refetch,

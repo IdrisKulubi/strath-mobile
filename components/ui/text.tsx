@@ -34,6 +34,8 @@ const textVariants = cva(
         large: 'text-lg font-semibold',
         small: 'text-sm font-medium leading-none',
         muted: 'text-muted-foreground text-sm',
+        caption: 'text-muted-foreground text-[13px] leading-[18px]',
+        label: 'text-muted-foreground text-xs font-medium',
       },
     },
     defaultVariants: {

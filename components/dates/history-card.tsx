@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import { useRouter } from 'expo-router';
@@ -8,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { CachedImage } from '@/components/ui/cached-image';
 import { useTheme } from '@/hooks/use-theme';
+import { PaymentCreditActions } from '@/components/dates/payment-credit-actions';
 import { ScheduledDate } from '@/hooks/use-date-requests';
 
 interface HistoryCardProps {
@@ -58,8 +58,7 @@ export function HistoryCard({ date, index }: HistoryCardProps) {
     const showFeedback = date.status === 'attended' && !date.hasFeedback;
 
     return (
-        <Animated.View
-            entering={FadeInDown.delay(index * 60).springify().damping(14)}
+        <View
             style={[
                 styles.card,
                 {
@@ -97,6 +96,10 @@ export function HistoryCard({ date, index }: HistoryCardProps) {
                 </View>
             </View>
 
+            {date.status === 'expired' || date.status === 'cancelled' ? (
+                <PaymentCreditActions dateMatchId={date.id} />
+            ) : null}
+
             {showFeedback && (
                 <Pressable
                     onPress={() =>
@@ -120,7 +123,7 @@ export function HistoryCard({ date, index }: HistoryCardProps) {
                     </Text>
                 </View>
             )}
-        </Animated.View>
+        </View>
     );
 }
 

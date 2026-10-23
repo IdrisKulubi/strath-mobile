@@ -1,9 +1,10 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { messages, matches } from "@/db/schema";
+import { messages, matches, mutualMatches } from "@/db/schema";
 import { successResponse, errorResponse } from "@/lib/api-response";
 import { eq, and, or, ne } from "drizzle-orm";
+import { assertChatUnlocked } from "@/lib/chat-access";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,9 @@ export async function PATCH(
         if (!match) {
             return errorResponse(new Error("Match not found or unauthorized"), 404);
         }
+
+        const gate = await assertChatUnlocked(matchId, session.user.id);
+        if (gate) return gate;
 
         console.log('[MarkAsRead API] Marking messages as read for match:', matchId, 'user:', session.user.id);
 

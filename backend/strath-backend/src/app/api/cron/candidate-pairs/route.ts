@@ -6,9 +6,15 @@ import { db } from "@/lib/db";
 import { isAuthorizedCronRequest } from "@/lib/security";
 import {
     generateCandidatePairsForUser,
-    getActiveCandidatePairsForUser,
+    countActiveCandidatePairsForUser,
+    promoteDueQueuedPairsForUser,
+    sendPendingCandidatePairReminders,
+    DAILY_CANDIDATE_PAIR_LIMIT,
 } from "@/lib/services/candidate-pairs-service";
 import { runPairExpiration } from "@/lib/services/pair-expiration-service";
+import { isManualMatchmakingModeEnabled } from "@/lib/services/manual-matchmaking-mode";
+import { releaseStalePreDateMatchHolds } from "@/lib/services/match-hold-service";
+import { createMatchExclusionContext } from "@/lib/services/match-exclusion-service";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -20,7 +26,25 @@ export async function GET(req: NextRequest) {
         }
 
         const expiration = await runPairExpiration();
+        const releasedStaleHolds = await releaseStalePreDateMatchHolds();
+        const reminders = await sendPendingCandidatePairReminders();
         console.log("[cron/candidate-pairs] expired pairs:", expiration.expiredCount);
+        console.log("[cron/candidate-pairs] released stale pre-date holds:", releasedStaleHolds);
+        console.log("[cron/candidate-pairs] reminders:", reminders);
+
+        if (isManualMatchmakingModeEnabled()) {
+            console.log("[cron/candidate-pairs] manual matchmaking mode active - skipping auto generation");
+            return successResponse({
+                ok: true,
+                checkedUsers: 0,
+                generatedFor: 0,
+                skippedAutoGeneration: true,
+                expiration,
+                releasedStaleHolds,
+                reminders,
+            });
+        }
+
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const limitParam = Number(req.nextUrl.searchParams.get("limit") || "0");
         const runLimit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 1000) : undefined;
@@ -40,10 +64,12 @@ export async function GET(req: NextRequest) {
         usersToCheck = Array.from(new Map(usersToCheck.map((u) => [u.id, u])).values());
 
         let generatedFor = 0;
+        const exclusionContext = await createMatchExclusionContext();
         for (const activeUser of usersToCheck) {
-            const existingPairs = await getActiveCandidatePairsForUser(activeUser.id);
-            if (existingPairs.length > 0) continue;
-            const created = await generateCandidatePairsForUser(activeUser.id);
+            await promoteDueQueuedPairsForUser(activeUser.id, exclusionContext);
+            const existingPairCount = await countActiveCandidatePairsForUser(activeUser.id, exclusionContext);
+            if (existingPairCount >= DAILY_CANDIDATE_PAIR_LIMIT) continue;
+            const created = await generateCandidatePairsForUser(activeUser.id, { context: exclusionContext });
             if (created.length > 0) {
                 generatedFor++;
             }
@@ -54,6 +80,8 @@ export async function GET(req: NextRequest) {
             checkedUsers: usersToCheck.length,
             generatedFor,
             expiration,
+            releasedStaleHolds,
+            reminders,
         });
     } catch (error) {
         console.error("[cron/candidate-pairs] Error:", error);

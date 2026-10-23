@@ -17,6 +17,7 @@ import Animated, {
     withSpring,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { OnboardingScreenBackdrop } from './onboarding-screen-backdrop';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -41,7 +42,7 @@ import {
 
 type ProfileDetailsData = Pick<
     OnboardingData,
-    'course' | 'education' | 'politics' | 'languages' | 'qualities' | 'instagram' | 'spotify' | 'snapchat'
+    'university' | 'course' | 'education' | 'politics' | 'languages' | 'qualities' | 'instagram' | 'spotify' | 'snapchat'
 >;
 
 interface ProfileDetailsStepProps {
@@ -97,6 +98,7 @@ export function ProfileDetailsStep({ data, onUpdate, onComplete, onBack }: Profi
     const progressWidth = useSharedValue(0);
     const [step, setStep] = useState<InnerStep>(0);
 
+    const [university, setUniversity] = useState(data.university ?? '');
     const [course, setCourse] = useState(data.course ?? '');
     const [education, setEducation] = useState(data.education ?? '');
     const [politics, setPolitics] = useState(data.politics ?? '');
@@ -137,6 +139,7 @@ export function ProfileDetailsStep({ data, onUpdate, onComplete, onBack }: Profi
     const persistCurrentStep = useCallback(() => {
         if (step === 0) {
             onUpdate({
+                university: university.trim(),
                 course: course.trim(),
                 education,
             });
@@ -168,6 +171,7 @@ export function ProfileDetailsStep({ data, onUpdate, onComplete, onBack }: Profi
         snapchat,
         spotify,
         step,
+        university,
     ]);
 
     const handleNext = useCallback(() => {
@@ -199,7 +203,7 @@ export function ProfileDetailsStep({ data, onUpdate, onComplete, onBack }: Profi
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            <LinearGradient colors={['#0f0d23', '#1a0d2e', '#0f0d23']} style={StyleSheet.absoluteFill} />
+            <OnboardingScreenBackdrop />
 
             <View style={[styles.progressContainer, { paddingTop: Math.max(insets.top + 12, 60) }]}>
                 <TouchableOpacity onPress={handleBack} activeOpacity={0.7} style={styles.backButton}>
@@ -240,6 +244,18 @@ export function ProfileDetailsStep({ data, onUpdate, onComplete, onBack }: Profi
                         <Text style={styles.subtitle}>
                             These details fill in the parts of your profile we were still missing.
                         </Text>
+
+                        <SectionLabel title="University" subtitle="Optional: where do you study?" />
+                        <View style={styles.inputShell}>
+                            <Student size={18} color="#94a3b8" weight="fill" />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Strathmore University"
+                                placeholderTextColor="#64748b"
+                                value={university}
+                                onChangeText={setUniversity}
+                            />
+                        </View>
 
                         <SectionLabel title="Course" subtitle="What are you studying?" />
                         <View style={styles.inputShell}>

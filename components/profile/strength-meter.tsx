@@ -1,89 +1,129 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, StyleSheet, Pressable, Text as RNText } from 'react-native';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withTiming,
+    Easing,
+} from 'react-native-reanimated';
+
+import { RADIUS, SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { getProfileStrengthHint, getProfileStrengthLabel } from '@/lib/profile-strength';
 import { useTheme } from '@/hooks/use-theme';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 
 interface StrengthMeterProps {
-    percentage: number; // 0 to 100
+    percentage: number;
     onPress?: () => void;
 }
 
 export function StrengthMeter({ percentage, onPress }: StrengthMeterProps) {
-    const { colors } = useTheme();
+    const { colors, isDark } = useTheme();
+    const progress = useSharedValue(0);
+    const clamped = Math.min(100, Math.max(0, percentage));
+    const strengthLabel = getProfileStrengthLabel(clamped);
 
-    const getStrengthLabel = (p: number) => {
-        if (p < 30) return 'WEAK';
-        if (p < 70) return 'GROWING';
-        if (p < 100) return 'STRONG';
-        return 'MAXIMUM';
-    };
+    useEffect(() => {
+        progress.value = withTiming(clamped / 100, {
+            duration: 700,
+            easing: Easing.out(Easing.cubic),
+        });
+    }, [clamped, progress]);
 
-    const label = getStrengthLabel(percentage);
+    const fillStyle = useAnimatedStyle(() => ({
+        flex: Math.max(progress.value, 0.001),
+    }));
 
-    const width = useSharedValue(0);
+    const spacerStyle = useAnimatedStyle(() => ({
+        flex: Math.max(1 - progress.value, 0.001),
+    }));
 
-    React.useEffect(() => {
-        width.value = withTiming(percentage, { duration: 1000 });
-    }, [percentage]);
+    const content = (
+        <View
+            style={[
+                styles.card,
+                {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                },
+                !isDark && styles.cardShadowLight,
+            ]}
+        >
+            <View style={styles.topRow}>
+                <RNText style={[styles.eyebrow, { color: colors.mutedForeground }]}>
+                    Profile strength
+                </RNText>
+                <RNText style={[styles.percent, { color: colors.primary }]}>
+                    {strengthLabel} · {clamped}%
+                </RNText>
+            </View>
+            <RNText style={[styles.hint, { color: colors.mutedForeground }]}>
+                {getProfileStrengthHint(clamped)}
+            </RNText>
+            <View style={[styles.track, { backgroundColor: colors.muted }]}>
+                <Animated.View
+                    style={[
+                        styles.fill,
+                        fillStyle,
+                        { backgroundColor: colors.primary },
+                    ]}
+                />
+                <Animated.View style={spacerStyle} />
+            </View>
+        </View>
+    );
 
-    const animatedStyle = useAnimatedStyle(() => {
-        return {
-            width: `${width.value}%`,
-        };
-    });
+    if (!onPress) return content;
 
     return (
-        <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
-            <View style={[styles.container, { backgroundColor: colors.card }]}>
-                <View style={styles.header}>
-                    <Text style={[styles.title, { color: colors.foreground }]}>
-                        Profile Strength: <Text style={styles.strengthText}>{label} ({percentage}%)</Text>
-                    </Text>
-                </View>
-                <View style={[styles.track, { backgroundColor: colors.border }]}>
-                    <Animated.View style={[styles.barContainer, animatedStyle]}>
-                        <LinearGradient
-                            colors={['#00f2ff', '#ff0055']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={styles.gradient}
-                        />
-                    </Animated.View>
-                </View>
-            </View>
-        </TouchableOpacity>
+        <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}>
+            {content}
+        </Pressable>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.1)',
+    card: {
+        marginHorizontal: SPACING.screenX,
+        marginBottom: SPACING.compact,
+        borderRadius: RADIUS.lg,
+        borderWidth: 1,
+        padding: SPACING.base,
+        gap: SPACING.tight,
     },
-    header: {
+    cardShadowLight: {
+        shadowColor: '#1C1524',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    topRow: {
         flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 8,
+        gap: SPACING.compact,
     },
-    title: {
-        fontSize: 14,
+    eyebrow: {
+        ...TYPOGRAPHY.label,
         fontWeight: '600',
     },
-    strengthText: {
-        color: '#00f2ff',
-        fontWeight: 'bold',
+    percent: {
+        ...TYPOGRAPHY.label,
+        fontWeight: '600',
+    },
+    hint: {
+        ...TYPOGRAPHY.caption,
     },
     track: {
+        flexDirection: 'row',
         height: 8,
-        borderRadius: 4,
+        borderRadius: RADIUS.full,
         overflow: 'hidden',
     },
-    barContainer: {
+    fill: {
         height: '100%',
-    },
-    gradient: {
-        flex: 1,
+        minWidth: 8,
+        borderTopLeftRadius: RADIUS.full,
+        borderBottomLeftRadius: RADIUS.full,
     },
 });

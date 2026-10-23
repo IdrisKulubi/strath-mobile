@@ -1,5 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { getAuthToken } from '@/lib/auth-helpers';
+import type { RescheduleViewerState } from '@/lib/reschedule-types';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -18,12 +21,21 @@ export interface MutualDate {
         compatibilityScore?: number;
         compatibilityReasons?: string[];
     };
-    arrangementStatus: 'mutual' | 'call_pending' | 'being_arranged' | 'upcoming' | 'completed' | 'cancelled' | 'expired';
+    arrangementStatus: 'mutual' | 'being_arranged' | 'upcoming' | 'completed' | 'cancelled' | 'expired';
     legacyMatchId?: string;
     legacyDateMatchId?: string;
     venueName?: string;
     venueAddress?: string;
     scheduledAt?: string;
+    confirmBy?: string;
+    assignedSlot?: 'wednesday' | 'saturday';
+    viewerSlotConfirmed?: boolean;
+    partnerSlotConfirmed?: boolean;
+    needsSlotConfirmation?: boolean;
+    confirmWindowOpen?: boolean;
+    /** Unread messages the viewer has not yet read in the linked chat thread. */
+    unreadMessageCount?: number;
+    reschedule?: RescheduleViewerState;
 }
 
 export interface ScheduledDate {
@@ -41,15 +53,18 @@ export interface ScheduledDate {
     };
 }
 
-export interface StartCallResult {
-    mutualMatchId: string;
-    matchId: string;
-    vibeCheckId: string;
-    partnerAvailability: 'online' | 'recently_active' | 'offline';
-    notificationSent: boolean;
-}
-
 export function useMutualMatches() {
+    const [isAppActive, setIsAppActive] = useState(true);
+
+    useEffect(() => {
+        const handleAppStateChange = (nextAppState: AppStateStatus) => {
+            setIsAppActive(nextAppState === 'active');
+        };
+
+        const subscription = AppState.addEventListener('change', handleAppStateChange);
+        return () => subscription?.remove();
+    }, []);
+
     return useQuery({
         queryKey: ['mutualDates'],
         queryFn: async (): Promise<MutualDate[]> => {
@@ -62,7 +77,12 @@ export function useMutualMatches() {
             const json = await res.json();
             return json?.data ?? [];
         },
-        staleTime: 30_000,
+        staleTime: 60_000,
+        refetchOnMount: 'always',
+        refetchOnWindowFocus: 'always',
+        refetchInterval: isAppActive ? 60_000 : false,
+        refetchIntervalInBackground: false,
+        placeholderData: (previousData) => previousData,
     });
 }
 
@@ -84,38 +104,6 @@ export function useDateHistory() {
     });
 }
 
-export function useStartMutualMatchCall() {
-    const queryClient = useQueryClient();
-
-    return useMutation({
-        mutationFn: async (mutualMatchId: string): Promise<StartCallResult> => {
-            const token = await getAuthToken();
-            if (!token) {
-                throw new Error('Not authenticated');
-            }
-
-            const res = await fetch(`${API_URL}/api/mutual-matches/${mutualMatchId}/start-call`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                throw new Error(json?.error ?? `Failed to start call (${res.status})`);
-            }
-
-            return json?.data as StartCallResult;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['mutualDates'] });
-            queryClient.invalidateQueries({ queryKey: ['matches'] });
-        },
-    });
-}
-
 export const VIBE_LABELS: Record<DateVibe, string> = {
     coffee: 'Coffee',
     walk: 'Walk',
@@ -130,10 +118,44 @@ export const VIBE_EMOJIS: Record<DateVibe, string> = {
     hangout: '🎮',
 };
 
+const CHAT_UNLOCKED_STATUSES: MutualDate['arrangementStatus'][] = [
+    'mutual',
+    'being_arranged',
+    'upcoming',
+    'completed',
+];
+
+/** Dates tab: hide Message until slot is confirmed (all statuses including arranging). */
+export function isChatUnlocked(match: MutualDate): boolean {
+    if (!match.legacyMatchId) return false;
+    if (!CHAT_UNLOCKED_STATUSES.includes(match.arrangementStatus)) return false;
+    if (match.needsSlotConfirmation && !match.viewerSlotConfirmed) return false;
+    return true;
+}
+
+/**
+ * Read history in thread when mutual match is listable (slot confirm does not block read).
+ */
+export function isChatThreadReadable(match: MutualDate): boolean {
+    if (!match.legacyMatchId) return false;
+    return CHAT_UNLOCKED_STATUSES.includes(match.arrangementStatus);
+}
+
+/**
+ * Chat thread APIs: mirrors backend assertChatUnlocked — arranging pairs may message
+ * while confirm UI stays on Dates; mutual matches still require slot confirm.
+ */
+export function isChatThreadUnlocked(match: MutualDate): boolean {
+    if (!match.legacyMatchId) return false;
+    if (!CHAT_UNLOCKED_STATUSES.includes(match.arrangementStatus)) return false;
+    if (match.arrangementStatus === 'being_arranged') return true;
+    if (match.needsSlotConfirmation && !match.viewerSlotConfirmed) return false;
+    return true;
+}
+
 export const ARRANGEMENT_STATUS_LABELS: Record<MutualDate['arrangementStatus'], string> = {
     mutual: 'You both said yes',
-    call_pending: 'Waiting for your call',
-    being_arranged: "We're arranging this one for you",
+    being_arranged: 'Confirm your date',
     upcoming: 'Date confirmed',
     completed: 'Completed',
     cancelled: 'Cancelled',

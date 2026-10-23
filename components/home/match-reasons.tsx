@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
 
 interface MatchReasonsProps {
@@ -38,16 +37,21 @@ function buildInsight(reasons: string[]) {
         .map((reason) => reason.toLowerCase());
 
     if (cleaned.length >= 2) {
-        return `You both seem aligned on ${cleaned[0]} and ${cleaned[1]}, which could make the first conversation feel easy.`;
+        return `Aligned on ${cleaned[0]} and ${cleaned[1]}.`;
     }
 
     if (cleaned.length === 1) {
-        return `You both seem drawn to ${cleaned[0]}, which gives this match a natural starting point.`;
+        return `You both seem drawn to ${cleaned[0]}.`;
     }
 
-    return 'There is a strong overlap in how you both tend to connect, which is why this match surfaced today.';
+    return 'Strong overlap in how you both connect.';
 }
 
+/**
+ * Compact reasons row: chips for the top shared signals plus a single-line
+ * insight underneath. Intentionally minimal so the photo stays the hero of
+ * the match card.
+ */
 export function MatchReasons({ reasons }: MatchReasonsProps) {
     const { colors, isDark } = useTheme();
 
@@ -57,20 +61,15 @@ export function MatchReasons({ reasons }: MatchReasonsProps) {
     const insight = buildInsight(topReasons);
 
     return (
-        <View
-            style={[
-                styles.container,
-                {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
-                },
-            ]}
-        >
-            <View style={styles.labelRow}>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                    ✨ Why you might click
+        <View style={styles.container}>
+            <View style={styles.headerRow}>
+                <Text style={[styles.kicker, { color: colors.mutedForeground }]}>
+                    Why this could work
+                </Text>
+                <Text style={[styles.signalCount, { color: colors.mutedForeground }]}>
+                    {topReasons.length} signal{topReasons.length === 1 ? '' : 's'}
                 </Text>
             </View>
-
             <View style={styles.chipsWrap}>
                 {topReasons.map((reason, i) => (
                     <View
@@ -78,7 +77,7 @@ export function MatchReasons({ reasons }: MatchReasonsProps) {
                         style={[
                             styles.chip,
                             {
-                                backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.9)',
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)',
                             },
                         ]}
                     >
@@ -90,74 +89,56 @@ export function MatchReasons({ reasons }: MatchReasonsProps) {
                 ))}
             </View>
 
-            <View
-                style={[
-                    styles.insightWrap,
-                    {
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.82)',
-                    },
-                ]}
-            >
-                <Text style={[styles.insightLabel, { color: colors.mutedForeground }]}>
-                    💡 AI Insight
-                </Text>
-                <Text style={[styles.insightText, { color: colors.foreground }]}>
-                    {insight}
-                </Text>
-            </View>
+            <Text style={[styles.insightText, { color: colors.mutedForeground }]} numberOfLines={2}>
+                {insight}
+            </Text>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        borderRadius: 20,
-        padding: 14,
-        gap: 12,
+        gap: 8,
     },
-    labelRow: {
+    headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        justifyContent: 'space-between',
+        gap: 8,
     },
-    label: {
-        fontSize: 12,
-        fontWeight: '600',
+    kicker: {
+        fontSize: 11,
+        fontWeight: '800',
         textTransform: 'uppercase',
-        letterSpacing: 0.5,
+        letterSpacing: 0,
+    },
+    signalCount: {
+        fontSize: 11,
+        fontWeight: '600',
     },
     chipsWrap: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 10,
+        gap: 6,
     },
     chip: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 5,
         borderRadius: 999,
-        paddingHorizontal: 12,
-        paddingVertical: 9,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
     },
     chipEmoji: {
-        fontSize: 14,
+        fontSize: 12,
     },
     chipText: {
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '600',
     },
-    insightWrap: {
-        borderRadius: 18,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        gap: 6,
-    },
-    insightLabel: {
-        fontSize: 12,
-        fontWeight: '700',
-    },
     insightText: {
-        fontSize: 13,
-        lineHeight: 19,
+        fontSize: 12,
+        lineHeight: 17,
+        fontWeight: '500',
     },
 });

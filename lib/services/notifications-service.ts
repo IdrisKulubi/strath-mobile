@@ -7,10 +7,12 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 // notification payload data object.
 
 export const NOTIFICATION_TYPES = {
+    QUESTIONNAIRE_LIKE: 'questionnaire_like',
     // Legacy
     MATCH: 'match',
+    QUESTIONNAIRE_MATCH: 'questionnaire_match',
+    NEW_CANDIDATE_MATCH: 'new_candidate_match',
     MESSAGE: 'message',
-    CALL: 'call',
     GENERIC: 'generic',
 
     // Date-flow types (new)
@@ -18,10 +20,31 @@ export const NOTIFICATION_TYPES = {
     DATE_REQUEST_ACCEPTED: 'date_request_accepted',   // "Sarah accepted your date invite! 🎉"
     DATE_REQUEST_DECLINED: 'date_request_declined',   // "Sarah passed on your request."
     MUTUAL_MATCH: 'mutual_match',                     // "It's a Date Match with Sarah! 💜"
-    CALL_REMINDER: 'call_reminder',                   // "Your 3-min call with Sarah starts soon"
+    DATE_ARRANGING: 'date_arranging',                 // "We're arranging your date with Sarah"
     DATE_SCHEDULED: 'date_scheduled',                 // "Your date is set! Saturday 6PM 📍"
     FEEDBACK_PROMPT: 'feedback_prompt',               // "How was your date with Sarah? 💬"
     DATE_CANCELLED: 'date_cancelled',                 // "Your date with Sarah was cancelled."
+
+    MEETUP_SLOT_ASSIGNED: 'meetup_slot_assigned',
+    MEETUP_PARTNER_CONFIRMED: 'meetup_partner_confirmed',
+    MEETUP_CONFIRM_REMINDER: 'meetup_confirm_reminder',
+
+    MEETUP_RESCHEDULE_REQUESTED: 'meetup_reschedule_requested',
+    MEETUP_RESCHEDULE_COUNTERED: 'meetup_reschedule_countered',
+    MEETUP_RESCHEDULE_ACCEPTED: 'meetup_reschedule_accepted',
+    MEETUP_RESCHEDULE_CANCELLED: 'meetup_reschedule_cancelled',
+
+    PAYMENT_REQUIRED: 'payment_required',
+    PAYMENT_PARTNER_PAID: 'payment_partner_paid',
+    PAYMENT_BOTH_PAID: 'payment_both_paid',
+    PAYMENT_EXPIRING: 'payment_expiring',
+    PAYMENT_EXPIRED: 'payment_expired',
+    CREDIT_GRANTED: 'credit_granted',
+    REFUND_COMPLETED: 'refund_completed',
+
+    // Soft-launch gating
+    ADMITTED_FROM_WAITLIST: 'admitted_from_waitlist', // "You're in 💛" — user promoted from waitlist to admitted
+    ADMIN_ANNOUNCEMENT: 'admin_announcement',         // Arbitrary broadcast from the admin console
 } as const;
 
 export type AppNotificationType = typeof NOTIFICATION_TYPES[keyof typeof NOTIFICATION_TYPES];
@@ -36,6 +59,8 @@ export interface NotificationPayload {
     userId?: string;        // sender profile
     dateId?: string;        // used for feedback_prompt
     name?: string;          // first name of the other person (for feedback screen)
+    mutualMatchId?: string;
+    requestId?: string;     // pending meetup reschedule request
 
     // Legacy explicit route override (still supported)
     route?: string;

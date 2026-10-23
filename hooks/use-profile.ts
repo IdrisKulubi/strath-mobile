@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-helpers';
+import { apiFetch, isApiError, isAuthExpiredError } from '@/lib/api-client';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://www.strathspace.com';
 
@@ -23,6 +24,11 @@ export interface Profile {
     snapchat?: string;
     profilePhoto?: string;
     phoneNumber?: string;
+    currentLocation?: string;
+    locationLatitude?: string;
+    locationLongitude?: string;
+    locationPermissionStatus?: 'granted' | 'denied' | 'undetermined' | 'unknown';
+    locationUpdatedAt?: string | null;
     firstName: string;
     lastName: string;
     drinkingPreference?: string;
@@ -57,11 +63,36 @@ export interface Profile {
     religion?: string;
     languages?: string[];
     interestedIn?: string[]; // Genders the user wants to see: ['male', 'female', 'other']
+    personalityAnswers?: {
+        sleepSchedule?: string;
+        socialVibe?: string;
+        driveStyle?: string;
+        convoStyle?: string;
+        socialBattery?: string;
+        idealDateVibe?: string;
+        musicGenres?: string[];
+    };
+    lifestyleAnswers?: {
+        relationshipGoal?: string;
+        outingFrequency?: string;
+    };
     user?: {
         name: string;
         email: string;
         image?: string;
     };
+    // Soft-launch gating — populated by /api/user/me
+    waitlist?: {
+        status: 'waitlisted';
+        position: number;
+        peopleAhead: number;
+        tier: 'imminent' | 'soon' | 'first_wave' | 'early_access';
+    } | null;
+    // Returned on PATCH after profileCompleted flips true
+    admission?: {
+        status: 'admitted' | 'waitlisted';
+        position: number | null;
+    } | null;
 }
 
 async function fetchProfile() {
@@ -75,30 +106,25 @@ async function fetchProfile() {
         throw new Error('Not authenticated');
     }
 
-    const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${finalToken}`,
-    };
-
     console.log('[useProfile] Fetching from:', `${API_URL}/api/user/me`);
-    const response = await fetch(`${API_URL}/api/user/me`, {
-        headers,
-    });
-
-    console.log('[useProfile] Response status:', response.status);
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[useProfile] Error response:', errorText);
-        throw new Error('Failed to fetch profile');
+    let data: { data?: Profile };
+    try {
+        data = await apiFetch<{ data?: Profile }>('/api/user/me');
+    } catch (error) {
+        if (
+            isApiError(error) &&
+            error.status === 404 &&
+            error.message.toLowerCase().includes('profile not found')
+        ) {
+            console.log('[useProfile] Profile not found; routing to onboarding');
+            return null;
+        }
+        throw error;
     }
-
-    const data = await response.json();
     console.log('[useProfile] Data received:', data?.data ? 'Has profile' : 'No profile data');
 
     // Helper to ensure URLs have protocol
-    const normalizeUrl = (url?: string) => {
-        if (!url) return url;
+    const normalizeUrl = (url: string) => {
         if (url.startsWith('http')) return url;
         // If it looks like an R2 URL (contains r2.dev or cloudflare), prepend https
         if (url.includes('r2.dev') || url.includes('cloudflare')) {
@@ -109,7 +135,9 @@ async function fetchProfile() {
 
     // Normalize URLs in the response
     if (data.data) {
-        data.data.profilePhoto = normalizeUrl(data.data.profilePhoto);
+        if (data.data.profilePhoto) {
+            data.data.profilePhoto = normalizeUrl(data.data.profilePhoto);
+        }
         if (data.data.photos) {
             data.data.photos = data.data.photos.map(normalizeUrl);
         }
@@ -119,29 +147,10 @@ async function fetchProfile() {
 }
 
 async function updateProfile(updates: Partial<Profile>) {
-    const finalToken = await getAuthToken();
-
-    const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-    };
-
-    if (finalToken) {
-        headers['Authorization'] = `Bearer ${finalToken}`;
-    }
-
-    const response = await fetch(`${API_URL}/api/user/me`, {
+    const data = await apiFetch<{ data: Profile }>('/api/user/me', {
         method: 'PATCH',
-        headers,
-        body: JSON.stringify(updates),
+        body: updates,
     });
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('[updateProfile] Error response:', response.status, errorData);
-        throw new Error(errorData.error || 'Failed to update profile');
-    }
-
-    const data = await response.json();
     return data.data;
 }
 
@@ -151,6 +160,12 @@ export function useProfile() {
     const query = useQuery({
         queryKey: ['profile'],
         queryFn: fetchProfile,
+        retry: (failureCount, error) => {
+            if (isAuthExpiredError(error)) return false;
+            if (isApiError(error) && (error.status === 401 || error.status === 404)) return false;
+            if (error instanceof Error && error.message === 'Not authenticated') return false;
+            return failureCount < 1;
+        },
     });
 
     const mutation = useMutation({

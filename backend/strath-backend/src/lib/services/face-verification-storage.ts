@@ -20,6 +20,102 @@ const REKOGNITION_NORMALIZATION_STEPS = [
 type UploadSlot = "front" | "left" | "right" | "smile" | "extra";
 const REKOGNITION_SUPPORTED_EXTENSIONS = new Set(["jpg", "jpeg", "png"]);
 
+const DEFAULT_CACHE_MAX_ENTRIES = 64;
+const DEFAULT_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+type ComparisonBytesCacheEntry = {
+    bytes: Uint8Array;
+    expiresAt: number;
+};
+
+const comparisonBytesCache = new Map<string, ComparisonBytesCacheEntry>();
+let comparisonBytesCacheTotalBytes = 0;
+
+function getComparisonBytesCacheMaxEntries() {
+    const value = Number(process.env.FACE_VERIFICATION_BYTES_CACHE_MAX_ENTRIES ?? DEFAULT_CACHE_MAX_ENTRIES);
+    return Number.isFinite(value) && value >= 8 ? Math.min(Math.floor(value), 256) : DEFAULT_CACHE_MAX_ENTRIES;
+}
+
+function getComparisonBytesCacheMaxBytes() {
+    const value = Number(process.env.FACE_VERIFICATION_BYTES_CACHE_MAX_BYTES ?? DEFAULT_CACHE_MAX_BYTES);
+    return Number.isFinite(value) && value >= 1024 * 1024
+        ? Math.min(Math.floor(value), 128 * 1024 * 1024)
+        : DEFAULT_CACHE_MAX_BYTES;
+}
+
+function getComparisonBytesCacheTtlMs() {
+    const value = Number(process.env.FACE_VERIFICATION_BYTES_CACHE_TTL_MS ?? DEFAULT_CACHE_TTL_MS);
+    return Number.isFinite(value) && value >= 30_000 ? Math.min(Math.floor(value), 30 * 60 * 1000) : DEFAULT_CACHE_TTL_MS;
+}
+
+function pruneComparisonBytesCache(now = Date.now()) {
+    for (const [key, entry] of comparisonBytesCache.entries()) {
+        if (entry.expiresAt <= now) {
+            comparisonBytesCache.delete(key);
+            comparisonBytesCacheTotalBytes -= entry.bytes.byteLength;
+        }
+    }
+
+    while (comparisonBytesCache.size > getComparisonBytesCacheMaxEntries()) {
+        const oldestKey = comparisonBytesCache.keys().next().value;
+        if (!oldestKey) {
+            break;
+        }
+        const oldest = comparisonBytesCache.get(oldestKey);
+        comparisonBytesCache.delete(oldestKey);
+        if (oldest) {
+            comparisonBytesCacheTotalBytes -= oldest.bytes.byteLength;
+        }
+    }
+
+    while (comparisonBytesCacheTotalBytes > getComparisonBytesCacheMaxBytes() && comparisonBytesCache.size > 0) {
+        const oldestKey = comparisonBytesCache.keys().next().value;
+        if (!oldestKey) {
+            break;
+        }
+        const oldest = comparisonBytesCache.get(oldestKey);
+        comparisonBytesCache.delete(oldestKey);
+        if (oldest) {
+            comparisonBytesCacheTotalBytes -= oldest.bytes.byteLength;
+        }
+    }
+}
+
+function readComparisonBytesFromCache(key: string, now = Date.now()) {
+    const entry = comparisonBytesCache.get(key);
+    if (!entry) {
+        return null;
+    }
+
+    if (entry.expiresAt <= now) {
+        comparisonBytesCache.delete(key);
+        comparisonBytesCacheTotalBytes -= entry.bytes.byteLength;
+        return null;
+    }
+
+    comparisonBytesCache.delete(key);
+    comparisonBytesCache.set(key, entry);
+    return entry.bytes;
+}
+
+function writeComparisonBytesToCache(key: string, bytes: Uint8Array, now = Date.now()) {
+    const existing = comparisonBytesCache.get(key);
+    if (existing) {
+        comparisonBytesCacheTotalBytes -= existing.bytes.byteLength;
+        comparisonBytesCache.delete(key);
+    }
+
+    const entry: ComparisonBytesCacheEntry = {
+        bytes,
+        expiresAt: now + getComparisonBytesCacheTtlMs(),
+    };
+
+    comparisonBytesCache.set(key, entry);
+    comparisonBytesCacheTotalBytes += bytes.byteLength;
+    pruneComparisonBytesCache(now);
+}
+
 export function getFaceVerificationPrefix() {
     return (process.env.FACE_VERIFICATION_R2_PREFIX?.trim() || DEFAULT_PREFIX).replace(/^\/+|\/+$/g, "");
 }
@@ -82,8 +178,15 @@ export async function getFaceVerificationObjectBytes(key: string) {
 }
 
 export async function getFaceVerificationComparisonBytes(key: string) {
+    const cached = readComparisonBytesFromCache(key);
+    if (cached) {
+        return cached;
+    }
+
     const originalBytes = await getFaceVerificationObjectBytes(key);
-    return normalizeFaceVerificationImageBytes(originalBytes);
+    const normalizedBytes = await normalizeFaceVerificationImageBytes(originalBytes);
+    writeComparisonBytesToCache(key, normalizedBytes);
+    return normalizedBytes;
 }
 
 function getExtensionForContentType(contentType: string) {

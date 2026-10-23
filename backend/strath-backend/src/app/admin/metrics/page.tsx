@@ -1,5 +1,6 @@
 import { getAdminMetrics, getAdminTimeSeries } from "@/lib/actions/admin";
 import { MetricsChart, type DataPoint } from "./_chart";
+import Link from "next/link";
 
 function FunnelStep({
     label,
@@ -47,16 +48,16 @@ export default async function AdminMetricsPage() {
             rate: "Total signups with complete profile",
         },
         {
-            label: "Date requests sent",
+            label: "Match decisions sent",
             value: metrics.totalRequestsAllTime,
             color: "bg-indigo-500",
             rate: `${metrics.requestsToday} today`,
         },
         {
-            label: "Requests accepted",
+            label: "Mutual matches",
             value: metrics.totalAccepted,
             color: "bg-blue-500",
-            rate: `${metrics.acceptanceRate}% acceptance rate`,
+            rate: `${metrics.acceptanceRate}% mutual rate`,
         },
         {
             label: "Dates scheduled",
@@ -88,6 +89,10 @@ export default async function AdminMetricsPage() {
             </div>
 
             {/* Time-series chart */}
+            <Link href="/admin/metrics/questionnaire" className="block rounded-xl border border-pink-400/30 bg-pink-400/5 p-6 hover:bg-pink-400/10">
+                <h2 className="text-lg font-semibold text-white">Questionnaire & matching analytics →</h2>
+                <p className="mt-2 text-sm text-gray-300">Completion, stalled progress, engine workload, discovery reliability, mutual matches and conversations.</p>
+            </Link>
             <MetricsChart data={timeSeries as DataPoint[]} />
 
             {/* Funnel */}
@@ -120,7 +125,7 @@ export default async function AdminMetricsPage() {
                     <tbody>
                         {[
                             {
-                                step: "Acceptance rate",
+                                step: "Mutual match rate",
                                 count: metrics.totalAccepted,
                                 base: metrics.totalRequestsAllTime,
                                 target: 30,
