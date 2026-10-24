@@ -7,6 +7,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 // notification payload data object.
 
 export const NOTIFICATION_TYPES = {
+    QUESTIONNAIRE_LIKE: 'questionnaire_like',
     // Legacy
     MATCH: 'match',
     QUESTIONNAIRE_MATCH: 'questionnaire_match',

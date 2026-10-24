@@ -18,3 +18,16 @@ export async function notifyQuestionnaireMatch(userA: string, userB: string, mat
         })];
     }));
 }
+
+/** A new incoming like; reciprocal likes use the match alert instead. */
+export async function notifyQuestionnaireLike(actorId: string, recipientId: string) {
+    const recipients = await query<{ pushToken: string | null } & QueryResultRow>(`
+        SELECT push_token AS "pushToken" FROM "user" WHERE id = $1 AND deleted_at IS NULL
+    `, [recipientId]);
+    if (!recipients[0]?.pushToken) return;
+    await sendPushNotification(recipients[0].pushToken, {
+        title: "Someone likes you",
+        body: "You have a new like. See who caught your eye.",
+        data: { type: "questionnaire_like", userId: actorId, route: "/dating/likes" },
+    });
+}

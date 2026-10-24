@@ -15,7 +15,7 @@ import {
 import { VerificationShell } from '@/components/verification/verification-shell';
 import { useFaceVerification } from '@/hooks/use-face-verification';
 import { useProfile } from '@/hooks/use-profile';
-import { hasVerifiedFace } from '@/lib/profile-access';
+import { hasCurrentFaceVerification as hasVerifiedFace, currentVerificationStatus } from '@/lib/verification/current-status';
 import { setCachedProfile } from '@/lib/session-cache';
 import { formatVerificationTimestamp } from '@/lib/verification/decision-summary';
 import {
@@ -41,7 +41,15 @@ export default function VerificationScreen() {
         : '/dating';
     const queryClient = useQueryClient();
     const { show } = useToast();
-    const { data: profile, isLoading: isProfileLoading, refetch: refetchProfile } = useProfile();
+    const { data: profile, isLoading: isProfileLoading, isFetching: isProfileFetching, refetch: refetchProfile } = useProfile();
+    const [profileChecked, setProfileChecked] = useState(false);
+    useEffect(() => {
+        let cancelled = false;
+        void refetchProfile().then(() => {
+            if (!cancelled) setProfileChecked(true);
+        });
+        return () => { cancelled = true; };
+    }, [refetchProfile]);
     const {
         latestSession,
         pollTimedOut,
@@ -77,17 +85,22 @@ export default function VerificationScreen() {
         [latestSession?.results],
     );
 
-    const status = latestSession?.status ?? profile?.faceVerificationStatus ?? 'not_started';
+    const status = currentVerificationStatus(profile?.faceVerificationStatus, latestSession?.status);
+    useEffect(() => {
+        // Processing may complete in the background. Read the server profile
+        // rather than promoting a historical session into local verification.
+        if (latestSession?.status === 'verified') void refetchProfile();
+    }, [latestSession?.id, latestSession?.status, refetchProfile]);
     const isProcessing = status === 'processing';
     const canRetry = status === 'retry_required' || status === 'failed';
 
-    const sessionVerified = latestSession?.status === 'verified';
     const profileVerified = Boolean(profile && hasVerifiedFace(profile));
     const shouldExitToTabs =
         !isProfileLoading &&
+        profileChecked && !isProfileFetching &&
         !isSessionLoading &&
         Boolean(profile) &&
-        (profileVerified || sessionVerified);
+        profileVerified;
 
     useEffect(() => {
         if (!shouldExitToTabs) return;
@@ -103,18 +116,7 @@ export default function VerificationScreen() {
                     return;
                 }
 
-                let next = hasVerifiedFace(p)
-                    ? p
-                    : sessionVerified
-                      ? {
-                            ...p,
-                            faceVerificationStatus: 'verified' as const,
-                            faceVerifiedAt:
-                                latestSession?.completedAt ??
-                                p.faceVerifiedAt ??
-                                new Date().toISOString(),
-                        }
-                      : null;
+                const next = hasVerifiedFace(p) ? p : null;
 
                 if (!next || !hasVerifiedFace(next)) {
                     exitToTabsInFlightRef.current = false;
@@ -123,6 +125,7 @@ export default function VerificationScreen() {
 
                 queryClient.setQueryData(['profile'], next);
                 await setCachedProfile(next.userId, next);
+                await queryClient.invalidateQueries({ queryKey: ['questionnaire'] });
                 router.replace(returnPath as any);
             } catch {
                 exitToTabsInFlightRef.current = false;
@@ -130,7 +133,6 @@ export default function VerificationScreen() {
         })();
     }, [
         shouldExitToTabs,
-        sessionVerified,
         profile,
         latestSession?.completedAt,
         latestSession?.status,
@@ -324,14 +326,7 @@ export default function VerificationScreen() {
     const getVerifiedProfileForRouting = () => {
         if (!profile) return null;
         if (hasVerifiedFace(profile)) return profile;
-        if (latestSession?.status !== 'verified') return null;
-
-        return {
-            ...profile,
-            faceVerificationStatus: 'verified' as const,
-            faceVerifiedAt:
-                latestSession.completedAt ?? profile.faceVerifiedAt ?? new Date().toISOString(),
-        };
+        return null;
     };
 
     const handleContinueToApp = async () => {
@@ -344,6 +339,10 @@ export default function VerificationScreen() {
             if (nextProfile?.userId) {
                 queryClient.setQueryData(['profile'], nextProfile);
                 await setCachedProfile(nextProfile.userId, nextProfile);
+                await queryClient.invalidateQueries({ queryKey: ['questionnaire'] });
+            } else {
+                show({ message: 'Verification is not complete yet. Please try again.', variant: 'warning' });
+                return;
             }
             router.replace(returnPath as any);
         } finally {
@@ -352,7 +351,7 @@ export default function VerificationScreen() {
     };
 
     const isBusy =
-        isProfileLoading ||
+        isProfileLoading || !profileChecked ||
         isSessionLoading ||
         isCreatingSession ||
         isRetryingSession ||

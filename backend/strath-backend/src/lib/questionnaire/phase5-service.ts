@@ -46,6 +46,7 @@ type ConnectionRow = QueryResultRow & {
 };
 
 export type Phase5Dependencies = {
+    notifyLike?: (actorId: string, recipientId: string) => Promise<void>;
     notifyMatch?: (userA: string, userB: string, matchId: string) => Promise<void>;
 };
 
@@ -174,6 +175,9 @@ export async function saveDecision(userId: string, input: unknown, dependencies:
         }
 
         await eligiblePair(userId, parsed.targetId, executor);
+        const previous = await query(`
+            SELECT 1 FROM q_profile_decisions WHERE actor_id = $1 AND target_id = $2 AND decision = 'like'
+        `, [userId, parsed.targetId], executor);
         await query(`
             INSERT INTO q_profile_decisions(actor_id, target_id, decision, updated_at)
             VALUES($1, $2, $3, now())
@@ -190,7 +194,7 @@ export async function saveDecision(userId: string, input: unknown, dependencies:
             SELECT 1 FROM q_profile_decisions
             WHERE actor_id = $1 AND target_id = $2 AND decision = 'like'
         `, [parsed.targetId, userId], executor);
-        if (reverse.length === 0) return { mutual: false, created: false };
+        if (reverse.length === 0) return { mutual: false, created: false, newLike: previous.length === 0 };
 
         // Eligibility is checked again after both likes exist and while the pair row is locked.
         await eligiblePair(userId, parsed.targetId, executor);
@@ -207,8 +211,11 @@ export async function saveDecision(userId: string, input: unknown, dependencies:
         return { mutual: true, matchId, created: true };
     });
 
+    if ('newLike' in result && result.newLike && dependencies.notifyLike) {
+        await dependencies.notifyLike(userId, parsed.targetId).catch((error) => console.error('[Notifications] Like delivery failed', error));
+    }
     if (result.created && result.matchId && dependencies.notifyMatch) {
-        await dependencies.notifyMatch(pair.userA, pair.userB, result.matchId).catch(() => undefined);
+        await dependencies.notifyMatch(pair.userA, pair.userB, result.matchId).catch((error) => console.error("[Notifications] Match delivery failed", error));
     }
     return { mutual: result.mutual, ...(result.matchId ? { matchId: result.matchId } : {}) };
 }

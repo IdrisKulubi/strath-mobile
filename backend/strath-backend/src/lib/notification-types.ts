@@ -4,6 +4,8 @@
  * strath-mobile/lib/services/notifications-service.ts
  */
 export const NOTIFICATION_TYPES = {
+    QUESTIONNAIRE_MATCH: 'questionnaire_match',
+    QUESTIONNAIRE_LIKE: 'questionnaire_like',
     // Legacy
     MATCH: 'match',
     /** New curated home introduction (candidate pair went live). */

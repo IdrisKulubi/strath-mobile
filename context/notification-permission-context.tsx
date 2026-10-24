@@ -5,12 +5,14 @@ import React, {
     useEffect,
     useMemo,
     useState,
+    useRef,
 } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { Alert, AppState, type AppStateStatus } from 'react-native';
 
 import { PrePermissionSheet } from '@/components/notifications/pre-permission-sheet';
 import {
     markPrePermissionPromptSeen,
+    markPrePermissionPromptShown,
     shouldShowPrePermissionPrompt,
     type PrePermissionContext,
 } from '@/lib/notification-permission-prompt';
@@ -42,6 +44,7 @@ export function NotificationPermissionProvider({
     onPushTokenChange?: (token: string | null) => void;
 }) {
     const [expoPushToken, setExpoPushTokenState] = useState<string | null>(initialPushToken ?? null);
+    const promptBusy = useRef(false);
     const [sheetVisible, setSheetVisible] = useState(false);
     const [sheetContext, setSheetContext] = useState<PrePermissionContext>('settings');
     const [partnerName, setPartnerName] = useState<string | undefined>();
@@ -53,23 +56,34 @@ export function NotificationPermissionProvider({
 
     const closeSheet = useCallback(() => {
         setSheetVisible(false);
+        promptBusy.current = false;
     }, []);
 
     const promptIfAppropriate = useCallback(async (options: PromptOptions) => {
-        const show = await shouldShowPrePermissionPrompt(options.context);
-        if (!show) return;
-
-        setSheetContext(options.context);
-        setPartnerName(options.partnerName);
-        setSheetVisible(true);
+        if (promptBusy.current) return;
+        promptBusy.current = true;
+        try {
+            const show = await shouldShowPrePermissionPrompt(options.context);
+            if (!show) { promptBusy.current = false; return; }
+            await markPrePermissionPromptShown();
+            setSheetContext(options.context);
+            setPartnerName(options.partnerName);
+            setSheetVisible(true);
+        } catch (error) {
+            promptBusy.current = false;
+            console.warn('[Notifications] Permission reminder unavailable', error);
+        }
     }, []);
 
     const handleEnable = useCallback(async () => {
-        await markPrePermissionPromptSeen(sheetContext, 'accepted');
         closeSheet();
-        const token = await enablePushNotificationsFromUserAction();
-        if (token) {
-            setExpoPushToken(token);
+        try {
+            await markPrePermissionPromptSeen(sheetContext, 'accepted');
+            const token = await enablePushNotificationsFromUserAction();
+            if (token) setExpoPushToken(token);
+        } catch (error) {
+            console.warn('[Notifications] Enable failed', error);
+            Alert.alert('Could not enable alerts', 'Check your connection and try again from Settings.');
         }
     }, [closeSheet, setExpoPushToken, sheetContext]);
 
@@ -77,15 +91,15 @@ export function NotificationPermissionProvider({
         const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
             if (nextState !== 'active') return;
             void registerPushTokenIfGranted().then((token) => {
-                if (token) setExpoPushToken(token);
-            });
+                setExpoPushToken(token);
+            }).catch((error) => console.warn('[Notifications] Registration failed', error));
         });
         return () => subscription.remove();
     }, [setExpoPushToken]);
 
     const handleDismiss = useCallback(async () => {
-        await markPrePermissionPromptSeen(sheetContext, 'dismissed');
         closeSheet();
+        await markPrePermissionPromptSeen(sheetContext, 'dismissed').catch((error) => console.warn('[Notifications] Reminder save failed', error));
     }, [closeSheet, sheetContext]);
 
     const value = useMemo(
