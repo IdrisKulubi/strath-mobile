@@ -14,7 +14,7 @@ config.resolver.blockList.push(/(?:^|[\\/])backend[\\/].*/);
 config.resolver.unstable_enablePackageExports = true;
 config.resolver.sourceExts = [...config.resolver.sourceExts, "mjs", "cjs"];
 
-const { resolve: metroResolve } = require("metro-resolver");
+const { resolve: metroResolve } = require("@expo/metro/metro-resolver");
 
 function resolveProjectAlias(context, moduleName, platform) {
   if (!moduleName.startsWith("@/")) {
@@ -44,19 +44,17 @@ function resolveProjectAlias(context, moduleName, platform) {
   return null;
 }
 
-const upstreamResolveRequest = config.resolver.resolveRequest;
-
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   const aliasHit = resolveProjectAlias(context, moduleName, platform);
   if (aliasHit) {
     return aliasHit;
   }
 
-  if (upstreamResolveRequest) {
-    return upstreamResolveRequest(context, moduleName, platform);
-  }
-
-  return metroResolve(context, moduleName, platform);
+  return metroResolve(
+    { ...context, resolveRequest: metroResolve },
+    moduleName,
+    platform,
+  );
 };
 
 module.exports = withNativeWind(config, { input: "./global.css" });
